@@ -1,0 +1,46 @@
+# @configure_input@
+
+INC = cryptech.h
+LIB = libcryptech.a
+
+BIN = hash hash_tester trng_extractor trng_tester aes_tester modexp_tester
+
+HAL_IO_OBJ_EIM	= hal_io_eim.o novena-eim.o
+HAL_IO_OBJ_I2C 	= hal_io_i2c.o
+HAL_IO_OBJ	= $(HAL_IO_OBJ_@FPGA_BUS@)
+
+LIB_OBJ		= $(HAL_IO_OBJ)
+
+CC		= @CC@
+CFLAGS		= @CFLAGS@
+LDFLAGS		= @LDFLAGS@
+LIBS		= @LIBS@
+
+prefix		= @prefix@
+exec_prefix	= @exec_prefix@
+bindir		= @bindir@
+includedir	= @includedir@
+libdir		= @libdir@
+sysconfdir	= @sysconfdir@
+
+all: $(LIB) $(BIN)
+
+*.o: $(INC)
+
+$(BIN): $(LIB)
+
+${LIB}: $(LIB_OBJ)
+	ar rcs $@ $^
+
+install: $(LIB) $(BIN) $(INC)
+	install $(LIB) $(libdir)
+	install $(BIN) $(bindir)
+	install $(INC) $(includedir)
+
+uninstall:
+	cd $(libdir); rm -f $(LIB)
+	cd $(bindir); rm -f ${BIN}
+	cd $(includedir); rm -f $(INC)
+
+clean:
+	rm -f *.o $(LIB) $(BIN)

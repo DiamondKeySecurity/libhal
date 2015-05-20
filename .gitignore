@@ -1,0 +1,7 @@
+*.[ao]
+*~
+Makefile
+TAGS
+autom4te.cache
+config.log
+config.status
