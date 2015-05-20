@@ -1,46 +1,36 @@
 # @configure_input@
 
-INC = cryptech.h
-LIB = libcryptech.a
+INC		= cryptech.h
+LIB		= libcryptech.a
+OBJ		= ${IO_OBJ} csprng.o hash.o
 
-BIN = hash hash_tester trng_extractor trng_tester aes_tester modexp_tester
-
-HAL_IO_OBJ_EIM	= hal_io_eim.o novena-eim.o
-HAL_IO_OBJ_I2C 	= hal_io_i2c.o
-HAL_IO_OBJ	= $(HAL_IO_OBJ_@FPGA_BUS@)
-
-LIB_OBJ		= $(HAL_IO_OBJ)
+IO_OBJ		= ${IO_OBJ_@FPGA_BUS@}
+IO_OBJ_EIM	= hal_io_eim.o novena-eim.o
+IO_OBJ_I2C 	= hal_io_i2c.o
 
 CC		= @CC@
 CFLAGS		= @CFLAGS@
 LDFLAGS		= @LDFLAGS@
-LIBS		= @LIBS@
 
 prefix		= @prefix@
 exec_prefix	= @exec_prefix@
-bindir		= @bindir@
 includedir	= @includedir@
 libdir		= @libdir@
-sysconfdir	= @sysconfdir@
 
-all: $(LIB) $(BIN)
+all: ${LIB}
 
-*.o: $(INC)
+${OBJ}: ${INC}
 
-$(BIN): $(LIB)
-
-${LIB}: $(LIB_OBJ)
+${LIB}: ${OBJ}
 	ar rcs $@ $^
 
-install: $(LIB) $(BIN) $(INC)
-	install $(LIB) $(libdir)
-	install $(BIN) $(bindir)
-	install $(INC) $(includedir)
+install: ${LIB} ${INC}
+	install ${LIB} ${libdir}
+	install ${INC} ${includedir}
 
 uninstall:
-	cd $(libdir); rm -f $(LIB)
-	cd $(bindir); rm -f ${BIN}
-	cd $(includedir); rm -f $(INC)
+	cd ${libdir}; rm -f ${LIB}
+	cd ${includedir}; rm -f ${INC}
 
 clean:
-	rm -f *.o $(LIB) $(BIN)
+	rm -f ${OBJ} ${LIB}

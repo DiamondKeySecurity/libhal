@@ -17,23 +17,13 @@ AC_ARG_VAR([CC],	[C compiler command])
 AC_ARG_VAR([CFLAGS],	[C compiler flags])
 AC_ARG_VAR([LDFLAGS],	[Linker flags])
 
-AS_CASE($FPGA_BUS,
-	[""],[FPGA_BUS=EIM],
-	[EIM|I2C],[],
+AS_CASE($FPGA_BUS, [""],[FPGA_BUS=EIM], [EIM|I2C],[],
 	[AC_MSG_ERROR([Invalid setting of FPGA_BUS, must be "EIM" or "I2C"])])
+	
+AS_CASE($CC,      [""],[CC="cc"],		  [])
+AS_CASE($CFLAGS,  [""],[CFLAGS="-g -Wall -fPIC"], [])
+AS_CASE($LDFLAGS, [""],[LDFLAGS="-g"],		  [])
 
-AS_CASE($CC,
-	[""],[CC="cc"],
-	[])
-	
-AS_CASE($CFLAGS,
-	[""],[CFLAGS="-g -Wall -fPIC"],
-	[])
-	
-AS_CASE($LDFLAGS,
-	[""],[LDFLAGS="-g"],
-	[])
-	
 AC_MSG_NOTICE([FPGA bus: $FPGA_BUS])
 AC_MSG_NOTICE([C compiler: $CC])
 AC_MSG_NOTICE([C compiler flags: $CFLAGS])
