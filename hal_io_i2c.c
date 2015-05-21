@@ -49,108 +49,106 @@
 static int debug = 0;
 static int i2cfd = -1;
 
-/* ---------------- I2C low-level code ---------------- */
 
 void hal_io_set_debug(int onoff)
 {
-    debug = onoff;
+  debug = onoff;
 }
 
 static void dump(char *label, const uint8_t *buf, size_t len)
 {
-    if (debug) {
-        int i;
-        printf("%s [", label);
-        for (i = 0; i < len; ++i)
-            printf(" %02x", buf[i]);
-        printf(" ]\n");
-    }
+  if (debug) {
+    int i;
+    printf("%s [", label);
+    for (i = 0; i < len; ++i)
+      printf(" %02x", buf[i]);
+    printf(" ]\n");
+  }
 }
 
 static void i2c_close(void)
 {
-    (void) close(i2cfd);
+  (void) close(i2cfd);
 }
 
 static hal_error_t i2c_open(void)
 {
-    int fd = -1;
+  int fd = -1;
 
-    if (i2cfd >= 0)
-        return HAL_OK;
-
-    /* It's dead, Jim, you can stop kicking it now */
-    if (i2cfd < -1)
-	return HAL_ERROR_IO_SETUP_FAILED;
-
-    fd = open(I2C_dev, O_RDWR);
-    if (fd < 0) {
-        if (debug)
-            perror("Unable to open %s: " I2C_dev);
-	goto fail;
-    }
-
-    if (ioctl(fd, I2C_SLAVE, I2C_addr) < 0) {
-        if (debug)
-	    perror("Unable to set I2C slave device");
-        goto fail;
-    }
-
-    if (atexit(i2c_close) < 0) {
-	if (debug)
-	    perror("Unable to set I2C atexit handler");
-        goto fail;
-    }
-
-    i2cfd = fd;
+  if (i2cfd >= 0)
     return HAL_OK;
 
- fail:
-    if (fd >= 0)
-        close(fd);
-    i2cfd = -2;
+  /* It's dead, Jim, you can stop kicking it now */
+  if (i2cfd < -1)
     return HAL_ERROR_IO_SETUP_FAILED;
+
+  fd = open(I2C_dev, O_RDWR);
+  if (fd < 0) {
+    if (debug)
+      perror("Unable to open %s: " I2C_dev);
+    goto fail;
+  }
+
+  if (ioctl(fd, I2C_SLAVE, I2C_addr) < 0) {
+    if (debug)
+      perror("Unable to set I2C slave device");
+    goto fail;
+  }
+
+  if (atexit(i2c_close) < 0) {
+    if (debug)
+      perror("Unable to set I2C atexit handler");
+    goto fail;
+  }
+
+  i2cfd = fd;
+  return HAL_OK;
+
+ fail:
+  if (fd >= 0)
+    close(fd);
+  i2cfd = -2;
+  return HAL_ERROR_IO_SETUP_FAILED;
 }
 
 static hal_error_t i2c_write(const uint8_t *buf, size_t len)
 {
-    hal_error_t err;
+  hal_error_t err;
 
-    if ((err = i2c_open()) != HAL_OK)
-        return err;
+  if ((err = i2c_open()) != HAL_OK)
+    return err;
 
-    dump("write ", buf, len);
+  dump("write ", buf, len);
 
-    if (write(i2cfd, buf, len) != len) {
-	if (debug)
-	      perror("i2c write failed");
-        return HAL_ERROR_IO_OS_ERROR;
-    }
+  if (write(i2cfd, buf, len) != len) {
+    if (debug)
+      perror("i2c write failed");
+    return HAL_ERROR_IO_OS_ERROR;
+  }
 
-    return HAL_OK;
+  return HAL_OK;
 }
 
 static hal_error_t i2c_read(uint8_t *b)
 {
-    hal_error_t err;
+  hal_error_t err;
 
-    if ((err = i2c_open()) != HAL_OK)
-        return err;
+  if ((err = i2c_open()) != HAL_OK)
+    return err;
 
-    /*
-     * read() on the i2c device only returns one byte at a time,
-     * and hal_io_get_resp() needs to parse the response one byte at a time
-     */
-    if (read(i2cfd, b, 1) != 1) {
-	if (debug)
-            perror("i2c read failed");
-        return HAL_ERROR_IO_OS_ERROR;
-    }
+  /*
+   * read() on the i2c device only returns one byte at a time,
+   * and hal_io_get_resp() needs to parse the response one byte at a time
+   */
+  if (read(i2cfd, b, 1) != 1) {
+    if (debug)
+      perror("i2c read failed");
+    return HAL_ERROR_IO_OS_ERROR;
+  }
 
-    return 0;
+  return 0;
 }
 
-/* ---------------- test-case low-level code ---------------- */
 
 /* coretest command codes */
 #define SOC       0x55
@@ -170,207 +168,198 @@ static hal_error_t i2c_read(uint8_t *b)
 
 static hal_error_t hal_io_send_write_cmd(off_t offset, const uint8_t *data)
 {
-    uint8_t buf[9] = { SOC, WRITE_CMD, (offset >> 8) & 0xff, offset & 0xff,
-                       data[0], data[1], data[2], data[3], EOC };
-
-    return i2c_write(buf, sizeof(buf));
+  uint8_t buf[9] = { SOC, WRITE_CMD, (offset >> 8) & 0xff, offset & 0xff,
+		     data[0], data[1], data[2], data[3], EOC };
+  return i2c_write(buf, sizeof(buf));
 }
 
 static hal_error_t hal_io_send_read_cmd(off_t offset)
 {
-    uint8_t buf[5] = { SOC, READ_CMD, (offset >> 8) & 0xff, offset & 0xff, EOC };
-
-    return i2c_write(buf, sizeof(buf));
+  uint8_t buf[5] = { SOC, READ_CMD, (offset >> 8) & 0xff, offset & 0xff, EOC };
+  return i2c_write(buf, sizeof(buf));
 }
 
 static hal_error_t hal_io_get_resp(uint8_t *buf, size_t len)
 {
-    hal_error_t err;
-    int i;
+  hal_error_t err;
+  int i;
 
-    for (i = 0; i < len; ++i) {
-        if ((err = i2c_read(&buf[i])) != HAL_OK)
-            return err;
-        if ((i == 0) && (buf[i] != SOR)) {
-            /* we've gotten out of sync, and there's probably nothing we can do */
-	    if (debug)
-		fprintf(stderr, "response byte 0: expected 0x%02x (SOR), got 0x%02x\n",
-			SOR, buf[0]);
-            return HAL_ERROR_IO_UNEXPECTED;
-        }
-        else if (i == 1) {      /* response code */
-            switch (buf[i]) {
-            case READ_OK:
-                len = 9;
-                break;
-            case WRITE_OK:
-                len = 5;
-                break;
-            case RESET_OK:
-                len = 3;
-                break;
-            case ERROR:
-            case UNKNOWN:
-                len = 4;
-                break;
-            default:
-                /* we've gotten out of sync, and there's probably nothing we can do */
-		if (debug)
-		    fprintf(stderr, "unknown response code 0x%02x\n", buf[i]);
-                return HAL_ERROR_IO_UNEXPECTED;
-            }
-        }
+  for (i = 0; i < len; ++i) {
+
+    if ((err = i2c_read(&buf[i])) != HAL_OK)
+      return err;
+
+    if ((i == 0) && (buf[i] != SOR))
+      /* We've gotten out of sync, and there's probably nothing we can do */
+      return HAL_ERROR_IO_UNEXPECTED;
+
+    if (i == 1) {      /* response code */
+      switch (buf[i]) {
+      case READ_OK:
+	len = 9;
+	break;
+      case WRITE_OK:
+	len = 5;
+	break;
+      case RESET_OK:
+	len = 3;
+	break;
+      case ERROR:
+      case UNKNOWN:
+	len = 4;
+	break;
+      default:
+	/* we've gotten out of sync, and there's probably nothing we can do */
+	return HAL_ERROR_IO_UNEXPECTED;
+      }
     }
+  }
 
-    dump("read  ", buf, len);
+  dump("read  ", buf, len);
 
-    return HAL_OK;
+  return HAL_OK;
 }
 
 static hal_error_t hal_io_compare(uint8_t *buf, const uint8_t *expected, size_t len)
 {
-    int i;
+  size_t i;
 
-    /* start at byte 1 because SOR has already been tested */
-    for (i = 1; i < len; ++i) {
-        if (buf[i] != expected[i]) {
-            fprintf(stderr, "response byte %d: expected 0x%02x, got 0x%02x\n",
-                    i, expected[i], buf[i]);
-            return HAL_ERROR_IO_UNEXPECTED;
-        }
-    }
+  /* start at byte 1 because SOR has already been tested */
+  for (i = 1; i < len; ++i) {
+    if (buf[i] != expected[i])
+      return HAL_ERROR_IO_UNEXPECTED;
+  }
 
-    return HAL_OK;
+  return HAL_OK;
 }
 
 static hal_error_t hal_io_get_write_resp(off_t offset)
 {
-    uint8_t buf[5];
-    uint8_t expected[5] = { SOR, WRITE_OK, (offset >> 8) & 0xff, offset & 0xff, EOR };
-    hal_error_t err;
+  uint8_t buf[5];
+  uint8_t expected[5] = { SOR, WRITE_OK, (offset >> 8) & 0xff, offset & 0xff, EOR };
+  hal_error_t err;
 
-    if ((err = hal_io_get_resp(buf, sizeof(buf))) != HAL_OK)
-	return err;
+  if ((err = hal_io_get_resp(buf, sizeof(buf))) != HAL_OK)
+    return err;
 
-    return hal_io_compare(buf, expected, sizeof(expected));
+  return hal_io_compare(buf, expected, sizeof(expected));
 }
 
 static hal_error_t hal_io_get_read_resp(off_t offset, uint8_t *data)
 {
-    uint8_t buf[9];
-    uint8_t expected[4] = { SOR, READ_OK, (offset >> 8) & 0xff, offset & 0xff };
-    hal_error_t err;
+  uint8_t buf[9];
+  uint8_t expected[4] = { SOR, READ_OK, (offset >> 8) & 0xff, offset & 0xff };
+  hal_error_t err;
 
-    if ((err = hal_io_get_resp(buf, sizeof(buf))) != HAL_OK ||
-        (err = hal_io_compare(buf, expected, 4))  != HAL_OK)
-	return err;
+  if ((err = hal_io_get_resp(buf, sizeof(buf))) != HAL_OK ||
+      (err = hal_io_compare(buf, expected, 4))  != HAL_OK)
+    return err;
 
-    if (buf[8] != EOR)
-        return HAL_ERROR_IO_UNEXPECTED;
+  if (buf[8] != EOR)
+    return HAL_ERROR_IO_UNEXPECTED;
 
-    data[0] = buf[4];
-    data[1] = buf[5];
-    data[2] = buf[6];
-    data[3] = buf[7];
+  data[0] = buf[4];
+  data[1] = buf[5];
+  data[2] = buf[6];
+  data[3] = buf[7];
 
-    return HAL_OK;
+  return HAL_OK;
 }
 
 static hal_error_t hal_io_get_read_resp_expected(off_t offset, const uint8_t *data)
 {
-    uint8_t buf[9];
-    uint8_t expected[9] = { SOR, READ_OK, (offset >> 8) & 0xff, offset & 0xff,
-                            data[0], data[1], data[2], data[3], EOR };
-    hal_error_t err;
+  uint8_t buf[9];
+  uint8_t expected[9] = { SOR, READ_OK, (offset >> 8) & 0xff, offset & 0xff,
+			  data[0], data[1], data[2], data[3], EOR };
+  hal_error_t err;
 
-    dump("expect", expected, 9);
+  dump("expect", expected, 9);
 
-    if ((err = hal_io_get_resp(buf, sizeof(buf))) != HAL_OK)
-	return err;
+  if ((err = hal_io_get_resp(buf, sizeof(buf))) != HAL_OK)
+    return err;
 
-    return hal_io_compare(buf, expected, sizeof(buf));
+  return hal_io_compare(buf, expected, sizeof(buf));
 }
 
 hal_error_t hal_io_write(off_t offset, const uint8_t *buf, size_t len)
 {
-    hal_error_t err;
+  hal_error_t err;
 
-    for (; len > 0; offset++, buf += 4, len -= 4)
-	if ((err = hal_io_send_write_cmd(offset, buf)) != HAL_OK ||
-	    (err = hal_io_get_write_resp(offset))      != HAL_OK)
-            return err;
+  for (; len > 0; offset++, buf += 4, len -= 4)
+    if ((err = hal_io_send_write_cmd(offset, buf)) != HAL_OK ||
+	(err = hal_io_get_write_resp(offset))      != HAL_OK)
+      return err;
 
-    return HAL_OK;
+  return HAL_OK;
 }
 
 hal_error_t hal_io_read(off_t offset, uint8_t *buf, size_t len)
 {
-    hal_error_t err;
+  hal_error_t err;
 
-    for (; len > 0; offset++, buf += 4, len -= 4)
-	if ((err = hal_io_send_read_cmd(offset))      != HAL_OK ||
-	    (err = hal_io_get_read_resp(offset, buf)) != HAL_OK)
-            return err;
+  for (; len > 0; offset++, buf += 4, len -= 4)
+    if ((err = hal_io_send_read_cmd(offset))      != HAL_OK ||
+	(err = hal_io_get_read_resp(offset, buf)) != HAL_OK)
+      return err;
 
-    return HAL_OK;
+  return HAL_OK;
 }
 
 hal_error_t hal_io_expected(off_t offset, const uint8_t *buf, size_t len)
 {
-    hal_error_t err;
+  hal_error_t err;
 
-    for (; len > 0; offset++, buf += 4, len -= 4)
-	if ((err = hal_io_send_read_cmd(offset))	       != HAL_OK ||
-	    (err = hal_io_get_read_resp_expected(offset, buf)) != HAL_OK)
-            return err;
+  for (; len > 0; offset++, buf += 4, len -= 4)
+    if ((err = hal_io_send_read_cmd(offset))	           != HAL_OK ||
+	(err = hal_io_get_read_resp_expected(offset, buf)) != HAL_OK)
+      return err;
 
-    return HAL_OK;
+  return HAL_OK;
 }
 
 hal_error_t hal_io_init(off_t offset)
 {
-    uint8_t buf[4] = { 0, 0, 0, CTRL_INIT };
-
-    return hal_io_write(offset, buf, 4);
+  uint8_t buf[4] = { 0, 0, 0, CTRL_INIT };
+  return hal_io_write(offset, buf, 4);
 }
 
 hal_error_t hal_io_next(off_t offset)
 {
-    uint8_t buf[4] = { 0, 0, 0, CTRL_NEXT };
-
-    return hal_io_write(offset, buf, 4);
+  uint8_t buf[4] = { 0, 0, 0, CTRL_NEXT };
+  return hal_io_write(offset, buf, 4);
 }
 
 hal_error_t hal_io_wait(off_t offset, uint8_t status, int *count)
 {
-    hal_error_t err;
-    uint8_t buf[4];
-    int i;
+  hal_error_t err;
+  uint8_t buf[4];
+  int i;
 
-    for (i = 1; ; ++i) {
-        if (count && (*count > 0) && (i >= *count)) {
-	    if (debug)
-	        fprintf(stderr, "hal_io_wait timed out\n");
-            return HAL_ERROR_IO_TIMEOUT;
-        }
-        if ((err = hal_io_read(offset, buf, 4)) != HAL_OK)
-            return err;
-        if (buf[3] & status) {
-            if (count)
-                *count = i;
-            return HAL_OK;
-        }
+  for (i = 1; ; ++i) {
+
+    if (count && (*count > 0) && (i >= *count))
+      return HAL_ERROR_IO_TIMEOUT;
+
+    if ((err = hal_io_read(offset, buf, 4)) != HAL_OK)
+      return err;
+
+    if (buf[3] & status) {
+      if (count)
+	*count = i;
+      return HAL_OK;
+
     }
+  }
 }
 
 hal_error_t hal_io_wait_ready(off_t offset)
 {
-    int limit = 10;
-    return hal_io_wait(offset, STATUS_READY, &limit);
+  int limit = 10;
+  return hal_io_wait(offset, STATUS_READY, &limit);
 }
 
 hal_error_t hal_io_wait_valid(off_t offset)
 {
-    int limit = 10;
-    return hal_io_wait(offset, STATUS_VALID, &limit);
+  int limit = 10;
+  return hal_io_wait(offset, STATUS_VALID, &limit);
 }

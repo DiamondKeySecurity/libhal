@@ -436,6 +436,7 @@ typedef enum {
   HAL_ERROR_IO_TIMEOUT,			/* I/O with FPGA timed out */
   HAL_ERROR_IO_UNEXPECTED,		/* Unexpected response from FPGA */
   HAL_ERROR_IO_OS_ERROR,		/* Operating system error talking to FPGA */
+  HAL_ERROR_IO_BAD_COUNT,		/* Bad byte count */
   HAL_ERROR_CSPRNG_BROKEN,		/* CSPRNG is returning nonsense (perhaps core not present?) */
   HAL_ERROR_KEYWRAP_BAD_MAGIC,		/* Bad magic number while unwrapping key */
   HAL_ERROR_KEYWRAP_BAD_LENGTH,		/* Length out of range while unwrapping key */

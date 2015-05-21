@@ -47,21 +47,20 @@
 static int debug = 0;
 static int inited = 0;
 
-/* ---------------- EIM low-level code ---------------- */
+#ifndef EIM_IO_TIMEOUT
+#define EIM_IO_TIMEOUT	100000000
+#endif
 
 static hal_error_t init(void)
 {
-    if (inited)
-        return HAL_OK;
-
-    if (eim_setup() != 0) {
-        if (debug)
-            fprintf(stderr, "[ EIM setup failed ]\n");
-        return HAL_ERROR_IO_SETUP_FAILED;
-    }
-
-    inited = 1;
+  if (inited)
     return HAL_OK;
+
+  if (eim_setup() != 0)
+    return HAL_ERROR_IO_SETUP_FAILED;
+
+  inited = 1;
+  return HAL_OK;
 }
 
 /* translate cryptech register number to EIM address
@@ -75,143 +74,134 @@ static hal_error_t init(void)
  */
 static off_t eim_offset(off_t offset)
 {
-    return EIM_BASE_ADDR + ((offset & ~0x1fff) << 3) + ((offset & 0x1fff) << 2);
+  return EIM_BASE_ADDR + ((offset & ~0x1fff) << 3) + ((offset & 0x1fff) << 2);
 }
-
-/* ---------------- test-case low-level code ---------------- */
 
 void hal_io_set_debug(int onoff)
 {
-    debug = onoff;
+  debug = onoff;
 }
 
 static void dump(char *label, const uint8_t *buf, size_t len)
 {
-    if (debug) {
-        int i;
-        printf("%s [", label);
-        for (i = 0; i < len; ++i)
-            printf(" %02x", buf[i]);
-        printf(" ]\n");
-    }
+  if (debug) {
+    size_t i;
+    printf("%s [", label);
+    for (i = 0; i < len; ++i)
+      printf(" %02x", buf[i]);
+    printf(" ]\n");
+  }
 }
 
 hal_error_t hal_io_write(off_t offset, const uint8_t *buf, size_t len)
 {
-    hal_error_t err;
+  hal_error_t err;
 
-    if ((err = init()) != HAL_OK)
-        return err;
+  if (len % 4 != 0)
+    return HAL_ERROR_IO_BAD_COUNT;
 
-    dump("write ", buf, len);
+  if ((err = init()) != HAL_OK)
+    return err;
 
-    offset = eim_offset(offset);
-    for (; len > 0; offset += 4, buf += 4, len -= 4) {
-        uint32_t val;
-        val = htonl(*(uint32_t *)buf);
-        eim_write_32(offset, &val);
-    }
+  dump("write ", buf, len);
 
-    return HAL_OK;
+  offset = eim_offset(offset);
+  for (; len > 0; offset += 4, buf += 4, len -= 4) {
+    uint32_t val;
+    val = htonl(*(uint32_t *)buf);
+    eim_write_32(offset, &val);
+  }
+
+  return HAL_OK;
 }
 
 hal_error_t hal_io_read(off_t offset, uint8_t *buf, size_t len)
 {
-    uint8_t *rbuf = buf;
-    int rlen = len;
-    hal_error_t err;
+  uint8_t *rbuf = buf;
+  int rlen = len;
+  hal_error_t err;
 
-    if ((err = init()) != HAL_OK)
-        return err;
+  if (len % 4 != 0)
+    return HAL_ERROR_IO_BAD_COUNT;
 
-    offset = eim_offset(offset);
-    for (; rlen > 0; offset += 4, rbuf += 4, rlen -= 4) {
-        uint32_t val;
-        eim_read_32(offset, &val);
-        *(uint32_t *)rbuf = ntohl(val);
-    }
+  if ((err = init()) != HAL_OK)
+    return err;
 
-    dump("read  ", buf, len);
+  offset = eim_offset(offset);
+  for (; rlen > 0; offset += 4, rbuf += 4, rlen -= 4) {
+    uint32_t val;
+    eim_read_32(offset, &val);
+    *(uint32_t *)rbuf = ntohl(val);
+  }
 
-    return HAL_OK;
+  dump("read  ", buf, len);
+
+  return HAL_OK;
 }
 
 hal_error_t hal_io_expected(off_t offset, const uint8_t *expected, size_t len)
 {
-    hal_error_t err;
-    uint8_t *buf;
-    int i;
+  hal_error_t err;
+  uint8_t buf[4];
+  size_t i;
 
-    buf = malloc(len);
-    if (buf == NULL) {
-        perror("malloc");
-        return HAL_ERROR_MEMORY;
-    }
-    dump("expect", expected, len);
+  if (len % 4 != 0)
+    return HAL_ERROR_IO_BAD_COUNT;
 
-    if ((err = hal_io_read(offset, buf, len)) != HAL_OK)
-        goto errout;
+  dump("expect", expected, len);
 
-    for (i = 0; i < len; ++i) {
-        if (buf[i] != expected[i]) {
-            fprintf(stderr, "response byte %d: expected 0x%02x, got 0x%02x\n",
-                    i, expected[i], buf[i]);
-	    err = HAL_ERROR_IO_UNEXPECTED;
-            goto errout;
-        }
-    }
+  for (i = 0; i < len; i++) {
+    if ((i & 3) == 0 && (err = hal_io_read(offset, buf, sizeof(buf))) != HAL_OK)
+      return err;
+    if (buf[i & 3] != expected[i])
+      return HAL_ERROR_IO_UNEXPECTED;
+  }
 
-    free(buf);
-    return HAL_OK;
-
-errout:
-    free(buf);
-    return err;
+  return HAL_OK;
 }
 
 hal_error_t hal_io_init(off_t offset)
 {
-    uint8_t buf[4] = { 0, 0, 0, CTRL_INIT };
-
-    return hal_io_write(offset, buf, 4);
+  uint8_t buf[4] = { 0, 0, 0, CTRL_INIT };
+  return hal_io_write(offset, buf, sizeof(buf));
 }
 
 hal_error_t hal_io_next(off_t offset)
 {
-    uint8_t buf[4] = { 0, 0, 0, CTRL_NEXT };
-
-    return hal_io_write(offset, buf, 4);
+  uint8_t buf[4] = { 0, 0, 0, CTRL_NEXT };
+  return hal_io_write(offset, buf, sizeof(buf));
 }
 
 hal_error_t hal_io_wait(off_t offset, uint8_t status, int *count)
 {
-    hal_error_t err;
-    uint8_t buf[4];
-    int i;
+  hal_error_t err;
+  uint8_t buf[4];
+  int i;
 
-    for (i = 1; ; ++i) {
-        if (count && (*count > 0) && (i >= *count)) {
-            fprintf(stderr, "hal_io_wait timed out\n");
-            return HAL_ERROR_IO_TIMEOUT;
-        }
-        if ((err = hal_io_read(offset, buf, 4)) != HAL_OK)
-            return err;
-        if (buf[3] & status) {
-            if (count)
-                *count = i;
-            return HAL_OK;
-        }
+  for (i = 1; ; ++i) {
+
+    if (count && (*count > 0) && (i >= *count))
+      return HAL_ERROR_IO_TIMEOUT;
+
+    if ((err = hal_io_read(offset, buf, sizeof(buf))) != HAL_OK)
+      return err;
+
+    if ((buf[3] & status) != 0) {
+      if (count)
+	*count = i;
+      return HAL_OK;
     }
+  }
 }
 
 hal_error_t hal_io_wait_ready(off_t offset)
 {
-    int limit = 256;
-    return hal_io_wait(offset, STATUS_READY, &limit);
+  int limit = EIM_IO_TIMEOUT;
+  return hal_io_wait(offset, STATUS_READY, &limit);
 }
 
 hal_error_t hal_io_wait_valid(off_t offset)
 {
-    int limit = 256;
-    return hal_io_wait(offset, STATUS_VALID, &limit);
+  int limit = EIM_IO_TIMEOUT;
+  return hal_io_wait(offset, STATUS_VALID, &limit);
 }
