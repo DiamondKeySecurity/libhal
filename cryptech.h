@@ -429,15 +429,18 @@
  */
 
 typedef enum {
-  HAL_OK,			/* All's well */
-  HAL_ERROR_MEMORY,		/* malloc() failure or similar */
-  HAL_ERROR_INCONSISTENT_ARGS,	/* Inconsistent arguments given */
-  HAL_ERROR_IO_SETUP_FAILED,	/* Could not set up I/O with FPGA */
-  HAL_ERROR_IO_TIMEOUT,		/* I/O with FPGA timed out */
-  HAL_ERROR_IO_UNEXPECTED,	/* Unexpected response from FPGA */
-  HAL_ERROR_IO_OS_ERROR,	/* Operating system error talking to FPGA */
-  HAL_ERROR_CSPRNG_ZEROED,	/* CSPRNG is returning zeros (perhaps core not present?) */
-  N_HAL_ERRORS			/* Number of error codes (must be last) */
+  HAL_OK,				/* All's well */
+  HAL_ERROR_MEMORY,			/* malloc() failure or similar */
+  HAL_ERROR_BAD_ARGUMENTS,		/* Bad arguments given */
+  HAL_ERROR_IO_SETUP_FAILED,		/* Could not set up I/O with FPGA */
+  HAL_ERROR_IO_TIMEOUT,			/* I/O with FPGA timed out */
+  HAL_ERROR_IO_UNEXPECTED,		/* Unexpected response from FPGA */
+  HAL_ERROR_IO_OS_ERROR,		/* Operating system error talking to FPGA */
+  HAL_ERROR_CSPRNG_BROKEN,		/* CSPRNG is returning nonsense (perhaps core not present?) */
+  HAL_ERROR_KEYWRAP_BAD_MAGIC,		/* Bad magic number while unwrapping key */
+  HAL_ERROR_KEYWRAP_BAD_LENGTH,		/* Length out of range while unwrapping key */
+  HAL_ERROR_KEYWRAP_BAD_PADDING,	/* Nonzero padding detected while unwrapping key */
+  N_HAL_ERRORS				/* Number of error codes (must be last) */
 } hal_error_t;
 
 
@@ -449,39 +452,47 @@ typedef enum {
  * Public I/O functions.
  */
 
-void hal_io_set_debug(int onoff);
-hal_error_t hal_io_write(off_t offset, const uint8_t *buf, size_t len);
-hal_error_t hal_io_read(off_t offset, uint8_t *buf, size_t len);
-hal_error_t hal_io_expected(off_t offset, const uint8_t *expected, size_t len);
-hal_error_t hal_io_init(off_t offset);
-hal_error_t hal_io_next(off_t offset);
-hal_error_t hal_io_wait(off_t offset, uint8_t status, int *count);
-hal_error_t hal_io_wait_ready(off_t offset);
-hal_error_t hal_io_wait_valid(off_t offset);
+extern void hal_io_set_debug(int onoff);
+extern hal_error_t hal_io_write(off_t offset, const uint8_t *buf, size_t len);
+extern hal_error_t hal_io_read(off_t offset, uint8_t *buf, size_t len);
+extern hal_error_t hal_io_expected(off_t offset, const uint8_t *expected, size_t len);
+extern hal_error_t hal_io_init(off_t offset);
+extern hal_error_t hal_io_next(off_t offset);
+extern hal_error_t hal_io_wait(off_t offset, uint8_t status, int *count);
+extern hal_error_t hal_io_wait_ready(off_t offset);
+extern hal_error_t hal_io_wait_valid(off_t offset);
 
 /*
  * Higher level public API.
  */
 
-hal_error_t hal_random(void *buffer, const size_t length);
+extern hal_error_t hal_get_random(void *buffer, const size_t length);
 
-void hal_hash_set_debug(int onoff);
-hal_error_t hash_sha1_core_present(void);
-hal_error_t hash_sha256_core_present(void);
-hal_error_t hash_sha512_core_present(void);
-size_t hal_hash_state_size(void);
-void hal_hash_state_initialize(void *state);
-hal_error_t hal_hash_sha1(void *state, const uint8_t * data_buffer, const size_t data_buffer_length,
-			  		    uint8_t *digest_buffer, const size_t digest_buffer_length);
-hal_error_t hal_hash_sha256(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
-					     uint8_t *digest_buffer, const size_t digest_buffer_length);
-hal_error_t hal_hash_sha512_224(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
-                                		 uint8_t *digest_buffer, const size_t digest_buffer_length);
-hal_error_t hal_hash_sha512_256(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
-                                		 uint8_t *digest_buffer, const size_t digest_buffer_length);
-hal_error_t hal_hash_sha384(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
-                            		     uint8_t *digest_buffer, const size_t digest_buffer_length);
-hal_error_t hal_hash_sha512(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
-                            		     uint8_t *digest_buffer, const size_t digest_buffer_length);
+extern void hal_hash_set_debug(int onoff);
+extern hal_error_t hash_sha1_core_present(void);
+extern hal_error_t hash_sha256_core_present(void);
+extern hal_error_t hash_sha512_core_present(void);
+extern size_t hal_hash_state_size(void);
+extern void hal_hash_state_initialize(void *state);
+extern hal_error_t hal_hash_sha1(void *state, const uint8_t * data_buffer, const size_t data_buffer_length,
+				 		   uint8_t *digest_buffer, const size_t digest_buffer_length);
+extern hal_error_t hal_hash_sha256(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
+				   		    uint8_t *digest_buffer, const size_t digest_buffer_length);
+extern hal_error_t hal_hash_sha512_224(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
+				       			uint8_t *digest_buffer, const size_t digest_buffer_length);
+extern hal_error_t hal_hash_sha512_256(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
+				       			uint8_t *digest_buffer, const size_t digest_buffer_length);
+extern hal_error_t hal_hash_sha384(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
+				   		    uint8_t *digest_buffer, const size_t digest_buffer_length);
+extern hal_error_t hal_hash_sha512(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
+				   		    uint8_t *digest_buffer, const size_t digest_buffer_length);
+
+extern hal_error_t hal_aes_keywrap(const uint8_t *kek, const size_t kek_length,
+				   const uint8_t *plaintext, const size_t plaintext_length,
+				   uint8_t *cyphertext, size_t *ciphertext_length);
+extern hal_error_t hal_aes_keyunwrap(const uint8_t *kek, const size_t kek_length,
+				     const uint8_t *ciphertext, const size_t ciphertext_length,
+				     unsigned char *plaintext, size_t *plaintext_length);
+extern size_t hal_aes_keywrap_ciphertext_length(const size_t plaintext_length);
 
 #endif /* _CRYPTECH_H_ */

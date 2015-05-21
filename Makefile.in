@@ -2,7 +2,7 @@
 
 INC		= cryptech.h
 LIB		= libcryptech.a
-OBJ		= ${IO_OBJ} csprng.o hash.o
+OBJ		= ${IO_OBJ} csprng.o hash.o aes_keywrap.o
 
 IO_OBJ		= ${IO_OBJ_@FPGA_BUS@}
 IO_OBJ_EIM	= hal_io_eim.o novena-eim.o

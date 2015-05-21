@@ -53,7 +53,7 @@
 #define WAIT_FOR_CSPRNG_VALID	1
 #endif
 
-hal_error_t hal_random(void *buffer, const size_t length)
+hal_error_t hal_get_random(void *buffer, const size_t length)
 {
   uint8_t temp[4], *buf = buffer;
   hal_error_t err;
@@ -77,7 +77,7 @@ hal_error_t hal_random(void *buffer, const size_t length)
     if (*buf != 0)
       return HAL_OK;
 
-  return HAL_ERROR_CSPRNG_ZEROED;
+  return HAL_ERROR_CSPRNG_BROKEN;
 }
 
 /*

@@ -191,7 +191,7 @@ static hal_error_t hash_do_hash(hash_state_t *state,                    /* Opaqu
       (data_buffer_length > 0 && data_buffer == NULL) ||
       (data_buffer_length == 0 && digest_buffer == NULL) ||
       (digest_buffer != NULL && digest_buffer_length < digest_length))
-    return HAL_ERROR_INCONSISTENT_ARGS;
+    return HAL_ERROR_BAD_ARGUMENTS;
 
   if (state->block_length == 0)
     state->block_length = block_length;
