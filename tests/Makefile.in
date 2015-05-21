@@ -1,0 +1,24 @@
+# @configure_input@
+
+INC		= ../cryptech.h
+LIB		= ../libcryptech.a
+BIN		= test-aes-key-wrap
+
+CC		= @CC@
+CFLAGS		= @CFLAGS@ -I..
+LDFLAGS		= @LDFLAGS@ ${LIB}
+
+all: ${BIN}
+
+*.o: ${INC}
+
+${BIN}: ${LIB}
+
+test: all
+	for i in ${BIN}; do ./$$i; done
+
+clean:
+	rm -f *.o ${BIN}
+
+distclean: clean
+	rm -f Makefile

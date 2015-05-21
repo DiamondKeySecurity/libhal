@@ -425,29 +425,38 @@
 
 
 /*
- * C API error codes.
+ * C API error codes.  Defined in this form so we can keep the tokens
+ * and error strings together.  See errorstrings.c.
  */
 
-typedef enum {
-  HAL_OK,				/* All's well */
-  HAL_ERROR_MEMORY,			/* malloc() failure or similar */
-  HAL_ERROR_BAD_ARGUMENTS,		/* Bad arguments given */
-  HAL_ERROR_IO_SETUP_FAILED,		/* Could not set up I/O with FPGA */
-  HAL_ERROR_IO_TIMEOUT,			/* I/O with FPGA timed out */
-  HAL_ERROR_IO_UNEXPECTED,		/* Unexpected response from FPGA */
-  HAL_ERROR_IO_OS_ERROR,		/* Operating system error talking to FPGA */
-  HAL_ERROR_IO_BAD_COUNT,		/* Bad byte count */
-  HAL_ERROR_CSPRNG_BROKEN,		/* CSPRNG is returning nonsense (perhaps core not present?) */
-  HAL_ERROR_KEYWRAP_BAD_MAGIC,		/* Bad magic number while unwrapping key */
-  HAL_ERROR_KEYWRAP_BAD_LENGTH,		/* Length out of range while unwrapping key */
-  HAL_ERROR_KEYWRAP_BAD_PADDING,	/* Nonzero padding detected while unwrapping key */
-  N_HAL_ERRORS				/* Number of error codes (must be last) */
-} hal_error_t;
+#define HAL_ERROR_LIST \
+  DEFINE_HAL_ERROR(HAL_OK,				"No error")					\
+  DEFINE_HAL_ERROR(HAL_ERROR_BAD_ARGUMENTS,		"Bad arguments given")				\
+  DEFINE_HAL_ERROR(HAL_ERROR_UNSUPPORTED_KEY,		"Unsupported key type or key length")		\
+  DEFINE_HAL_ERROR(HAL_ERROR_IO_SETUP_FAILED,		"Could not set up I/O with FPGA")		\
+  DEFINE_HAL_ERROR(HAL_ERROR_IO_TIMEOUT,		"I/O with FPGA timed out")			\
+  DEFINE_HAL_ERROR(HAL_ERROR_IO_UNEXPECTED,		"Unexpected response from FPGA")		\
+  DEFINE_HAL_ERROR(HAL_ERROR_IO_OS_ERROR,		"Operating system error talking to FPGA")	\
+  DEFINE_HAL_ERROR(HAL_ERROR_IO_BAD_COUNT,		"Bad byte count")				\
+  DEFINE_HAL_ERROR(HAL_ERROR_CSPRNG_BROKEN,		"CSPRNG is returning nonsense")			\
+  DEFINE_HAL_ERROR(HAL_ERROR_KEYWRAP_BAD_MAGIC,		"Bad magic number while unwrapping key")	\
+  DEFINE_HAL_ERROR(HAL_ERROR_KEYWRAP_BAD_LENGTH,	"Length out of range while unwrapping key")	\
+  DEFINE_HAL_ERROR(HAL_ERROR_KEYWRAP_BAD_PADDING,	"Non-zero padding detected unwrapping key")	\
+  END_OF_HAL_ERROR_LIST
 
+/* Marker to forestall silly line continuation errors */
+#define END_OF_HAL_ERROR_LIST
+
+/* Define the error code enum here.  See errorstrings.c for the text strings. */
+#define DEFINE_HAL_ERROR(_code_,_text_)	 _code_,
+typedef enum { HAL_ERROR_LIST N_HAL_ERRORS } hal_error_t;
+#undef  DEFINE_HAL_ERROR
 
 /*
  * Public functions.
  */
+
+extern const char *hal_error_string(const hal_error_t err);
 
 /*
  * Public I/O functions.

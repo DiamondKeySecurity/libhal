@@ -1699,14 +1699,12 @@ case $CC in #(
   *) :
      ;;
 esac
-
 case $CFLAGS in #(
   "") :
     CFLAGS="-g -Wall -fPIC" ;; #(
   *) :
      ;;
 esac
-
 case $LDFLAGS in #(
   "") :
     LDFLAGS="-g" ;; #(
@@ -1723,7 +1721,7 @@ $as_echo "$as_me: C compiler flags: $CFLAGS" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: Linker flags: $LDFLAGS" >&5
 $as_echo "$as_me: Linker flags: $LDFLAGS" >&6;}
 
-ac_config_files="$ac_config_files Makefile"
+ac_config_files="$ac_config_files Makefile tests/Makefile"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -2431,6 +2429,7 @@ for ac_config_target in $ac_config_targets
 do
   case $ac_config_target in
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
+    "tests/Makefile") CONFIG_FILES="$CONFIG_FILES tests/Makefile" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
   esac

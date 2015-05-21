@@ -53,6 +53,8 @@ static hal_error_t load_kek(const uint8_t *K, const size_t K_len, const kek_acti
   case bitsToBytes(256):
     config[3] |=  AES_CONFIG_KEYLEN;
     break;
+  case bitsToBytes(192):
+    return HAL_ERROR_UNSUPPORTED_KEY;
   default:
     return HAL_ERROR_BAD_ARGUMENTS;
   }

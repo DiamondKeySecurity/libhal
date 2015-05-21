@@ -2,7 +2,7 @@
 
 INC		= cryptech.h
 LIB		= libcryptech.a
-OBJ		= ${IO_OBJ} csprng.o hash.o aes_keywrap.o
+OBJ		= ${IO_OBJ} csprng.o hash.o aes_keywrap.o errorstrings.o
 
 IO_OBJ		= ${IO_OBJ_@FPGA_BUS@}
 IO_OBJ_EIM	= hal_io_eim.o novena-eim.o
@@ -24,6 +24,9 @@ ${OBJ}: ${INC}
 ${LIB}: ${OBJ}
 	ar rcs $@ $^
 
+test: all
+	cd tests; ${MAKE} -k $@
+
 install: ${LIB} ${INC}
 	install ${LIB} ${libdir}
 	install ${INC} ${includedir}
@@ -34,3 +37,13 @@ uninstall:
 
 clean:
 	rm -f ${OBJ} ${LIB}
+	cd tests; ${MAKE} $@
+
+distclean: clean
+	cd tests; ${MAKE} $@
+	rm -f config.log config.status TAGS Makefile
+
+tags: TAGS
+
+TAGS: *.[ch]
+	etags $^

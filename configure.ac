@@ -29,5 +29,5 @@ AC_MSG_NOTICE([C compiler: $CC])
 AC_MSG_NOTICE([C compiler flags: $CFLAGS])
 AC_MSG_NOTICE([Linker flags: $LDFLAGS])
 
-AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([Makefile tests/Makefile])
 AC_OUTPUT
