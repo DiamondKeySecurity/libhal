@@ -15,48 +15,52 @@
 #endif
 
 /*
- * Test cases from RFC 5649...which all use a 192-bit key, which our
- * AES implementation doesn't support, to these will never pass.  Feh.
- *
- * Have to write our own, I guess, using our Python implementation or
- * something.
+ * Test cases from RFC 5649 all use a 192-bit key, which our AES
+ * implementation doesn't support, so had to write our own.
  */
 
-typedef struct {
-  const char *K;                /* Key-encryption-key */
-  const char *Q;                /* Plaintext */
-  const char *C;                /* Ciphertext */
-} test_case_t;
-
-static const test_case_t test_case[] = {
-
-  { "5840df6e29b02af1 ab493b705bf16ea1 ae8338f4dcc176a8",                       /* K */
-    "c37b7e6492584340 bed1220780894115 5068f738",                               /* Q */
-    "138bdeaa9b8fa7fc 61f97742e72248ee 5ae6ae5360d1ae6a 5f54f373fa543b6a"},     /* C */
-
-  { "5840df6e29b02af1 ab493b705bf16ea1 ae8338f4dcc176a8",                       /* K */
-    "466f7250617369",                                                           /* Q */
-    "afbeb0f07dfbf541 9200f2ccb50bb24f" }                                       /* C */
-
+static const uint8_t Q[] = { /* Plaintext, 81 bytes */
+  0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x21, 0x20, 0x20, 0x4d, 0x79, 0x20, 0x6e,
+  0x61, 0x6d, 0x65, 0x20, 0x69, 0x73, 0x20, 0x49, 0x6e, 0x69, 0x67, 0x6f,
+  0x20, 0x4d, 0x6f, 0x6e, 0x74, 0x6f, 0x79, 0x61, 0x2e, 0x20, 0x20, 0x59,
+  0x6f, 0x75, 0x20, 0x62, 0x72, 0x6f, 0x6b, 0x65, 0x20, 0x6d, 0x79, 0x20,
+  0x41, 0x45, 0x53, 0x20, 0x6b, 0x65, 0x79, 0x20, 0x77, 0x72, 0x61, 0x70,
+  0x70, 0x65, 0x72, 0x2e, 0x20, 0x20, 0x50, 0x72, 0x65, 0x70, 0x61, 0x72,
+  0x65, 0x20, 0x74, 0x6f, 0x20, 0x64, 0x69, 0x65, 0x2e
 };
 
-static int parse_hex(const char *hex, uint8_t *bin, size_t *len, const size_t max)
-{
-  static const char whitespace[] = " \t\r\n";
-  size_t i;
+static const uint8_t K_128[] = { /* 128-bit KEK, 16 bytes */
+  0xbc, 0x2a, 0xd8, 0x90, 0xd8, 0x91, 0x10, 0x65, 0xf0, 0x42, 0x10, 0x1b,
+  0x4a, 0x6b, 0xaf, 0x99
+};
 
-  assert(hex != NULL && bin != NULL && len != NULL);
+static const uint8_t K_256[] = { /* 256-bit KEK, 32 bytes */
+  0xe3, 0x97, 0x52, 0x81, 0x2b, 0x7e, 0xc2, 0xa4, 0x6a, 0xac, 0x50, 0x18,
+  0x0d, 0x10, 0xc6, 0x85, 0x2c, 0xcf, 0x86, 0x0a, 0xa9, 0x4f, 0x69, 0xab,
+  0x16, 0xa6, 0x4f, 0x3e, 0x96, 0xa0, 0xbd, 0x9e
+};
 
-  hex += strspn(hex, whitespace);
+static const uint8_t C_128[] = { /* Plaintext wrapped by 128-bit KEK, 96 bytes */
+  0xb0, 0x10, 0x91, 0x7b, 0xe7, 0x67, 0x9c, 0x10, 0x16, 0x64, 0xe7, 0x73,
+  0xd2, 0x68, 0xba, 0xed, 0x8c, 0x50, 0x49, 0x80, 0x16, 0x2f, 0x4e, 0x97,
+  0xe8, 0x45, 0x5c, 0x2f, 0x2b, 0x7a, 0x88, 0x0e, 0xd8, 0xef, 0xaa, 0x40,
+  0xb0, 0x2e, 0xb4, 0x50, 0xe7, 0x60, 0xf7, 0xbb, 0xed, 0x56, 0x79, 0x16,
+  0x65, 0xb7, 0x13, 0x9b, 0x4c, 0x66, 0x86, 0x5f, 0x4d, 0x53, 0x2d, 0xcd,
+  0x83, 0x41, 0x01, 0x35, 0x0d, 0x06, 0x39, 0x4e, 0x9e, 0xfe, 0x68, 0xc5,
+  0x2f, 0x37, 0x33, 0x99, 0xbb, 0x88, 0xf7, 0x76, 0x1e, 0x82, 0x48, 0xd6,
+  0xa2, 0xf3, 0x9b, 0x92, 0x01, 0x65, 0xcb, 0x48, 0x36, 0xf5, 0x42, 0xd3
+};
 
-  for (i = 0; *hex != '\0' && i < max; i++, hex += 2 + strspn(hex + 2, whitespace))
-    if (sscanf(hex, "%2hhx", &bin[i]) != 1)
-      return 0;
-
-  *len = i;
-
-  return *hex == '\0';
-}
+static const uint8_t C_256[] = { /* Plaintext wrapped by 256-bit KEK, 96 bytes */
+  0x08, 0x00, 0xbc, 0x1b, 0x35, 0xe4, 0x2a, 0x69, 0x3f, 0x43, 0x07, 0x54,
+  0x31, 0xba, 0xb6, 0x89, 0x7c, 0x64, 0x9f, 0x03, 0x84, 0xc4, 0x4a, 0x71,
+  0xdb, 0xcb, 0xae, 0x55, 0x30, 0xdf, 0xb0, 0x2b, 0xc3, 0x91, 0x5d, 0x07,
+  0xa9, 0x24, 0xdb, 0xe7, 0xbe, 0x4d, 0x0d, 0x62, 0xd4, 0xf8, 0xb1, 0x94,
+  0xf1, 0xb9, 0x22, 0xb5, 0x94, 0xab, 0x7e, 0x0b, 0x15, 0x6a, 0xd9, 0x5f,
+  0x6c, 0x20, 0xb7, 0x7e, 0x13, 0x19, 0xfa, 0xc4, 0x70, 0xec, 0x0d, 0xbd,
+  0xf7, 0x01, 0xc6, 0xb3, 0x9a, 0x19, 0xaf, 0xf2, 0x47, 0x68, 0xea, 0x7e,
+  0x97, 0x7e, 0x52, 0x2e, 0xd4, 0x03, 0x31, 0xcb, 0x22, 0xb6, 0xfe, 0xf5
+};
 
 static const char *format_hex(const uint8_t *bin, const size_t len, char *hex, const size_t max)
 {
@@ -74,57 +78,68 @@ static const char *format_hex(const uint8_t *bin, const size_t len, char *hex, c
   return hex;
 }
 
-static int run_test(const test_case_t * const tc)
+static int run_test(const uint8_t * const K, const size_t K_len,
+		    const uint8_t * const C, const size_t C_len)
 {
-  uint8_t K[TC_BUFSIZE], Q[TC_BUFSIZE], C[TC_BUFSIZE], q[TC_BUFSIZE], c[TC_BUFSIZE];
-  size_t K_len, Q_len, C_len, q_len = sizeof(q), c_len = sizeof(c);
-  char h1[TC_BUFSIZE * 3],  h2[TC_BUFSIZE * 3];
+  const size_t Q_len = sizeof(Q);
+  uint8_t q[TC_BUFSIZE], c[TC_BUFSIZE];
+  size_t q_len = sizeof(q), c_len = sizeof(c);
+  char h1[TC_BUFSIZE * 3 + 1],  h2[TC_BUFSIZE * 3 + 1];
   hal_error_t err;
-  int ok = 1;
+  int ok1 = 1, ok2 = 1;
 
-  assert(tc != NULL);
+  /*
+   * Wrap and compare results.
+   */
 
-  if (!parse_hex(tc->K, K, &K_len, sizeof(K)))
-    return printf("couldn't parse KEK %s\n", tc->K), 0;
+  if ((err = hal_aes_keywrap(K, K_len, Q, Q_len, c, &c_len)) != HAL_OK) {
+    printf("couldn't wrap with %lu-bit KEK: %s\n",
+	   K_len * 8, hal_error_string(err));
+    ok1 = 0;
+  }
+  else if (C_len != c_len || memcmp(C, c, C_len) != 0) {
+    printf("ciphertext mismatch:\n  Want: %s\n  Got:  %s\n",
+	   format_hex(C, C_len, h1, sizeof(h1)),
+	   format_hex(c, c_len, h2, sizeof(h2)));
+    ok1 = 0;
+  }
 
-  if (!parse_hex(tc->Q, Q, &Q_len, sizeof(Q)))
-    return printf("couldn't parse plaintext %s\n", tc->Q), 0;
+  /*
+   * Unwrap and compare results.
+   */
 
-  if (!parse_hex(tc->C, C, &C_len, sizeof(C)))
-    return printf("couldn't parse ciphertext %s\n", tc->C), 0;
+  if ((err = hal_aes_keyunwrap(K, K_len, C, C_len, q, &q_len)) != HAL_OK) {
+    printf("couldn't unwrap with %lu-bit KEK: %s\n",
+	   K_len * 8, hal_error_string(err));
+    ok2 = 0;
+  }
+  else if (Q_len != q_len || memcmp(Q, q, Q_len) != 0) {
+    printf("plaintext mismatch:\n  Want: %s\n  Got:  %s\n",
+	   format_hex(Q, Q_len, h1, sizeof(h1)),
+	   format_hex(q, q_len, h2, sizeof(h2)));
+    ok2 = 0;
+  }
 
-  if ((err = hal_aes_keywrap(K, K_len, Q, Q_len, c, &c_len)) != HAL_OK)
-    ok = printf("couldn't wrap %s: %s\n", tc->Q, hal_error_string(err)), 0;
-
-  if ((err = hal_aes_keyunwrap(K, K_len, C, C_len, q, &q_len)) != HAL_OK)
-    ok = printf("couldn't unwrap %s: %s\n", tc->C, hal_error_string(err)), 0;
-
-  if (C_len != c_len || memcmp(C, c, C_len) != 0)
-    ok = printf("ciphertext mismatch:\n  Want: %s\n  Got:  %s\n",
-		format_hex(C, C_len, h1, sizeof(h1)),
-		format_hex(c, c_len, h2, sizeof(h2))), 0;
-
-  if (Q_len != q_len || memcmp(Q, q, Q_len) != 0)
-    ok = printf("plaintext mismatch:\n  Want: %s\n  Got:  %s\n",
-		format_hex(Q, Q_len, h1, sizeof(h1)),
-		format_hex(q, q_len, h2, sizeof(h2))), 0;
-
-  return ok;
+  return ok1 && ok2;
 }
 
 int main (int argc, char *argv[])
 {
-  int i, ok = 1;
+  int failures = 0;
 
-  for (i = 0; i < sizeof(test_case)/sizeof(*test_case); i++) {
-    printf("Running test case #%d...", i);
-    if (run_test(&test_case[i]))
-      printf("OK\n");
-    else
-      ok = 0;
-  }
+  printf("Testing 128-bit KEK...");
+  if (run_test(K_128, sizeof(K_128), C_128, sizeof(C_128)))
+    printf("OK\n");
+  else
+    failures++;
 
-  return !ok;
+  printf("Testing 256-bit KEK...");
+  if (run_test(K_256, sizeof(K_256), C_256, sizeof(C_256)))
+    printf("OK\n");
+  else
+    failures++;
+
+  return failures;
 }
 
 /*
