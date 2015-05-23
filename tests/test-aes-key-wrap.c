@@ -94,7 +94,7 @@ static int run_test(const uint8_t * const K, const size_t K_len,
 
   if ((err = hal_aes_keywrap(K, K_len, Q, Q_len, c, &c_len)) != HAL_OK) {
     printf("couldn't wrap with %lu-bit KEK: %s\n",
-	   K_len * 8, hal_error_string(err));
+	   (unsigned long) K_len * 8, hal_error_string(err));
     ok1 = 0;
   }
   else if (C_len != c_len || memcmp(C, c, C_len) != 0) {
@@ -110,7 +110,7 @@ static int run_test(const uint8_t * const K, const size_t K_len,
 
   if ((err = hal_aes_keyunwrap(K, K_len, C, C_len, q, &q_len)) != HAL_OK) {
     printf("couldn't unwrap with %lu-bit KEK: %s\n",
-	   K_len * 8, hal_error_string(err));
+	   (unsigned long) K_len * 8, hal_error_string(err));
     ok2 = 0;
   }
   else if (Q_len != q_len || memcmp(Q, q, Q_len) != 0) {
@@ -126,6 +126,14 @@ static int run_test(const uint8_t * const K, const size_t K_len,
 int main (int argc, char *argv[])
 {
   int failures = 0;
+
+  printf("Testing whether AES core reports present...");
+  if (hal_io_expected(AES_ADDR_NAME0, (const uint8_t *) (AES_CORE_NAME0 AES_CORE_NAME1), 8))
+    printf("yes\n");
+  else
+    printf("no\n");
+
+  hal_io_set_debug(1);
 
   printf("Testing 128-bit KEK...");
   if (run_test(K_128, sizeof(K_128), C_128, sizeof(C_128)))

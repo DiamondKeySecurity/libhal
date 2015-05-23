@@ -18,7 +18,6 @@
 
 #include "cryptech.h"
 
-
 /*
  * How long the ciphertext will be for a given plaintext length.
  */
@@ -74,8 +73,9 @@ static hal_error_t load_kek(const uint8_t *K, const size_t K_len, const kek_acti
    * Load the KEK and tell the core to expand it.
    */
 
-  if ((err = hal_io_write(AES_ADDR_KEY0, K, K_len)) != HAL_OK ||
-      (err = hal_io_init(AES_ADDR_CTRL))            != HAL_OK)
+  if ((err = hal_io_write(AES_ADDR_KEY0, K, K_len))                 != HAL_OK ||
+      (err = hal_io_write(AES_ADDR_CONFIG, config, sizeof(config))) != HAL_OK ||
+      (err = hal_io_init(AES_ADDR_CTRL))                            != HAL_OK)
     return err;
 
   return HAL_OK;
