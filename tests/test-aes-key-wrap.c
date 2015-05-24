@@ -92,32 +92,40 @@ static int run_test(const uint8_t * const K, const size_t K_len,
    * Wrap and compare results.
    */
 
+  printf("Wrapping with %lu-bit KEK...\n", (unsigned long) K_len * 8);
   if ((err = hal_aes_keywrap(K, K_len, Q, Q_len, c, &c_len)) != HAL_OK) {
-    printf("couldn't wrap with %lu-bit KEK: %s\n",
+    printf("Couldn't wrap with %lu-bit KEK: %s\n",
 	   (unsigned long) K_len * 8, hal_error_string(err));
     ok1 = 0;
   }
   else if (C_len != c_len || memcmp(C, c, C_len) != 0) {
-    printf("ciphertext mismatch:\n  Want: %s\n  Got:  %s\n",
+    printf("Ciphertext mismatch:\n  Want: %s\n  Got:  %s\n",
 	   format_hex(C, C_len, h1, sizeof(h1)),
 	   format_hex(c, c_len, h2, sizeof(h2)));
     ok1 = 0;
+  }
+  else {
+    printf("OK\n");
   }
 
   /*
    * Unwrap and compare results.
    */
 
+  printf("Unwrapping with %lu-bit KEK...\n", (unsigned long) K_len * 8);
   if ((err = hal_aes_keyunwrap(K, K_len, C, C_len, q, &q_len)) != HAL_OK) {
-    printf("couldn't unwrap with %lu-bit KEK: %s\n",
+    printf("Couldn't unwrap with %lu-bit KEK: %s\n",
 	   (unsigned long) K_len * 8, hal_error_string(err));
     ok2 = 0;
   }
   else if (Q_len != q_len || memcmp(Q, q, Q_len) != 0) {
-    printf("plaintext mismatch:\n  Want: %s\n  Got:  %s\n",
+    printf("Plaintext mismatch:\n  Want: %s\n  Got:  %s\n",
 	   format_hex(Q, Q_len, h1, sizeof(h1)),
 	   format_hex(q, q_len, h2, sizeof(h2)));
     ok2 = 0;
+  }
+  else {
+    printf("OK\n");
   }
 
   return ok1 && ok2;
@@ -135,16 +143,10 @@ int main (int argc, char *argv[])
 
   hal_io_set_debug(1);
 
-  printf("Testing 128-bit KEK...");
-  if (run_test(K_128, sizeof(K_128), C_128, sizeof(C_128)))
-    printf("OK\n");
-  else
+  if (!run_test(K_128, sizeof(K_128), C_128, sizeof(C_128)))
     failures++;
 
-  printf("Testing 256-bit KEK...");
-  if (run_test(K_256, sizeof(K_256), C_256, sizeof(C_256)))
-    printf("OK\n");
-  else
+  if (!run_test(K_256, sizeof(K_256), C_256, sizeof(C_256)))
     failures++;
 
   return failures;

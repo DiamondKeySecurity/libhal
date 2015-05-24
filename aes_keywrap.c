@@ -63,7 +63,7 @@ static hal_error_t load_kek(const uint8_t *K, const size_t K_len, const kek_acti
     config[3] |=  AES_CONFIG_ENCDEC;
     break;
   case KEK_decrypting:
-    config[3] &= !AES_CONFIG_ENCDEC;
+    config[3] &= ~AES_CONFIG_ENCDEC;
     break;
   default:
     return HAL_ERROR_BAD_ARGUMENTS;
