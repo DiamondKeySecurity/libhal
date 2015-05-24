@@ -141,8 +141,6 @@ int main (int argc, char *argv[])
   else
     printf("no\n");
 
-  hal_io_set_debug(1);
-
   if (!run_test(K_128, sizeof(K_128), C_128, sizeof(C_128)))
     failures++;
 
