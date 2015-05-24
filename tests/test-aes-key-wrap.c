@@ -136,7 +136,7 @@ int main (int argc, char *argv[])
   int failures = 0;
 
   printf("Testing whether AES core reports present...");
-  if (hal_io_expected(AES_ADDR_NAME0, (const uint8_t *) (AES_CORE_NAME0 AES_CORE_NAME1), 8))
+  if (hal_io_expected(AES_ADDR_NAME0, (const uint8_t *) (AES_CORE_NAME0 AES_CORE_NAME1), 8) == HAL_OK)
     printf("yes\n");
   else
     printf("no\n");
