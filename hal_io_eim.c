@@ -151,7 +151,7 @@ hal_error_t hal_io_expected(off_t offset, const uint8_t *expected, size_t len)
   dump("expect", expected, len);
 
   for (i = 0; i < len; i++) {
-    if ((i & 3) == 0 && (err = hal_io_read(offset, buf, sizeof(buf))) != HAL_OK)
+    if ((i & 3) == 0 && (err = hal_io_read(offset + i/4, buf, sizeof(buf))) != HAL_OK)
       return err;
     if (buf[i & 3] != expected[i])
       return HAL_ERROR_IO_UNEXPECTED;

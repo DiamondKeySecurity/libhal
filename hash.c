@@ -147,8 +147,8 @@ static hal_error_t hash_write_block(const off_t block_addr,
  * Read hash result from core.
  */
 
-static hal_error_t hash_read_digest(const uint8_t digest_addr,
-                                    const uint8_t status_addr,
+static hal_error_t hash_read_digest(const off_t digest_addr,
+                                    const off_t status_addr,
                                     uint8_t *digest,
                                     const size_t digest_length)
 {
