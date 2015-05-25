@@ -53,6 +53,18 @@ static const uint8_t nist_1024_single[] = { /* 3 bytes */
   0x61, 0x62, 0x63
 };
 
+static const uint8_t sha512_224_single_digest[] = { /* 28 bytes */
+  0x46, 0x34, 0x27, 0x0f, 0x70, 0x7b, 0x6a, 0x54, 0xda, 0xae, 0x75, 0x30,
+  0x46, 0x08, 0x42, 0xe2, 0x0e, 0x37, 0xed, 0x26, 0x5c, 0xee, 0xe9, 0xa4,
+  0x3e, 0x89, 0x24, 0xaa
+};
+
+static const uint8_t sha512_256_single_digest[] = { /* 32 bytes */
+  0x53, 0x04, 0x8e, 0x26, 0x81, 0x94, 0x1e, 0xf9, 0x9b, 0x2e, 0x29, 0xb7,
+  0x6b, 0x4c, 0x7d, 0xab, 0xe4, 0xc2, 0xd0, 0xc6, 0x34, 0xfc, 0x6d, 0x46,
+  0xe0, 0xe2, 0xf1, 0x31, 0x07, 0xe7, 0xaf, 0x23
+};
+
 static const uint8_t sha384_single_digest[] = { /* 48 bytes */
   0xcb, 0x00, 0x75, 0x3f, 0x45, 0xa3, 0x5e, 0x8b, 0xb5, 0xa0, 0x3d, 0x69,
   0x9a, 0xc6, 0x50, 0x07, 0x27, 0x2c, 0x32, 0xab, 0x0e, 0xde, 0xd1, 0x63,
@@ -84,6 +96,18 @@ static const uint8_t nist_1024_double[] = { /* 112 bytes */
   0x72, 0x73, 0x74, 0x75
 };
 
+static const uint8_t sha512_224_double_digest[] = { /* 28 bytes */
+  0x23, 0xfe, 0xc5, 0xbb, 0x94, 0xd6, 0x0b, 0x23, 0x30, 0x81, 0x92, 0x64,
+  0x0b, 0x0c, 0x45, 0x33, 0x35, 0xd6, 0x64, 0x73, 0x4f, 0xe4, 0x0e, 0x72,
+  0x68, 0x67, 0x4a, 0xf9
+};
+
+static const uint8_t sha512_256_double_digest[] = { /* 32 bytes */
+  0x39, 0x28, 0xe1, 0x84, 0xfb, 0x86, 0x90, 0xf8, 0x40, 0xda, 0x39, 0x88,
+  0x12, 0x1d, 0x31, 0xbe, 0x65, 0xcb, 0x9d, 0x3e, 0xf8, 0x3e, 0xe6, 0x14,
+  0x6f, 0xea, 0xc8, 0x61, 0xe1, 0x9b, 0x56, 0x3a
+};
+
 static const uint8_t sha384_double_digest[] = { /* 48 bytes */
   0x09, 0x33, 0x0c, 0x33, 0xf7, 0x11, 0x47, 0xe8, 0x3d, 0x19, 0x2f, 0xc7,
   0x82, 0xcd, 0x1b, 0x47, 0x53, 0x11, 0x1b, 0x17, 0x3b, 0x3b, 0x05, 0xd2,
@@ -100,7 +124,9 @@ static const uint8_t sha512_double_digest[] = { /* 64 bytes */
   0x87, 0x4b, 0xe9, 0x09
 };
 
-static int _test_hash(hal_error_t (*hash)(void *, const uint8_t *, const size_t, uint8_t *, const size_t),
+static int _test_hash(hal_error_t (*hash)(void *,
+					  const uint8_t *, const size_t,
+					  uint8_t *, const size_t),
 		      const uint8_t * const data, const size_t data_len,
 		      const uint8_t * const result, const size_t result_len,
 		      const char * const label)
@@ -110,7 +136,8 @@ static int _test_hash(hal_error_t (*hash)(void *, const uint8_t *, const size_t,
 
   assert(hash != NULL && data != NULL && result != NULL && label != NULL);
 
-  assert(result_len <= sizeof(digest) && hal_hash_state_size() <= sizeof(state));
+  assert(result_len <= sizeof(digest));
+  assert(hal_hash_state_size() <= sizeof(state));
 
   printf("Starting %s test\n", label);
 
@@ -150,11 +177,6 @@ int main (int argc, char *argv[])
 {
   int ok = 1;
 
-  /*
-   * Missing some tests here because I started from the Cryptlib test
-   * script, which skips the 224 and 256 options of the SHA-512 core.
-   */
-
   if (hash_sha1_core_present() == HAL_OK) {
     ok &= test_hash(hal_hash_sha1,   nist_512_single, sha1_single_digest, "SHA-1 single block");
     ok &= test_hash(hal_hash_sha1,   nist_512_double, sha1_double_digest, "SHA-1 double block");
@@ -172,6 +194,13 @@ int main (int argc, char *argv[])
   }
 
   if (hash_sha512_core_present() == HAL_OK) {
+
+    ok &= test_hash(hal_hash_sha512_224, nist_1024_single, sha512_224_single_digest, "SHA-512/224 single block");
+    ok &= test_hash(hal_hash_sha512_224, nist_1024_double, sha512_224_double_digest, "SHA-512/224 double block");
+
+    ok &= test_hash(hal_hash_sha512_256, nist_1024_single, sha512_256_single_digest, "SHA-512/256 single block");
+    ok &= test_hash(hal_hash_sha512_256, nist_1024_double, sha512_256_double_digest, "SHA-512/256 double block");
+      
     ok &= test_hash(hal_hash_sha384, nist_1024_single, sha384_single_digest, "SHA-384 single block");
     ok &= test_hash(hal_hash_sha384, nist_1024_double, sha384_double_digest, "SHA-384 double block");
 
