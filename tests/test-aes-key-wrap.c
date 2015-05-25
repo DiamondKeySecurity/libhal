@@ -136,16 +136,17 @@ int main (int argc, char *argv[])
   int failures = 0;
 
   printf("Testing whether AES core reports present...");
-  if (hal_io_expected(AES_ADDR_NAME0, (const uint8_t *) (AES_CORE_NAME0 AES_CORE_NAME1), 8) == HAL_OK)
+  if (hal_io_expected(AES_ADDR_NAME0, (const uint8_t *) (AES_CORE_NAME0 AES_CORE_NAME1), 8) != HAL_OK) {
+    printf("no, skipping keywrap tests\n");
+  }
+
+  else {
     printf("yes\n");
-  else
-    printf("no\n");
-
-  if (!run_test(K_128, sizeof(K_128), C_128, sizeof(C_128)))
-    failures++;
-
-  if (!run_test(K_256, sizeof(K_256), C_256, sizeof(C_256)))
-    failures++;
+    if (!run_test(K_128, sizeof(K_128), C_128, sizeof(C_128)))
+      failures++;
+    if (!run_test(K_256, sizeof(K_256), C_256, sizeof(C_256)))
+      failures++;
+  }
 
   return failures;
 }
