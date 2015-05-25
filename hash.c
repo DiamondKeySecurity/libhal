@@ -92,17 +92,17 @@ void hal_hash_state_initialize(void *_state)
  * Report whether cores are present.
  */
 
-hal_error_t hash_sha1_core_present(void)
+hal_error_t hal_hash_sha1_core_present(void)
 {
   return hal_io_expected(SHA1_ADDR_NAME0, (const uint8_t *) (SHA1_NAME0 SHA1_NAME1), 8);
 }
 
-hal_error_t hash_sha256_core_present(void)
+hal_error_t hal_hash_sha256_core_present(void)
 {
   return hal_io_expected(SHA256_ADDR_NAME0, (const uint8_t *) (SHA256_NAME0 SHA256_NAME1), 8);
 }
 
-hal_error_t hash_sha512_core_present(void)
+hal_error_t hal_hash_sha512_core_present(void)
 {
   return hal_io_expected(SHA512_ADDR_NAME0, (const uint8_t *) (SHA512_NAME0 SHA512_NAME1), 8);
 }

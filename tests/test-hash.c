@@ -177,7 +177,7 @@ int main (int argc, char *argv[])
 {
   int ok = 1;
 
-  if (hash_sha1_core_present() == HAL_OK) {
+  if (hal_hash_sha1_core_present() == HAL_OK) {
     ok &= test_hash(hal_hash_sha1,   nist_512_single, sha1_single_digest, "SHA-1 single block");
     ok &= test_hash(hal_hash_sha1,   nist_512_double, sha1_double_digest, "SHA-1 double block");
   }
@@ -185,7 +185,7 @@ int main (int argc, char *argv[])
     printf("SHA-1 core not present, skipping tests which depend on it\n");
   }
 
-  if (hash_sha256_core_present() == HAL_OK) {
+  if (hal_hash_sha256_core_present() == HAL_OK) {
     ok &= test_hash(hal_hash_sha256, nist_512_single, sha256_single_digest, "SHA-256 single block");
     ok &= test_hash(hal_hash_sha256, nist_512_double, sha256_double_digest, "SHA-256 double block");
   }
@@ -193,7 +193,7 @@ int main (int argc, char *argv[])
     printf("SHA-256 core not present, skipping tests which depend on it\n");
   }
 
-  if (hash_sha512_core_present() == HAL_OK) {
+  if (hal_hash_sha512_core_present() == HAL_OK) {
 
     ok &= test_hash(hal_hash_sha512_224, nist_1024_single, sha512_224_single_digest, "SHA-512/224 single block");
     ok &= test_hash(hal_hash_sha512_224, nist_1024_double, sha512_224_double_digest, "SHA-512/224 double block");

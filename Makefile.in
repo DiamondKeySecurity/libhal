@@ -18,6 +18,7 @@ includedir	= @includedir@
 libdir		= @libdir@
 
 all: ${LIB}
+	cd tests; ${MAKE} $@
 
 ${OBJ}: ${INC}
 

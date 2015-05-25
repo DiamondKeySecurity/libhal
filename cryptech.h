@@ -479,9 +479,9 @@ extern hal_error_t hal_io_wait_valid(off_t offset);
 extern hal_error_t hal_get_random(void *buffer, const size_t length);
 
 extern void hal_hash_set_debug(int onoff);
-extern hal_error_t hash_sha1_core_present(void);
-extern hal_error_t hash_sha256_core_present(void);
-extern hal_error_t hash_sha512_core_present(void);
+extern hal_error_t hal_hash_sha1_core_present(void);
+extern hal_error_t hal_hash_sha256_core_present(void);
+extern hal_error_t hal_hash_sha512_core_present(void);
 extern size_t hal_hash_state_size(void);
 extern void hal_hash_state_initialize(void *state);
 extern hal_error_t hal_hash_sha1(void *state, const uint8_t * data_buffer, const size_t data_buffer_length,
