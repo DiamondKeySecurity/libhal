@@ -2,7 +2,7 @@
 
 INC		= ../cryptech.h
 LIB		= ../libcryptech.a
-BIN		= test-aes-key-wrap test-hash
+BIN		= test-aes-key-wrap test-hash test-rsa
 
 CC		= @CC@
 CFLAGS		= @CFLAGS@ -I..
