@@ -7,3 +7,4 @@ config.log
 config.status
 tests/test-aes-key-wrap
 tests/test-hash
+tests/test-rsa

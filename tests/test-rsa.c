@@ -49,12 +49,11 @@ static int _set_register(const off_t addr,
     w1[i] = value & 0xFF;
     value >>= 8;
   }
-  printf("Setting register %#lx %s\n", (unsigned long) addr, name);
+  printf("Setting register %#lx %s...\n", (unsigned long) addr, name);
   check(hal_io_write(addr, w1, sizeof(w1)));
   check(hal_io_read(addr,  w2, sizeof(w2)));
   if (memcmp(w1, w2, sizeof(w1)) != 0)
     printf("MISMATCH\n");
-  printf("\n");
   return 0;
 }
 
@@ -70,11 +69,10 @@ static int _get_blockmem(const off_t reset_addr,
 			 const size_t length)
 {
   size_t i;
-  assert(reset_name != NULL && data_name != NULL && value != NULL && length % 4 == 0 && length <= sizeof(value));
-  printf("Setting register %#lx %s\n", (unsigned long) reset_addr, reset_name);
+  assert(reset_name != NULL && data_name != NULL && value != NULL && length % 4 == 0);
+  printf("Setting register %#lx %s...\n", (unsigned long) reset_addr, reset_name);
   check(hal_io_write(reset_addr, one, sizeof(one)));
-  printf("\n");
-  printf("Getting blockmem %#lx %s\n", (unsigned long) data_addr, data_name);
+  printf("Getting blockmem %#lx %s...\n", (unsigned long) data_addr, data_name);
   for (i = 0; i < length; i += 4)
     check(hal_io_read(data_addr, &value[i], 4));
   return 0;
@@ -95,13 +93,11 @@ static int _set_blockmem(const off_t reset_addr,
 {
   size_t i;
   assert(reset_name != NULL && data_name != NULL && value != NULL && buffer_length >= value_length && value_length % 4 == 0);
-  printf("Setting register %#lx %s\n", (unsigned long) reset_addr, reset_name);
+  printf("Setting register %#lx %s...\n", (unsigned long) reset_addr, reset_name);
   check(hal_io_write(reset_addr, one, sizeof(one)));
-  printf("\n");
-  printf("Setting blockmem %#lx %s\n", (unsigned long) data_addr, data_name);
+  printf("Setting blockmem %#lx %s...\n", (unsigned long) data_addr, data_name);
   for (i = 0; i < value_length; i += 4)
     check(hal_io_write(data_addr, &value[i], 4));
-  printf("\n");
   check(_get_blockmem(reset_addr, reset_name, data_addr, data_name, buffer, value_length));
   if (memcmp(value, buffer, value_length))
     printf("MISMATCH\n");
@@ -116,8 +112,8 @@ static int _set_blockmem(const off_t reset_addr,
 #define set_register(_field_, _value_) \
   _set_register(_field_, #_field_, _value_)
 
-#define get_blockmem(_field_, _value_) \
-  _get_blockmem(_field_##_PTR_RST, #_field_ "_PTR_RST", _field_##_DATA, #_field_ "_DATA", _value_, sizeof(_value_))
+#define get_blockmem(_field_, _value_, _length_) \
+  _get_blockmem(_field_##_PTR_RST, #_field_ "_PTR_RST", _field_##_DATA, #_field_ "_DATA", _value_, _length_)
 
 #define set_blockmem(_field_, _value_, _buffer_) \
   _set_blockmem(_field_##_PTR_RST, #_field_ "_PTR_RST", _field_##_DATA, #_field_ "_DATA", (_value_).val, (_value_).len, _buffer_, sizeof(_buffer_))
@@ -129,6 +125,8 @@ static int _set_blockmem(const off_t reset_addr,
 static int test(const rsa_tc_t * const tc)
 {
   uint8_t b[4096];
+
+  hal_io_set_debug(1);
 
   printf("Signature test for %lu-bit RSA key\n", (unsigned long) tc->size);
 
@@ -145,11 +143,15 @@ static int test(const rsa_tc_t * const tc)
 
   check(set_register(MODEXP_ADDR_CTRL, 1));
 
+  hal_io_set_debug(0);
+
   printf("Waiting for ready\n");
   check(hal_io_wait(MODEXP_ADDR_STATUS, STATUS_READY, NULL));
   printf("\n");
 
-  check(get_blockmem(MODEXP_RESULT, b));
+  hal_io_set_debug(1);
+
+  check(get_blockmem(MODEXP_RESULT, b, tc->n.len));
 
   printf("Comparing results with known value...");
   if (memcmp(b, tc->s.val, tc->s.len))
@@ -172,11 +174,15 @@ static int test(const rsa_tc_t * const tc)
 
   check(set_register(MODEXP_ADDR_CTRL, 1));
 
+  hal_io_set_debug(0);
+
   printf("Waiting for ready\n");
   check(hal_io_wait(MODEXP_ADDR_STATUS, STATUS_READY, NULL));
   printf("\n");
 
-  check(get_blockmem(MODEXP_RESULT, b));
+  hal_io_set_debug(1);
+
+  check(get_blockmem(MODEXP_RESULT, b, tc->n.len));
 
   printf("Comparing results with known value...");
   if (memcmp(b, tc->m.val, tc->m.len))
@@ -201,13 +207,17 @@ int main(int argc, char *argv[])
   check(hal_io_read(MODEXP_ADDR_VERSION, version, sizeof(version)));
   printf("\"%8.8s\"  \"%4.4s\"\n\n", name, version);
 
-  hal_io_set_debug(1);
-
   /*
-   * Run all the test cases.
+   * Run the test cases.
    */
 
-  for (i = 0; i < sizeof(rsa_tc)/sizeof(*rsa_tc); i++)
+#if 0
+#define N (sizeof(rsa_tc)/sizeof(*rsa_tc))
+#else
+#define N (1)
+#endif
+
+  for (i = 0; i < N; i++)
     if (test(&rsa_tc[i]))
       return 1;
 
