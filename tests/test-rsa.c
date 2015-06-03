@@ -119,23 +119,27 @@ static int _set_blockmem(const off_t reset_addr,
   _set_blockmem(_field_##_PTR_RST, #_field_ "_PTR_RST", _field_##_DATA, #_field_ "_DATA", (_value_).val, (_value_).len, _buffer_, sizeof(_buffer_))
 
 /*
- * Test driver.
+ * Run one modexp test.
  */
 
-static int test(const rsa_tc_t * const tc)
+static int test_modexp(const char * const kind,
+		       const rsa_tc_t * const tc,
+		       const rsa_tc_bn_t * const msg, /* Input message */
+		       const rsa_tc_bn_t * const exp, /* Exponent */
+		       const rsa_tc_bn_t * const val) /* Expected result */
 {
   uint8_t b[4096];
 
   hal_io_set_debug(1);
 
-  printf("Signature test for %lu-bit RSA key\n", (unsigned long) tc->size);
+  printf("%s test for %lu-bit RSA key\n", kind, (unsigned long) tc->size);
 
   check(set_blockmem(MODEXP_MODULUS, tc->n, b));
-  check(set_blockmem(MODEXP_MESSAGE, tc->m, b));
+  check(set_blockmem(MODEXP_MESSAGE, (*msg), b));
   check(set_register(MODEXP_MODULUS_LENGTH, tc->n.len / 4));
 
-  check(set_blockmem(MODEXP_EXPONENT, tc->d, b));
-  check(set_register(MODEXP_EXPONENT_LENGTH, tc->d.len / 4));
+  check(set_blockmem(MODEXP_EXPONENT, (*exp), b));
+  check(set_register(MODEXP_EXPONENT_LENGTH, val->len / 4));
 
   printf("Checking ready status\n");
   check(hal_io_wait_ready(MODEXP_ADDR_STATUS));
@@ -154,45 +158,24 @@ static int test(const rsa_tc_t * const tc)
   check(get_blockmem(MODEXP_RESULT, b, tc->n.len));
 
   printf("Comparing results with known value...");
-  if (memcmp(b, tc->s.val, tc->s.len))
+  if (memcmp(b, val->val, val->len))
     printf("MISMATCH\n");
   else
     printf("OK\n");
-
-  printf("Verification test for %lu-bit RSA key\n", (unsigned long) tc->size);
-
-  check(set_blockmem(MODEXP_MODULUS, tc->n, b));
-  check(set_blockmem(MODEXP_MESSAGE, tc->m, b));
-  check(set_register(MODEXP_MODULUS_LENGTH, tc->n.len / 4));
-
-  check(set_blockmem(MODEXP_EXPONENT, tc->e, b));
-  check(set_register(MODEXP_EXPONENT_LENGTH, tc->e.len / 4));
-
-  printf("Checking ready status\n");
-  check(hal_io_wait_ready(MODEXP_ADDR_STATUS));
   printf("\n");
-
-  check(set_register(MODEXP_ADDR_CTRL, 1));
-
-  hal_io_set_debug(0);
-
-  printf("Waiting for ready\n");
-  check(hal_io_wait(MODEXP_ADDR_STATUS, STATUS_READY, NULL));
-  printf("\n");
-
-  hal_io_set_debug(1);
-
-  check(get_blockmem(MODEXP_RESULT, b, tc->n.len));
-
-  printf("Comparing results with known value...");
-  if (memcmp(b, tc->m.val, tc->m.len))
-    printf("MISMATCH\n");
-  else
-    printf("OK\n");
 
   return 0;
 }
 
+/*
+ * Test signature and exponentiation for one RSA keypair.
+ */
+
+static int test_rsa(const rsa_tc_t * const tc)
+{
+  return (test_modexp("Signature",    tc, &tc->m, &tc->d, &tc->s) || /* RSA decryption */
+	  test_modexp("Verification", tc, &tc->s, &tc->e, &tc->m));  /* RSA encryption */
+}
 
 int main(int argc, char *argv[])
 {
@@ -211,14 +194,8 @@ int main(int argc, char *argv[])
    * Run the test cases.
    */
 
-#if 0
-#define N (sizeof(rsa_tc)/sizeof(*rsa_tc))
-#else
-#define N (1)
-#endif
-
-  for (i = 0; i < N; i++)
-    if (test(&rsa_tc[i]))
+  for (i = 0; i < (sizeof(rsa_tc)/sizeof(*rsa_tc)); i++)
+    if (test_rsa(&rsa_tc[i]))
       return 1;
 
   return 0;
