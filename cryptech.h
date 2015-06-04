@@ -1,9 +1,9 @@
 /*
  * cryptech.h
  * ----------
- * Memory map and access functions for Cryptech cores.
+ * Memory map, access functions, and HAL for Cryptech cores.
  *
- * Authors: Joachim Strombergson, Paul Selkirk
+ * Authors: Joachim Strombergson, Paul Selkirk, Rob Austein
  * Copyright (c) 2015, NORDUnet A/S All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -430,25 +430,25 @@
  */
 
 #define HAL_ERROR_LIST \
-  DEFINE_HAL_ERROR(HAL_OK,				"No error")					\
-  DEFINE_HAL_ERROR(HAL_ERROR_BAD_ARGUMENTS,		"Bad arguments given")				\
-  DEFINE_HAL_ERROR(HAL_ERROR_UNSUPPORTED_KEY,		"Unsupported key type or key length")		\
-  DEFINE_HAL_ERROR(HAL_ERROR_IO_SETUP_FAILED,		"Could not set up I/O with FPGA")		\
-  DEFINE_HAL_ERROR(HAL_ERROR_IO_TIMEOUT,		"I/O with FPGA timed out")			\
-  DEFINE_HAL_ERROR(HAL_ERROR_IO_UNEXPECTED,		"Unexpected response from FPGA")		\
-  DEFINE_HAL_ERROR(HAL_ERROR_IO_OS_ERROR,		"Operating system error talking to FPGA")	\
-  DEFINE_HAL_ERROR(HAL_ERROR_IO_BAD_COUNT,		"Bad byte count")				\
-  DEFINE_HAL_ERROR(HAL_ERROR_CSPRNG_BROKEN,		"CSPRNG is returning nonsense")			\
-  DEFINE_HAL_ERROR(HAL_ERROR_KEYWRAP_BAD_MAGIC,		"Bad magic number while unwrapping key")	\
-  DEFINE_HAL_ERROR(HAL_ERROR_KEYWRAP_BAD_LENGTH,	"Length out of range while unwrapping key")	\
-  DEFINE_HAL_ERROR(HAL_ERROR_KEYWRAP_BAD_PADDING,	"Non-zero padding detected unwrapping key")	\
+  DEFINE_HAL_ERROR(HAL_OK,                              "No error")                                     \
+  DEFINE_HAL_ERROR(HAL_ERROR_BAD_ARGUMENTS,             "Bad arguments given")                          \
+  DEFINE_HAL_ERROR(HAL_ERROR_UNSUPPORTED_KEY,           "Unsupported key type or key length")           \
+  DEFINE_HAL_ERROR(HAL_ERROR_IO_SETUP_FAILED,           "Could not set up I/O with FPGA")               \
+  DEFINE_HAL_ERROR(HAL_ERROR_IO_TIMEOUT,                "I/O with FPGA timed out")                      \
+  DEFINE_HAL_ERROR(HAL_ERROR_IO_UNEXPECTED,             "Unexpected response from FPGA")                \
+  DEFINE_HAL_ERROR(HAL_ERROR_IO_OS_ERROR,               "Operating system error talking to FPGA")       \
+  DEFINE_HAL_ERROR(HAL_ERROR_IO_BAD_COUNT,              "Bad byte count")                               \
+  DEFINE_HAL_ERROR(HAL_ERROR_CSPRNG_BROKEN,             "CSPRNG is returning nonsense")                 \
+  DEFINE_HAL_ERROR(HAL_ERROR_KEYWRAP_BAD_MAGIC,         "Bad magic number while unwrapping key")        \
+  DEFINE_HAL_ERROR(HAL_ERROR_KEYWRAP_BAD_LENGTH,        "Length out of range while unwrapping key")     \
+  DEFINE_HAL_ERROR(HAL_ERROR_KEYWRAP_BAD_PADDING,       "Non-zero padding detected unwrapping key")     \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
 #define END_OF_HAL_ERROR_LIST
 
 /* Define the error code enum here.  See errorstrings.c for the text strings. */
-#define DEFINE_HAL_ERROR(_code_,_text_)	 _code_,
+#define DEFINE_HAL_ERROR(_code_,_text_)  _code_,
 typedef enum { HAL_ERROR_LIST N_HAL_ERRORS } hal_error_t;
 #undef  DEFINE_HAL_ERROR
 
@@ -518,33 +518,39 @@ extern const hal_hash_descriptor_t hal_hash_sha512;
 extern hal_error_t hal_hash_core_present(const hal_hash_descriptor_t * const descriptor);
 
 extern hal_error_t hal_hash_initialize(const hal_hash_descriptor_t * const descriptor,
-				       hal_hash_state_t *state,
-				       void *state_buffer, const size_t state_length);
+                                       hal_hash_state_t *state,
+                                       void *state_buffer, const size_t state_length);
 
 extern hal_error_t hal_hash_update(const hal_hash_state_t state,
-				   const uint8_t * data, const size_t length);
+                                   const uint8_t * data, const size_t length);
 
 extern hal_error_t hal_hash_finalize(const hal_hash_state_t state,
-				     uint8_t *digest, const size_t length);
+                                     uint8_t *digest, const size_t length);
 
 extern hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
-				       hal_hmac_state_t *state,
-				       void *state_buffer, const size_t state_length,
-				       const uint8_t * const key, const size_t key_length);
+                                       hal_hmac_state_t *state,
+                                       void *state_buffer, const size_t state_length,
+                                       const uint8_t * const key, const size_t key_length);
 
 extern hal_error_t hal_hmac_update(const hal_hmac_state_t state,
-				   const uint8_t * data, const size_t length);
+                                   const uint8_t * data, const size_t length);
 
 extern hal_error_t hal_hmac_finalize(const hal_hmac_state_t state,
-				     uint8_t *hmac, const size_t length);
+                                     uint8_t *hmac, const size_t length);
 
 
 extern hal_error_t hal_aes_keywrap(const uint8_t *kek, const size_t kek_length,
-				   const uint8_t *plaintext, const size_t plaintext_length,
-				   uint8_t *cyphertext, size_t *ciphertext_length);
+                                   const uint8_t *plaintext, const size_t plaintext_length,
+                                   uint8_t *cyphertext, size_t *ciphertext_length);
 extern hal_error_t hal_aes_keyunwrap(const uint8_t *kek, const size_t kek_length,
-				     const uint8_t *ciphertext, const size_t ciphertext_length,
-				     unsigned char *plaintext, size_t *plaintext_length);
+                                     const uint8_t *ciphertext, const size_t ciphertext_length,
+                                     unsigned char *plaintext, size_t *plaintext_length);
 extern size_t hal_aes_keywrap_ciphertext_length(const size_t plaintext_length);
 
 #endif /* _CRYPTECH_H_ */
+
+/*
+ * Local variables:
+ * indent-tabs-mode: nil
+ * End:
+ */

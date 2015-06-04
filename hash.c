@@ -1,7 +1,6 @@
 /* 
  * hashes.c
  * --------
- *
  * HAL interface to Cryptech hash cores.
  * 
  * Authors: Joachim Strömbergson, Paul Selkirk, Rob Austein
@@ -50,7 +49,7 @@
  */
 
 #define MAX_BLOCK_LEN           SHA512_BLOCK_LEN
-#define	MAX_DIGEST_LEN		SHA512_DIGEST_LEN
+#define MAX_DIGEST_LEN          SHA512_DIGEST_LEN
 
 /*
  * HMAC magic numbers.

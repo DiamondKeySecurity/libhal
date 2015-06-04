@@ -51,3 +51,9 @@ void eim_write_32(off_t, uint32_t *);
  * If EIM is not set up correctly, this will abort with a bus error.
  */
 void eim_read_32(off_t, uint32_t *);
+
+/*
+ * Local variables:
+ * indent-tabs-mode: nil
+ * End:
+ */

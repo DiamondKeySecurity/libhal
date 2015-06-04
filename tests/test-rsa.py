@@ -4,8 +4,33 @@
 Use PyCrypto to generate test data for Cryptech ModExp core.
 """
 
-# Funnily enough, PyCrypto and Cryptlib use exactly the same names for
-# RSA key components, see Cryptlib documentation pages 186-187 & 339.
+# Author: Rob Austein
+# Copyright (c) 2015, SUNET
+#
+# Redistribution and use in source and binary forms, with or
+# without modification, are permitted provided that the following
+# conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in
+#    the documentation and/or other materials provided with the
+#    distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+# COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+# STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from argparse                           import ArgumentParser, FileType
 from Crypto                             import __version__ as PyCryptoVersion
@@ -58,6 +83,9 @@ def print_hex(name, value, comment):
 def pad_to_blocksize(value, blocksize):
   extra = len(value) % blocksize
   return value if extra == 0 else ("\x00" * (blocksize - extra)) + value
+
+# Funnily enough, PyCrypto and Cryptlib use exactly the same names for
+# RSA key components, see Cryptlib documentation pages 186-187 & 339.
 
 h = SHA256.new(plaintext)
 

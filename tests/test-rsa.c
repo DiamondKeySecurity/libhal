@@ -1,4 +1,6 @@
 /*
+ * test-rsa.c
+ * ----------
  * First stumblings towards a test harness for RSA using Cryptech
  * ModExp core.
  *
@@ -6,6 +8,34 @@
  * RSA keys and pre-formatted data-to-be-signed, without attempting
  * CRT or any of the other clever stuff we should be doing.  This is
  * not usable for any sane purpose other than testing.
+ *
+ * Authors: Rob Austein
+ * Copyright (c) 2015, SUNET
+ *
+ * Redistribution and use in source and binary forms, with or
+ * without modification, are permitted provided that the following
+ * conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <stdio.h>
@@ -28,10 +58,10 @@ static const uint8_t one[] = { 0, 0, 0, 1 };
  * Debugging aid: check a result, report on failure.
  */
 
-#define check(_expr_)				\
-  do {						\
-    if ((_expr_) != 0)				\
-      return printf("%s failed\n", #_expr_), 1;	\
+#define check(_expr_)                           \
+  do {                                          \
+    if ((_expr_) != 0)                          \
+      return printf("%s failed\n", #_expr_), 1; \
   } while (0)
 
 /*
@@ -39,8 +69,8 @@ static const uint8_t one[] = { 0, 0, 0, 1 };
  */
 
 static int _set_register(const off_t addr,
-			 const char * const name,
-			 uint32_t value)
+                         const char * const name,
+                         uint32_t value)
 {
   uint8_t w1[4], w2[4];
   int i;
@@ -62,11 +92,11 @@ static int _set_register(const off_t addr,
  */
 
 static int _get_blockmem(const off_t reset_addr,
-			 const char * const reset_name,
-			 const off_t data_addr,
-			 const char * const data_name,
-			 uint8_t *value,
-			 const size_t length)
+                         const char * const reset_name,
+                         const off_t data_addr,
+                         const char * const data_name,
+                         uint8_t *value,
+                         const size_t length)
 {
   size_t i;
   assert(reset_name != NULL && data_name != NULL && value != NULL && length % 4 == 0);
@@ -83,13 +113,13 @@ static int _get_blockmem(const off_t reset_addr,
  */
 
 static int _set_blockmem(const off_t reset_addr,
-			 const char * const reset_name,
-			 const off_t data_addr,
-			 const char * const data_name,
-			 const uint8_t * const value,
-			 const size_t value_length,
-			 uint8_t *buffer,
-			 const size_t buffer_length)
+                         const char * const reset_name,
+                         const off_t data_addr,
+                         const char * const data_name,
+                         const uint8_t * const value,
+                         const size_t value_length,
+                         uint8_t *buffer,
+                         const size_t buffer_length)
 {
   size_t i;
   assert(reset_name != NULL && data_name != NULL && value != NULL && buffer_length >= value_length && value_length % 4 == 0);
@@ -123,10 +153,10 @@ static int _set_blockmem(const off_t reset_addr,
  */
 
 static int test_modexp(const char * const kind,
-		       const rsa_tc_t * const tc,
-		       const rsa_tc_bn_t * const msg, /* Input message */
-		       const rsa_tc_bn_t * const exp, /* Exponent */
-		       const rsa_tc_bn_t * const val) /* Expected result */
+                       const rsa_tc_t * const tc,
+                       const rsa_tc_bn_t * const msg, /* Input message */
+                       const rsa_tc_bn_t * const exp, /* Exponent */
+                       const rsa_tc_bn_t * const val) /* Expected result */
 {
   uint8_t b[4096];
 
@@ -174,7 +204,7 @@ static int test_modexp(const char * const kind,
 static int test_rsa(const rsa_tc_t * const tc)
 {
   return (test_modexp("Signature",    tc, &tc->m, &tc->d, &tc->s) || /* RSA decryption */
-	  test_modexp("Verification", tc, &tc->s, &tc->e, &tc->m));  /* RSA encryption */
+          test_modexp("Verification", tc, &tc->s, &tc->e, &tc->m));  /* RSA encryption */
 }
 
 int main(int argc, char *argv[])
@@ -200,3 +230,9 @@ int main(int argc, char *argv[])
 
   return 0;
 }
+
+/*
+ * Local variables:
+ * indent-tabs-mode: nil
+ * End:
+ */

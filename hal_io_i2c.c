@@ -169,7 +169,7 @@ static hal_error_t i2c_read(uint8_t *b)
 static hal_error_t hal_io_send_write_cmd(off_t offset, const uint8_t *data)
 {
   uint8_t buf[9] = { SOC, WRITE_CMD, (offset >> 8) & 0xff, offset & 0xff,
-		     data[0], data[1], data[2], data[3], EOC };
+                     data[0], data[1], data[2], data[3], EOC };
   return i2c_write(buf, sizeof(buf));
 }
 
@@ -196,21 +196,21 @@ static hal_error_t hal_io_get_resp(uint8_t *buf, size_t len)
     if (i == 1) {      /* response code */
       switch (buf[i]) {
       case READ_OK:
-	len = 9;
-	break;
+        len = 9;
+        break;
       case WRITE_OK:
-	len = 5;
-	break;
+        len = 5;
+        break;
       case RESET_OK:
-	len = 3;
-	break;
+        len = 3;
+        break;
       case ERROR:
       case UNKNOWN:
-	len = 4;
-	break;
+        len = 4;
+        break;
       default:
-	/* we've gotten out of sync, and there's probably nothing we can do */
-	return HAL_ERROR_IO_UNEXPECTED;
+        /* we've gotten out of sync, and there's probably nothing we can do */
+        return HAL_ERROR_IO_UNEXPECTED;
       }
     }
   }
@@ -270,7 +270,7 @@ static hal_error_t hal_io_get_read_resp_expected(off_t offset, const uint8_t *da
 {
   uint8_t buf[9];
   uint8_t expected[9] = { SOR, READ_OK, (offset >> 8) & 0xff, offset & 0xff,
-			  data[0], data[1], data[2], data[3], EOR };
+                          data[0], data[1], data[2], data[3], EOR };
   hal_error_t err;
 
   dump("expect", expected, 9);
@@ -287,7 +287,7 @@ hal_error_t hal_io_write(off_t offset, const uint8_t *buf, size_t len)
 
   for (; len > 0; offset++, buf += 4, len -= 4)
     if ((err = hal_io_send_write_cmd(offset, buf)) != HAL_OK ||
-	(err = hal_io_get_write_resp(offset))      != HAL_OK)
+        (err = hal_io_get_write_resp(offset))      != HAL_OK)
       return err;
 
   return HAL_OK;
@@ -299,7 +299,7 @@ hal_error_t hal_io_read(off_t offset, uint8_t *buf, size_t len)
 
   for (; len > 0; offset++, buf += 4, len -= 4)
     if ((err = hal_io_send_read_cmd(offset))      != HAL_OK ||
-	(err = hal_io_get_read_resp(offset, buf)) != HAL_OK)
+        (err = hal_io_get_read_resp(offset, buf)) != HAL_OK)
       return err;
 
   return HAL_OK;
@@ -310,8 +310,8 @@ hal_error_t hal_io_expected(off_t offset, const uint8_t *buf, size_t len)
   hal_error_t err;
 
   for (; len > 0; offset++, buf += 4, len -= 4)
-    if ((err = hal_io_send_read_cmd(offset))	           != HAL_OK ||
-	(err = hal_io_get_read_resp_expected(offset, buf)) != HAL_OK)
+    if ((err = hal_io_send_read_cmd(offset))               != HAL_OK ||
+        (err = hal_io_get_read_resp_expected(offset, buf)) != HAL_OK)
       return err;
 
   return HAL_OK;
@@ -345,7 +345,7 @@ hal_error_t hal_io_wait(off_t offset, uint8_t status, int *count)
 
     if (buf[3] & status) {
       if (count)
-	*count = i;
+        *count = i;
       return HAL_OK;
 
     }
@@ -363,3 +363,9 @@ hal_error_t hal_io_wait_valid(off_t offset)
   int limit = 10;
   return hal_io_wait(offset, STATUS_VALID, &limit);
 }
+
+/*
+ * Local variables:
+ * indent-tabs-mode: nil
+ * End:
+ */

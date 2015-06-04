@@ -1,5 +1,35 @@
 /*
+ * test-aes-key-wrap.c
+ * -------------------
  * Test code for AES Key Wrap.
+ *
+ * Authors: Rob Austein
+ * Copyright (c) 2015, SUNET
+ *
+ * Redistribution and use in source and binary forms, with or
+ * without modification, are permitted provided that the following
+ * conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <stdio.h>
@@ -79,7 +109,7 @@ static const char *format_hex(const uint8_t *bin, const size_t len, char *hex, c
 }
 
 static int run_test(const uint8_t * const K, const size_t K_len,
-		    const uint8_t * const C, const size_t C_len)
+                    const uint8_t * const C, const size_t C_len)
 {
   const size_t Q_len = sizeof(Q);
   uint8_t q[TC_BUFSIZE], c[TC_BUFSIZE];
@@ -95,13 +125,13 @@ static int run_test(const uint8_t * const K, const size_t K_len,
   printf("Wrapping with %lu-bit KEK...\n", (unsigned long) K_len * 8);
   if ((err = hal_aes_keywrap(K, K_len, Q, Q_len, c, &c_len)) != HAL_OK) {
     printf("Couldn't wrap with %lu-bit KEK: %s\n",
-	   (unsigned long) K_len * 8, hal_error_string(err));
+           (unsigned long) K_len * 8, hal_error_string(err));
     ok1 = 0;
   }
   else if (C_len != c_len || memcmp(C, c, C_len) != 0) {
     printf("Ciphertext mismatch:\n  Want: %s\n  Got:  %s\n",
-	   format_hex(C, C_len, h1, sizeof(h1)),
-	   format_hex(c, c_len, h2, sizeof(h2)));
+           format_hex(C, C_len, h1, sizeof(h1)),
+           format_hex(c, c_len, h2, sizeof(h2)));
     ok1 = 0;
   }
   else {
@@ -115,13 +145,13 @@ static int run_test(const uint8_t * const K, const size_t K_len,
   printf("Unwrapping with %lu-bit KEK...\n", (unsigned long) K_len * 8);
   if ((err = hal_aes_keyunwrap(K, K_len, C, C_len, q, &q_len)) != HAL_OK) {
     printf("Couldn't unwrap with %lu-bit KEK: %s\n",
-	   (unsigned long) K_len * 8, hal_error_string(err));
+           (unsigned long) K_len * 8, hal_error_string(err));
     ok2 = 0;
   }
   else if (Q_len != q_len || memcmp(Q, q, Q_len) != 0) {
     printf("Plaintext mismatch:\n  Want: %s\n  Got:  %s\n",
-	   format_hex(Q, Q_len, h1, sizeof(h1)),
-	   format_hex(q, q_len, h2, sizeof(h2)));
+           format_hex(Q, Q_len, h1, sizeof(h1)),
+           format_hex(q, q_len, h2, sizeof(h2)));
     ok2 = 0;
   }
   else {

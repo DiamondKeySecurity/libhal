@@ -48,7 +48,7 @@ static int debug = 0;
 static int inited = 0;
 
 #ifndef EIM_IO_TIMEOUT
-#define EIM_IO_TIMEOUT	100000000
+#define EIM_IO_TIMEOUT  100000000
 #endif
 
 static hal_error_t init(void)
@@ -188,7 +188,7 @@ hal_error_t hal_io_wait(off_t offset, uint8_t status, int *count)
 
     if ((buf[3] & status) != 0) {
       if (count)
-	*count = i;
+        *count = i;
       return HAL_OK;
     }
   }
@@ -205,3 +205,9 @@ hal_error_t hal_io_wait_valid(off_t offset)
   int limit = EIM_IO_TIMEOUT;
   return hal_io_wait(offset, STATUS_VALID, &limit);
 }
+
+/*
+ * Local variables:
+ * indent-tabs-mode: nil
+ * End:
+ */

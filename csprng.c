@@ -1,8 +1,7 @@
 /* 
  * csprng.c
- * ------------------------------
- *
- * HAL interface to Cryptech CSPRNG/TRNG.
+ * --------
+ * HAL interface to Cryptech CSPRNG.
  * 
  * Authors: Joachim Strömbergson, Paul Selkirk, Rob Austein
  * Copyright (c) 2014-2015, SUNET
@@ -38,19 +37,10 @@
 #include <stddef.h>
 #include <stdio.h>
 
-#if 0
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#endif
-
 #include "cryptech.h"
 
 #ifndef WAIT_FOR_CSPRNG_VALID
-#define WAIT_FOR_CSPRNG_VALID	1
+#define WAIT_FOR_CSPRNG_VALID   1
 #endif
 
 hal_error_t hal_get_random(void *buffer, const size_t length)
