@@ -104,7 +104,6 @@ typedef struct {
 typedef struct {
   internal_hash_state_t hash_state;     /* Hash state */
   uint8_t keybuf[MAX_BLOCK_LEN];        /* HMAC key */
-  size_t keylen;                        /* Length of HMAC key */
 } internal_hmac_state_t;
 
 /*
@@ -471,17 +470,20 @@ hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
       state_length < descriptor->hmac_state_length)
     return HAL_ERROR_BAD_ARGUMENTS;
 
+  assert(descriptor->block_length <= sizeof(state->keybuf));
+
+#if 0
   /*
    * RFC 2104 frowns upon keys shorter than the digest length.
+   * ... but most of the test vectors fail this test!
    */
 
   if (key_length < descriptor->digest_length)
     return HAL_ERROR_UNSUPPORTED_KEY;
+#endif
 
   if ((err = hal_hash_initialize(descriptor, &oh, h, sizeof(*h))) != HAL_OK)
     return err;
-
-  memset(state->keybuf, 0, sizeof(state->keybuf));
 
   /*
    * If the supplied HMAC key is longer than the hash block length, we
@@ -489,27 +491,24 @@ hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
    * Otherwise, we just use the supplied HMAC key directly.
    */
 
-  if (key_length > descriptor->block_length) {
-    if ((err = hal_hash_update(oh, key, key_length))                        != HAL_OK ||
-        (err = hal_hash_finalize(oh, state->keybuf, sizeof(state->keybuf))) != HAL_OK ||
-        (err = hal_hash_initialize(descriptor, &oh, h, sizeof(*h)))         != HAL_OK)
-      return err;
-    state->keylen = descriptor->digest_length;
-  }
+  memset(state->keybuf, 0, sizeof(state->keybuf));
 
-  else {
+  if (key_length <= descriptor->block_length)
     memcpy(state->keybuf, key, key_length);
-    state->keylen = key_length;
-  }
+
+  else if ((err = hal_hash_update(oh, key, key_length))                        != HAL_OK ||
+           (err = hal_hash_finalize(oh, state->keybuf, sizeof(state->keybuf))) != HAL_OK ||
+           (err = hal_hash_initialize(descriptor, &oh, h, sizeof(*h)))         != HAL_OK)
+    return err;
 
   /*
    * XOR the key with the IPAD value, then start the inner hash.
    */
 
-  for (i = 0; i < state->keylen; i++)
+  for (i = 0; i < descriptor->block_length; i++)
     state->keybuf[i] ^= HMAC_IPAD;
 
-  if ((err = hal_hash_update(oh, state->keybuf, state->keylen)) != HAL_OK)
+  if ((err = hal_hash_update(oh, state->keybuf, descriptor->block_length)) != HAL_OK)
     return err;
 
   /*
@@ -517,7 +516,7 @@ hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
    * IPAD, we need to XOR with both IPAD and OPAD to get key XOR OPAD.
    */
 
-  for (i = 0; i < state->keylen; i++)
+  for (i = 0; i < descriptor->block_length; i++)
     state->keybuf[i] ^= HMAC_IPAD ^ HMAC_OPAD;
 
   /*
@@ -575,11 +574,11 @@ hal_error_t hal_hmac_finalize(const hal_hmac_state_t opaque_state,
    * to get HMAC.  Key was prepared for this in hal_hmac_initialize().
    */
 
-  if ((err = hal_hash_finalize(oh, d, sizeof(d)))                 != HAL_OK ||
-      (err = hal_hash_initialize(descriptor, &oh, h, sizeof(*h))) != HAL_OK ||
-      (err = hal_hash_update(oh, state->keybuf, state->keylen))   != HAL_OK ||
-      (err = hal_hash_update(oh, d, descriptor->digest_length))   != HAL_OK ||
-      (err = hal_hash_finalize(oh, hmac, length))                 != HAL_OK)
+  if ((err = hal_hash_finalize(oh, d, sizeof(d)))                          != HAL_OK ||
+      (err = hal_hash_initialize(descriptor, &oh, h, sizeof(*h)))          != HAL_OK ||
+      (err = hal_hash_update(oh, state->keybuf, descriptor->block_length)) != HAL_OK ||
+      (err = hal_hash_update(oh, d, descriptor->digest_length))            != HAL_OK ||
+      (err = hal_hash_finalize(oh, hmac, length))                          != HAL_OK)
     return err;
 
   return HAL_OK;
