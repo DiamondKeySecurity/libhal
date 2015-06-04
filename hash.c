@@ -45,8 +45,19 @@
 
 #include "cryptech.h"
 
-/* Longest digest block we support at the moment */
+/*
+ * Longest block and digest we support at the moment.
+ */
+
 #define MAX_BLOCK_LEN           SHA512_BLOCK_LEN
+#define	MAX_DIGEST_LEN		SHA512_DIGEST_LEN
+
+/*
+ * HMAC magic numbers.
+ */
+
+#define HMAC_IPAD 0x36
+#define HMAC_OPAD 0x5c
 
 /*
  * Driver.  This encapsulates whatever per-algorithm voodoo we need
@@ -87,10 +98,22 @@ typedef struct {
 } internal_hash_state_t;
 
 /*
- * Drivers and descriptors for known digest algorithms.
+ * HMAC state.
  */
 
-/* Drivers */
+typedef struct {
+  internal_hash_state_t hash_state;     /* Hash state */
+  uint8_t keybuf[MAX_BLOCK_LEN];        /* HMAC key */
+  size_t keylen;                        /* Length of HMAC key */
+} internal_hmac_state_t;
+
+/*
+ * Drivers for known digest algorithms.
+ *
+ * Initialization of the core_name field is not a typo, we're
+ * concatenating two string constants and trusting the compiler to
+ * whine if the resulting string doesn't fit into the field.
+ */
 
 static const driver_t sha1_driver = {
   SHA1_LENGTH_LEN,
@@ -134,41 +157,46 @@ static const driver_t sha512_driver = {
   MODE_SHA_512
 };
 
-/* Descriptors */
+/*
+ * Descriptors.  Yes, the {hash,hmac}_state_length fields are a bit
+ * repetitive given that they (currently) have the same value
+ * regardless of algorithm, but we don't want to wire in that
+ * assumption, so it's simplest to be explicit.
+ */
 
 const hal_hash_descriptor_t hal_hash_sha1 = {
   SHA1_BLOCK_LEN, SHA1_DIGEST_LEN,
-  sizeof(internal_hash_state_t), 0,
+  sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha1_driver
 };
 
 const hal_hash_descriptor_t hal_hash_sha256 = {
   SHA256_BLOCK_LEN, SHA256_DIGEST_LEN,
-  sizeof(internal_hash_state_t), 0,
+  sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha256_driver
 };
 
 const hal_hash_descriptor_t hal_hash_sha512_224 = {
   SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
-  sizeof(internal_hash_state_t), 0,
+  sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha512_224_driver
 };
 
 const hal_hash_descriptor_t hal_hash_sha512_256 = {
   SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
-  sizeof(internal_hash_state_t), 0,
+  sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha512_256_driver
 };
 
 const hal_hash_descriptor_t hal_hash_sha384 = {
   SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
-  sizeof(internal_hash_state_t), 0,
+  sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha384_driver
 };
 
 const hal_hash_descriptor_t hal_hash_sha512 = {
   SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
-  sizeof(internal_hash_state_t), 0,
+  sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha512_driver
 };
 
@@ -292,7 +320,7 @@ static hal_error_t hash_read_digest(const driver_t * const driver,
  */
 
 hal_error_t hal_hash_update(hal_hash_state_t opaque_state,      /* Opaque state block */
-                            const uint8_t * const data_buffer,	/* Data to be hashed */
+                            const uint8_t * const data_buffer,  /* Data to be hashed */
                             size_t data_buffer_length)          /* Length of data_buffer */
 {
   internal_hash_state_t *state = opaque_state.state;
@@ -418,6 +446,140 @@ hal_error_t hal_hash_finalize(hal_hash_state_t opaque_state,            /* Opaqu
 
   /* All data pushed to core, now we just need to read back the result */
   if ((err = hash_read_digest(state->driver, digest_buffer, state->descriptor->digest_length)) != HAL_OK)
+    return err;
+
+  return HAL_OK;
+}
+
+/*
+ * Initialize HMAC state.
+ */
+
+hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
+                                hal_hmac_state_t *opaque_state,
+                                void *state_buffer, const size_t state_length,
+                                const uint8_t * const key, const size_t key_length)
+{
+  const driver_t * const driver = check_driver(descriptor);
+  internal_hmac_state_t *state = state_buffer;
+  internal_hash_state_t *h = &state->hash_state;
+  hal_hash_state_t oh;
+  hal_error_t err;
+  int i;
+
+  if (descriptor == NULL || driver == NULL || state == NULL || opaque_state == NULL ||
+      state_length < descriptor->hmac_state_length)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  /*
+   * RFC 2104 frowns upon keys shorter than the digest length.
+   */
+
+  if (key_length < descriptor->digest_length)
+    return HAL_ERROR_UNSUPPORTED_KEY;
+
+  if ((err = hal_hash_initialize(descriptor, &oh, h, sizeof(*h))) != HAL_OK)
+    return err;
+
+  memset(state->keybuf, 0, sizeof(state->keybuf));
+
+  /*
+   * If the supplied HMAC key is longer than the hash block length, we
+   * need to hash the supplied HMAC key to get the real HMAC key.
+   * Otherwise, we just use the supplied HMAC key directly.
+   */
+
+  if (key_length > descriptor->block_length) {
+    if ((err = hal_hash_update(oh, key, key_length))                        != HAL_OK ||
+        (err = hal_hash_finalize(oh, state->keybuf, sizeof(state->keybuf))) != HAL_OK ||
+        (err = hal_hash_initialize(descriptor, &oh, h, sizeof(*h)))         != HAL_OK)
+      return err;
+    state->keylen = descriptor->digest_length;
+  }
+
+  else {
+    memcpy(state->keybuf, key, key_length);
+    state->keylen = key_length;
+  }
+
+  /*
+   * XOR the key with the IPAD value, then start the inner hash.
+   */
+
+  for (i = 0; i < state->keylen; i++)
+    state->keybuf[i] ^= HMAC_IPAD;
+
+  if ((err = hal_hash_update(oh, state->keybuf, state->keylen)) != HAL_OK)
+    return err;
+
+  /*
+   * Prepare the key for the final hash.  Since we just XORed key with
+   * IPAD, we need to XOR with both IPAD and OPAD to get key XOR OPAD.
+   */
+
+  for (i = 0; i < state->keylen; i++)
+    state->keybuf[i] ^= HMAC_IPAD ^ HMAC_OPAD;
+
+  /*
+   * If we had some good way of saving all of our state (including
+   * state internal to the hash core), this would be a good place to
+   * do it, since it might speed up algorithms like PBKDF2 which do
+   * repeated HMAC operations using the same key.  Revisit this if and
+   * when the hash cores support such a thing.
+   */
+
+  opaque_state->state = state;
+
+  return HAL_OK;
+}
+
+/*
+ * Add data to HMAC.
+ */
+
+hal_error_t hal_hmac_update(const hal_hmac_state_t opaque_state,
+                            const uint8_t * data, const size_t length)
+{
+  internal_hmac_state_t *state = opaque_state.state;
+  internal_hash_state_t *h = &state->hash_state;
+  hal_hash_state_t oh = { h };
+
+  if (state == NULL || data == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  return hal_hash_update(oh, data, length);
+}
+
+/*
+ * Finish and return HMAC.
+ */
+
+hal_error_t hal_hmac_finalize(const hal_hmac_state_t opaque_state,
+                              uint8_t *hmac, const size_t length)
+{
+  internal_hmac_state_t *state = opaque_state.state;
+  internal_hash_state_t *h = &state->hash_state;
+  const hal_hash_descriptor_t *descriptor;
+  hal_hash_state_t oh = { h };
+  uint8_t d[MAX_DIGEST_LEN];
+  hal_error_t err;
+
+  if (state == NULL || hmac == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  descriptor = h->descriptor;
+  assert(descriptor != NULL && descriptor->digest_length <= sizeof(d));
+
+  /*
+   * Finish up inner hash and extract digest, then perform outer hash
+   * to get HMAC.  Key was prepared for this in hal_hmac_initialize().
+   */
+
+  if ((err = hal_hash_finalize(oh, d, sizeof(d)))                 != HAL_OK ||
+      (err = hal_hash_initialize(descriptor, &oh, h, sizeof(*h))) != HAL_OK ||
+      (err = hal_hash_update(oh, state->keybuf, state->keylen))   != HAL_OK ||
+      (err = hal_hash_update(oh, d, descriptor->digest_length))   != HAL_OK ||
+      (err = hal_hash_finalize(oh, hmac, length))                 != HAL_OK)
     return err;
 
   return HAL_OK;
