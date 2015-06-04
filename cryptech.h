@@ -479,23 +479,65 @@ extern hal_error_t hal_io_wait_valid(off_t offset);
 extern hal_error_t hal_get_random(void *buffer, const size_t length);
 
 extern void hal_hash_set_debug(int onoff);
-extern hal_error_t hal_hash_sha1_core_present(void);
-extern hal_error_t hal_hash_sha256_core_present(void);
-extern hal_error_t hal_hash_sha512_core_present(void);
-extern size_t hal_hash_state_size(void);
-extern void hal_hash_state_initialize(void *state);
-extern hal_error_t hal_hash_sha1(void *state, const uint8_t * data_buffer, const size_t data_buffer_length,
-				 		   uint8_t *digest_buffer, const size_t digest_buffer_length);
-extern hal_error_t hal_hash_sha256(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
-				   		    uint8_t *digest_buffer, const size_t digest_buffer_length);
-extern hal_error_t hal_hash_sha512_224(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
-				       			uint8_t *digest_buffer, const size_t digest_buffer_length);
-extern hal_error_t hal_hash_sha512_256(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
-				       			uint8_t *digest_buffer, const size_t digest_buffer_length);
-extern hal_error_t hal_hash_sha384(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
-				   		    uint8_t *digest_buffer, const size_t digest_buffer_length);
-extern hal_error_t hal_hash_sha512(void *state, const uint8_t *data_buffer, const size_t data_buffer_length,
-				   		    uint8_t *digest_buffer, const size_t digest_buffer_length);
+
+/*
+ * Public information about a digest algorithm.
+ *
+ * The _state_length values in the descriptor and the typed opaque
+ * pointers in the API are all intended to hide internal details of
+ * the implementation while making memory allocation the caller's
+ * problem.
+ */
+
+typedef struct {
+  size_t block_length;
+  size_t digest_length;
+  size_t hash_state_length;
+  size_t hmac_state_length;
+  const void *driver;
+} hal_hash_descriptor_t;
+
+/*
+ * Typed opaque pointers to internal state.
+ */
+
+typedef struct { void *state; } hal_hash_state_t;
+typedef struct { void *state; } hal_hmac_state_t;
+
+/*
+ * Supported digest algorithms.
+ */
+
+extern const hal_hash_descriptor_t hal_hash_sha1;
+extern const hal_hash_descriptor_t hal_hash_sha256;
+extern const hal_hash_descriptor_t hal_hash_sha512_224;
+extern const hal_hash_descriptor_t hal_hash_sha512_256;
+extern const hal_hash_descriptor_t hal_hash_sha384;
+extern const hal_hash_descriptor_t hal_hash_sha512;
+
+extern hal_error_t hal_hash_core_present(const hal_hash_descriptor_t * const descriptor);
+
+extern hal_error_t hal_hash_initialize(const hal_hash_descriptor_t * const descriptor,
+				       hal_hash_state_t *state,
+				       void *state_buffer, const size_t state_length);
+
+extern hal_error_t hal_hash_update(const hal_hash_state_t state,
+				   const uint8_t * data, const size_t length);
+
+extern hal_error_t hal_hash_finalize(const hal_hash_state_t state,
+				     uint8_t *digest, const size_t length);
+
+extern hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
+				       hal_hmac_state_t *state,
+				       void *state_buffer, const size_t state_length,
+				       const uint8_t * const key, const size_t key_length);
+
+extern hal_error_t hal_hmac_update(const hal_hmac_state_t state,
+				   const uint8_t * data, const size_t length);
+
+extern hal_error_t hal_hmac_finalize(const hal_hmac_state_t state,
+				     uint8_t *hmac, const size_t length);
+
 
 extern hal_error_t hal_aes_keywrap(const uint8_t *kek, const size_t kek_length,
 				   const uint8_t *plaintext, const size_t plaintext_length,

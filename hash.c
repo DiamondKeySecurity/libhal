@@ -48,21 +48,135 @@
 /* Longest digest block we support at the moment */
 #define MAX_BLOCK_LEN           SHA512_BLOCK_LEN
 
-/* Hash state */
+/*
+ * Driver.  This encapsulates whatever per-algorithm voodoo we need
+ * this week.  At the moment, this is mostly Cryptech core addresses,
+ * but this is subject to change without notice.
+ *
+ * Most of the addresses in the current version could be calculated
+ * from a single address (the core base address), but this week's
+ * theory prefers the precomputed composite addresses, and doing it
+ * this way saves some microscopic bit of addition at runtime.
+ * Whatever.  It'll probably all change again once we have a dynamic
+ * memory map, so it's not really worth overthinking at the moment.
+ */
+
 typedef struct {
+  size_t length_length;                 /* Length of the length field */
+  off_t block_addr;                     /* Where to write hash blocks */
+  off_t ctrl_addr;                      /* Control register */
+  off_t status_addr;                    /* Status register */
+  off_t digest_addr;                    /* Where to read digest */
+  off_t name_addr;                      /* Where to read core name */
+  char core_name[8];                    /* Expected name of core */
+  uint8_t ctrl_mode;                    /* Digest mode, for cores that have modes */
+} driver_t;
+
+/*
+ * Hash state.
+ */
+
+typedef struct {
+  const hal_hash_descriptor_t *descriptor;
+  const driver_t *driver;
   uint64_t msg_length_high;             /* Total data hashed in this message */
   uint64_t msg_length_low;              /* (128 bits in SHA-512 cases) */
-  size_t block_length;                  /* Block length for this algorithm */
   uint8_t block[MAX_BLOCK_LEN];         /* Block we're accumulating */
   size_t block_used;                    /* How much of the block we've used */
   unsigned block_count;                 /* Blocks sent */
-} hash_state_t;
+} internal_hash_state_t;
 
-static int debug = 0;
+/*
+ * Drivers and descriptors for known digest algorithms.
+ */
+
+/* Drivers */
+
+static const driver_t sha1_driver = {
+  SHA1_LENGTH_LEN,
+  SHA1_ADDR_BLOCK, SHA1_ADDR_CTRL, SHA1_ADDR_STATUS, SHA1_ADDR_DIGEST,
+  SHA1_ADDR_NAME0, (SHA1_NAME0 SHA1_NAME1),
+  0
+};
+
+static const driver_t sha256_driver = {
+  SHA256_LENGTH_LEN,
+  SHA256_ADDR_BLOCK, SHA256_ADDR_CTRL, SHA256_ADDR_STATUS, SHA256_ADDR_DIGEST,
+  SHA256_ADDR_NAME0, (SHA256_NAME0 SHA256_NAME1),
+  0
+};
+
+static const driver_t sha512_224_driver = {
+  SHA512_LENGTH_LEN,
+  SHA512_ADDR_BLOCK, SHA512_ADDR_CTRL, SHA512_ADDR_STATUS, SHA512_ADDR_DIGEST,
+  SHA512_ADDR_NAME0, (SHA512_NAME0 SHA512_NAME1),
+  MODE_SHA_512_224
+};
+
+static const driver_t sha512_256_driver = {
+  SHA512_LENGTH_LEN,
+  SHA512_ADDR_BLOCK, SHA512_ADDR_CTRL, SHA512_ADDR_STATUS, SHA512_ADDR_DIGEST,
+  SHA512_ADDR_NAME0, (SHA512_NAME0 SHA512_NAME1),
+  MODE_SHA_512_256
+};
+
+static const driver_t sha384_driver = {
+  SHA512_LENGTH_LEN,
+  SHA512_ADDR_BLOCK, SHA512_ADDR_CTRL, SHA512_ADDR_STATUS, SHA512_ADDR_DIGEST,
+  SHA512_ADDR_NAME0, (SHA512_NAME0 SHA512_NAME1),
+  MODE_SHA_384
+};
+
+static const driver_t sha512_driver = {
+  SHA512_LENGTH_LEN,
+  SHA512_ADDR_BLOCK, SHA512_ADDR_CTRL, SHA512_ADDR_STATUS, SHA512_ADDR_DIGEST,
+  SHA512_ADDR_NAME0, (SHA512_NAME0 SHA512_NAME1),
+  MODE_SHA_512
+};
+
+/* Descriptors */
+
+const hal_hash_descriptor_t hal_hash_sha1 = {
+  SHA1_BLOCK_LEN, SHA1_DIGEST_LEN,
+  sizeof(internal_hash_state_t), 0,
+  &sha1_driver
+};
+
+const hal_hash_descriptor_t hal_hash_sha256 = {
+  SHA256_BLOCK_LEN, SHA256_DIGEST_LEN,
+  sizeof(internal_hash_state_t), 0,
+  &sha256_driver
+};
+
+const hal_hash_descriptor_t hal_hash_sha512_224 = {
+  SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
+  sizeof(internal_hash_state_t), 0,
+  &sha512_224_driver
+};
+
+const hal_hash_descriptor_t hal_hash_sha512_256 = {
+  SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
+  sizeof(internal_hash_state_t), 0,
+  &sha512_256_driver
+};
+
+const hal_hash_descriptor_t hal_hash_sha384 = {
+  SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
+  sizeof(internal_hash_state_t), 0,
+  &sha384_driver
+};
+
+const hal_hash_descriptor_t hal_hash_sha512 = {
+  SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
+  sizeof(internal_hash_state_t), 0,
+  &sha512_driver
+};
 
 /*
  * Debugging control.
  */
+
+static int debug = 0;
 
 void hal_hash_set_debug(int onoff)
 {
@@ -70,85 +184,96 @@ void hal_hash_set_debug(int onoff)
 }
 
 /*
- * Tell caller how much space to allocate for a hash_state_t.  This
- * lets us hide details that are nobody else's business while letting
- * somebody else deal with memory allocation (and is the way
- * Cryptlib's HAL code works, not by coincidence).
+ * Internal utility to do whatever checking we need of a descriptor,
+ * then extract the driver pointer in a way that works nicely with
+ * initialization of an automatic const pointer.
+ *
+ * Returns the driver pointer on success, NULL on failure.
  */
 
-size_t hal_hash_state_size(void)
+static const driver_t *check_driver(const hal_hash_descriptor_t * const descriptor)
 {
-  return sizeof(hash_state_t);
-}
-
-void hal_hash_state_initialize(void *_state)
-{
-  hash_state_t *state = _state;
-  assert(state != NULL);
-  memset(state, 0, sizeof(*state));
+  return descriptor == NULL ? NULL : descriptor->driver;
 }
 
 /*
  * Report whether cores are present.
  */
 
-hal_error_t hal_hash_sha1_core_present(void)
+hal_error_t hal_hash_core_present(const hal_hash_descriptor_t * const descriptor)
 {
-  return hal_io_expected(SHA1_ADDR_NAME0, (const uint8_t *) (SHA1_NAME0 SHA1_NAME1), 8);
+  const driver_t * const driver = check_driver(descriptor);
+
+  if (driver == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  return hal_io_expected(driver->name_addr,
+                         (const uint8_t *) driver->core_name,
+                         sizeof(driver->core_name));
 }
 
-hal_error_t hal_hash_sha256_core_present(void)
-{
-  return hal_io_expected(SHA256_ADDR_NAME0, (const uint8_t *) (SHA256_NAME0 SHA256_NAME1), 8);
-}
+/*
+ * Initialize hash state.
+ */
 
-hal_error_t hal_hash_sha512_core_present(void)
+hal_error_t hal_hash_initialize(const hal_hash_descriptor_t * const descriptor,
+                                hal_hash_state_t *opaque_state,
+                                void *state_buffer, const size_t state_length)
 {
-  return hal_io_expected(SHA512_ADDR_NAME0, (const uint8_t *) (SHA512_NAME0 SHA512_NAME1), 8);
+  const driver_t * const driver = check_driver(descriptor);
+  internal_hash_state_t *state = state_buffer;
+
+  if (driver == NULL || state == NULL || opaque_state == NULL ||
+      state_length < descriptor->hash_state_length)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  memset(state, 0, sizeof(*state));
+  state->descriptor = descriptor;
+  state->driver = driver;
+
+  opaque_state->state = state;
+
+  return HAL_OK;
 }
 
 /*
  * Send one block to a core.
  */
 
-static hal_error_t hash_write_block(const off_t block_addr,
-                                    const off_t ctrl_addr,
-                                    const off_t status_addr,
-                                    const uint8_t ctrl_mode,
-                                    const hash_state_t * const state)
+static hal_error_t hash_write_block(const internal_hash_state_t * const state)
 {
   uint8_t ctrl_cmd[4];
   hal_error_t err;
 
-  assert(state != NULL && state->block_length % 4 == 0);
+  assert(state != NULL && state->descriptor != NULL && state->driver != NULL);
+  assert(state->descriptor->block_length % 4 == 0);
 
   if (debug)
     fprintf(stderr, "[ %s ]\n", state->block_count == 0 ? "init" : "next");
 
-  if ((err = hal_io_write(block_addr, state->block, state->block_length)) != HAL_OK)
+  if ((err = hal_io_write(state->driver->block_addr, state->block, state->descriptor->block_length)) != HAL_OK)
     return err;
 
   ctrl_cmd[0] = ctrl_cmd[1] = ctrl_cmd[2] = 0;
   ctrl_cmd[3] = state->block_count == 0 ? CTRL_INIT : CTRL_NEXT;  
-  ctrl_cmd[3] |= ctrl_mode;
+  ctrl_cmd[3] |= state->driver->ctrl_mode;
 
   /*
    * Not sure why we're waiting for ready here, but it's what the old
    * (read: tested) code did, so keep that behavior for now.
    */
 
-  if ((err = hal_io_write(ctrl_addr, ctrl_cmd, sizeof(ctrl_cmd))) != HAL_OK)
+  if ((err = hal_io_write(state->driver->ctrl_addr, ctrl_cmd, sizeof(ctrl_cmd))) != HAL_OK)
     return err;
 
-  return hal_io_wait_valid(status_addr);
+  return hal_io_wait_valid(state->driver->status_addr);
 }
 
 /*
  * Read hash result from core.
  */
 
-static hal_error_t hash_read_digest(const off_t digest_addr,
-                                    const off_t status_addr,
+static hal_error_t hash_read_digest(const driver_t * const driver,
                                     uint8_t *digest,
                                     const size_t digest_length)
 {
@@ -156,211 +281,146 @@ static hal_error_t hash_read_digest(const off_t digest_addr,
 
   assert(digest != NULL && digest_length % 4 == 0);
 
-  if ((err = hal_io_wait_valid(status_addr)) != HAL_OK)
+  if ((err = hal_io_wait_valid(driver->status_addr)) != HAL_OK)
     return err;
 
-  return hal_io_read(digest_addr, digest, digest_length);
+  return hal_io_read(driver->digest_addr, digest, digest_length);
 }
 
 /*
- * Hash data.  All supported hash algorithms use similar block
- * manipulations and padding algorithms, so all can use this method
- * with a few parameters which we handle via closures below.
+ * Add data to hash.
  */
 
-static hal_error_t hash_do_hash(hash_state_t *state,                    /* Opaque state block */
-                                const uint8_t * const data_buffer,	/* Data to be hashed */
-                                size_t data_buffer_length,              /* Length of data_buffer */
-                                uint8_t *digest_buffer,                 /* Returned digest */
-                                const size_t digest_buffer_length,      /* Length of digest_buffer */
-                                const size_t block_length,              /* Length of a block */
-                                const size_t digest_length,             /* Length of resulting digest */
-                                const size_t length_length,             /* Length of the length field */
-                                const off_t block_addr,                 /* Where to write hash blocks */
-                                const off_t ctrl_addr,                  /* Control register */
-                                const off_t status_addr,                /* Status register */
-                                const off_t digest_addr,                /* Where to read digest */
-                                const uint8_t ctrl_mode)                /* Digest mode, for cores that have modes */
+hal_error_t hal_hash_update(hal_hash_state_t opaque_state,      /* Opaque state block */
+                            const uint8_t * const data_buffer,	/* Data to be hashed */
+                            size_t data_buffer_length)          /* Length of data_buffer */
 {
+  internal_hash_state_t *state = opaque_state.state;
+  const uint8_t *p = data_buffer;
   hal_error_t err;
   size_t n;
-  int i;
 
-  if (state == NULL ||
-      (state->block_length != 0 && state->block_length != block_length) ||
-      (data_buffer_length > 0 && data_buffer == NULL) ||
-      (data_buffer_length == 0 && digest_buffer == NULL) ||
-      (digest_buffer != NULL && digest_buffer_length < digest_length))
+  if (state == NULL || data_buffer == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if (state->block_length == 0)
-    state->block_length = block_length;
+  if (data_buffer_length == 0)
+    return HAL_OK;
 
-  assert(block_length <= sizeof(state->block));
+  assert(state->descriptor != NULL && state->driver != NULL);
+  assert(state->descriptor->block_length <= sizeof(state->block));
 
-  if (data_buffer_length > 0) {                            /* We have data to hash */
-
-    const uint8_t *p = data_buffer;
-
-    while ((n = state->block_length - state->block_used) <= data_buffer_length) {
-      /*
-       * We have enough data for another complete block.
-       */
-      if (debug)
-        fprintf(stderr, "[ Full block, data_buffer_length %lu, used %lu, n %lu, msg_length %llu ]\n",
-                (unsigned long) data_buffer_length, (unsigned long) state->block_used, (unsigned long) n, state->msg_length_low);
-      memcpy(state->block + state->block_used, p, n);
-      if ((state->msg_length_low += n) < n)
-        state->msg_length_high++;
-      state->block_used = 0;
-      data_buffer_length -= n;
-      p += n;
-      if ((err = hash_write_block(block_addr, ctrl_addr, status_addr, ctrl_mode, state)) != HAL_OK)
-        return err;
-      state->block_count++;
-    }
-
-    if (data_buffer_length > 0) {
-      /*
-       * Data left over, but not enough for a full block, stash it.
-       */
-      if (debug)
-        fprintf(stderr, "[ Partial block, data_buffer_length %lu, used %lu, n %lu, msg_length %llu ]\n",
-                (unsigned long) data_buffer_length, (unsigned long) state->block_used, (unsigned long) n, state->msg_length_low);
-      assert(data_buffer_length < n);
-      memcpy(state->block + state->block_used, p, data_buffer_length);
-      if ((state->msg_length_low += data_buffer_length) < data_buffer_length)
-        state->msg_length_high++;
-      state->block_used += data_buffer_length;
-    }
-  }
-
-  else {           /* Done: add padding, then pull result from the core */
-
-    uint64_t bit_length_low  = (state->msg_length_low  << 3);
-    uint64_t bit_length_high = (state->msg_length_high << 3) | (state->msg_length_low >> 61);
-    uint8_t *p;
-
-    /* Initial pad byte */
-    assert(state->block_used < state->block_length);
-    state->block[state->block_used++] = 0x80;
-
-    /* If not enough room for bit count, zero and push current block */
-    if ((n = state->block_length - state->block_used) < length_length) {
-      if (debug)
-        fprintf(stderr, "[ Overflow block, data_buffer_length %lu, used %lu, n %lu, msg_length %llu ]\n",
-                (unsigned long) data_buffer_length, (unsigned long) state->block_used, (unsigned long) n, state->msg_length_low);
-      if (n > 0)
-        memset(state->block + state->block_used, 0, n);
-      if ((err = hash_write_block(block_addr, ctrl_addr, status_addr, ctrl_mode, state)) != HAL_OK)
-        return err;
-      state->block_count++;
-      state->block_used = 0;
-    }
-
-    /* Pad final block */
-    n = state->block_length - state->block_used;
-    assert(n >= length_length);
-    if (n > 0)
-      memset(state->block + state->block_used, 0, n);
+  while ((n = state->descriptor->block_length - state->block_used) <= data_buffer_length) {
+    /*
+     * We have enough data for another complete block.
+     */
     if (debug)
-      fprintf(stderr, "[ Final block, data_buffer_length %lu, used %lu, n %lu, msg_length %llu ]\n",
+      fprintf(stderr, "[ Full block, data_buffer_length %lu, used %lu, n %lu, msg_length %llu ]\n",
               (unsigned long) data_buffer_length, (unsigned long) state->block_used, (unsigned long) n, state->msg_length_low);
-    p = state->block + state->block_length;
-    for (i = 0; (bit_length_low || bit_length_high) && i < length_length; i++) {
-      *--p = (uint8_t) (bit_length_low & 0xFF);
-      bit_length_low >>= 8;
-      if (bit_length_high) {
-        bit_length_low |= ((bit_length_high & 0xFF) << 56);
-        bit_length_high >>= 8;
-      }
-    }
-
-    /* Push final block */
-    if ((err = hash_write_block(block_addr, ctrl_addr, status_addr, ctrl_mode, state)) != HAL_OK)
+    memcpy(state->block + state->block_used, p, n);
+    if ((state->msg_length_low += n) < n)
+      state->msg_length_high++;
+    state->block_used = 0;
+    data_buffer_length -= n;
+    p += n;
+    if ((err = hash_write_block(state)) != HAL_OK)
       return err;
     state->block_count++;
+  }
 
-    /* All data pushed to core, now we just need to read back the result */
-    if ((err = hash_read_digest(digest_addr, status_addr, digest_buffer, digest_length)) != HAL_OK)
-      return err;
+  if (data_buffer_length > 0) {
+    /*
+     * Data left over, but not enough for a full block, stash it.
+     */
+    if (debug)
+      fprintf(stderr, "[ Partial block, data_buffer_length %lu, used %lu, n %lu, msg_length %llu ]\n",
+              (unsigned long) data_buffer_length, (unsigned long) state->block_used, (unsigned long) n, state->msg_length_low);
+    assert(data_buffer_length < n);
+    memcpy(state->block + state->block_used, p, data_buffer_length);
+    if ((state->msg_length_low += data_buffer_length) < data_buffer_length)
+      state->msg_length_high++;
+    state->block_used += data_buffer_length;
   }
 
   return HAL_OK;
 }
 
 /*
- * Closures to provide the public API.
+ * Finish hash and return digest.
  */
 
-hal_error_t hal_hash_sha1(void *state,
-                          const uint8_t *data_buffer,
-                          const size_t data_buffer_length,
-                          uint8_t *digest_buffer,
-                          const size_t digest_buffer_length)
+hal_error_t hal_hash_finalize(hal_hash_state_t opaque_state,            /* Opaque state block */
+                              uint8_t *digest_buffer,                   /* Returned digest */
+                              const size_t digest_buffer_length)        /* Length of digest_buffer */
 {
-  return hash_do_hash(state, data_buffer, data_buffer_length, digest_buffer, digest_buffer_length,
-                      SHA1_BLOCK_LEN, SHA1_DIGEST_LEN, SHA1_LENGTH_LEN,
-                      SHA1_ADDR_BLOCK, SHA1_ADDR_CTRL, SHA1_ADDR_STATUS, SHA1_ADDR_DIGEST, 0);
-}
+  internal_hash_state_t *state = opaque_state.state;
+  uint64_t bit_length_high, bit_length_low;
+  hal_error_t err;
+  uint8_t *p;
+  size_t n;
+  int i;
 
-hal_error_t hal_hash_sha256(void *state,
-                            const uint8_t *data_buffer,
-                            const size_t data_buffer_length,
-                            uint8_t *digest_buffer,
-                            const size_t digest_buffer_length)
-{
-  return hash_do_hash(state, data_buffer, data_buffer_length, digest_buffer, digest_buffer_length,
-                      SHA256_BLOCK_LEN, SHA256_DIGEST_LEN, SHA256_LENGTH_LEN,
-                      SHA256_ADDR_BLOCK, SHA256_ADDR_CTRL, SHA256_ADDR_STATUS, SHA256_ADDR_DIGEST, 0);
-}
+  if (state == NULL || digest_buffer == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
 
-hal_error_t hal_hash_sha512_224(void *state,
-                                const uint8_t *data_buffer,
-                                const size_t data_buffer_length,
-                                uint8_t *digest_buffer,
-                                const size_t digest_buffer_length)
-{
-  return hash_do_hash(state, data_buffer, data_buffer_length, digest_buffer, digest_buffer_length,
-                      SHA512_BLOCK_LEN, SHA512_DIGEST_LEN, SHA512_LENGTH_LEN,
-                      SHA512_ADDR_BLOCK, SHA512_ADDR_CTRL, SHA512_ADDR_STATUS, SHA512_ADDR_DIGEST,
-                      MODE_SHA_512_224);
-}
+  assert(state->descriptor != NULL && state->driver != NULL);
 
-hal_error_t hal_hash_sha512_256(void *state,
-                                const uint8_t *data_buffer,
-                                const size_t data_buffer_length,
-                                uint8_t *digest_buffer,
-                                const size_t digest_buffer_length)
-{
-  return hash_do_hash(state, data_buffer, data_buffer_length, digest_buffer, digest_buffer_length,
-                      SHA512_BLOCK_LEN, SHA512_DIGEST_LEN, SHA512_LENGTH_LEN,
-                      SHA512_ADDR_BLOCK, SHA512_ADDR_CTRL, SHA512_ADDR_STATUS, SHA512_ADDR_DIGEST,
-                      MODE_SHA_512_256);
-}
+  if (digest_buffer_length < state->descriptor->digest_length)
+    return HAL_ERROR_BAD_ARGUMENTS;
 
-hal_error_t hal_hash_sha384(void *state,
-                            const uint8_t *data_buffer,
-                            const size_t data_buffer_length,
-                            uint8_t *digest_buffer,
-                            const size_t digest_buffer_length)
-{
-  return hash_do_hash(state, data_buffer, data_buffer_length, digest_buffer, digest_buffer_length,
-                      SHA512_BLOCK_LEN, SHA512_DIGEST_LEN, SHA512_LENGTH_LEN,
-                      SHA512_ADDR_BLOCK, SHA512_ADDR_CTRL, SHA512_ADDR_STATUS, SHA512_ADDR_DIGEST,
-                      MODE_SHA_384);
-}
+  assert(state->descriptor->block_length <= sizeof(state->block));
 
-hal_error_t hal_hash_sha512(void *state,
-                            const uint8_t *data_buffer,
-                            const size_t data_buffer_length,
-                            uint8_t *digest_buffer,
-                            const size_t digest_buffer_length)
-{
-  return hash_do_hash(state, data_buffer, data_buffer_length, digest_buffer, digest_buffer_length,
-                      SHA512_BLOCK_LEN, SHA512_DIGEST_LEN, SHA512_LENGTH_LEN,
-                      SHA512_ADDR_BLOCK, SHA512_ADDR_CTRL, SHA512_ADDR_STATUS, SHA512_ADDR_DIGEST,
-                      MODE_SHA_512);
+  /*
+   * Add padding, then pull result from the core
+   */
+
+  bit_length_low  = (state->msg_length_low  << 3);
+  bit_length_high = (state->msg_length_high << 3) | (state->msg_length_low >> 61);
+
+  /* Initial pad byte */
+  assert(state->block_used < state->descriptor->block_length);
+  state->block[state->block_used++] = 0x80;
+
+  /* If not enough room for bit count, zero and push current block */
+  if ((n = state->descriptor->block_length - state->block_used) < state->driver->length_length) {
+    if (debug)
+      fprintf(stderr, "[ Overflow block, used %lu, n %lu, msg_length %llu ]\n",
+              (unsigned long) state->block_used, (unsigned long) n, state->msg_length_low);
+    if (n > 0)
+      memset(state->block + state->block_used, 0, n);
+    if ((err = hash_write_block(state)) != HAL_OK)
+      return err;
+    state->block_count++;
+    state->block_used = 0;
+  }
+
+  /* Pad final block */
+  n = state->descriptor->block_length - state->block_used;
+  assert(n >= state->driver->length_length);
+  if (n > 0)
+    memset(state->block + state->block_used, 0, n);
+  if (debug)
+    fprintf(stderr, "[ Final block, used %lu, n %lu, msg_length %llu ]\n",
+            (unsigned long) state->block_used, (unsigned long) n, state->msg_length_low);
+  p = state->block + state->descriptor->block_length;
+  for (i = 0; (bit_length_low || bit_length_high) && i < state->driver->length_length; i++) {
+    *--p = (uint8_t) (bit_length_low & 0xFF);
+    bit_length_low >>= 8;
+    if (bit_length_high) {
+      bit_length_low |= ((bit_length_high & 0xFF) << 56);
+      bit_length_high >>= 8;
+    }
+  }
+
+  /* Push final block */
+  if ((err = hash_write_block(state)) != HAL_OK)
+    return err;
+  state->block_count++;
+
+  /* All data pushed to core, now we just need to read back the result */
+  if ((err = hash_read_digest(state->driver, digest_buffer, state->descriptor->digest_length)) != HAL_OK)
+    return err;
+
+  return HAL_OK;
 }
 
 /*

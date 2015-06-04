@@ -124,32 +124,49 @@ static const uint8_t sha512_double_digest[] = { /* 64 bytes */
   0x87, 0x4b, 0xe9, 0x09
 };
 
-static int _test_hash(hal_error_t (*hash)(void *,
-					  const uint8_t *, const size_t,
-					  uint8_t *, const size_t),
+static int _test_hash(const hal_hash_descriptor_t * const descriptor,
 		      const uint8_t * const data, const size_t data_len,
 		      const uint8_t * const result, const size_t result_len,
 		      const char * const label)
 {
-  uint8_t state[512], digest[512];
+  uint8_t statebuf[512], digest[512];
+  hal_hash_state_t state;
   hal_error_t err;
 
-  assert(hash != NULL && data != NULL && result != NULL && label != NULL);
-
+  assert(descriptor != NULL && data != NULL && result != NULL && label != NULL);
   assert(result_len <= sizeof(digest));
-  assert(hal_hash_state_size() <= sizeof(state));
+  assert(descriptor->hash_state_length <= sizeof(statebuf));
 
   printf("Starting %s test\n", label);
 
-  hal_hash_state_initialize(state);
+  err = hal_hash_core_present(descriptor);
 
-  if ((err = hash(state, data, data_len, NULL, 0)) != HAL_OK) {
-    printf("Failed: %s\n", hal_error_string(err));
+  switch (err) {
+
+  case HAL_OK:
+    break;
+
+  case HAL_ERROR_IO_UNEXPECTED:
+    printf("Core not present, skipping test\n");
+    return 1;
+
+  default:
+    printf("Failed while checking for core: %s\n", hal_error_string(err));
     return 0;
   }
 
-  if ((err = hash(state, NULL, 0, digest, sizeof(digest))) != HAL_OK) {
-    printf("Failed: %s\n", hal_error_string(err));
+  if ((err = hal_hash_initialize(descriptor, &state, statebuf, sizeof(statebuf))) != HAL_OK) {
+    printf("Failed while initializing hash: %s\n", hal_error_string(err));
+    return 0;
+  }
+
+  if ((err = hal_hash_update(state, data, data_len)) != HAL_OK) {
+    printf("Failed while updating hash: %s\n", hal_error_string(err));
+    return 0;
+  }
+
+  if ((err = hal_hash_finalize(state, digest, sizeof(digest))) != HAL_OK) {
+    printf("Failed while finalizing hash: %s\n", hal_error_string(err));
     return 0;
   }
 
@@ -170,46 +187,30 @@ static int _test_hash(hal_error_t (*hash)(void *,
     return 1;
 }
 
-#define test_hash(_hash_, _data_, _result_, _label_) \
-  _test_hash(_hash_, _data_, sizeof(_data_), _result_, sizeof(_result_), _label_)
+#define test_hash(_desc_, _data_, _result_, _label_) \
+  _test_hash(_desc_, _data_, sizeof(_data_), _result_, sizeof(_result_), _label_)
 
 int main (int argc, char *argv[])
 {
   int ok = 1;
 
-  if (hal_hash_sha1_core_present() == HAL_OK) {
-    ok &= test_hash(hal_hash_sha1,   nist_512_single, sha1_single_digest, "SHA-1 single block");
-    ok &= test_hash(hal_hash_sha1,   nist_512_double, sha1_double_digest, "SHA-1 double block");
-  }
-  else {
-    printf("SHA-1 core not present, skipping tests which depend on it\n");
-  }
+  ok &= test_hash(&hal_hash_sha1,   nist_512_single, sha1_single_digest, "SHA-1 single block");
+  ok &= test_hash(&hal_hash_sha1,   nist_512_double, sha1_double_digest, "SHA-1 double block");
 
-  if (hal_hash_sha256_core_present() == HAL_OK) {
-    ok &= test_hash(hal_hash_sha256, nist_512_single, sha256_single_digest, "SHA-256 single block");
-    ok &= test_hash(hal_hash_sha256, nist_512_double, sha256_double_digest, "SHA-256 double block");
-  }
-  else {
-    printf("SHA-256 core not present, skipping tests which depend on it\n");
-  }
+  ok &= test_hash(&hal_hash_sha256, nist_512_single, sha256_single_digest, "SHA-256 single block");
+  ok &= test_hash(&hal_hash_sha256, nist_512_double, sha256_double_digest, "SHA-256 double block");
 
-  if (hal_hash_sha512_core_present() == HAL_OK) {
+  ok &= test_hash(&hal_hash_sha512_224, nist_1024_single, sha512_224_single_digest, "SHA-512/224 single block");
+  ok &= test_hash(&hal_hash_sha512_224, nist_1024_double, sha512_224_double_digest, "SHA-512/224 double block");
 
-    ok &= test_hash(hal_hash_sha512_224, nist_1024_single, sha512_224_single_digest, "SHA-512/224 single block");
-    ok &= test_hash(hal_hash_sha512_224, nist_1024_double, sha512_224_double_digest, "SHA-512/224 double block");
-
-    ok &= test_hash(hal_hash_sha512_256, nist_1024_single, sha512_256_single_digest, "SHA-512/256 single block");
-    ok &= test_hash(hal_hash_sha512_256, nist_1024_double, sha512_256_double_digest, "SHA-512/256 double block");
+  ok &= test_hash(&hal_hash_sha512_256, nist_1024_single, sha512_256_single_digest, "SHA-512/256 single block");
+  ok &= test_hash(&hal_hash_sha512_256, nist_1024_double, sha512_256_double_digest, "SHA-512/256 double block");
       
-    ok &= test_hash(hal_hash_sha384, nist_1024_single, sha384_single_digest, "SHA-384 single block");
-    ok &= test_hash(hal_hash_sha384, nist_1024_double, sha384_double_digest, "SHA-384 double block");
+  ok &= test_hash(&hal_hash_sha384, nist_1024_single, sha384_single_digest, "SHA-384 single block");
+  ok &= test_hash(&hal_hash_sha384, nist_1024_double, sha384_double_digest, "SHA-384 double block");
 
-    ok &= test_hash(hal_hash_sha512, nist_1024_single, sha512_single_digest, "SHA-512 single block");
-    ok &= test_hash(hal_hash_sha512, nist_1024_double, sha512_double_digest, "SHA-512 double block");
-  }
-  else {
-    printf("SHA-512 core not present, skipping tests which depend on it\n");
-  }
+  ok &= test_hash(&hal_hash_sha512, nist_1024_single, sha512_single_digest, "SHA-512 single block");
+  ok &= test_hash(&hal_hash_sha512, nist_1024_double, sha512_double_digest, "SHA-512 double block");
 
   return !ok;
 }
