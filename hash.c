@@ -45,13 +45,6 @@
 #include "cryptech.h"
 
 /*
- * Longest block and digest we support at the moment.
- */
-
-#define MAX_BLOCK_LEN           SHA512_BLOCK_LEN
-#define MAX_DIGEST_LEN          SHA512_DIGEST_LEN
-
-/*
  * HMAC magic numbers.
  */
 
@@ -89,20 +82,24 @@ typedef struct {
 typedef struct {
   const hal_hash_descriptor_t *descriptor;
   const driver_t *driver;
-  uint64_t msg_length_high;             /* Total data hashed in this message */
-  uint64_t msg_length_low;              /* (128 bits in SHA-512 cases) */
-  uint8_t block[MAX_BLOCK_LEN];         /* Block we're accumulating */
-  size_t block_used;                    /* How much of the block we've used */
-  unsigned block_count;                 /* Blocks sent */
+  uint64_t msg_length_high;                     /* Total data hashed in this message */
+  uint64_t msg_length_low;                      /* (128 bits in SHA-512 cases) */
+  uint8_t block[HAL_MAX_HASH_BLOCK_LENGTH];     /* Block we're accumulating */
+  size_t block_used;                            /* How much of the block we've used */
+  unsigned block_count;                         /* Blocks sent */
 } internal_hash_state_t;
 
 /*
- * HMAC state.
+ * HMAC state.  Right now this just holds the key block and a hash
+ * context; if and when we figure out how PCLSR the hash cores, we
+ * might want to save a lot more than that, and may also want to
+ * reorder certain operations during HMAC initialization to get a
+ * performance boost for things like PBKDF2.
  */
 
 typedef struct {
-  internal_hash_state_t hash_state;     /* Hash state */
-  uint8_t keybuf[MAX_BLOCK_LEN];        /* HMAC key */
+  internal_hash_state_t hash_state;          /* Hash state */
+  uint8_t keybuf[HAL_MAX_HASH_BLOCK_LENGTH]; /* HMAC key */
 } internal_hmac_state_t;
 
 /*
@@ -162,41 +159,41 @@ static const driver_t sha512_driver = {
  * assumption, so it's simplest to be explicit.
  */
 
-const hal_hash_descriptor_t hal_hash_sha1 = {
+const hal_hash_descriptor_t hal_hash_sha1[1] = {{
   SHA1_BLOCK_LEN, SHA1_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha1_driver
-};
+}};
 
-const hal_hash_descriptor_t hal_hash_sha256 = {
+const hal_hash_descriptor_t hal_hash_sha256[1] = {{
   SHA256_BLOCK_LEN, SHA256_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha256_driver
-};
+}};
 
-const hal_hash_descriptor_t hal_hash_sha512_224 = {
+const hal_hash_descriptor_t hal_hash_sha512_224[1] = {{
   SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha512_224_driver
-};
+}};
 
-const hal_hash_descriptor_t hal_hash_sha512_256 = {
+const hal_hash_descriptor_t hal_hash_sha512_256[1] = {{
   SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha512_256_driver
-};
+}};
 
-const hal_hash_descriptor_t hal_hash_sha384 = {
+const hal_hash_descriptor_t hal_hash_sha384[1] = {{
   SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha384_driver
-};
+}};
 
-const hal_hash_descriptor_t hal_hash_sha512 = {
+const hal_hash_descriptor_t hal_hash_sha512[1] = {{
   SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha512_driver
-};
+}};
 
 /*
  * Debugging control.
@@ -559,7 +556,7 @@ hal_error_t hal_hmac_finalize(const hal_hmac_state_t opaque_state,
   internal_hash_state_t *h = &state->hash_state;
   const hal_hash_descriptor_t *descriptor;
   hal_hash_state_t oh = { h };
-  uint8_t d[MAX_DIGEST_LEN];
+  uint8_t d[HAL_MAX_HASH_DIGEST_LENGTH];
   hal_error_t err;
 
   if (state == NULL || hmac == NULL)

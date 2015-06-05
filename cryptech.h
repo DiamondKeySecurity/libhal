@@ -476,9 +476,22 @@ extern hal_error_t hal_io_wait_valid(off_t offset);
  * Higher level public API.
  */
 
+/*
+ * Get random bytes from the CSPRNG.
+ */
+
 extern hal_error_t hal_get_random(void *buffer, const size_t length);
 
-extern void hal_hash_set_debug(int onoff);
+/*
+ * Hash and HMAC API.
+ */
+
+/*
+ * Longest hash block and digest we support at the moment.
+ */
+
+#define HAL_MAX_HASH_BLOCK_LENGTH       SHA512_BLOCK_LEN
+#define HAL_MAX_HASH_DIGEST_LENGTH      SHA512_DIGEST_LEN
 
 /*
  * Public information about a digest algorithm.
@@ -505,15 +518,22 @@ typedef struct { void *state; } hal_hash_state_t;
 typedef struct { void *state; } hal_hmac_state_t;
 
 /*
- * Supported digest algorithms.
+ * Supported digest algorithms.  These are one-element arrays so that
+ * they can be used as constant pointers.
  */
 
-extern const hal_hash_descriptor_t hal_hash_sha1;
-extern const hal_hash_descriptor_t hal_hash_sha256;
-extern const hal_hash_descriptor_t hal_hash_sha512_224;
-extern const hal_hash_descriptor_t hal_hash_sha512_256;
-extern const hal_hash_descriptor_t hal_hash_sha384;
-extern const hal_hash_descriptor_t hal_hash_sha512;
+extern const hal_hash_descriptor_t hal_hash_sha1[1];
+extern const hal_hash_descriptor_t hal_hash_sha256[1];
+extern const hal_hash_descriptor_t hal_hash_sha512_224[1];
+extern const hal_hash_descriptor_t hal_hash_sha512_256[1];
+extern const hal_hash_descriptor_t hal_hash_sha384[1];
+extern const hal_hash_descriptor_t hal_hash_sha512[1];
+
+/*
+ * Hash and HMAC functions.
+ */
+
+extern void hal_hash_set_debug(int onoff);
 
 extern hal_error_t hal_hash_core_present(const hal_hash_descriptor_t * const descriptor);
 
@@ -538,14 +558,30 @@ extern hal_error_t hal_hmac_update(const hal_hmac_state_t state,
 extern hal_error_t hal_hmac_finalize(const hal_hmac_state_t state,
                                      uint8_t *hmac, const size_t length);
 
+/*
+ * AES key wrap functions.
+ */
 
 extern hal_error_t hal_aes_keywrap(const uint8_t *kek, const size_t kek_length,
                                    const uint8_t *plaintext, const size_t plaintext_length,
                                    uint8_t *cyphertext, size_t *ciphertext_length);
+
 extern hal_error_t hal_aes_keyunwrap(const uint8_t *kek, const size_t kek_length,
                                      const uint8_t *ciphertext, const size_t ciphertext_length,
                                      unsigned char *plaintext, size_t *plaintext_length);
+
 extern size_t hal_aes_keywrap_ciphertext_length(const size_t plaintext_length);
+
+/*
+ * PBKDF2 function.  Uses HMAC with the specified digest algorithm as
+ * the pseudo-random function (PRF).
+ */
+
+extern hal_error_t hal_pbkdf2(const hal_hash_descriptor_t * const descriptor,
+			      const uint8_t * const password, const size_t password_length,
+			      const uint8_t * const salt,     const size_t salt_length,
+			      uint8_t       * derived_key,    const size_t derived_key_length,
+			      unsigned iterations_desired);
 
 #endif /* _CRYPTECH_H_ */
 
