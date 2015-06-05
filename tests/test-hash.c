@@ -697,23 +697,12 @@ int main (int argc, char *argv[])
   ok &= test_hmac(hal_hash_sha256, hmac_sha2_tc_6_key, hmac_sha2_tc_6_data, hmac_sha2_tc_6_result_sha256, "HMAC-SHA-256 test case 6");
   ok &= test_hmac(hal_hash_sha256, hmac_sha2_tc_7_key, hmac_sha2_tc_7_data, hmac_sha2_tc_7_result_sha256, "HMAC-SHA-256 test case 7");
 
-#if 0
-  /*
-   * HMAC-SHA-384 doesn't work with the test vectors provided in RFC
-   * 4231.  I have yet to find an implementation of HMAC-SHA-384 that
-   * /does/ work with those test vectors.  Some day we should figure
-   * out what's going on here, but HMAC-SHA-384 is not currently on
-   * our critical path, and I have more urgent things to work on, so
-   * for now I'm just declaring HMAC-SHA-384 unsupported and disabling
-   * these tests until somebody has time to sort this out.
-   */
   ok &= test_hmac(hal_hash_sha384, hmac_sha2_tc_1_key, hmac_sha2_tc_1_data, hmac_sha2_tc_1_result_sha384, "HMAC-SHA-384 test case 1");
   ok &= test_hmac(hal_hash_sha384, hmac_sha2_tc_2_key, hmac_sha2_tc_2_data, hmac_sha2_tc_2_result_sha384, "HMAC-SHA-384 test case 2");
   ok &= test_hmac(hal_hash_sha384, hmac_sha2_tc_3_key, hmac_sha2_tc_3_data, hmac_sha2_tc_3_result_sha384, "HMAC-SHA-384 test case 3");
   ok &= test_hmac(hal_hash_sha384, hmac_sha2_tc_4_key, hmac_sha2_tc_4_data, hmac_sha2_tc_4_result_sha384, "HMAC-SHA-384 test case 4");
   ok &= test_hmac(hal_hash_sha384, hmac_sha2_tc_6_key, hmac_sha2_tc_6_data, hmac_sha2_tc_6_result_sha384, "HMAC-SHA-384 test case 6");
   ok &= test_hmac(hal_hash_sha384, hmac_sha2_tc_7_key, hmac_sha2_tc_7_data, hmac_sha2_tc_7_result_sha384, "HMAC-SHA-384 test case 7");
-#endif
 
   ok &= test_hmac(hal_hash_sha512, hmac_sha2_tc_1_key, hmac_sha2_tc_1_data, hmac_sha2_tc_1_result_sha512, "HMAC-SHA-512 test case 1");
   ok &= test_hmac(hal_hash_sha512, hmac_sha2_tc_2_key, hmac_sha2_tc_2_data, hmac_sha2_tc_2_result_sha512, "HMAC-SHA-512 test case 2");

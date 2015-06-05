@@ -172,19 +172,19 @@ const hal_hash_descriptor_t hal_hash_sha256[1] = {{
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512_224[1] = {{
-  SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
+  SHA512_BLOCK_LEN, SHA512_224_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha512_224_driver
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512_256[1] = {{
-  SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
+  SHA512_BLOCK_LEN, SHA512_256_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha512_256_driver
 }};
 
 const hal_hash_descriptor_t hal_hash_sha384[1] = {{
-  SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
+  SHA512_BLOCK_LEN, SHA384_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   &sha384_driver
 }};
