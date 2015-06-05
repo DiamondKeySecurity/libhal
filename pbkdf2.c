@@ -86,8 +86,12 @@ hal_error_t hal_pbkdf2(const hal_hash_descriptor_t * const descriptor,
                        uint8_t       * derived_key,          size_t derived_key_length,
                        unsigned iterations_desired)
 {
-  uint8_t statebuf[1024];       /* C99 may let us clean this up */
-  uint32_t block_count;
+  uint8_t ac[HAL_MAX_HASH_DIGEST_LENGTH], mac[HAL_MAX_HASH_DIGEST_LENGTH];
+  uint8_t statebuf[1024];
+  unsigned iteration;
+  hal_error_t err;
+  uint32_t block;
+  int i;
 
   if (descriptor == NULL || password == NULL || salt == NULL ||
       derived_key == NULL || derived_key_length == 0 ||
@@ -95,10 +99,15 @@ hal_error_t hal_pbkdf2(const hal_hash_descriptor_t * const descriptor,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   assert(sizeof(statebuf) >= descriptor->hmac_state_length);
+  assert(sizeof(ac)       >= descriptor->digest_length);
+  assert(sizeof(mac)      >= descriptor->digest_length);
 
   /* Output length check per RFC 2989 5.2. */
   if ((uint64_t) derived_key_length > ((uint64_t) 0xFFFFFFFF) * descriptor->block_length)
     return HAL_ERROR_UNSUPPORTED_KEY;
+
+  memset(ac,  0, sizeof(ac));
+  memset(mac, 0, sizeof(mac));
 
   /*
    * We probably should check here to see whether the password is
@@ -113,38 +122,33 @@ hal_error_t hal_pbkdf2(const hal_hash_descriptor_t * const descriptor,
    * Generate output blocks until we reach the requested length.
    */
 
-  for (block_count = 1; ; block_count++) {
-
-    uint8_t accumulator[HAL_MAX_HASH_DIGEST_LENGTH], mac[HAL_MAX_HASH_DIGEST_LENGTH];
-    unsigned iteration;
-    hal_error_t err;
-    int i;
+  for (block = 1; ; block++) {
 
     /*
-     * Initialize the accumulator with the HMAC of the salt
-     * concatenated with the block count.
+     * Initial HMAC is of the salt concatenated with the block count.
+     * This seeds the accumulator, and constitutes iteration one.
      */
 
     if ((err = do_hmac(descriptor, password, password_length, salt, salt_length,
-                       block_count, accumulator, sizeof(accumulator))) != HAL_OK)
+                       block, mac, sizeof(mac))) != HAL_OK)
       return err;
+
+    memcpy(ac, mac, descriptor->digest_length);
 
     /*
      * Now iterate however many times the caller requested, XORing the
      * result back into the accumulator on each iteration.
-     * Initializing the accumulator counts as iteration 1, so we start
-     * with iteration 2.
      */
 
     for (iteration = 2; iteration <= iterations_desired; iteration++) {
 
       if ((err = do_hmac(descriptor, password, password_length,
-                         accumulator, descriptor->digest_length,
+                         ac, descriptor->digest_length,
                          0, mac, sizeof(mac))) != HAL_OK)
         return err;
 
       for (i = 0; i < descriptor->digest_length; i++)
-        accumulator[i] ^= mac[i];
+        ac[i] ^= mac[i];
     }
 
     /*
@@ -153,12 +157,12 @@ hal_error_t hal_pbkdf2(const hal_hash_descriptor_t * const descriptor,
      */
 
     if (derived_key_length > descriptor->digest_length) {
-      memcpy(derived_key, accumulator, descriptor->digest_length);
+      memcpy(derived_key, ac, descriptor->digest_length);
       derived_key        += descriptor->digest_length;
       derived_key_length -= descriptor->digest_length;
     }
     else {
-      memcpy(derived_key, accumulator, derived_key_length);
+      memcpy(derived_key, ac, derived_key_length);
       return HAL_OK;
     }
   }

@@ -153,7 +153,8 @@ static const uint8_t pbkdf2_tc_6_DK[] = { /* 16 bytes */
 
 static void print_hex(const uint8_t * const val, const size_t len)
 {
-  for (size_t i = 0; i < len; i++)
+  size_t i;
+  for (i = 0; i < len; i++)
     printf(" %02x", val[i]);
 }
 
