@@ -186,10 +186,10 @@ hal_error_t hal_modexp(const uint8_t * const msg, const size_t msg_len, /* Messa
 
   check(set_blockmem(MODEXP_MODULUS_PTR_RST, MODEXP_MODULUS_DATA, mod, mod_len, io_len));
   check(set_blockmem(MODEXP_MESSAGE_PTR_RST, MODEXP_MESSAGE_DATA, msg, msg_len, io_len));
-  check(set_register(MODEXP_MODULUS_LENGTH, mod_len / 4));
+  check(set_register(MODEXP_MODULUS_LENGTH, /* mod_len */ io_len / 4));
 
   check(set_blockmem(MODEXP_EXPONENT_PTR_RST, MODEXP_EXPONENT_DATA, exp, exp_len, io_len));
-  check(set_register(MODEXP_EXPONENT_LENGTH, exp_len / 4));
+  check(set_register(MODEXP_EXPONENT_LENGTH, /* exp_len */ io_len / 4));
 
   check(hal_io_wait_ready(MODEXP_ADDR_STATUS));
 

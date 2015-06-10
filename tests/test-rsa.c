@@ -82,7 +82,7 @@ static int test_modexp(const char * const kind,
 
 static int test_rsa(const rsa_tc_t * const tc)
 {
-  return (test_modexp("Signature",    tc, &tc->m, &tc->d, &tc->s) || /* RSA decryption */
+  return (test_modexp("Signature",    tc, &tc->m, &tc->d, &tc->s) && /* RSA decryption */
           test_modexp("Verification", tc, &tc->s, &tc->e, &tc->m));  /* RSA encryption */
 }
 
