@@ -583,6 +583,20 @@ extern hal_error_t hal_pbkdf2(const hal_hash_descriptor_t * const descriptor,
 			      uint8_t       * derived_key,    const size_t derived_key_length,
 			      unsigned iterations_desired);
 
+/*
+ * Modular exponentiation.
+ */
+
+extern void hal_modexp_set_debug(const int onoff);
+
+extern hal_error_t hal_modexp(const uint8_t * const msg, const size_t msg_len, /* Message */
+                              const uint8_t * const exp, const size_t exp_len, /* Exponent */
+                              const uint8_t * const mod, const size_t mod_len, /* Modulus */
+                              uint8_t * result, const size_t result_len);
+
+
+
+
 #endif /* _CRYPTECH_H_ */
 
 /*
