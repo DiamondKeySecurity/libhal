@@ -36,7 +36,7 @@ from argparse                           import ArgumentParser, FileType
 from Crypto                             import __version__ as PyCryptoVersion
 from Crypto.PublicKey                   import RSA
 from Crypto.Hash                        import SHA256
-from Crypto.Util.number                 import long_to_bytes
+from Crypto.Util.number                 import long_to_bytes, inverse
 from Crypto.Signature.PKCS1_v1_5        import EMSA_PKCS1_V1_5_ENCODE, PKCS115_SigScheme
 from textwrap                           import TextWrapper
 import sys, os.path
@@ -101,6 +101,8 @@ printlines("/*",
            plaintext  = plaintext,
            digest     = h.hexdigest())
 
+fields = ("n", "e", "d", "p", "q", "dP", "dQ", "u", "m", "s")
+
 for k_len in args.key_lengths:
 
   k = RSA.generate(k_len)       # Cryptlib insists u < p, probably with good reason,
@@ -123,14 +125,29 @@ for k_len in args.key_lengths:
              "*/", "",
              k_len = k_len, pkcs  = args.pkcs_encoding)
 
-  for component in k.keydata:
-    print_hex("%s_%d" % (component, k_len),
-              long_to_bytes(getattr(k, component), blocksize = blocksize),
-              "key component %s" % component)
+  # PyCrypto doesn't precalculate dP or dQ, and for some reason it
+  # does u backwards (uses (1/p % q) and swaps the roles of p and q in
+  # the CRT calculation to compensate), so we just calculate our own.
+
+  for name in fields:
+    if name in "ms":
+      continue
+    elif name == "dP":
+      value = k.d % (k.p - 1)
+    elif name == "dQ":
+      value = k.d % (k.q - 1)
+    elif name == "u":
+      value = inverse(k.q, k.p)
+    else:
+      value = getattr(k, name)
+
+    print_hex("%s_%d" % (name, k_len),
+              long_to_bytes(value, blocksize = blocksize),
+              "key component %s" % name)
+
   print_hex("m_%d" % k_len, pad_to_blocksize(m, blocksize), "message to be signed")
   print_hex("s_%d" % k_len, pad_to_blocksize(s, blocksize), "signed message")
 
-fields = "nedpqums"
 printlines("typedef struct { const uint8_t *val; size_t len; } rsa_tc_bn_t;",
            "typedef struct { size_t size; rsa_tc_bn_t %(fields)s; } rsa_tc_t;",
            "",

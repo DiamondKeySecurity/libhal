@@ -175,18 +175,18 @@ static hal_error_t modexp_fp(fp_int *msg, fp_int *exp, fp_int *mod, fp_int *res)
 
   assert(msg != NULL && exp != NULL && mod != NULL && res != NULL);
 
-  uint8_t msgbuf[(fp_unsigned_bin_size(msg) + 3) & ~3];
-  uint8_t expbuf[(fp_unsigned_bin_size(exp) + 3) & ~3];
-  uint8_t modbuf[(fp_unsigned_bin_size(mod) + 3) & ~3];
+  const size_t msg_len = fp_unsigned_bin_size(msg);
+  const size_t exp_len = fp_unsigned_bin_size(exp);
+  const size_t mod_len = fp_unsigned_bin_size(mod);
+
+  const size_t len = (MAX(MAX(msg_len, exp_len), mod_len) + 3) & ~3;
+
+  uint8_t msgbuf[len], expbuf[len], modbuf[len], resbuf[len];
 
   if ((err = unpack_fp(msg, msgbuf, sizeof(msgbuf))) != HAL_OK ||
       (err = unpack_fp(exp, expbuf, sizeof(expbuf))) != HAL_OK ||
-      (err = unpack_fp(mod, modbuf, sizeof(modbuf))) != HAL_OK)
-    goto fail;
-
-  uint8_t resbuf[FP_MAX_SIZE/8];
-
-  if ((err = hal_modexp(msgbuf, sizeof(msgbuf),
+      (err = unpack_fp(mod, modbuf, sizeof(modbuf))) != HAL_OK ||
+      (err = hal_modexp(msgbuf, sizeof(msgbuf),
                         expbuf, sizeof(expbuf),
                         modbuf, sizeof(modbuf),
                         resbuf, sizeof(resbuf))) != HAL_OK)

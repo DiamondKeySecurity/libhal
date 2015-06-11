@@ -74,7 +74,6 @@ static int test_modexp(const char * const kind,
     return 0;
   }
 
-  printf("OK\n");
   return 1;
 }
 
@@ -105,29 +104,36 @@ static int test_crt(const char * const kind, const rsa_tc_t * const tc)
     return 0;
   }
 
-  printf("OK\n");
   return 1;
 }
 
+/*
+ * Time a test.
+ */
+
+static void _time_check(const struct timeval t0, const int ok)
+{
+  struct timeval t;
+  gettimeofday(&t, NULL);
+  t.tv_sec -= t0.tv_sec;
+  t.tv_usec = t0.tv_usec;
+  if (t.tv_usec < 0) {
+    t.tv_usec += 1000000;
+    t.tv_sec  -= 1;
+  }
+  printf("Elapsed time %lu.%06lu seconds, %s\n",
+         (unsigned long) t.tv_sec,
+         (unsigned long) t.tv_usec,
+         ok ? "OK" : "FAILED");
+}
 
 #define time_check(_expr_)                      \
   do {                                          \
-    struct timeval _t1, _t2, _td;               \
-    gettimeofday(&_t1, NULL);                   \
+    struct timeval _t;                          \
+    gettimeofday(&_t, NULL);                    \
     int _ok = (_expr_);                         \
-    gettimeofday(&_t2, NULL);                   \
-    _td.tv_sec = _t2.tv_sec - _t1.tv_sec;       \
-    _td.tv_usec = _t2.tv_usec - _t1.tv_usec;    \
-    if (_td.tv_usec < 0) {                      \
-      _td.tv_usec += 1000000;                   \
-      _td.tv_sec  -= 1;                         \
-    }                                           \
-    printf("%lu.%06lu %s\n",                    \
-           (unsigned long) _td.tv_sec,          \
-           (unsigned long) _td.tv_usec,         \
-           _ok ? "OK" : "FAILED");              \
-    if (!_ok)                                   \
-      return 0;                                 \
+    _time_check(_t, _ok);                       \
+    ok &= _ok;                                  \
   } while (0)
 
 /*
@@ -136,6 +142,8 @@ static int test_crt(const char * const kind, const rsa_tc_t * const tc)
 
 static int test_rsa(const rsa_tc_t * const tc)
 {
+  int ok = 1;
+
   /* RSA encryption */
   time_check(test_modexp("Verification", tc, &tc->s, &tc->e, &tc->m));
 
@@ -145,7 +153,7 @@ static int test_rsa(const rsa_tc_t * const tc)
   /* RSA decyrption using CRT */
   time_check(test_crt("Signature (CRT)", tc));
 
-  return 1;
+  return ok;
 }
 
 int main(int argc, char *argv[])
@@ -171,6 +179,8 @@ int main(int argc, char *argv[])
    */
 
   hal_modexp_set_debug(1);
+
+  /* Normal test */
 
   for (i = 0; i < (sizeof(rsa_tc)/sizeof(*rsa_tc)); i++)
     if (!test_rsa(&rsa_tc[i]))
