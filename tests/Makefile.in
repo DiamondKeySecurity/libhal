@@ -34,6 +34,13 @@ BIN		= test-aes-key-wrap test-hash test-pbkdf2 test-rsa
 CC		= @CC@
 CFLAGS		= @CFLAGS@ -I..
 LDFLAGS		= @LDFLAGS@ ${LIB}
+TFMDIR		= @TFMDIR@
+
+prefix		= @prefix@
+exec_prefix	= @exec_prefix@
+includedir	= @includedir@
+libdir		= @libdir@
+abs_top_builddir= @abs_top_builddir@
 
 all: ${BIN}
 

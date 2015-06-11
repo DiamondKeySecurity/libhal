@@ -44,6 +44,8 @@
 #include <string.h>
 #include <assert.h>
 
+#include <sys/time.h>
+
 #include "cryptech.h"
 #include "test-rsa.h"
 
@@ -77,13 +79,73 @@ static int test_modexp(const char * const kind,
 }
 
 /*
+ * Run one RSA CRT test.
+ */
+
+static int test_crt(const char * const kind, const rsa_tc_t * const tc)
+{
+  uint8_t result[tc->n.len];
+
+  printf("%s test for %lu-bit RSA key\n", kind, (unsigned long) tc->size);
+
+  if (hal_rsa_crt(tc->m.val, tc->m.len,
+                  tc->n.val, tc->n.len,
+                  tc->e.val, tc->e.len,
+                  tc->d.val, tc->d.len,
+                  tc->p.val, tc->p.len,
+                  tc->q.val, tc->q.len,
+                  tc->u.val, tc->u.len,
+                  result, sizeof(result)) != HAL_OK) {
+    printf("RSA CRT failed\n");
+    return 0;
+  }
+
+  if (memcmp(result, tc->s.val, tc->s.len)) {
+    printf("MISMATCH\n");
+    return 0;
+  }
+
+  printf("OK\n");
+  return 1;
+}
+
+
+#define time_check(_expr_)                      \
+  do {                                          \
+    struct timeval _t1, _t2, _td;               \
+    gettimeofday(&_t1, NULL);                   \
+    int _ok = (_expr_);                         \
+    gettimeofday(&_t2, NULL);                   \
+    _td.tv_sec = _t2.tv_sec - _t1.tv_sec;       \
+    _td.tv_usec = _t2.tv_usec - _t1.tv_usec;    \
+    if (_td.tv_usec < 0) {                      \
+      _td.tv_usec += 1000000;                   \
+      _td.tv_sec  -= 1;                         \
+    }                                           \
+    printf("%lu.%06lu %s\n",                    \
+           (unsigned long) _td.tv_sec,          \
+           (unsigned long) _td.tv_usec,         \
+           _ok ? "OK" : "FAILED");              \
+    if (!_ok)                                   \
+      return 0;                                 \
+  } while (0)
+
+/*
  * Test signature and exponentiation for one RSA keypair.
  */
 
 static int test_rsa(const rsa_tc_t * const tc)
 {
-  return (test_modexp("Signature",    tc, &tc->m, &tc->d, &tc->s) && /* RSA decryption */
-          test_modexp("Verification", tc, &tc->s, &tc->e, &tc->m));  /* RSA encryption */
+  /* RSA encryption */
+  time_check(test_modexp("Verification", tc, &tc->s, &tc->e, &tc->m));
+
+  /* Brute force RSA decryption */
+  time_check(test_modexp("Signature (ModExp)", tc, &tc->m, &tc->d, &tc->s));
+
+  /* RSA decyrption using CRT */
+  time_check(test_crt("Signature (CRT)", tc));
+
+  return 1;
 }
 
 int main(int argc, char *argv[])

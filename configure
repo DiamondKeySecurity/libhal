@@ -583,6 +583,7 @@ PACKAGE_URL=''
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+TFMDIR
 LDFLAGS
 CFLAGS
 CC
@@ -635,7 +636,8 @@ target_alias
 FPGA_BUS
 CC
 CFLAGS
-LDFLAGS'
+LDFLAGS
+TFMDIR'
 
 
 # Initialize some variables set by options.
@@ -1246,6 +1248,7 @@ Some influential environment variables:
   CC          C compiler command
   CFLAGS      C compiler flags
   LDFLAGS     Linker flags
+  TFMDIR      Directory containing libtfm.a and tfm.h
 
 Use these variables to override the choices made by `configure' or to help
 it to find libraries and programs with nonstandard names/locations.
@@ -1684,6 +1687,7 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
 
+
 case $FPGA_BUS in #(
   "") :
     FPGA_BUS=EIM ;; #(
@@ -1695,19 +1699,25 @@ esac
 
 case $CC in #(
   "") :
-    CC="cc" ;; #(
+    CC='cc' ;; #(
   *) :
      ;;
 esac
 case $CFLAGS in #(
   "") :
-    CFLAGS="-g -Wall -fPIC" ;; #(
+    CFLAGS='-g3 -Wall -fPIC -std=c99 -I${TFMDIR}' ;; #(
   *) :
      ;;
 esac
 case $LDFLAGS in #(
   "") :
-    LDFLAGS="-g" ;; #(
+    LDFLAGS='-g3 -L${TFMDIR} -ltfm' ;; #(
+  *) :
+     ;;
+esac
+case $TFMDIR in #(
+  "") :
+    TFMDIR='${abs_top_builddir}/../libtfm' ;; #(
   *) :
      ;;
 esac
@@ -1720,6 +1730,8 @@ $as_echo "$as_me: C compiler: $CC" >&6;}
 $as_echo "$as_me: C compiler flags: $CFLAGS" >&6;}
 { $as_echo "$as_me:${as_lineno-$LINENO}: Linker flags: $LDFLAGS" >&5
 $as_echo "$as_me: Linker flags: $LDFLAGS" >&6;}
+{ $as_echo "$as_me:${as_lineno-$LINENO}: libtfm directory: $TFMDIR" >&5
+$as_echo "$as_me: libtfm directory: $TFMDIR" >&6;}
 
 ac_config_files="$ac_config_files Makefile tests/Makefile"
 

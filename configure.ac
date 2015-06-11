@@ -39,22 +39,25 @@
 
 AC_INIT([libcryptech], [0.1])
 
-AC_ARG_VAR([FPGA_BUS],	[Bus architecture to use (currently must be "EIM" or "I2C")])
-AC_ARG_VAR([CC],	[C compiler command])
-AC_ARG_VAR([CFLAGS],	[C compiler flags])
-AC_ARG_VAR([LDFLAGS],	[Linker flags])
+AC_ARG_VAR([FPGA_BUS],  [Bus architecture to use (currently must be "EIM" or "I2C")])
+AC_ARG_VAR([CC],        [C compiler command])
+AC_ARG_VAR([CFLAGS],    [C compiler flags])
+AC_ARG_VAR([LDFLAGS],   [Linker flags])
+AC_ARG_VAR([TFMDIR],    [Directory containing libtfm.a and tfm.h])
 
 AS_CASE($FPGA_BUS, [""],[FPGA_BUS=EIM], [EIM|I2C],[],
-	[AC_MSG_ERROR([Invalid setting of FPGA_BUS, must be "EIM" or "I2C"])])
-	
-AS_CASE($CC,      [""],[CC="cc"],		  [])
-AS_CASE($CFLAGS,  [""],[CFLAGS="-g -Wall -fPIC"], [])
-AS_CASE($LDFLAGS, [""],[LDFLAGS="-g"],		  [])
+        [AC_MSG_ERROR([Invalid setting of FPGA_BUS, must be "EIM" or "I2C"])])
+        
+AS_CASE($CC,      [""],[CC='cc'],                                       [])
+AS_CASE($CFLAGS,  [""],[CFLAGS='-g3 -Wall -fPIC -std=c99 -I${TFMDIR}'], [])
+AS_CASE($LDFLAGS, [""],[LDFLAGS='-g3 -L${TFMDIR} -ltfm'],               [])
+AS_CASE($TFMDIR,  [""],[TFMDIR='${abs_top_builddir}/../libtfm'],        [])
 
 AC_MSG_NOTICE([FPGA bus: $FPGA_BUS])
 AC_MSG_NOTICE([C compiler: $CC])
 AC_MSG_NOTICE([C compiler flags: $CFLAGS])
 AC_MSG_NOTICE([Linker flags: $LDFLAGS])
+AC_MSG_NOTICE([libtfm directory: $TFMDIR])
 
 AC_CONFIG_FILES([Makefile tests/Makefile])
 AC_OUTPUT

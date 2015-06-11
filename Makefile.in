@@ -29,7 +29,8 @@
 
 INC		= cryptech.h
 LIB		= libcryptech.a
-OBJ		= ${IO_OBJ} csprng.o hash.o aes_keywrap.o pbkdf2.o modexp.o errorstrings.o
+OBJ		= ${IO_OBJ} csprng.o hash.o aes_keywrap.o pbkdf2.o \
+		  modexp.o rsa.o errorstrings.o
 
 IO_OBJ		= ${IO_OBJ_@FPGA_BUS@}
 IO_OBJ_EIM	= hal_io_eim.o novena-eim.o
@@ -38,11 +39,13 @@ IO_OBJ_I2C 	= hal_io_i2c.o
 CC		= @CC@
 CFLAGS		= @CFLAGS@
 LDFLAGS		= @LDFLAGS@
+TFMDIR		= @TFMDIR@
 
 prefix		= @prefix@
 exec_prefix	= @exec_prefix@
 includedir	= @includedir@
 libdir		= @libdir@
+abs_top_builddir= @abs_top_builddir@
 
 all: ${LIB}
 	cd tests; ${MAKE} $@
