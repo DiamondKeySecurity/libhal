@@ -460,6 +460,9 @@ typedef enum { HAL_ERROR_LIST N_HAL_ERRORS } hal_error_t;
  * Public functions.
  */
 
+#include <stdint.h>
+#include <sys/types.h>
+
 extern const char *hal_error_string(const hal_error_t err);
 
 /*
