@@ -83,28 +83,38 @@ static int test_modexp(const char * const kind,
 
 static int test_crt(const char * const kind, const rsa_tc_t * const tc)
 {
-  uint8_t result[tc->n.len];
-
   printf("%s test for %lu-bit RSA key\n", kind, (unsigned long) tc->size);
 
-  if (hal_rsa_crt(tc->m.val, tc->m.len,
-                  tc->n.val, tc->n.len,
-                  tc->e.val, tc->e.len,
-                  tc->d.val, tc->d.len,
-                  tc->p.val, tc->p.len,
-                  tc->q.val, tc->q.len,
-                  tc->u.val, tc->u.len,
-                  result, sizeof(result)) != HAL_OK) {
-    printf("RSA CRT failed\n");
+  uint8_t keybuf[hal_rsa_key_t_size];
+  hal_error_t err = HAL_OK;
+  hal_rsa_key_t key;
+
+  if ((err = hal_rsa_key_load(RSA_PRIVATE, &key, keybuf, sizeof(keybuf),
+                              tc->n.val,  tc->n.len,
+                              tc->e.val,  tc->e.len,
+                              tc->d.val,  tc->d.len,
+                              tc->p.val,  tc->p.len,
+                              tc->q.val,  tc->q.len,
+                              tc->u.val,  tc->u.len,
+                              tc->dP.val, tc->dP.len,
+                              tc->dQ.val, tc->dQ.len)) != HAL_OK) {
+    printf("RSA CRT key load failed: %s\n", hal_error_string(err));
     return 0;
   }
 
-  if (memcmp(result, tc->s.val, tc->s.len)) {
-    printf("MISMATCH\n");
-    return 0;
-  }
+  uint8_t result[tc->n.len];
 
-  return 1;
+  if ((err = hal_rsa_crt(key, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
+    printf("RSA CRT failed: %s\n", hal_error_string(err));
+
+  const int mismatch = (err == HAL_OK && memcmp(result, tc->s.val, tc->s.len) != 0);
+
+  if (mismatch)
+    printf("MISMATCH\n");    
+
+  hal_rsa_key_clear(key);
+
+  return err == HAL_OK && !mismatch;
 }
 
 /*

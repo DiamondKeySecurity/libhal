@@ -442,9 +442,8 @@
   DEFINE_HAL_ERROR(HAL_ERROR_KEYWRAP_BAD_MAGIC,         "Bad magic number while unwrapping key")        \
   DEFINE_HAL_ERROR(HAL_ERROR_KEYWRAP_BAD_LENGTH,        "Length out of range while unwrapping key")     \
   DEFINE_HAL_ERROR(HAL_ERROR_KEYWRAP_BAD_PADDING,       "Non-zero padding detected unwrapping key")     \
-  DEFINE_HAL_ERROR(HAL_ERROR_CRT_FAILED,                "CRT calculation failed")                       \
+  DEFINE_HAL_ERROR(HAL_ERROR_IMPOSSIBLE,                "\"Impossible\" error")                         \
   DEFINE_HAL_ERROR(HAL_ERROR_ALLOCATION_FAILURE,        "Memory allocation failed")                     \
-  DEFINE_HAL_ERROR(HAL_ERROR_UNKNOWN_TFM_FAILURE,       "Unknown libtfm failure")                       \
   DEFINE_HAL_ERROR(HAL_ERROR_RESULT_TOO_LONG,		"Result too long for buffer")			\
   END_OF_HAL_ERROR_LIST
 
@@ -608,17 +607,29 @@ extern hal_error_t hal_modexp(const uint8_t * const msg, const size_t msg_len, /
 
 extern void hal_rsa_set_debug(const int onoff);
 
-extern hal_error_t hal_rsa_crt(const uint8_t * const m, const size_t m_len,
-                               const uint8_t * const n, const size_t n_len,
-                               const uint8_t * const e, const size_t e_len,
-                               const uint8_t * const d, const size_t d_len,
-                               const uint8_t * const p, const size_t p_len,
-                               const uint8_t * const q, const size_t q_len,
-                               const uint8_t * const u, const size_t u_len,
+extern const size_t hal_rsa_key_t_size;
+
+typedef enum { RSA_PRIVATE, RSA_PUBLIC } hal_rsa_key_type_t;
+
+typedef struct { void *key; } hal_rsa_key_t;
+
+extern hal_error_t hal_rsa_key_load(const hal_rsa_key_type_t type,
+                                    hal_rsa_key_t *key,
+                                    void *keybuf, const size_t keybuf_len,
+                                    const uint8_t * const n,  const size_t n_len,
+                                    const uint8_t * const e,  const size_t e_len,
+                                    const uint8_t * const d,  const size_t d_len,
+                                    const uint8_t * const p,  const size_t p_len,
+                                    const uint8_t * const q,  const size_t q_len,
+                                    const uint8_t * const u,  const size_t u_len,
+                                    const uint8_t * const dP, const size_t dP_len,
+                                    const uint8_t * const dQ, const size_t dQ_len);
+
+extern void hal_rsa_key_clear(hal_rsa_key_t key);
+
+extern hal_error_t hal_rsa_crt(hal_rsa_key_t key,
+                               const uint8_t * const m,  const size_t m_len,
                                uint8_t * result, const size_t result_len);
-
-
-
 
 #endif /* _CRYPTECH_H_ */
 
