@@ -609,7 +609,7 @@ extern void hal_rsa_set_debug(const int onoff);
 
 extern const size_t hal_rsa_key_t_size;
 
-typedef enum { RSA_PRIVATE, RSA_PUBLIC } hal_rsa_key_type_t;
+typedef enum { HAL_RSA_PRIVATE, HAL_RSA_PUBLIC } hal_rsa_key_type_t;
 
 typedef struct { void *key; } hal_rsa_key_t;
 
@@ -630,6 +630,12 @@ extern void hal_rsa_key_clear(hal_rsa_key_t key);
 extern hal_error_t hal_rsa_crt(hal_rsa_key_t key,
                                const uint8_t * const m,  const size_t m_len,
                                uint8_t * result, const size_t result_len);
+
+extern hal_error_t hal_rsa_gen(hal_rsa_key_t *key,
+                               void *keybuf, const size_t keybuf_len,
+                               const unsigned key_length,
+                               const unsigned long public_exponent);
+
 
 #endif /* _CRYPTECH_H_ */
 

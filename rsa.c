@@ -241,9 +241,9 @@ hal_error_t hal_rsa_key_load(const hal_rsa_key_type_t type,
 
 #define _(x) do { fp_init(&key->x); if (x == NULL) goto fail; fp_read_unsigned_bin(&key->x, (uint8_t *) x, x##_len); } while (0)
   switch (type) {
-  case RSA_PRIVATE:
+  case HAL_RSA_PRIVATE:
     _(d); _(p); _(q); _(u); _(dP); _(dQ);
-  case RSA_PUBLIC:
+  case HAL_RSA_PUBLIC:
     _(n); _(e);
     key_->key = key;
     return HAL_OK;
@@ -314,6 +314,98 @@ hal_error_t hal_rsa_crt(hal_rsa_key_t key_,
 
  fail:
   memset(&tmp, 0, sizeof(tmp));
+  return err;
+}
+
+static hal_error_t find_prime(unsigned prime_length, fp_int *e, fp_int *result)
+{
+  uint8_t buffer[prime_length];
+  hal_error_t err;
+  fp_int t;
+
+  /*
+   * Get random bytes, munge a few bits, and stuff into a bignum.
+   * Keep doing this until we find a result that's (probably) prime
+   * and for which result - 1 is relatively prime with respect to e.
+   */
+
+  do {
+    if ((err = hal_get_random(buffer, sizeof(buffer))) != HAL_OK)
+      return err;
+    buffer[0                 ] |= 0xc0;
+    buffer[sizeof(buffer) - 1] |= 0x01;
+    fp_read_unsigned_bin(result, buffer, sizeof(buffer));
+
+  } while (!fp_isprime(result) ||
+           (fp_sub_d(result, 1, &t), fp_gcd(&t, e, &t), fp_cmp_d(&t, 1) != FP_EQ));
+
+  fp_zero(&t);
+  return HAL_OK;
+}
+
+hal_error_t hal_rsa_gen(hal_rsa_key_t *key_,
+                        void *keybuf, const size_t keybuf_len,
+                        const unsigned key_length,
+                        const unsigned long public_exponent)
+{
+  struct rsa_key *key = keybuf;
+  hal_error_t err = HAL_OK;
+  fp_int p_1, q_1;
+
+  if (key_ == NULL || keybuf == NULL || keybuf_len < sizeof(struct rsa_key))
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  switch (key_length) {
+  case bitsToBytes(1024):
+  case bitsToBytes(2048):
+  case bitsToBytes(4096):
+  case bitsToBytes(8192):
+    break;
+  default:
+    return HAL_ERROR_UNSUPPORTED_KEY;
+  }
+
+  switch (public_exponent) {
+  case 0x010001:
+    break;
+  default:
+    return HAL_ERROR_UNSUPPORTED_KEY;
+  }
+
+  /*
+   * Initialize key
+   */
+
+  memset(keybuf, 0, keybuf_len);
+  key->type = HAL_RSA_PRIVATE;
+  fp_set(&key->e, public_exponent);
+
+  /*
+   * Find a good pair of prime numbers.
+   */
+
+  if ((err = find_prime(key_length / 2, &key->e, &key->p)) != HAL_OK ||
+      (err = find_prime(key_length / 2, &key->e, &key->q)) != HAL_OK)
+    return err;
+
+  /*
+   * Calculate remaining key components.
+   */
+
+  fp_sub_d(&key->p, 1, &p_1);
+  fp_sub_d(&key->q, 1, &q_1);
+  fp_mul(&key->p, &key->q, &key->n);                    /* n = p * q */
+  fp_lcm(&p_1, &q_1, &key->d);
+  FP_CHECK(fp_invmod(&key->e, &key->d, &key->d));       /* d = (1/e) % lcm(p-1, q-1) */
+  FP_CHECK(fp_mod(&key->d, &p_1, &key->dP));            /* dP = d % (p-1) */
+  FP_CHECK(fp_mod(&key->d, &q_1, &key->dQ));            /* dQ = d % (q-1) */
+  FP_CHECK(fp_invmod(&key->q, &key->p, &key->u));       /* u = (1/q) % p */
+
+  /* Fall through to cleanup */
+
+ fail:
+  fp_zero(&p_1);
+  fp_zero(&q_1);
   return err;
 }
 

@@ -89,7 +89,8 @@ static int test_crt(const char * const kind, const rsa_tc_t * const tc)
   hal_error_t err = HAL_OK;
   hal_rsa_key_t key;
 
-  if ((err = hal_rsa_key_load(RSA_PRIVATE, &key, keybuf, sizeof(keybuf),
+  if ((err = hal_rsa_key_load(HAL_RSA_PRIVATE, &key,
+                              keybuf, sizeof(keybuf),
                               tc->n.val,  tc->n.len,
                               tc->e.val,  tc->e.len,
                               tc->d.val,  tc->d.len,
