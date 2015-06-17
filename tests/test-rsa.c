@@ -43,6 +43,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <errno.h>
 
 #include <sys/time.h>
 
@@ -119,6 +120,85 @@ static int test_crt(const char * const kind, const rsa_tc_t * const tc)
 }
 
 /*
+ * Run one RSA key generation + CRT test.
+ */
+
+static int test_gen(const char * const kind, const rsa_tc_t * const tc)
+{
+  printf("%s test for %lu-bit RSA key\n", kind, (unsigned long) tc->size);
+
+  char fn[sizeof("test-rsa-key-xxxxxx.der")];
+  uint8_t keybuf[hal_rsa_key_t_size];
+  hal_error_t err = HAL_OK;
+  hal_rsa_key_t key;
+  FILE *f;
+
+  if ((err = hal_rsa_key_gen(&key, keybuf, sizeof(keybuf), bitsToBytes(tc->size), 0x010001)) != HAL_OK) {
+    printf("RSA key generation failed: %s\n", hal_error_string(err));
+    return 0;
+  }
+
+  size_t der_len = 0;
+
+  if ((err = hal_rsa_key_to_der(key, NULL, &der_len, 0)) != HAL_OK) {
+    printf("Getting DER length of RSA key failed: %s\n", hal_error_string(err));
+    return 0;
+  }
+  
+  uint8_t der[der_len];
+
+  if ((err = hal_rsa_key_to_der(key, der, &der_len, sizeof(der))) != HAL_OK) {
+    printf("Converting RSA key to DER failed: %s\n", hal_error_string(err));
+    return 0;
+  }
+
+  snprintf(fn, sizeof(fn), "test-rsa-key-%04lu.der", (unsigned long) tc->size);
+  printf("Writing %s\n", fn);
+
+  if ((f = fopen(fn, "wb")) == NULL) {
+    printf("Couldn't open %s: %s\n", fn, strerror(errno));
+    return 0;
+  }
+
+  if (fwrite(der, der_len, 1, f) != der_len) {
+    printf("Length mismatch writing %s\n", fn);
+    return 0;
+  }
+
+  if (fclose(f) == EOF) {
+    printf("Couldn't close %s: %s\n", fn, strerror(errno));
+    return 0;
+  }
+
+  uint8_t result[tc->n.len];
+
+  if ((err = hal_rsa_crt(key, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
+    printf("RSA CRT failed: %s\n", hal_error_string(err));
+
+  snprintf(fn, sizeof(fn), "test-rsa-sig-%04lu.der", (unsigned long) tc->size);
+  printf("Writing %s\n", fn);
+
+  if ((f = fopen(fn, "wb")) == NULL) {
+    printf("Couldn't open %s: %s\n", fn, strerror(errno));
+    return 0;
+  }
+
+  if (fwrite(result, sizeof(result), 1, f) != sizeof(result)) {
+    printf("Length mismatch writing %s key\n", fn);
+    return 0;
+  }
+
+  if (fclose(f) == EOF) {
+    printf("Couldn't close %s: %s\n", fn, strerror(errno));
+    return 0;
+  }
+
+  hal_rsa_key_clear(key);
+
+  return err == HAL_OK;
+}
+
+/*
  * Time a test.
  */
 
@@ -148,7 +228,9 @@ static void _time_check(const struct timeval t0, const int ok)
   } while (0)
 
 /*
- * Test signature and exponentiation for one RSA keypair.
+ * Test signature and exponentiation for one RSA keypair using
+ * precompiled test vectors, then generate a key of the same length
+ * and try generating a signature with that.
  */
 
 static int test_rsa(const rsa_tc_t * const tc)
@@ -163,6 +245,9 @@ static int test_rsa(const rsa_tc_t * const tc)
 
   /* RSA decyrption using CRT */
   time_check(test_crt("Signature (CRT)", tc));
+
+  /* Key generation and CRT -- not test vector, so writes key and sig to file */
+  time_check(test_gen("Generation and CRT", tc));
 
   return ok;
 }

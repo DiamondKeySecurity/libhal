@@ -444,7 +444,8 @@
   DEFINE_HAL_ERROR(HAL_ERROR_KEYWRAP_BAD_PADDING,       "Non-zero padding detected unwrapping key")     \
   DEFINE_HAL_ERROR(HAL_ERROR_IMPOSSIBLE,                "\"Impossible\" error")                         \
   DEFINE_HAL_ERROR(HAL_ERROR_ALLOCATION_FAILURE,        "Memory allocation failed")                     \
-  DEFINE_HAL_ERROR(HAL_ERROR_RESULT_TOO_LONG,		"Result too long for buffer")			\
+  DEFINE_HAL_ERROR(HAL_ERROR_RESULT_TOO_LONG,           "Result too long for buffer")                   \
+  DEFINE_HAL_ERROR(HAL_ERROR_ASN1_PARSE_FAILED,         "ASN.1 parse failed")                           \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -631,11 +632,18 @@ extern hal_error_t hal_rsa_crt(hal_rsa_key_t key,
                                const uint8_t * const m,  const size_t m_len,
                                uint8_t * result, const size_t result_len);
 
-extern hal_error_t hal_rsa_gen(hal_rsa_key_t *key,
-                               void *keybuf, const size_t keybuf_len,
-                               const unsigned key_length,
-                               const unsigned long public_exponent);
+extern hal_error_t hal_rsa_key_gen(hal_rsa_key_t *key,
+                                   void *keybuf, const size_t keybuf_len,
+                                   const unsigned key_length,
+                                   const unsigned long public_exponent);
 
+
+extern hal_error_t hal_rsa_key_to_der(hal_rsa_key_t key,
+                                      uint8_t *der, size_t *der_len, const size_t der_max);
+
+extern hal_error_t hal_rsa_key_from_der(hal_rsa_key_t *key,
+                                        void *keybuf, const size_t keybuf_len,
+                                        const uint8_t * const der, const size_t der_len);
 
 #endif /* _CRYPTECH_H_ */
 
