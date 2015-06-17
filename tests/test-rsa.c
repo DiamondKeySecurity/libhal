@@ -160,7 +160,7 @@ static int test_gen(const char * const kind, const rsa_tc_t * const tc)
     return 0;
   }
 
-  if (fwrite(der, der_len, 1, f) != der_len) {
+  if (fwrite(der, der_len, 1, f) != 1) {
     printf("Length mismatch writing %s\n", fn);
     return 0;
   }
@@ -183,7 +183,7 @@ static int test_gen(const char * const kind, const rsa_tc_t * const tc)
     return 0;
   }
 
-  if (fwrite(result, sizeof(result), 1, f) != sizeof(result)) {
+  if (fwrite(result, sizeof(result), 1, f) != 1) {
     printf("Length mismatch writing %s key\n", fn);
     return 0;
   }

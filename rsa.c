@@ -392,8 +392,8 @@ hal_error_t hal_rsa_key_gen(hal_rsa_key_t *key_,
    * Calculate remaining key components.
    */
 
-  fp_sub_d(&key->p, 1, &p_1);
-  fp_sub_d(&key->q, 1, &q_1);
+  fp_init(&p_1); fp_sub_d(&key->p, 1, &p_1);
+  fp_init(&q_1); fp_sub_d(&key->q, 1, &q_1);
   fp_mul(&key->p, &key->q, &key->n);                    /* n = p * q */
   fp_lcm(&p_1, &q_1, &key->d);
   FP_CHECK(fp_invmod(&key->e, &key->d, &key->d));       /* d = (1/e) % lcm(p-1, q-1) */
@@ -401,9 +401,13 @@ hal_error_t hal_rsa_key_gen(hal_rsa_key_t *key_,
   FP_CHECK(fp_mod(&key->d, &q_1, &key->dQ));            /* dQ = d % (q-1) */
   FP_CHECK(fp_invmod(&key->q, &key->p, &key->u));       /* u = (1/q) % p */
 
+  key_->key = key;
+
   /* Fall through to cleanup */
 
  fail:
+  if (err != HAL_OK)
+    memset(keybuf, 0, keybuf_len);
   fp_zero(&p_1);
   fp_zero(&q_1);
   return err;

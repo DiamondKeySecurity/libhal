@@ -40,7 +40,7 @@
 #include "cryptech.h"
 
 #ifndef WAIT_FOR_CSPRNG_VALID
-#define WAIT_FOR_CSPRNG_VALID   1
+#define WAIT_FOR_CSPRNG_VALID   0
 #endif
 
 hal_error_t hal_get_random(void *buffer, const size_t length)
