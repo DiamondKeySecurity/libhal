@@ -641,8 +641,7 @@ extern hal_error_t hal_rsa_decrypt(hal_rsa_key_t key,
 extern hal_error_t hal_rsa_key_gen(hal_rsa_key_t *key,
                                    void *keybuf, const size_t keybuf_len,
                                    const unsigned key_length,
-                                   const unsigned long public_exponent);
-
+                                   const uint8_t * const public_exponent, const size_t public_exponent_len);
 
 extern hal_error_t hal_rsa_key_to_der(hal_rsa_key_t key,
                                       uint8_t *der, size_t *der_len, const size_t der_max);

@@ -133,7 +133,9 @@ static int test_gen(const char * const kind, const rsa_tc_t * const tc)
   hal_error_t err = HAL_OK;
   FILE *f;
 
-  if ((err = hal_rsa_key_gen(&key1, keybuf1, sizeof(keybuf1), bitsToBytes(tc->size), 0x010001)) != HAL_OK) {
+  const uint8_t f4[] = { 0x01, 0x00, 0x01 };
+
+  if ((err = hal_rsa_key_gen(&key1, keybuf1, sizeof(keybuf1), bitsToBytes(tc->size), f4, sizeof(f4))) != HAL_OK) {
     printf("RSA key generation failed: %s\n", hal_error_string(err));
     return 0;
   }

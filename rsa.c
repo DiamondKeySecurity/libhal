@@ -201,7 +201,7 @@ static hal_error_t create_blinding_factors(struct rsa_key *key, fp_int *bf, fp_i
 {
   assert(key != NULL && bf != NULL && ubf != NULL);
 
-  uint8_t rnd[(fp_unsigned_bin_size(&key->n) + 7) & ~7];
+  uint8_t rnd[fp_unsigned_bin_size(&key->n)];
   hal_error_t err = HAL_OK;
 
   if ((err = hal_get_random(rnd, sizeof(rnd))) != HAL_OK)
@@ -443,7 +443,7 @@ static hal_error_t find_prime(unsigned prime_length, fp_int *e, fp_int *result)
 hal_error_t hal_rsa_key_gen(hal_rsa_key_t *key_,
                             void *keybuf, const size_t keybuf_len,
                             const unsigned key_length,
-                            const unsigned long public_exponent)
+                            const uint8_t * const public_exponent, const size_t public_exponent_len)
 {
   struct rsa_key *key = keybuf;
   hal_error_t err = HAL_OK;
@@ -452,30 +452,16 @@ hal_error_t hal_rsa_key_gen(hal_rsa_key_t *key_,
   if (key_ == NULL || keybuf == NULL || keybuf_len < sizeof(struct rsa_key))
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  switch (key_length) {
-  case bitsToBytes(1024):
-  case bitsToBytes(2048):
-  case bitsToBytes(4096):
-  case bitsToBytes(8192):
-    break;
-  default:
-    return HAL_ERROR_UNSUPPORTED_KEY;
-  }
-
-  switch (public_exponent) {
-  case 0x010001:
-    break;
-  default:
-    return HAL_ERROR_UNSUPPORTED_KEY;
-  }
-
-  /*
-   * Initialize key
-   */
-
   memset(keybuf, 0, keybuf_len);
   key->type = HAL_RSA_PRIVATE;
-  fp_set(&key->e, public_exponent);
+  fp_read_unsigned_bin(&key->e, (uint8_t *) public_exponent, public_exponent_len);
+
+  if (key_length != bitsToBytes(1024) && key_length != bitsToBytes(2048) &&
+      key_length != bitsToBytes(4096) && key_length != bitsToBytes(8192))
+    return HAL_ERROR_UNSUPPORTED_KEY;
+
+  if (fp_cmp_d(&key->e, 0x010001) != FP_EQ)
+    return HAL_ERROR_UNSUPPORTED_KEY;
 
   /*
    * Find a good pair of prime numbers.
