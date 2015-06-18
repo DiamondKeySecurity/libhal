@@ -748,6 +748,8 @@ hal_error_t hal_rsa_key_from_der(hal_rsa_key_t *key_,
   if (fp_cmp_d(&version, 0) != FP_EQ)
     return HAL_ERROR_ASN1_PARSE_FAILED;
 
+  key_->key = key;
+
   return HAL_OK;
 }
 

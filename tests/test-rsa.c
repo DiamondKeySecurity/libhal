@@ -87,8 +87,8 @@ static int test_decrypt(const char * const kind, const rsa_tc_t * const tc)
   printf("%s test for %lu-bit RSA key\n", kind, (unsigned long) tc->size);
 
   uint8_t keybuf[hal_rsa_key_t_size];
+  hal_rsa_key_t key = { NULL };
   hal_error_t err = HAL_OK;
-  hal_rsa_key_t key;
 
   if ((err = hal_rsa_key_load(HAL_RSA_PRIVATE, &key,
                               keybuf, sizeof(keybuf),
@@ -129,8 +129,8 @@ static int test_gen(const char * const kind, const rsa_tc_t * const tc)
 
   char fn[sizeof("test-rsa-key-xxxxxx.der")];
   uint8_t keybuf1[hal_rsa_key_t_size], keybuf2[hal_rsa_key_t_size];
+  hal_rsa_key_t key1 = { NULL }, key2 = { NULL };
   hal_error_t err = HAL_OK;
-  hal_rsa_key_t key1, key2;
   FILE *f;
 
   if ((err = hal_rsa_key_gen(&key1, keybuf1, sizeof(keybuf1), bitsToBytes(tc->size), 0x010001)) != HAL_OK) {
