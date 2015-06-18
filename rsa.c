@@ -76,18 +76,15 @@ void hal_rsa_set_debug(const int onoff)
 }
 
 /*
- * Check a result, report on failure if debugging, pass failures up
- * the chain.
+ * Whether we want RSA blinding.
  */
 
-#define check(_expr_)                                                   \
-  do {                                                                  \
-    hal_error_t _err = (_expr_);                                        \
-    if (_err != HAL_OK && debug)                                        \
-      printf("%s failed: %s\n", #_expr_, hal_error_string(_err));       \
-    if (_err != HAL_OK)                                                 \
-      return _err;                                                      \
-  } while (0)
+static int blinding = 1;
+
+void hal_rsa_set_blinding(const int onoff)
+{
+  blinding = onoff;
+}
 
 /*
  * RSA key implementation.  This structure type is private to this
@@ -120,8 +117,6 @@ const size_t hal_rsa_key_t_size = sizeof(struct rsa_key);
  * So don't worry about whether the following functions are what we
  * want in the long run, they'll probably evolve as we go.
  */
-
-#warning Should do RSA blinding, skipping for now
 
 #define lose(_code_)                                    \
   do { err = _code_; goto fail; } while (0)
@@ -164,7 +159,7 @@ static hal_error_t unpack_fp(fp_int *bn, uint8_t *buffer, const size_t length)
  * wrap result back up as a bignum.
  */
 
-static hal_error_t modexp_fp(fp_int *msg, fp_int *exp, fp_int *mod, fp_int *res)
+static hal_error_t modexp(fp_int *msg, fp_int *exp, fp_int *mod, fp_int *res)
 {
   hal_error_t err = HAL_OK;
 
@@ -197,6 +192,36 @@ static hal_error_t modexp_fp(fp_int *msg, fp_int *exp, fp_int *mod, fp_int *res)
 }
 
 /*
+ * Create blinding factors.  There are various schemes for amortizing
+ * the cost of this over multiple RSA operations, at present we don't
+ * try.  Come back to this if it looks like a bottleneck.
+ */
+
+static hal_error_t create_blinding_factors(struct rsa_key *key, fp_int *bf, fp_int *ubf)
+{
+  assert(key != NULL && bf != NULL && ubf != NULL);
+
+  uint8_t rnd[(fp_unsigned_bin_size(&key->n) + 7) & ~7];
+  hal_error_t err = HAL_OK;
+
+  if ((err = hal_get_random(rnd, sizeof(rnd))) != HAL_OK)
+    goto fail;
+
+  fp_init(bf);
+  fp_read_unsigned_bin(bf,  rnd, sizeof(rnd));
+  fp_copy(bf, ubf);
+
+  if ((err = modexp(bf, &key->e, &key->n, bf)) != HAL_OK)
+    goto fail;
+
+  FP_CHECK(fp_invmod(ubf, &key->n, ubf));
+
+ fail:
+  memset(rnd, 0, sizeof(rnd));
+  return err;
+}
+
+/*
  * RSA decryption via Chinese Remainder Theorem (Garner's formula).
  */
 
@@ -205,18 +230,27 @@ static hal_error_t rsa_crt(struct rsa_key *key, fp_int *msg, fp_int *sig)
   assert(key != NULL && msg != NULL && sig != NULL);
 
   hal_error_t err = HAL_OK;
-  fp_int t, m1, m2;
+  fp_int t, m1, m2, bf, ubf;
 
   fp_init(&t);
   fp_init(&m1);
   fp_init(&m2);
 
   /*
+   * Handle blinding if requested.
+   */
+  if (blinding) {
+    if ((err = create_blinding_factors(key, &bf, &ubf)) != HAL_OK)
+      goto fail;
+    FP_CHECK(fp_mulmod(msg, &bf, &key->n, msg));
+  }
+
+  /*
    * m1 = msg ** dP mod p
    * m2 = msg ** dQ mod q
    */
-  if ((err = modexp_fp(msg, &key->dP, &key->p, &m1)) != HAL_OK ||
-      (err = modexp_fp(msg, &key->dQ, &key->q, &m2)) != HAL_OK)
+  if ((err = modexp(msg, &key->dP, &key->p, &m1)) != HAL_OK ||
+      (err = modexp(msg, &key->dQ, &key->q, &m2)) != HAL_OK)
     goto fail;
 
   /*
@@ -241,6 +275,12 @@ static hal_error_t rsa_crt(struct rsa_key *key, fp_int *msg, fp_int *sig)
   FP_CHECK(fp_mulmod(&t, &key->u, &key->p, &t));
   fp_mul(&t, &key->q, &t);
   fp_add(&t, &m2, sig);
+
+  /*
+   * Unblind if necessary.
+   */
+  if (blinding)
+    FP_CHECK(fp_mulmod(sig, &ubf, &key->n, sig));
 
  fail:
   fp_zero(&t);
@@ -269,7 +309,7 @@ hal_error_t hal_rsa_encrypt(hal_rsa_key_t key_,
 
   fp_read_unsigned_bin(&i, (uint8_t *) input, input_len);
 
-  if ((err = modexp_fp(&i, &key->e, &key->n, &o)) != HAL_OK ||
+  if ((err = modexp(&i, &key->e, &key->n, &o)) != HAL_OK ||
       (err = unpack_fp(&o, output, output_len))   != HAL_OK)
     goto fail;
 
@@ -301,7 +341,7 @@ hal_error_t hal_rsa_decrypt(hal_rsa_key_t key_,
    */
 
   if (fp_iszero(&key->p) || fp_iszero(&key->q) || fp_iszero(&key->u) || fp_iszero(&key->dP) || fp_iszero(&key->dQ))
-    err = modexp_fp(&i, &key->d, &key->n, &o);
+    err = modexp(&i, &key->d, &key->n, &o);
   else
     err = rsa_crt(key, &i, &o);
   

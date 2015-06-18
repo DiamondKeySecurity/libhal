@@ -603,16 +603,18 @@ extern hal_error_t hal_modexp(const uint8_t * const msg, const size_t msg_len, /
 
 
 /*
- * RSA.  This is not the real API (yet), just test functions for debugging.
+ * RSA.
  */
-
-extern void hal_rsa_set_debug(const int onoff);
-
-extern const size_t hal_rsa_key_t_size;
 
 typedef enum { HAL_RSA_PRIVATE, HAL_RSA_PUBLIC } hal_rsa_key_type_t;
 
 typedef struct { void *key; } hal_rsa_key_t;
+
+extern const size_t hal_rsa_key_t_size;
+
+extern void hal_rsa_set_debug(const int onoff);
+
+extern void hal_rsa_set_blinding(const int onoff);
 
 extern hal_error_t hal_rsa_key_load(const hal_rsa_key_type_t type,
                                     hal_rsa_key_t *key,
