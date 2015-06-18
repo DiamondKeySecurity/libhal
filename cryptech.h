@@ -628,9 +628,13 @@ extern hal_error_t hal_rsa_key_load(const hal_rsa_key_type_t type,
 
 extern void hal_rsa_key_clear(hal_rsa_key_t key);
 
-extern hal_error_t hal_rsa_crt(hal_rsa_key_t key,
-                               const uint8_t * const m,  const size_t m_len,
-                               uint8_t * result, const size_t result_len);
+extern hal_error_t hal_rsa_encrypt(hal_rsa_key_t key,
+                                   const uint8_t * const input,  const size_t input_len,
+                                   uint8_t * output, const size_t output_len);
+
+extern hal_error_t hal_rsa_decrypt(hal_rsa_key_t key,
+                                   const uint8_t * const input,  const size_t input_len,
+                                   uint8_t * output, const size_t output_len);
 
 extern hal_error_t hal_rsa_key_gen(hal_rsa_key_t *key,
                                    void *keybuf, const size_t keybuf_len,

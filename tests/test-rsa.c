@@ -82,7 +82,7 @@ static int test_modexp(const char * const kind,
  * Run one RSA CRT test.
  */
 
-static int test_crt(const char * const kind, const rsa_tc_t * const tc)
+static int test_decrypt(const char * const kind, const rsa_tc_t * const tc)
 {
   printf("%s test for %lu-bit RSA key\n", kind, (unsigned long) tc->size);
 
@@ -106,7 +106,7 @@ static int test_crt(const char * const kind, const rsa_tc_t * const tc)
 
   uint8_t result[tc->n.len];
 
-  if ((err = hal_rsa_crt(key, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
+  if ((err = hal_rsa_decrypt(key, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
     printf("RSA CRT failed: %s\n", hal_error_string(err));
 
   const int mismatch = (err == HAL_OK && memcmp(result, tc->s.val, tc->s.len) != 0);
@@ -172,7 +172,7 @@ static int test_gen(const char * const kind, const rsa_tc_t * const tc)
 
   uint8_t result[tc->n.len];
 
-  if ((err = hal_rsa_crt(key, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
+  if ((err = hal_rsa_decrypt(key, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
     printf("RSA CRT failed: %s\n", hal_error_string(err));
 
   snprintf(fn, sizeof(fn), "test-rsa-sig-%04lu.der", (unsigned long) tc->size);
@@ -244,7 +244,7 @@ static int test_rsa(const rsa_tc_t * const tc)
   time_check(test_modexp("Signature (ModExp)", tc, &tc->m, &tc->d, &tc->s));
 
   /* RSA decyrption using CRT */
-  time_check(test_crt("Signature (CRT)", tc));
+  time_check(test_decrypt("Signature (CRT)", tc));
 
   /* Key generation and CRT -- not test vector, so writes key and sig to file */
   time_check(test_gen("Generation and CRT", tc));
