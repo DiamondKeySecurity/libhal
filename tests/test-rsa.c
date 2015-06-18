@@ -128,27 +128,37 @@ static int test_gen(const char * const kind, const rsa_tc_t * const tc)
   printf("%s test for %lu-bit RSA key\n", kind, (unsigned long) tc->size);
 
   char fn[sizeof("test-rsa-key-xxxxxx.der")];
-  uint8_t keybuf[hal_rsa_key_t_size];
+  uint8_t keybuf1[hal_rsa_key_t_size], keybuf2[hal_rsa_key_t_size];
   hal_error_t err = HAL_OK;
-  hal_rsa_key_t key;
+  hal_rsa_key_t key1, key2;
   FILE *f;
 
-  if ((err = hal_rsa_key_gen(&key, keybuf, sizeof(keybuf), bitsToBytes(tc->size), 0x010001)) != HAL_OK) {
+  if ((err = hal_rsa_key_gen(&key1, keybuf1, sizeof(keybuf1), bitsToBytes(tc->size), 0x010001)) != HAL_OK) {
     printf("RSA key generation failed: %s\n", hal_error_string(err));
     return 0;
   }
 
   size_t der_len = 0;
 
-  if ((err = hal_rsa_key_to_der(key, NULL, &der_len, 0)) != HAL_OK) {
+  if ((err = hal_rsa_key_to_der(key1, NULL, &der_len, 0)) != HAL_OK) {
     printf("Getting DER length of RSA key failed: %s\n", hal_error_string(err));
     return 0;
   }
   
   uint8_t der[der_len];
 
-  if ((err = hal_rsa_key_to_der(key, der, &der_len, sizeof(der))) != HAL_OK) {
+  if ((err = hal_rsa_key_to_der(key1, der, &der_len, sizeof(der))) != HAL_OK) {
     printf("Converting RSA key to DER failed: %s\n", hal_error_string(err));
+    return 0;
+  }
+
+  if ((err = hal_rsa_key_from_der(&key2, keybuf2, sizeof(keybuf2), der, sizeof(der))) != HAL_OK) {
+    printf("Converting RSA key back from DER failed: %s\n", hal_error_string(err));
+    return 0;
+  }
+
+  if (memcmp(keybuf1, keybuf2, hal_rsa_key_t_size) != 0) {
+    printf("RSA key mismatch after conversion to and back from DER\n");
     return 0;
   }
 
@@ -172,7 +182,7 @@ static int test_gen(const char * const kind, const rsa_tc_t * const tc)
 
   uint8_t result[tc->n.len];
 
-  if ((err = hal_rsa_decrypt(key, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
+  if ((err = hal_rsa_decrypt(key1, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
     printf("RSA CRT failed: %s\n", hal_error_string(err));
 
   snprintf(fn, sizeof(fn), "test-rsa-sig-%04lu.der", (unsigned long) tc->size);
@@ -193,7 +203,8 @@ static int test_gen(const char * const kind, const rsa_tc_t * const tc)
     return 0;
   }
 
-  hal_rsa_key_clear(key);
+  hal_rsa_key_clear(key1);
+  hal_rsa_key_clear(key2);
 
   return err == HAL_OK;
 }
