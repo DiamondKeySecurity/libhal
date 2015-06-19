@@ -49,6 +49,15 @@
 #include "cryptech.h"
 
 /*
+ * Whether to use ModExp core.  It works, but at the moment it's so
+ * slow that a full test run can take more than an hour.
+ */
+
+#ifndef HAL_RSA_USE_MODEXP
+#define HAL_RSA_USE_MODEXP 1
+#endif
+
+/*
  * Use "Tom's Fast Math" library for our bignum implementation.  This
  * particular implementation has a couple of nice features:
  *
@@ -154,6 +163,8 @@ static hal_error_t unpack_fp(fp_int *bn, uint8_t *buffer, const size_t length)
   return err;
 }
 
+#if HAL_RSA_USE_MODEXP
+
 /*
  * Unwrap bignums into byte arrays, feeds them into hal_modexp(), and
  * wrap result back up as a bignum.
@@ -205,6 +216,24 @@ int fp_exptmod(fp_int *a, fp_int *b, fp_int *c, fp_int *d)
 {
   return modexp(a, b, c, d) == HAL_OK ? FP_OKAY : FP_VAL;
 }
+
+#else /* HAL_RSA_USE_MODEXP */
+
+/*
+ * Workaround to let us use TFM's software implementation of modular
+ * exponentiation when we want to test other things and don't want to
+ * wait for the slow FPGA implementation.
+ */
+
+static hal_error_t modexp(fp_int *msg, fp_int *exp, fp_int *mod, fp_int *res)
+{
+  hal_error_t err = HAL_OK;
+  FP_CHECK(fp_exptmod(msg, exp, mod, res));
+ fail:
+  return err;
+}
+
+#endif /* HAL_RSA_USE_MODEXP */
 
 /*
  * Create blinding factors.  There are various schemes for amortizing
