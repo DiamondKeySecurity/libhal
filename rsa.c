@@ -62,7 +62,7 @@
  * to support at compile time.  This should not be a serious problem.
  */
 
-#include "tfm.h"
+#include <tfm.h>
 
 /*
  * Whether we want debug output.
@@ -189,6 +189,21 @@ static hal_error_t modexp(fp_int *msg, fp_int *exp, fp_int *mod, fp_int *res)
   memset(expbuf, 0, sizeof(expbuf));
   memset(modbuf, 0, sizeof(modbuf));
   return err;
+}
+
+/*
+ * Wrapper to let us export our modexp function as a replacement for
+ * TFM's, to avoid dragging all of the TFM montgomery code in when we
+ * use TFM's Miller-Rabin test code.
+ *
+ * This code is here rather than in a separate module because of the
+ * error handling: TFM's error codes aren't really capable of
+ * expressing all the things that could go wrong here.
+ */
+
+int fp_exptmod(fp_int *a, fp_int *b, fp_int *c, fp_int *d)
+{
+  return modexp(a, b, c, d) == HAL_OK ? FP_OKAY : FP_VAL;
 }
 
 /*
