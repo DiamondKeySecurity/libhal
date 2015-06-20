@@ -43,6 +43,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <string.h>
 #include <assert.h>
 
@@ -99,7 +100,7 @@ void hal_rsa_set_blinding(const int onoff)
  * RSA key implementation.  This structure type is private to this
  * module, anything else that needs to touch one of these just gets a
  * typed opaque pointer.  We do, however, export the size, so that we
- * can make memory allocation the caller's problem (well, maybe).
+ * can make memory allocation the caller's problem.
  */
 
 struct rsa_key {
@@ -117,14 +118,7 @@ struct rsa_key {
 const size_t hal_rsa_key_t_size = sizeof(struct rsa_key);
 
 /*
- * In the long run we want a full RSA implementation, or enough of one
- * to cover what we need in PKCS #11.  For the moment, though, the
- * most urgent thing is to see whether this approach to performing the
- * CRT calculation works (and is any faster), followed by whether we
- * can use this approach for key generation.
- *
- * So don't worry about whether the following functions are what we
- * want in the long run, they'll probably evolve as we go.
+ * Error handling.
  */
 
 #define lose(_code_)                                    \
@@ -166,7 +160,7 @@ static hal_error_t unpack_fp(fp_int *bn, uint8_t *buffer, const size_t length)
 #if HAL_RSA_USE_MODEXP
 
 /*
- * Unwrap bignums into byte arrays, feeds them into hal_modexp(), and
+ * Unwrap bignums into byte arrays, feed them into hal_modexp(), and
  * wrap result back up as a bignum.
  */
 
@@ -204,7 +198,7 @@ static hal_error_t modexp(fp_int *msg, fp_int *exp, fp_int *mod, fp_int *res)
 
 /*
  * Wrapper to let us export our modexp function as a replacement for
- * TFM's, to avoid dragging all of the TFM montgomery code in when we
+ * TFM's, to avoid dragging in all of the TFM montgomery code when we
  * use TFM's Miller-Rabin test code.
  *
  * This code is here rather than in a separate module because of the
@@ -335,6 +329,9 @@ static hal_error_t rsa_crt(struct rsa_key *key, fp_int *msg, fp_int *sig)
 
 /*
  * Public API for raw RSA encryption and decryption.
+ *
+ * NB: This does not handle PKCS #1.5 padding, at the moment that's up
+ * to the caller.
  */
 
 hal_error_t hal_rsa_encrypt(hal_rsa_key_t key_,
@@ -456,6 +453,51 @@ hal_error_t hal_rsa_key_load(const hal_rsa_key_type_t type,
   return HAL_ERROR_BAD_ARGUMENTS;
 }
 
+/*
+ * Extract public key components.
+ */
+
+static hal_error_t extract_component(hal_rsa_key_t key_, const size_t offset,
+                                     uint8_t *res, size_t *res_len, const size_t res_max)
+{
+  if (key_.key == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  fp_int *bn = (fp_int *) (((uint8_t *) key_.key) + offset);
+
+  const size_t len = fp_unsigned_bin_size(bn);
+
+  if (res_len != NULL)
+    *res_len = len;
+
+  if (len > res_max)
+    return HAL_ERROR_RESULT_TOO_LONG;
+
+  memset(res, 0, res_max);
+  fp_to_unsigned_bin(bn, res);
+  return HAL_OK;
+}
+
+hal_error_t hal_rsa_key_get_modulus(hal_rsa_key_t key_,
+                                    uint8_t *res, size_t *res_len, const size_t res_max)
+{
+  return extract_component(key_, offsetof(struct rsa_key, n), res, res_len, res_max);
+}
+
+hal_error_t hal_rsa_key_get_public_exponent(hal_rsa_key_t key_,
+                                            uint8_t *res, size_t *res_len, const size_t res_max)
+{
+  return extract_component(key_, offsetof(struct rsa_key, e), res, res_len, res_max);
+}
+
+/*
+ * Generate a prime factor for an RSA keypair.
+ * 
+ * Get random bytes, munge a few bits, and stuff into a bignum.  Keep
+ * doing this until we find a result that's (probably) prime and for
+ * which result - 1 is relatively prime with respect to e.
+ */
+
 static hal_error_t find_prime(unsigned prime_length, fp_int *e, fp_int *result)
 {
   uint8_t buffer[prime_length];
@@ -463,12 +505,6 @@ static hal_error_t find_prime(unsigned prime_length, fp_int *e, fp_int *result)
   fp_int t;
 
   fp_init(&t);
-
-  /*
-   * Get random bytes, munge a few bits, and stuff into a bignum.
-   * Keep doing this until we find a result that's (probably) prime
-   * and for which result - 1 is relatively prime with respect to e.
-   */
 
   do {
     if ((err = hal_get_random(buffer, sizeof(buffer))) != HAL_OK)
@@ -483,6 +519,10 @@ static hal_error_t find_prime(unsigned prime_length, fp_int *e, fp_int *result)
   fp_zero(&t);
   return HAL_OK;
 }
+
+/*
+ * Generate a new RSA keypair.
+ */
 
 hal_error_t hal_rsa_key_gen(hal_rsa_key_t *key_,
                             void *keybuf, const size_t keybuf_len,
@@ -552,6 +592,21 @@ hal_error_t hal_rsa_key_gen(hal_rsa_key_t *key_,
 
 #define	ASN1_INTEGER	0x02
 #define	ASN1_SEQUENCE	0x30
+
+/*
+ * RSAPrivateKey fields in the required order.
+ */
+
+#define RSAPrivateKey_fields    \
+  _(&version);                  \
+  _(&key->n);                   \
+  _(&key->e);                   \
+  _(&key->d);                   \
+  _(&key->p);                   \
+  _(&key->q);                   \
+  _(&key->dP);                  \
+  _(&key->dQ);                  \
+  _(&key->u);
 
 static size_t count_length(size_t length)
 {
@@ -681,22 +736,6 @@ static hal_error_t decode_integer(fp_int *bn,
   fp_read_unsigned_bin(bn, (uint8_t *) der + hlen, vlen);
   return HAL_OK;
 }
-
-/*
- * RSAPrivateKey fields in the required order.
- */
-
-#define RSAPrivateKey_fields    \
-  _(&version);                  \
-  _(&key->n);                   \
-  _(&key->e);                   \
-  _(&key->d);                   \
-  _(&key->p);                   \
-  _(&key->q);                   \
-  _(&key->dP);                  \
-  _(&key->dQ);                  \
-  _(&key->u);
-
 
 hal_error_t hal_rsa_key_to_der(hal_rsa_key_t key_,
                                uint8_t *der, size_t *der_len, const size_t der_max)

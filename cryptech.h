@@ -628,6 +628,16 @@ extern hal_error_t hal_rsa_key_load(const hal_rsa_key_type_t type,
                                     const uint8_t * const dP, const size_t dP_len,
                                     const uint8_t * const dQ, const size_t dQ_len);
 
+extern hal_error_t hal_rsa_key_get_modulus(hal_rsa_key_t key,
+                                           uint8_t *modulus,
+                                           size_t *modulus_len,
+                                           const size_t modulus_max);
+
+extern hal_error_t hal_rsa_key_get_public_exponent(hal_rsa_key_t key,
+                                                   uint8_t *public_exponent,
+                                                   size_t *public_exponent_len,
+                                                   const size_t public_exponent_max);
+
 extern void hal_rsa_key_clear(hal_rsa_key_t key);
 
 extern hal_error_t hal_rsa_encrypt(hal_rsa_key_t key,
