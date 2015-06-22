@@ -37,7 +37,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
-#include "cryptech.h"
+#include "hal.h"
 
 #ifndef WAIT_FOR_CSPRNG_VALID
 #define WAIT_FOR_CSPRNG_VALID   0

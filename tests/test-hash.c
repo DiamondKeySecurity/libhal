@@ -38,7 +38,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include <cryptech.h>
+#include <hal.h>
 
 /* Usual NIST sample messages. */
 

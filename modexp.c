@@ -45,7 +45,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "cryptech.h"
+#include "hal.h"
 
 /*
  * Whether we want debug output.

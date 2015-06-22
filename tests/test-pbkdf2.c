@@ -42,7 +42,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 
-#include "cryptech.h"
+#include <hal.h>
 
 /* PBKDF2 HMAC-SHA-1 test cases from RFC 6070. */
 

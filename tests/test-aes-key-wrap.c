@@ -38,7 +38,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include <cryptech.h>
+#include <hal.h>
 
 #ifndef TC_BUFSIZE
 #define TC_BUFSIZE      4096

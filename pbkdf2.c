@@ -42,7 +42,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 
-#include "cryptech.h"
+#include "hal.h"
 
 /*
  * Utility to encapsulate the HMAC operations.  May need refactoring

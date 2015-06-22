@@ -47,7 +47,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "cryptech.h"
+#include "hal.h"
 
 /*
  * Whether to use ModExp core.  It works, but at the moment it's so

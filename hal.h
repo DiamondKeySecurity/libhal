@@ -1,5 +1,5 @@
 /*
- * cryptech.h
+ * hal.h
  * ----------
  * Memory map, access functions, and HAL for Cryptech cores.
  *
@@ -60,8 +60,8 @@
  * in order to map it into a 16-bit address space.
  */
 
-#ifndef _CRYPTECH_H_
-#define _CRYPTECH_H_
+#ifndef _HAL_H_
+#define _HAL_H_
 
 
 /*
@@ -664,7 +664,7 @@ extern hal_error_t hal_rsa_key_from_der(hal_rsa_key_t *key,
                                         void *keybuf, const size_t keybuf_len,
                                         const uint8_t * const der, const size_t der_len);
 
-#endif /* _CRYPTECH_H_ */
+#endif /* _HAL_H_ */
 
 /*
  * Local variables:

@@ -42,7 +42,7 @@
 #include <arpa/inet.h>
 
 #include "novena-eim.h"
-#include "cryptech.h"
+#include "hal.h"
 
 static int debug = 0;
 static int inited = 0;

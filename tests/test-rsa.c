@@ -47,7 +47,8 @@
 
 #include <sys/time.h>
 
-#include "cryptech.h"
+#include <hal.h>
+
 #include "test-rsa.h"
 
 /*

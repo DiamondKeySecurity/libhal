@@ -40,7 +40,7 @@
 #include <sys/ioctl.h>
 #include <stdint.h>
 
-#include "cryptech.h"
+#include "hal.h"
 
 #define I2C_dev                 "/dev/i2c-2"
 #define I2C_addr                0x0f

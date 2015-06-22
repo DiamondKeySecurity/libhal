@@ -47,7 +47,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "cryptech.h"
+#include "hal.h"
 
 /*
  * How long the ciphertext will be for a given plaintext length.

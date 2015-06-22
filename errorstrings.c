@@ -38,7 +38,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "cryptech.h"
+#include "hal.h"
 
 #define DEFINE_HAL_ERROR(_code_,_text_) \
   case _code_: return _text_;
