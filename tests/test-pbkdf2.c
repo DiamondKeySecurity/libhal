@@ -200,16 +200,31 @@ static int _test_pbkdf2(const uint8_t * const pwd,  const size_t pwd_len,
 
 int main (int argc, char *argv[])
 {
+  hal_error_t err = hal_hash_core_present(hal_hash_sha1);
   int ok = 1;
 
-  ok &= test_pbkdf2(1);
-  ok &= test_pbkdf2(2);
-  ok &= test_pbkdf2(3);
-  ok &= test_pbkdf2(4);
-  ok &= test_pbkdf2(5);
-  ok &= test_pbkdf2(6);
+  switch (err) {
 
-  return !ok;
+  case HAL_OK:
+    ok &= test_pbkdf2(1);
+    ok &= test_pbkdf2(2);
+    ok &= test_pbkdf2(3);
+    ok &= test_pbkdf2(4);
+    ok &= test_pbkdf2(5);
+    ok &= test_pbkdf2(6);
+    break;
+
+  case HAL_ERROR_IO_UNEXPECTED:
+    printf("SHA-1 core not present, not testing PBKDF2\n");
+    break;
+
+  default:
+    printf("Unexpected error while probing for hash core: %s\n", hal_error_string(err));
+    ok = 0;
+    break;
+  }
+
+    return !ok;
 }
 
 /*
