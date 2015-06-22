@@ -153,6 +153,28 @@ static const driver_t sha512_driver = {
 };
 
 /*
+ * Digest algorithm identifiers: DER encoded full TLV of an
+ * DigestAlgorithmIdentifier SEQUENCE including OID for the algorithm in
+ * question and a NULL parameters value.
+ *
+ * See RFC 2313 and the NIST algorithm registry:
+ * http://csrc.nist.gov/groups/ST/crypto_apps_infra/csor/algorithms.html
+ *
+ * The DER encoding is too complex to generate in the C preprocessor,
+ * and we want these as compile-time constants, so we just supply the
+ * raw hex encoding here.  If this gets seriously out of control we'll
+ * write a script to generate a header file we can include.
+ */
+
+static const uint8_t
+  dalgid_sha1[]       = { 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05, 0x00 },
+  dalgid_sha256[]     = { 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00 },
+  dalgid_sha384[]     = { 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02, 0x05, 0x00 },
+  dalgid_sha512[]     = { 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03, 0x05, 0x00 },
+  dalgid_sha512_224[] = { 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x05, 0x05, 0x00 },
+  dalgid_sha512_256[] = { 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x06, 0x05, 0x00 };
+
+/*
  * Descriptors.  Yes, the {hash,hmac}_state_length fields are a bit
  * repetitive given that they (currently) have the same value
  * regardless of algorithm, but we don't want to wire in that
@@ -162,36 +184,42 @@ static const driver_t sha512_driver = {
 const hal_hash_descriptor_t hal_hash_sha1[1] = {{
   SHA1_BLOCK_LEN, SHA1_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
+  dalgid_sha1, sizeof(dalgid_sha1),
   &sha1_driver
 }};
 
 const hal_hash_descriptor_t hal_hash_sha256[1] = {{
   SHA256_BLOCK_LEN, SHA256_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
+  dalgid_sha256, sizeof(dalgid_sha256),
   &sha256_driver
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512_224[1] = {{
   SHA512_BLOCK_LEN, SHA512_224_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
+  dalgid_sha512_224, sizeof(dalgid_sha512_224),
   &sha512_224_driver
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512_256[1] = {{
   SHA512_BLOCK_LEN, SHA512_256_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
+  dalgid_sha512_256, sizeof(dalgid_sha512_256),
   &sha512_256_driver
 }};
 
 const hal_hash_descriptor_t hal_hash_sha384[1] = {{
   SHA512_BLOCK_LEN, SHA384_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
+  dalgid_sha384, sizeof(dalgid_sha384),
   &sha384_driver
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512[1] = {{
   SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
+  dalgid_sha512, sizeof(dalgid_sha512),
   &sha512_driver
 }};
 

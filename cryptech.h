@@ -514,6 +514,8 @@ typedef struct {
   size_t digest_length;
   size_t hash_state_length;
   size_t hmac_state_length;
+  const uint8_t * const digest_algorithm_id;
+  size_t digest_algorithm_id_length;
   const void *driver;
 } hal_hash_descriptor_t;
 
@@ -655,6 +657,8 @@ extern hal_error_t hal_rsa_key_gen(hal_rsa_key_t *key,
 
 extern hal_error_t hal_rsa_key_to_der(hal_rsa_key_t key,
                                       uint8_t *der, size_t *der_len, const size_t der_max);
+
+extern size_t hal_rsa_key_to_der_len(hal_rsa_key_t key);
 
 extern hal_error_t hal_rsa_key_from_der(hal_rsa_key_t *key,
                                         void *keybuf, const size_t keybuf_len,

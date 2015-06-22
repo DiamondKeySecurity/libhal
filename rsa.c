@@ -470,6 +470,9 @@ static hal_error_t extract_component(hal_rsa_key_t key_, const size_t offset,
   if (res_len != NULL)
     *res_len = len;
 
+  if (res == NULL)
+    return HAL_OK;
+
   if (len > res_max)
     return HAL_ERROR_RESULT_TOO_LONG;
 
@@ -784,6 +787,12 @@ hal_error_t hal_rsa_key_to_der(hal_rsa_key_t key_,
 #undef _
 
   return HAL_OK;
+}
+
+size_t hal_rsa_key_to_der_len(hal_rsa_key_t key_)
+{
+  size_t len = 0;
+  return hal_rsa_key_to_der(key_, NULL, &len, 0) == HAL_OK ? len : 0;
 }
 
 hal_error_t hal_rsa_key_from_der(hal_rsa_key_t *key_,
