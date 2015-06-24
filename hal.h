@@ -618,17 +618,24 @@ extern void hal_rsa_set_debug(const int onoff);
 
 extern void hal_rsa_set_blinding(const int onoff);
 
-extern hal_error_t hal_rsa_key_load(const hal_rsa_key_type_t type,
-                                    hal_rsa_key_t *key,
-                                    void *keybuf, const size_t keybuf_len,
-                                    const uint8_t * const n,  const size_t n_len,
-                                    const uint8_t * const e,  const size_t e_len,
-                                    const uint8_t * const d,  const size_t d_len,
-                                    const uint8_t * const p,  const size_t p_len,
-                                    const uint8_t * const q,  const size_t q_len,
-                                    const uint8_t * const u,  const size_t u_len,
-                                    const uint8_t * const dP, const size_t dP_len,
-                                    const uint8_t * const dQ, const size_t dQ_len);
+extern hal_error_t hal_rsa_key_load_private(hal_rsa_key_t *key,
+                                            void *keybuf, const size_t keybuf_len,
+                                            const uint8_t * const n,  const size_t n_len,
+                                            const uint8_t * const e,  const size_t e_len,
+                                            const uint8_t * const d,  const size_t d_len,
+                                            const uint8_t * const p,  const size_t p_len,
+                                            const uint8_t * const q,  const size_t q_len,
+                                            const uint8_t * const u,  const size_t u_len,
+                                            const uint8_t * const dP, const size_t dP_len,
+                                            const uint8_t * const dQ, const size_t dQ_len);
+
+extern hal_error_t hal_rsa_key_load_public(hal_rsa_key_t *key,
+                                           void *keybuf, const size_t keybuf_len,
+                                           const uint8_t * const n,  const size_t n_len,
+                                           const uint8_t * const e,  const size_t e_len);
+
+extern hal_error_t hal_rsa_key_get_type(hal_rsa_key_t key,
+                                        hal_rsa_key_type_t *key_type);
 
 extern hal_error_t hal_rsa_key_get_modulus(hal_rsa_key_t key,
                                            uint8_t *modulus,

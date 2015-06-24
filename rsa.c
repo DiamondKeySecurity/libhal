@@ -416,17 +416,17 @@ void hal_rsa_key_clear(hal_rsa_key_t key)
  * calculate everything else from them.
  */
 
-hal_error_t hal_rsa_key_load(const hal_rsa_key_type_t type,
-                             hal_rsa_key_t *key_,
-                             void *keybuf, const size_t keybuf_len,
-                             const uint8_t * const n,  const size_t n_len,
-                             const uint8_t * const e,  const size_t e_len,
-                             const uint8_t * const d,  const size_t d_len,
-                             const uint8_t * const p,  const size_t p_len,
-                             const uint8_t * const q,  const size_t q_len,
-                             const uint8_t * const u,  const size_t u_len,
-                             const uint8_t * const dP, const size_t dP_len,
-                             const uint8_t * const dQ, const size_t dQ_len)
+static hal_error_t load_key(const hal_rsa_key_type_t type,
+                            hal_rsa_key_t *key_,
+                            void *keybuf, const size_t keybuf_len,
+                            const uint8_t * const n,  const size_t n_len,
+                            const uint8_t * const e,  const size_t e_len,
+                            const uint8_t * const d,  const size_t d_len,
+                            const uint8_t * const p,  const size_t p_len,
+                            const uint8_t * const q,  const size_t q_len,
+                            const uint8_t * const u,  const size_t u_len,
+                            const uint8_t * const dP, const size_t dP_len,
+                            const uint8_t * const dQ, const size_t dQ_len)
 {
   if (key_ == NULL || keybuf == NULL || keybuf_len < sizeof(struct rsa_key))
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -451,6 +451,52 @@ hal_error_t hal_rsa_key_load(const hal_rsa_key_type_t type,
  fail:
   memset(key, 0, sizeof(*key));
   return HAL_ERROR_BAD_ARGUMENTS;
+}
+
+/*
+ * Public API to load_key().
+ */
+
+hal_error_t hal_rsa_key_load_private(hal_rsa_key_t *key_,
+                                     void *keybuf, const size_t keybuf_len,
+                                     const uint8_t * const n,  const size_t n_len,
+                                     const uint8_t * const e,  const size_t e_len,
+                                     const uint8_t * const d,  const size_t d_len,
+                                     const uint8_t * const p,  const size_t p_len,
+                                     const uint8_t * const q,  const size_t q_len,
+                                     const uint8_t * const u,  const size_t u_len,
+                                     const uint8_t * const dP, const size_t dP_len,
+                                     const uint8_t * const dQ, const size_t dQ_len)
+{
+  return load_key(HAL_RSA_PRIVATE, key_, keybuf, keybuf_len,
+                  n, n_len, e, e_len,
+                  d, d_len, p, p_len, q, q_len, u, u_len, dP, dP_len, dQ, dQ_len);
+}
+
+hal_error_t hal_rsa_key_load_public(hal_rsa_key_t *key_,
+                                    void *keybuf, const size_t keybuf_len,
+                                    const uint8_t * const n,  const size_t n_len,
+                                    const uint8_t * const e,  const size_t e_len)
+{
+  return load_key(HAL_RSA_PUBLIC, key_, keybuf, keybuf_len,
+                  n, n_len, e, e_len,
+                  NULL, 0, NULL, 0, NULL, 0, NULL, 0, NULL, 0, NULL, 0);
+}
+
+/*
+ * Extract the key type.
+ */
+
+hal_error_t hal_rsa_key_get_type(hal_rsa_key_t key_,
+                                 hal_rsa_key_type_t *key_type)
+{
+  struct rsa_key *key = key_.key;
+
+  if (key == NULL || key_type == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  *key_type = key->type;
+  return HAL_OK;
 }
 
 /*
@@ -543,8 +589,7 @@ hal_error_t hal_rsa_key_gen(hal_rsa_key_t *key_,
   key->type = HAL_RSA_PRIVATE;
   fp_read_unsigned_bin(&key->e, (uint8_t *) public_exponent, public_exponent_len);
 
-  if (key_length != bitsToBytes(1024) && key_length != bitsToBytes(2048) &&
-      key_length != bitsToBytes(4096) && key_length != bitsToBytes(8192))
+  if (key_length < bitsToBytes(1024) || key_length > bitsToBytes(8192))
     return HAL_ERROR_UNSUPPORTED_KEY;
 
   if (fp_cmp_d(&key->e, 0x010001) != FP_EQ)

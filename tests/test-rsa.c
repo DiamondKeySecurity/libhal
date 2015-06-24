@@ -91,16 +91,16 @@ static int test_decrypt(const char * const kind, const rsa_tc_t * const tc)
   hal_rsa_key_t key = { NULL };
   hal_error_t err = HAL_OK;
 
-  if ((err = hal_rsa_key_load(HAL_RSA_PRIVATE, &key,
-                              keybuf, sizeof(keybuf),
-                              tc->n.val,  tc->n.len,
-                              tc->e.val,  tc->e.len,
-                              tc->d.val,  tc->d.len,
-                              tc->p.val,  tc->p.len,
-                              tc->q.val,  tc->q.len,
-                              tc->u.val,  tc->u.len,
-                              tc->dP.val, tc->dP.len,
-                              tc->dQ.val, tc->dQ.len)) != HAL_OK) {
+  if ((err = hal_rsa_key_load_private(&key,
+                                      keybuf, sizeof(keybuf),
+                                      tc->n.val,  tc->n.len,
+                                      tc->e.val,  tc->e.len,
+                                      tc->d.val,  tc->d.len,
+                                      tc->p.val,  tc->p.len,
+                                      tc->q.val,  tc->q.len,
+                                      tc->u.val,  tc->u.len,
+                                      tc->dP.val, tc->dP.len,
+                                      tc->dQ.val, tc->dQ.len)) != HAL_OK) {
     printf("RSA CRT key load failed: %s\n", hal_error_string(err));
     return 0;
   }
