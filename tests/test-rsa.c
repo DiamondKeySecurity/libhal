@@ -113,7 +113,7 @@ static int test_decrypt(const char * const kind, const rsa_tc_t * const tc)
   const int mismatch = (err == HAL_OK && memcmp(result, tc->s.val, tc->s.len) != 0);
 
   if (mismatch)
-    printf("MISMATCH\n");    
+    printf("MISMATCH\n");
 
   hal_rsa_key_clear(key);
 
@@ -147,7 +147,7 @@ static int test_gen(const char * const kind, const rsa_tc_t * const tc)
     printf("Getting DER length of RSA key failed: %s\n", hal_error_string(err));
     return 0;
   }
-  
+
   uint8_t der[der_len];
 
   if ((err = hal_rsa_key_to_der(key1, der, &der_len, sizeof(der))) != HAL_OK) {
@@ -206,10 +206,21 @@ static int test_gen(const char * const kind, const rsa_tc_t * const tc)
     return 0;
   }
 
+  if (err != HAL_OK)            /* Deferred failure from hal_rsa_decrypt(), above */
+    return 0;
+
+  if ((err = hal_rsa_encrypt(key1, result, sizeof(result), result, sizeof(result))) != HAL_OK)
+    printf("RSA signature check failed: %s\n", hal_error_string(err));
+
+  const int mismatch = (err == HAL_OK && memcmp(result, tc->m.val, tc->m.len) != 0);
+
+  if (mismatch)
+    printf("MISMATCH\n");
+
   hal_rsa_key_clear(key1);
   hal_rsa_key_clear(key2);
 
-  return err == HAL_OK;
+  return err == HAL_OK && !mismatch;
 }
 
 /*
