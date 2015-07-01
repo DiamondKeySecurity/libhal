@@ -55,7 +55,7 @@
  */
 
 #ifndef HAL_RSA_USE_MODEXP
-#define HAL_RSA_USE_MODEXP 1
+#define HAL_RSA_USE_MODEXP 0
 #endif
 
 /*
