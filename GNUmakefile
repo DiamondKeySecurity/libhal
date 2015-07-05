@@ -1,5 +1,3 @@
-# @configure_input@
-
 # Copyright (c) 2015, SUNET
 #
 # Redistribution and use in source and binary forms, with or
@@ -32,23 +30,19 @@ LIB		= libhal.a
 OBJ		= ${IO_OBJ} csprng.o hash.o aes_keywrap.o pbkdf2.o \
 		  modexp.o rsa.o errorstrings.o
 
-IO_OBJ		= ${IO_OBJ_@FPGA_BUS@}
 IO_OBJ_EIM	= hal_io_eim.o novena-eim.o
 IO_OBJ_I2C 	= hal_io_i2c.o
 
-CC		= @CC@
-CFLAGS		= @CFLAGS@
-LDFLAGS		= @LDFLAGS@
-TFMDIR		= @TFMDIR@
+# Default I/O bus is EIM, override this to use I2C instead
+IO_OBJ		= ${IO_OBJ_EIM}
 
-prefix		= @prefix@
-exec_prefix	= @exec_prefix@
-includedir	= @includedir@
-libdir		= @libdir@
-abs_top_builddir= @abs_top_builddir@
+TFMDIR		:= $(abspath ../libtfm)
+CFLAGS		:= -g3 -Wall -fPIC -std=c99 -I${TFMDIR}
+LDFLAGS		:= -g3 -L${TFMDIR} -ltfm
 
 all: ${LIB}
-	cd tests; ${MAKE} $@
+	cd tests; ${MAKE} CFLAGS='${CFLAGS} -I..' LDFLAGS='${LDFLAGS}' $@
+	cd utils; ${MAKE} CFLAGS='${CFLAGS} -I..' LDFLAGS='${LDFLAGS}' $@
 
 ${OBJ}: ${INC}
 
@@ -58,21 +52,13 @@ ${LIB}: ${OBJ}
 test: all
 	cd tests; ${MAKE} -k $@
 
-install: ${LIB} ${INC}
-	install ${LIB} ${libdir}
-	install ${INC} ${includedir}
-
-uninstall:
-	cd ${libdir}; rm -f ${LIB}
-	cd ${includedir}; rm -f ${INC}
-
 clean:
 	rm -f ${OBJ} ${LIB}
 	cd tests; ${MAKE} $@
+	cd utils; ${MAKE} $@
 
 distclean: clean
-	cd tests; ${MAKE} $@
-	rm -f config.log config.status TAGS Makefile
+	rm TAGS
 
 tags: TAGS
 

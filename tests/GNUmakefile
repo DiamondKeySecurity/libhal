@@ -1,5 +1,3 @@
-# @configure_input@
-
 # Copyright (c) 2015, SUNET
 #
 # Redistribution and use in source and binary forms, with or
@@ -27,20 +25,11 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-INC		= ../hal.h
-LIB		= ../libhal.a
-BIN		= test-aes-key-wrap test-hash test-pbkdf2 test-rsa
+INC	= ../hal.h
+LIB	= ../libhal.a
+BIN	= test-aes-key-wrap test-hash test-pbkdf2 test-rsa
 
-CC		= @CC@
-CFLAGS		= @CFLAGS@ -I..
-LDFLAGS		= @LDFLAGS@
-TFMDIR		= @TFMDIR@
-
-prefix		= @prefix@
-exec_prefix	= @exec_prefix@
-includedir	= @includedir@
-libdir		= @libdir@
-abs_top_builddir= @abs_top_builddir@
+CFLAGS	= -g3 -Wall -fPIC -std=c99 -I..
 
 all: ${BIN}
 
@@ -49,9 +38,6 @@ test: all
 
 clean:
 	rm -f *.o ${BIN}
-
-distclean: clean
-	rm -f Makefile
 
 ${BIN}: %: %.o ${LIB}
 	${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}

@@ -9,3 +9,4 @@ tests/test-aes-key-wrap
 tests/test-hash
 tests/test-pbkdf2
 tests/test-rsa
+utils/eim_peek_poke
