@@ -58,7 +58,7 @@ clean:
 	cd utils; ${MAKE} $@
 
 distclean: clean
-	rm TAGS
+	rm -f TAGS
 
 tags: TAGS
 

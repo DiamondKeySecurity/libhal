@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
   off_t offset = 0;
   uint32_t value;
 
-  if (argc == 1 || string_match(argv[1], "-?", "-h", "--help"))
+  if (argc == 1 || string_match(argv[1], "-?", "-h", "--help", NULL))
     usage(EXIT_SUCCESS, argv[0]);
 
   if (eim_setup() != 0) {
@@ -99,14 +99,14 @@ int main(int argc, char *argv[])
     return EXIT_FAILURE;
   }
 
-  if (string_match(argv[1], "r", "-r", "--read", "--peek")) {
+  if (string_match(argv[1], "r", "-r", "--read", "--peek", NULL)) {
     if (argc != 3 || !parse_offset(argv[2], &offset))
       usage(EXIT_FAILURE, argv[0]);
     eim_read_32(offset, &value);
     printf("%08x\n", value);
   }
 
-  else if (string_match(argv[1], "w", "-w", "--write", "--poke")) {
+  else if (string_match(argv[1], "w", "-w", "--write", "--poke", NULL)) {
     if (argc != 4 || !parse_offset(argv[2], &offset) || !parse_value(argv[3], &value))
       usage(EXIT_FAILURE, argv[0]);
     eim_write_32(offset, &value);
