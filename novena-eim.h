@@ -34,23 +34,36 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef _NOVENA_EIM_H_
+#define _NOVENA_EIM_H_
+
 #include <stdint.h>
+#include <sys/types.h>  /* Required for off_t, at least on Debian Wheezy. */
+
 #define EIM_BASE_ADDR 0x08000000
 
-/* Set up EIM bus.
+/*
+ * Set up EIM bus.
  * Returns 0 on success, -1 on failure.
  */
+
 int  eim_setup(void);
 
-/* Write a 32-bit word to EIM.
+/*
+ * Write a 32-bit word to EIM.
  * If EIM is not set up correctly, this will abort with a bus error.
  */
+
 void eim_write_32(off_t, uint32_t *);
 
-/* Read a 32-bit word from EIM.
+/*
+ * Read a 32-bit word from EIM.
  * If EIM is not set up correctly, this will abort with a bus error.
  */
+
 void eim_read_32(off_t, uint32_t *);
+
+#endif /* _NOVENA_EIM_H_ */
 
 /*
  * Local variables:
