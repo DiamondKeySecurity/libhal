@@ -36,7 +36,7 @@ IO_OBJ_I2C 	= hal_io_i2c.o
 # Default I/O bus is EIM, override this to use I2C instead
 IO_OBJ		= ${IO_OBJ_EIM}
 
-TFMDIR		:= $(abspath ../libtfm)
+TFMDIR		:= $(abspath ../thirdparty/libtfm)
 CFLAGS		:= -g3 -Wall -fPIC -std=c99 -I${TFMDIR}
 LDFLAGS		:= -g3 -L${TFMDIR} -ltfm
 
