@@ -271,8 +271,14 @@ static int test_rsa(const rsa_tc_t * const tc)
   /* RSA decyrption using CRT */
   time_check(test_decrypt("Signature (CRT)", tc));
 
+#if 1
+#warning Key generation tests disabled
+#else
+
   /* Key generation and CRT -- not test vector, so writes key and sig to file */
   time_check(test_gen("Generation and CRT", tc));
+
+#endif
 
   return ok;
 }
@@ -287,8 +293,8 @@ int main(int argc, char *argv[])
    * Initialize EIM and report what core we're running.
    */
 
-  if ((err = hal_io_read(MODEXP_ADDR_NAME0,   name,    sizeof(name)))    != HAL_OK ||
-      (err = hal_io_read(MODEXP_ADDR_VERSION, version, sizeof(version))) != HAL_OK) {
+  if ((err = hal_io_read(MODEXPS6_ADDR_NAME0,   name,    sizeof(name)))    != HAL_OK ||
+      (err = hal_io_read(MODEXPS6_ADDR_VERSION, version, sizeof(version))) != HAL_OK) {
     printf("Initialization failed: %s\n", hal_error_string(err));
     return 1;
   }
@@ -300,6 +306,11 @@ int main(int argc, char *argv[])
    */
 
   hal_modexp_set_debug(1);
+
+#if 1
+#warning RSA blinding disabled
+  hal_rsa_set_blinding(0);
+#endif
 
   /* Normal test */
 

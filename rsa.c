@@ -55,7 +55,7 @@
  */
 
 #ifndef HAL_RSA_USE_MODEXP
-#define HAL_RSA_USE_MODEXP 0
+#define HAL_RSA_USE_MODEXP 1
 #endif
 
 /*
@@ -170,13 +170,21 @@ static hal_error_t modexp(fp_int *msg, fp_int *exp, fp_int *mod, fp_int *res)
 
   assert(msg != NULL && exp != NULL && mod != NULL && res != NULL);
 
-  const size_t msg_len = fp_unsigned_bin_size(msg);
-  const size_t exp_len = fp_unsigned_bin_size(exp);
-  const size_t mod_len = fp_unsigned_bin_size(mod);
+  fp_int reduced_msg;
 
-  const size_t len = (MAX(MAX(msg_len, exp_len), mod_len) + 3) & ~3;
+  if (fp_cmp_mag(msg, mod) != FP_LT) {
+    fp_init(&reduced_msg);
+    fp_mod(msg, mod, &reduced_msg);
+    msg = &reduced_msg;
+  }
 
-  uint8_t msgbuf[len], expbuf[len], modbuf[len], resbuf[len];
+  const size_t exp_len = (fp_unsigned_bin_size(exp) + 3) & ~3;
+  const size_t mod_len = (fp_unsigned_bin_size(mod) + 3) & ~3;
+
+  uint8_t msgbuf[mod_len];
+  uint8_t expbuf[exp_len];
+  uint8_t modbuf[mod_len];
+  uint8_t resbuf[mod_len];
 
   if ((err = unpack_fp(msg, msgbuf, sizeof(msgbuf))) != HAL_OK ||
       (err = unpack_fp(exp, expbuf, sizeof(expbuf))) != HAL_OK ||
