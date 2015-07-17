@@ -517,6 +517,7 @@ typedef struct {
   const uint8_t * const digest_algorithm_id;
   size_t digest_algorithm_id_length;
   const void *driver;
+  unsigned can_restore_state : 1;
 } hal_hash_descriptor_t;
 
 /*

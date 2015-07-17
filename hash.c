@@ -76,7 +76,8 @@ typedef struct {
 } driver_t;
 
 /*
- * Hash state.
+ * Hash state.  For now we assume that the only core state we need to
+ * save and restore is the current digest value.
  */
 
 typedef struct {
@@ -84,7 +85,8 @@ typedef struct {
   const driver_t *driver;
   uint64_t msg_length_high;                     /* Total data hashed in this message */
   uint64_t msg_length_low;                      /* (128 bits in SHA-512 cases) */
-  uint8_t block[HAL_MAX_HASH_BLOCK_LENGTH];     /* Block we're accumulating */
+  uint8_t block[HAL_MAX_HASH_BLOCK_LENGTH],     /* Block we're accumulating */
+    core_state[HAL_MAX_HASH_DIGEST_LENGTH];     /* Saved core state */
   size_t block_used;                            /* How much of the block we've used */
   unsigned block_count;                         /* Blocks sent */
 } internal_hash_state_t;
@@ -185,42 +187,42 @@ const hal_hash_descriptor_t hal_hash_sha1[1] = {{
   SHA1_BLOCK_LEN, SHA1_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   dalgid_sha1, sizeof(dalgid_sha1),
-  &sha1_driver
+  &sha1_driver, 0
 }};
 
 const hal_hash_descriptor_t hal_hash_sha256[1] = {{
   SHA256_BLOCK_LEN, SHA256_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   dalgid_sha256, sizeof(dalgid_sha256),
-  &sha256_driver
+  &sha256_driver, 1
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512_224[1] = {{
   SHA512_BLOCK_LEN, SHA512_224_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   dalgid_sha512_224, sizeof(dalgid_sha512_224),
-  &sha512_224_driver
+  &sha512_224_driver, 0
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512_256[1] = {{
   SHA512_BLOCK_LEN, SHA512_256_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   dalgid_sha512_256, sizeof(dalgid_sha512_256),
-  &sha512_256_driver
+  &sha512_256_driver, 0
 }};
 
 const hal_hash_descriptor_t hal_hash_sha384[1] = {{
   SHA512_BLOCK_LEN, SHA384_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   dalgid_sha384, sizeof(dalgid_sha384),
-  &sha384_driver
+  &sha384_driver, 0
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512[1] = {{
   SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
   sizeof(internal_hash_state_t), sizeof(internal_hmac_state_t),
   dalgid_sha512, sizeof(dalgid_sha512),
-  &sha512_driver
+  &sha512_driver, 0
 }};
 
 /*
@@ -281,47 +283,15 @@ hal_error_t hal_hash_initialize(const hal_hash_descriptor_t * const descriptor,
   memset(state, 0, sizeof(*state));
   state->descriptor = descriptor;
   state->driver = driver;
-
+    
   opaque_state->state = state;
 
   return HAL_OK;
 }
 
 /*
- * Send one block to a core.
- */
-
-static hal_error_t hash_write_block(const internal_hash_state_t * const state)
-{
-  uint8_t ctrl_cmd[4];
-  hal_error_t err;
-
-  assert(state != NULL && state->descriptor != NULL && state->driver != NULL);
-  assert(state->descriptor->block_length % 4 == 0);
-
-  if (debug)
-    fprintf(stderr, "[ %s ]\n", state->block_count == 0 ? "init" : "next");
-
-  if ((err = hal_io_write(state->driver->block_addr, state->block, state->descriptor->block_length)) != HAL_OK)
-    return err;
-
-  ctrl_cmd[0] = ctrl_cmd[1] = ctrl_cmd[2] = 0;
-  ctrl_cmd[3] = state->block_count == 0 ? CTRL_INIT : CTRL_NEXT;  
-  ctrl_cmd[3] |= state->driver->ctrl_mode;
-
-  /*
-   * Not sure why we're waiting for ready here, but it's what the old
-   * (read: tested) code did, so keep that behavior for now.
-   */
-
-  if ((err = hal_io_write(state->driver->ctrl_addr, ctrl_cmd, sizeof(ctrl_cmd))) != HAL_OK)
-    return err;
-
-  return hal_io_wait_valid(state->driver->status_addr);
-}
-
-/*
- * Read hash result from core.
+ * Read hash result from core.  At least for now, this also serves to
+ * read current hash state from core.
  */
 
 static hal_error_t hash_read_digest(const driver_t * const driver,
@@ -336,6 +306,70 @@ static hal_error_t hash_read_digest(const driver_t * const driver,
     return err;
 
   return hal_io_read(driver->digest_addr, digest, digest_length);
+}
+
+/*
+ * Write hash state back to core.
+ */
+
+static hal_error_t hash_write_digest(const driver_t * const driver,
+                                     const uint8_t * const digest,
+                                     const size_t digest_length)
+{
+  hal_error_t err;
+
+  assert(digest != NULL && digest_length % 4 == 0);
+
+  if ((err = hal_io_wait_ready(driver->status_addr)) != HAL_OK)
+    return err;
+
+  return hal_io_write(driver->digest_addr, digest, digest_length);
+}
+
+/*
+ * Send one block to a core.
+ */
+
+static hal_error_t hash_write_block(internal_hash_state_t *state)
+{
+  uint8_t ctrl_cmd[4];
+  hal_error_t err;
+
+  assert(state != NULL && state->descriptor != NULL && state->driver != NULL);
+  assert(state->descriptor->block_length % 4 == 0);
+
+  assert(state->descriptor->digest_length <= sizeof(state->core_state) ||
+         !state->descriptor->can_restore_state);
+
+  if (debug)
+    fprintf(stderr, "[ %s ]\n", state->block_count == 0 ? "init" : "next");
+
+  if ((err = hal_io_wait_ready(state->driver->status_addr)) != HAL_OK)
+    return err;
+
+  if (state->descriptor->can_restore_state &&
+      state->block_count != 0 &&
+      (err = hash_write_digest(state->driver, state->core_state,
+                               state->descriptor->digest_length)) != HAL_OK)
+    return err;
+
+  if ((err = hal_io_write(state->driver->block_addr, state->block,
+                          state->descriptor->block_length)) != HAL_OK)
+    return err;
+
+  ctrl_cmd[0] = ctrl_cmd[1] = ctrl_cmd[2] = 0;
+  ctrl_cmd[3] = state->block_count == 0 ? CTRL_INIT : CTRL_NEXT;  
+  ctrl_cmd[3] |= state->driver->ctrl_mode;
+
+  if ((err = hal_io_write(state->driver->ctrl_addr, ctrl_cmd, sizeof(ctrl_cmd))) != HAL_OK)
+    return err;
+
+  if (state->descriptor->can_restore_state &&
+      (err = hash_read_digest(state->driver, state->core_state,
+                              state->descriptor->digest_length)) != HAL_OK)
+    return err;
+
+  return hal_io_wait_valid(state->driver->status_addr);
 }
 
 /*
