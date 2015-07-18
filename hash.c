@@ -89,7 +89,10 @@ typedef struct {
     core_state[HAL_MAX_HASH_DIGEST_LENGTH];     /* Saved core state */
   size_t block_used;                            /* How much of the block we've used */
   unsigned block_count;                         /* Blocks sent */
+  unsigned flags;
 } internal_hash_state_t;
+
+#define STATE_FLAG_STATE_ALLOCATED 0x1          /* State buffer dynamically allocated */
 
 /*
  * HMAC state.  Right now this just holds the key block and a hash
@@ -276,17 +279,44 @@ hal_error_t hal_hash_initialize(const hal_hash_descriptor_t * const descriptor,
   const driver_t * const driver = check_driver(descriptor);
   internal_hash_state_t *state = state_buffer;
 
-  if (driver == NULL || state == NULL || opaque_state == NULL ||
-      state_length < descriptor->hash_state_length)
+  if (driver == NULL || opaque_state == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (state_buffer != NULL && state_length < descriptor->hash_state_length)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (state_buffer == NULL && (state = malloc(descriptor->hash_state_length)) == NULL)
+      return HAL_ERROR_ALLOCATION_FAILURE;
 
   memset(state, 0, sizeof(*state));
   state->descriptor = descriptor;
   state->driver = driver;
     
+  if (state_buffer == NULL)
+    state->flags |= STATE_FLAG_STATE_ALLOCATED;
+
   opaque_state->state = state;
 
   return HAL_OK;
+}
+
+/*
+ * Clean up hash state.  No-op unless memory was dynamically allocated.
+ */
+
+void hal_hash_cleanup(hal_hash_state_t *opaque_state)
+{
+  if (opaque_state == NULL)
+    return;
+
+  internal_hash_state_t *state = opaque_state->state;
+
+  if (state == NULL || (state->flags & STATE_FLAG_STATE_ALLOCATED) == 0)
+    return;
+
+  memset(state, 0, state->descriptor->hash_state_length);
+  free(state);
+  opaque_state->state = NULL;
 }
 
 /*
@@ -519,14 +549,20 @@ hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
 {
   const driver_t * const driver = check_driver(descriptor);
   internal_hmac_state_t *state = state_buffer;
-  internal_hash_state_t *h = &state->hash_state;
   hal_hash_state_t oh;
   hal_error_t err;
   int i;
 
-  if (descriptor == NULL || driver == NULL || state == NULL || opaque_state == NULL ||
-      state_length < descriptor->hmac_state_length)
+  if (driver == NULL || opaque_state == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (state_buffer != NULL && state_length < descriptor->hmac_state_length)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (state_buffer == NULL && (state = malloc(descriptor->hmac_state_length)) == NULL)
+    return HAL_ERROR_ALLOCATION_FAILURE;
+
+  internal_hash_state_t *h = &state->hash_state;
 
   assert(descriptor->block_length <= sizeof(state->keybuf));
 
@@ -541,7 +577,10 @@ hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
 #endif
 
   if ((err = hal_hash_initialize(descriptor, &oh, h, sizeof(*h))) != HAL_OK)
-    return err;
+    goto fail;
+
+  if (state_buffer == NULL)
+    h->flags |= STATE_FLAG_STATE_ALLOCATED;
 
   /*
    * If the supplied HMAC key is longer than the hash block length, we
@@ -557,7 +596,7 @@ hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
   else if ((err = hal_hash_update(oh, key, key_length))                        != HAL_OK ||
            (err = hal_hash_finalize(oh, state->keybuf, sizeof(state->keybuf))) != HAL_OK ||
            (err = hal_hash_initialize(descriptor, &oh, h, sizeof(*h)))         != HAL_OK)
-    return err;
+    goto fail;
 
   /*
    * XOR the key with the IPAD value, then start the inner hash.
@@ -567,7 +606,7 @@ hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
     state->keybuf[i] ^= HMAC_IPAD;
 
   if ((err = hal_hash_update(oh, state->keybuf, descriptor->block_length)) != HAL_OK)
-    return err;
+    goto fail;
 
   /*
    * Prepare the key for the final hash.  Since we just XORed key with
@@ -588,6 +627,35 @@ hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
   opaque_state->state = state;
 
   return HAL_OK;
+
+ fail:
+  if (state_buffer == NULL)
+    free(state);
+  return err;
+}
+
+/*
+ * Clean up HMAC state.  No-op unless memory was dynamically allocated.
+ */
+
+void hal_hmac_cleanup(hal_hmac_state_t *opaque_state)
+{
+  if (opaque_state == NULL)
+    return;
+
+  internal_hmac_state_t *state = opaque_state->state;
+
+  if (state == NULL)
+    return;
+
+  internal_hash_state_t *h = &state->hash_state;
+
+  if ((h->flags & STATE_FLAG_STATE_ALLOCATED) == 0)
+    return;
+
+  memset(state, 0, h->descriptor->hmac_state_length);
+  free(state);
+  opaque_state->state = NULL;
 }
 
 /*
