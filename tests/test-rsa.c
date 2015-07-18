@@ -271,14 +271,8 @@ static int test_rsa(const rsa_tc_t * const tc)
   /* RSA decyrption using CRT */
   time_check(test_decrypt("Signature (CRT)", tc));
 
-#if 1
-#warning Key generation tests disabled
-#else
-
   /* Key generation and CRT -- not test vector, so writes key and sig to file */
   time_check(test_gen("Generation and CRT", tc));
-
-#endif
 
   return ok;
 }
@@ -306,11 +300,6 @@ int main(int argc, char *argv[])
    */
 
   hal_modexp_set_debug(1);
-
-#if 1
-#warning RSA blinding disabled
-  hal_rsa_set_blinding(0);
-#endif
 
   /* Normal test */
 
