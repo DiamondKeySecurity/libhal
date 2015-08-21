@@ -253,10 +253,16 @@ static inline int point_equal(const ec_point_t * const P,
  * All of these are operations in the field underlying the specified
  * curve, and assume that operands are already in Montgomery form.
  *
- * Several of these are written a bit oddly, in an attempt to make
- * them run in constant time.  Be warned that an optimizing compiler
- * may be clever enough to defeat this.  In the long run, the real
- * solution is probably to perform these field operations in Verilog.
+ * The ff_add() and ff_sub() are written a bit oddly, in an attempt to
+ * make them run in constant time.  An optimizing compiler may be
+ * clever enough to defeat this.  In the long run, we probably want to
+ * perform these field operations in Verilog anyway.
+ *
+ * We might be able to squeeze a bit more speed out of the point
+ * arithmetic by making using fp_mul_2d() when multiplying by a power
+ * of two.  Skipping for now as a premature optimization, but if we do
+ * need this, it'd probably be simplest to add a ff_dbl() function
+ * which handles overflow in the same way that ff_add() does.
  */
 
 static inline void ff_add(const ecdsa_curve_t * const curve,
@@ -266,9 +272,12 @@ static inline void ff_add(const ecdsa_curve_t * const curve,
 {
   fp_int t[2][1];
   memset(t, 0, sizeof(t));
+
   fp_add(unconst_fp_int(a), unconst_fp_int(b), t[0]);
   fp_sub(t[0], unconst_fp_int(curve->q), t[1]);
-  fp_copy(t[fp_cmp(t[0], unconst_fp_int(curve->q)) != FP_LT], c);
+
+  fp_copy(t[fp_cmp_d(t[1], 0) != FP_LT], c);
+
   memset(t, 0, sizeof(t));
 }
 
@@ -279,21 +288,12 @@ static inline void ff_sub(const ecdsa_curve_t * const curve,
 {
   fp_int t[2][1];
   memset(t, 0, sizeof(t));
+
   fp_sub(unconst_fp_int(a), unconst_fp_int(b), t[0]);
   fp_add(t[0], unconst_fp_int(curve->q), t[1]);
-  fp_copy(t[fp_cmp_d(c, 0) == FP_LT], c);
-  memset(t, 0, sizeof(t));
-}
 
-static inline void ff_div2(const ecdsa_curve_t * const curve,
-                           const fp_int * const a, 
-                           fp_int *b)
-{
-  fp_int t[2][1];
-  memset(t, 0, sizeof(t));
-  fp_copy(unconst_fp_int(a), t[0]);
-  fp_add(t[0], unconst_fp_int(curve->q), t[1]);
-  fp_div_2(t[fp_isodd(unconst_fp_int(a))], b);
+  fp_copy(t[fp_cmp_d(t[0], 0) == FP_LT], c);
+
   memset(t, 0, sizeof(t));
 }
 
@@ -314,37 +314,14 @@ static inline void ff_sqr(const ecdsa_curve_t * const curve,
   fp_montgomery_reduce(b, unconst_fp_int(curve->q), curve->rho);
 }
 
-#warning Change point arithmetic algorithms?
-/*
- * The point doubling and addition algorithms we use here are from
- * libtomcrypt.  The formula database at hyperelliptic.org lists
- * faster algorithms satisfying the same preconditions, perhaps we
- * should use those instead?
- *
- * Labels in the following refer to entries on the page:
- *  http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html
- *
- * The libtomcrypt doubling algorithm looks like a trivial variation
- * on dbl-2004-hmv.  We might want to use dbl-2001-b instead.
- *
- * The libtomcrypt addition algorithm doesn't match up exactly with
- * any listed algorithm, but I suspect it's a variation on
- * add-1998-cmo-2.  We might want to use add-2007-bl instead.
- *
- * There are faster algorithms listed, but all of them appear to
- * require whacking one or both points back into affine
- * representation, which has its own costs, so, at least for now, it'd
- * probably be best to stick with algorithms that don't require this.
- */
-
 /**
  * Double an EC point.
  * @param P             The point to double
  * @param R             [out] The destination of the double
  * @param curve         The curve parameters structure
  *
- * Algorithm is a minor variation on algorithm 3.21 from Guide to
- * Elliptic Curve Cryptography.
+ * Algorithm is dbl-2001-b from
+ * http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html
  */
 
 static inline void point_double(const ec_point_t * const P,
@@ -353,36 +330,41 @@ static inline void point_double(const ec_point_t * const P,
 {
   assert(P != NULL && R != NULL && curve != NULL);
 
-  fp_int t1[1]; fp_init(t1); 
-  fp_int t2[1]; fp_init(t2);
+  fp_int alpha[1], beta[1], gamma[1], delta[1],  t1[1], t2[1];
 
-  if (P != R)
-    *R = *P;
+  fp_init(alpha); fp_init(beta); fp_init(gamma); fp_init(delta); fp_init(t1); fp_init(t2);
 
-  ff_sqr  (curve,  R->z,  t1);                /* t1 = Pz ** 2                                   */
-  ff_sub  (curve,  R->x,  t1,    t2);         /* t2 = Px - Pz ** 2                              */
-  ff_add  (curve,  R->x,  t1,    t1);         /* t1 = Px + Pz ** 2                              */
-  ff_mul  (curve,  t1,    t2,    t2);         /* t2 = 1 * (Px - Pz ** 2) * (Px + Pz ** 2)       */
-  ff_add  (curve,  t2,    t2,    t1);         /* t1 = 2 * (Px - Pz ** 2) * (Px + Pz ** 2)       */
-  ff_add  (curve,  t1,    t2,    t1);         /* t1 = 3 * (Px - Pz ** 2) * (Px + Pz ** 2) = A   */
+  ff_sqr  (curve,  P->z,          delta);       /* delta = Pz ** 2 */
+  ff_sqr  (curve,  P->y,          gamma);       /* gamma = Py ** 2 */
+  ff_mul  (curve,  P->x,  gamma,  beta);        /* beta  = Px * gamma */
+  ff_sub  (curve,  P->x,  delta,  t1);          /* alpha = 3 * (Px - delta) * (Px + delta) */
+  ff_add  (curve,  P->x,  delta,  t2);
+  ff_mul  (curve,  t1,    t2,     t1);
+  ff_add  (curve,  t1,    t1,     t2);
+  ff_add  (curve,  t1,    t2,     alpha);
 
-  ff_add  (curve,  R->y,  R->y,  R->y);       /* Ry = 2 * Py = B                                */
-  ff_mul  (curve,  R->z,  R->y,  R->z);       /* Rz = B * Pz                                    */
+  ff_sqr  (curve,  alpha,         t1);          /* Rx = (alpha ** 2) - (8 * beta) */
+  ff_add  (curve,  beta,  beta,   t2);
+  ff_add  (curve,  t2,    t2,     t2);
+  ff_add  (curve,  t2,    t2,     t2);
+  ff_sub  (curve,  t1,    t2,     R->x);
 
-  ff_sqr  (curve,  R->y,  R->y);              /* Ry = B ** 2 = C                                */
-  ff_sqr  (curve,  R->y,  t2);                /* t2 = C ** 2                                    */
-  ff_div2 (curve,  t2,    t2);                /* t2 = C ** 2 / 2                                */
-  ff_mul  (curve,  R->y,  R->x,  R->y);       /* Ry = C * Px = D                                */
+  ff_add  (curve,  P->y,  P->z,   t1);          /* Rz = ((Py + Pz) ** 2) - gamma - delta */
+  ff_sqr  (curve,  t1,            t1);
+  ff_sub  (curve,  t1,    gamma,  t1);
+  ff_sub  (curve,  t1,    delta,  R->z);
 
-  ff_sqr  (curve,  t1,    R->x);              /* Rx = A ** 2                                    */
-  ff_sub  (curve,  R->x,  R->y,  R->x);       /* Rx = A ** 2 - D                                */
-  ff_sub  (curve,  R->x,  R->y,  R->x);       /* Rx = A ** 2 - 2 * D                            */
+  ff_add  (curve,  beta,  beta,   t1);          /* Ry = (((4 * beta) - Rx) * alpha) - (8 * (gamma ** 2)) */
+  ff_add  (curve,  t1,    t1,     t1);
+  ff_sub  (curve,  t1,    R->x,   t1);
+  ff_mul  (curve,  t1,    alpha,  t1);
+  ff_sqr  (curve,  gamma,         t2);
+  ff_add  (curve,  t2,    t2,     t2);
+  ff_add  (curve,  t2,    t2,     t2);
+  ff_add  (curve,  t2,    t2,     t2);
+  ff_sub  (curve,  t1,    t2,     R->y);
 
-  ff_sub  (curve,  R->y,  R->x,  R->y);       /* Ry = D - Rx                                    */
-  ff_mul  (curve,  R->y,  t1,    R->y);       /* Ry = (D - Rx) * A                              */
-  ff_sub  (curve,  R->y,  t2,    R->y);       /* Ry = (D - Rx) * A - C ** 2 / 2                 */
-
-  fp_zero(t1); fp_zero(t2);
+  fp_zero(alpha); fp_zero(beta); fp_zero(gamma); fp_zero(delta); fp_zero(t1); fp_zero(t2);
 }
 
 /**
@@ -391,7 +373,10 @@ static inline void point_double(const ec_point_t * const P,
  * @param Q             The point to add
  * @param R             [out] The destination of the double
  * @param curve         The curve parameters structure
-*/
+ *
+ * Algorithm is add-2007-bl from
+ * http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html
+ */
 
 static inline void point_add(const ec_point_t * const P,
                              const ec_point_t * const Q,
@@ -403,54 +388,56 @@ static inline void point_add(const ec_point_t * const P,
   if (point_equal(P, Q, curve))
     return point_double(P, R, curve);
 
-  fp_int t1[1]; fp_init(t1);
-  fp_int t2[1]; fp_init(t2);
+  fp_int Z1Z1[1], Z2Z2[1], U1[1], U2[1], S1[1], S2[1], H[1], I[1], J[1], r[1], V[1], t[1];
 
-  if (P != R)
-    *R = *P;
+  fp_init(Z1Z1), fp_init(Z2Z2), fp_init(U1), fp_init(U2), fp_init(S1), fp_init(S2);
+  fp_init(H), fp_init(I), fp_init(J), fp_init(r), fp_init(V), fp_init(t);
 
-  /*
-   * Operations marked {@} are no-ops when Q.z == 1, but probably
-   * don't save us enough in the long run for optimizing them out to
-   * be worth even a low-probability risk of a timing channel attack.
-   */
+  ff_sqr  (curve,  P->z,           Z1Z1);       /* Z1Z1 = Pz ** 2 */
 
-  ff_sqr  (curve,  Q->z,   t1);                      /* t1 = z' ** 2       {@} */
-  ff_mul  (curve,  t1,     R->x,   R->x);            /* x  = x  *  z' ** 2 {@} */
-  ff_mul  (curve,  Q->z,   t1,     t1);              /* t1 = z' ** 3       {@} */
-  ff_mul  (curve,  t1,     R->y,   R->y);            /* y  = y  *  z' ** 3 {@} */
+  ff_sqr  (curve,  Q->z,           Z2Z2);       /* Z2Z1 = Qz ** 2 */
 
-  ff_sqr  (curve,  R->z,  t1);                       /* t1 = z  * z  */
-  ff_mul  (curve,  Q->x,  t1,    t2);                /* t2 = x' * t1 */
-  ff_mul  (curve,  R->z,  t1,    t1);                /* t1 = z  * t1 */
-  ff_mul  (curve,  Q->y,  t1,    t1);                /* t1 = y' * t1 */
+  ff_mul  (curve,  P->x,   Z2Z2,   U1);         /* U1   = Px * Z2Z2 */
 
-  ff_sub  (curve,  R->y,  t1,    R->y);              /* y  = y  - t1 */
-  ff_add  (curve,  t1,    t1,    t1);                /* t1 = 2  * t1 */
-  ff_add  (curve,  t1,    R->y,  t1);                /* t1 = y  + t1 */
-  ff_sub  (curve,  R->x,  t2,    R->x);              /* x  = x  - t2 */
-  ff_add  (curve,  t2,    t2,    t2);                /* t2 = 2  * t2 */
-  ff_add  (curve,  t2,    R->x,  t2);                /* t2 = x  + t2 */
+  ff_mul  (curve,  Q->x,   Z1Z1,   U2);         /* U2   = Qx * Z1Z1 */
 
-  ff_mul  (curve,  R->z,  Q->z,  R->z);              /* z  = z * z' {@} */
+  ff_mul  (curve,  Q->z,   Z2Z2,   S1);         /* S1 = Py * (Qz ** 3) */
+  ff_mul  (curve,  P->y,   S1,     S1);
 
-  ff_mul  (curve,  R->z,  R->x,  R->z);              /* z  = z  * x  */
+  ff_mul  (curve,  P->z,   Z1Z1,   S2);         /* S2 = Qy * (Pz ** 3) */
+  ff_mul  (curve,  Q->y,   S2,     S2);
 
-  ff_mul  (curve,  t1,    R->x,  t1);                /* t1 = t1 * x  */
-  ff_sqr  (curve,  R->x,  R->x);                     /* x  = x  * x  */
-  ff_mul  (curve,  t2,    R->x,  t2);                /* t2 = t2 * x  */
-  ff_mul  (curve,  t1,    R->x,  t1);                /* t1 = t1 * x  */
+  ff_sub  (curve,  U2,     U1,     H);          /* H = U2 - U1 */
 
-  ff_sqr  (curve,  R->y,  R->x);                     /* x  = y  * y  */
-  ff_sub  (curve,  R->x,  t2,    R->x);              /* x  = x  - t2 */
+  ff_add  (curve,  H,      H,      I);          /* I = (2 * H) ** 2 */
+  ff_sqr  (curve,  I,      I);
 
-  ff_sub  (curve,  t2,    R->x,  t2);                /* t2 = t2 - x  */
-  ff_sub  (curve,  t2,    R->x,  t2);                /* t2 = t2 - x  */
-  ff_mul  (curve,  t2,    R->y,  t2);                /* t2 = t2 * y  */
-  ff_sub  (curve,  t2,    t1,    R->y);              /* y  = t2 - t1 */
-  ff_div2 (curve,  R->y,  R->y);                     /* y  = y  / 2  */
+  ff_mul  (curve,  H,      I,      J);          /* J = H * I */
 
-  fp_zero(t1); fp_zero(t2);
+  ff_sub  (curve,  S2,     S1,     r);          /* r = 2 * (S2 - S1) */
+  ff_add  (curve,  r,      r,      r);
+
+  ff_mul  (curve,  U1,     I,      V);          /* V = U1 * I */
+
+  ff_sqr  (curve,  r,              R->x);       /* Rx = (r ** 2) - J - (2 * V) */
+  ff_sub  (curve,  R->x,   J,      R->x);
+  ff_sub  (curve,  R->x,   V,      R->x);
+  ff_sub  (curve,  R->x,   V,      R->x);
+
+  ff_sub  (curve,  V,      R->x,   R->y);       /* Ry = (r * (V - Rx)) - (2 * S1 * J) */
+  ff_mul  (curve,  r,      R->y,   R->y);
+  ff_mul  (curve,  S1,     J,      t);
+  ff_sub  (curve,  R->y,   t,      R->y);
+  ff_sub  (curve,  R->y,   t,      R->y);
+
+  ff_add  (curve,  P->z,   Q->z,   R->z);       /* Rz = (((Pz + Qz) ** 2) - Z1Z1 - Z2Z2) * H */
+  ff_sqr  (curve,  R->z,           R->z);
+  ff_sub  (curve,  R->z,   Z1Z1,   R->z);
+  ff_sub  (curve,  R->z,   Z2Z2,   R->z);
+  ff_mul  (curve,  R->z,   H,      R->z);
+
+  fp_zero(Z1Z1), fp_zero(Z2Z2), fp_zero(U1), fp_zero(U2), fp_zero(S1), fp_zero(S2);
+  fp_zero(H), fp_zero(I), fp_zero(J), fp_zero(r), fp_zero(V), fp_zero(t);
 }
 
 /**
