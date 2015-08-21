@@ -28,7 +28,7 @@
 INC		= hal.h
 LIB		= libhal.a
 OBJ		= ${IO_OBJ} csprng.o hash.o aes_keywrap.o pbkdf2.o \
-		  modexp.o rsa.o errorstrings.o
+		  modexp.o rsa.o ecdsa.o asn1.o errorstrings.o
 
 IO_OBJ_EIM	= hal_io_eim.o novena-eim.o
 IO_OBJ_I2C 	= hal_io_i2c.o
@@ -48,6 +48,10 @@ ${OBJ}: ${INC}
 
 ${LIB}: ${OBJ}
 	ar rcs $@ $^
+
+asn1.o rsa.o ecdsa.o: asn1_internal.h
+
+ecdsa.o: ecdsa_curves.h
 
 test: all
 	cd tests; ${MAKE} -k $@
