@@ -447,6 +447,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_RESULT_TOO_LONG,           "Result too long for buffer")                   \
   DEFINE_HAL_ERROR(HAL_ERROR_ASN1_PARSE_FAILED,         "ASN.1 parse failed")                           \
   DEFINE_HAL_ERROR(HAL_ERROR_KEY_NOT_ON_CURVE,          "EC key is not on its purported curve")         \
+  DEFINE_HAL_ERROR(HAL_ERROR_INVALID_SIGNATURE,         "Invalid signature")                            \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -711,15 +712,6 @@ extern hal_error_t hal_ecdsa_key_get_public(const hal_ecdsa_key_t * const key,
 
 extern void hal_ecdsa_key_clear(hal_ecdsa_key_t *key);
 
-extern hal_error_t hal_ecdsa_sign(const hal_ecdsa_key_t * const key,
-                                  const hal_hash_descriptor_t * const hash_descriptor,
-                                  const uint8_t * const input, const size_t input_len,
-                                  uint8_t *output, size_t *output_len, const size_t output_max);
-
-extern hal_error_t hal_ecdsa_verify(const hal_ecdsa_key_t * const key,
-                                    const hal_hash_descriptor_t * const hash_descriptor,
-                                    const uint8_t * const input, const size_t input_len);
-
 extern hal_error_t hal_ecdsa_key_gen(hal_ecdsa_key_t **key,
                                      void *keybuf, const size_t keybuf_len,
                                      const hal_ecdsa_curve_t curve);
@@ -732,6 +724,14 @@ extern size_t hal_ecdsa_key_to_der_len(const hal_ecdsa_key_t * const key);
 extern hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key,
                                           void *keybuf, const size_t keybuf_len,
                                           const uint8_t * const der, const size_t der_len);
+
+extern hal_error_t hal_ecdsa_sign(const hal_ecdsa_key_t * const key,
+                                  const uint8_t * const hash, const size_t hash_len,
+                                  uint8_t *signature, size_t *signature_len, const size_t signature_max);
+
+extern hal_error_t hal_ecdsa_verify(const hal_ecdsa_key_t * const key,
+                                  const uint8_t * const hash, const size_t hash_len,
+                                  const uint8_t * const signature, const size_t signature_len);
 
 #endif /* _HAL_H_ */
 

@@ -144,6 +144,11 @@ hal_error_t hal_asn1_encode_integer(fp_int *bn,
   return HAL_OK;
 }
 
+/*
+ * Parse tag and length of an ASN.1 object.  Tag must match value
+ * specified by the caller.  On success, sets hlen and vlen to lengths
+ * of header and value, respectively.
+ */
 
 hal_error_t hal_asn1_decode_header(const uint8_t tag,
 				   const uint8_t * const der, size_t der_max,
@@ -175,6 +180,12 @@ hal_error_t hal_asn1_decode_header(const uint8_t tag,
 
   return HAL_OK;
 }
+
+/*
+ * Decode an ASN.1 INTEGER into a libtfm bignum.  Since we only
+ * support (or need to support, or expect to see) unsigned integers,
+ * we return failure if the sign bit is set in the ASN.1 INTEGER.
+ */
 
 hal_error_t hal_asn1_decode_integer(fp_int *bn,
 				    const uint8_t * const der, size_t *der_len, const size_t der_max)
