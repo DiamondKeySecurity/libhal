@@ -574,30 +574,31 @@ static hal_error_t point_scalar_multiply(const fp_int * const k,
 
   /*
    * Walk down bits of the scalar, performing dummy operations to mask
-   * timing while hunting for the most significant bit.
+   * timing while hunting for the most significant bit of the scalar.
+   *
+   * Note that, in order for this timing protection to work, the
+   * number of iterations in the loop has to depend on the order of
+   * the base point rather than on the scalar.
    */
 
   int dummy_mode = 1;
 
-  for (int digit_index = k->used - 1; digit_index >= 0; digit_index--) {
+  for (int bit_index = fp_count_bits(unconst_fp_int(curve->n)) - 1; bit_index >= 0; bit_index--) {
 
-    fp_digit digit = k->dp[digit_index];
+    const int digit_index = bit_index / DIGIT_BIT;
+    const fp_digit  digit = digit_index < k->used ? k->dp[digit_index] : 0;
+    const fp_digit   mask = ((fp_digit) 1) << (bit_index % DIGIT_BIT);
+    const int         bit = (digit & mask) != 0;
 
-    for (int bits_left = DIGIT_BIT; bits_left > 0; bits_left--) {
+    if (dummy_mode) {
+      point_add    (M[0], M[1], M[2], curve);
+      point_double (M[1], M[2],       curve);
+      dummy_mode = !bit;                              /* Dummy until we find MSB */
+    }
 
-      const int bit = (digit >> (DIGIT_BIT - 1)) & 1;
-      digit <<= 1;
-
-      if (dummy_mode) {
-        point_add    (M[0], M[1], M[2], curve);
-        point_double (M[1], M[2],       curve);
-        dummy_mode = !bit;                              /* Dummy until we find MSB */
-      }
-
-      else {
-        point_add    (M[0],   M[1],  M[bit^1], curve);
-        point_double (M[bit], M[bit],          curve);
-      }
+    else {
+      point_add    (M[0],   M[1],  M[bit^1], curve);
+      point_double (M[bit], M[bit],          curve);
     }
   }
 
@@ -605,7 +606,7 @@ static hal_error_t point_scalar_multiply(const fp_int * const k,
    * Copy result out, map back to affine if requested, then done.
    */
 
-  *R = *M[0];
+  point_copy(M[0], R);
   hal_error_t err = map ? point_to_affine(R, curve) : HAL_OK;
   memset(M, 0, sizeof(M));
   return err;
