@@ -110,52 +110,82 @@ static void set_next_random(const uint8_t * const data, const size_t length)
  * Run one keygen test from test vectors.
  */
 
-static int test_keygen_static(const hal_ecdsa_curve_t curve)
+static int test_against_static_vectors(const ecdsa_tc_t * const tc)
 
 {
-  uint8_t keybuf[hal_ecdsa_key_t_size];
-  hal_ecdsa_key_t *key = NULL;
   hal_error_t err;
-  const uint8_t *d, *Qx, *Qy;
-  size_t d_len, Qx_len, Qy_len;
 
-  switch (curve) {
+  set_next_random(tc->d, tc->d_len);
 
-  case HAL_ECDSA_CURVE_P256:
-    printf("ECDSA P-256 key generation test\n");
-    d  = p256_d;  d_len  = sizeof(p256_d);
-    Qx = p256_Qx; Qx_len = sizeof(p256_Qx);
-    Qy = p256_Qy; Qy_len = sizeof(p256_Qy);
-    break;
+  uint8_t keybuf1[hal_ecdsa_key_t_size];
+  hal_ecdsa_key_t *key1 = NULL;
 
-  case HAL_ECDSA_CURVE_P384:
-    printf("ECDSA P-384 key generation test\n");
-    d  = p384_d;  d_len  = sizeof(p384_d);
-    Qx = p384_Qx; Qx_len = sizeof(p384_Qx);
-    Qy = p384_Qy; Qy_len = sizeof(p384_Qy);
-    break;
-
-  default:
-    printf("Unsupported ECDSA curve type\n");
-    return 0;
-  }
-
-  set_next_random(d, d_len);
-
-  if ((err =  hal_ecdsa_key_gen(&key, keybuf, sizeof(keybuf), curve)) != HAL_OK)
+  if ((err = hal_ecdsa_key_gen(&key1, keybuf1, sizeof(keybuf1), tc->curve)) != HAL_OK)
     return printf("hal_ecdsa_key_gen() failed: %s\n", hal_error_string(err)), 0;
 
-  uint8_t Rx[Qx_len], Ry[Qy_len];
-  size_t Rx_len, Ry_len;
+  uint8_t Qx[tc->Qx_len], Qy[tc->Qy_len];
+  size_t Qx_len, Qy_len;
 
-  if ((err = hal_ecdsa_key_get_public(key, Rx, &Rx_len, sizeof(Rx), Ry, &Ry_len, sizeof(Ry))) != HAL_OK)
+  if ((err = hal_ecdsa_key_get_public(key1, Qx, &Qx_len, sizeof(Qx), Qy, &Qy_len, sizeof(Qy))) != HAL_OK)
     return printf("hal_ecdsa_key_get_public() failed: %s\n", hal_error_string(err)), 0;
 
-  if (Qx_len != Rx_len || memcmp(Qx, Rx, Rx_len) != 0)
+  if (tc->Qx_len != Qx_len || memcmp(tc->Qx, Qx, Qx_len) != 0)
     return printf("Qx mismatch\n"), 0;
 
-  if (Qy_len != Ry_len || memcmp(Qy, Ry, Ry_len) != 0)
+  if (tc->Qy_len != Qy_len || memcmp(tc->Qy, Qy, Qy_len) != 0)
     return printf("Qy mismatch\n"), 0;
+
+  if (hal_ecdsa_key_to_der_len(key1) != tc->key_len)
+    return printf("DER Key length mismatch\n"), 0;
+
+  uint8_t keyder[tc->key_len];
+  size_t keyder_len;
+
+  if ((err = hal_ecdsa_key_to_der(key1, keyder, &keyder_len, sizeof(keyder))) != HAL_OK)
+    return printf("hal_ecdsa_key_to_der() failed: %s\n", hal_error_string(err)), 0;
+
+  uint8_t keybuf2[hal_ecdsa_key_t_size];
+  hal_ecdsa_key_t *key2 = NULL;
+
+  if ((err = hal_ecdsa_key_from_der(&key2, keybuf2, sizeof(keybuf2), keyder, keyder_len)) != HAL_OK)
+    return printf("hal_ecdsa_key_from_der() failed: %s\n", hal_error_string(err)), 0;
+
+  if (memcmp(key1, key2, hal_ecdsa_key_t_size) != 0)
+    return printf("Key mismatch after read/write cycle\n"), 0;
+
+  set_next_random(tc->k, tc->k_len);
+
+  uint8_t sig[tc->sig_len];
+  size_t  sig_len;
+
+  if ((err = hal_ecdsa_sign(key1, tc->H, tc->H_len, sig, &sig_len, sizeof(sig))) != HAL_OK)
+    return printf("hal_ecdsa_sign() failed: %s\n", hal_error_string(err)), 0;
+
+  if (sig_len != tc->sig_len || memcmp(sig, tc->sig, tc->sig_len) != 0)
+    return printf("Signature mismatch\n"), 0;
+
+  if ((err = hal_ecdsa_verify(key2, tc->H, tc->H_len, sig, sig_len)) != HAL_OK)
+    return printf("hal_ecdsa_verify(private) failed: %s\n", hal_error_string(err)), 0;
+
+  hal_ecdsa_key_clear(key2);
+  key2 = NULL;
+
+  if ((err = hal_ecdsa_key_load_private(&key2, keybuf2, sizeof(keybuf2), tc->curve,
+                                        tc->Qx, tc->Qx_len, tc->Qy, tc->Qy_len, tc->d, tc->d_len)) != HAL_OK)
+    return printf("hal_ecdsa_load_private() failed: %s\n", hal_error_string(err)), 0;
+
+  if (memcmp(key1, key2, hal_ecdsa_key_t_size) != 0)
+    return printf("Key mismatch after hal_ecdsa_load_private_key()\n"), 0;
+
+  hal_ecdsa_key_clear(key2);
+  key2 = NULL;
+
+  if ((err = hal_ecdsa_key_load_public(&key2, keybuf2, sizeof(keybuf2), tc->curve,
+                                       tc->Qx, tc->Qx_len, tc->Qy, tc->Qy_len)) != HAL_OK)
+    return printf("hal_ecdsa_load_public() failed: %s\n", hal_error_string(err)), 0;
+
+  if ((err = hal_ecdsa_verify(key2, tc->H, tc->H_len, sig, sig_len)) != HAL_OK)
+    return printf("hal_ecdsa_verify(public) failed: %s\n", hal_error_string(err)), 0;
 
   return 1;
 }
@@ -261,16 +291,12 @@ static void _time_check(const struct timeval t0, const int ok)
  * Run tests for one ECDSA curve.
  */
 
-static int test_ecdsa(const hal_ecdsa_curve_t curve)
+static int test_ecdsa(const ecdsa_tc_t * const tc)
 
 {
   int ok = 1;
-
-  if (curve == HAL_ECDSA_CURVE_P256 || curve == HAL_ECDSA_CURVE_P384)
-    time_check(test_keygen_static(curve));
-
-  time_check(test_keygen_sign_verify(curve));
-
+  time_check(test_against_static_vectors(tc));
+  time_check(test_keygen_sign_verify(tc->curve));
   return ok;
 }
 
@@ -291,7 +317,11 @@ int main(int argc, char *argv[])
 
   printf("\"%8.8s\"  \"%4.4s\"\n\n", name, version);
 
-  return !test_ecdsa(HAL_ECDSA_CURVE_P256) || !test_ecdsa(HAL_ECDSA_CURVE_P384);
+  for (int i = 0; i < sizeof(ecdsa_tc)/sizeof(*ecdsa_tc); i++)
+    if (!test_ecdsa(&ecdsa_tc[i]))
+      return 1;
+
+  return 0;
 }
 
 /*
