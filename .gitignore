@@ -6,6 +6,7 @@ autom4te.cache
 config.log
 config.status
 tests/test-aes-key-wrap
+tests/test-ecdsa
 tests/test-hash
 tests/test-pbkdf2
 tests/test-rsa

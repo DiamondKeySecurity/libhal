@@ -74,6 +74,15 @@
 #include "asn1_internal.h"
 
 /*
+ * Whether we're using static test vectors instead of the random
+ * number generator.  Do NOT enable this in production (doh).
+ */
+
+#ifndef HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM
+#define HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM 1
+#endif
+
+/*
  * Whether we want debug output.
  */
 
@@ -613,6 +622,48 @@ static hal_error_t point_scalar_multiply(const fp_int * const k,
 }
 
 /*
+ * Testing only: ECDSA key generation and signature both have a
+ * critical dependency on random numbers, but we can't use the random
+ * number generator when testing against static test vectors. So add a
+ * wrapper around the random number generator calls, with a hook to
+ * let us override the generator for test purposes.  Do NOT use this
+ * in production, kids.
+ */
+
+#if HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM
+
+#warning hal_ecdsa random number generator overriden for test purposes
+#warning DO NOT USE THIS IN PRODUCTION
+
+typedef hal_error_t (*rng_override_test_function_t)(void *, const size_t);
+
+static rng_override_test_function_t rng_test_override_function = 0;
+
+rng_override_test_function_t hal_ecdsa_set_rng_override_test_function(rng_override_test_function_t new_func)
+{
+  rng_override_test_function_t old_func = rng_test_override_function;
+  rng_test_override_function = new_func;
+  return old_func;
+}
+
+static inline hal_error_t get_random(void *buffer, const size_t length)
+{
+  if (rng_test_override_function)
+    return rng_test_override_function(buffer, length);
+  else
+    return hal_get_random(buffer, length);
+}
+
+#else /* HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM */
+
+static inline hal_error_t get_random(void *buffer, const size_t length)
+{
+  return hal_get_random(buffer, length);
+}
+
+#endif /* HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM */
+
+/*
  * Pick a random point on the curve, return random scalar and
  * resulting point.
  */
@@ -644,7 +695,7 @@ static hal_error_t point_pick_random(const ecdsa_curve_t * const curve,
 
   do {
 
-    if ((err = hal_get_random(k_buf, sizeof(k_buf))) != HAL_OK)
+    if ((err = get_random(k_buf, sizeof(k_buf))) != HAL_OK)
       return err;
 
     fp_read_unsigned_bin(k, k_buf, sizeof(k_buf));

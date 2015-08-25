@@ -27,7 +27,7 @@
 
 INC	= ../hal.h
 LIB	= ../libhal.a
-BIN	= test-aes-key-wrap test-hash test-pbkdf2 test-rsa
+BIN	= test-aes-key-wrap test-hash test-pbkdf2 test-rsa test-ecdsa
 
 CFLAGS	= -g3 -Wall -fPIC -std=c99 -I..
 
