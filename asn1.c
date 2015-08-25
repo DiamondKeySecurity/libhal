@@ -85,6 +85,8 @@ hal_error_t hal_asn1_encode_header(const uint8_t tag,
   if (value_len + header_len > der_max)
     return HAL_ERROR_RESULT_TOO_LONG;
 
+  *der++ = tag;
+
   if (value_len < 128) {
     *der = (uint8_t) value_len;
   }

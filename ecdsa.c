@@ -1153,7 +1153,7 @@ hal_error_t hal_ecdsa_sign(const hal_ecdsa_key_t * const key,
 
   uint8_t * const r_out = signature + *signature_len;
   uint8_t * const s_out = r_out + r_len;
-  signature_len += r_len + s_len;
+  *signature_len += r_len + s_len;
   assert(*signature_len <= signature_max);
 
   if ((err = hal_asn1_encode_integer(r, r_out, NULL, signature_max - (r_out - signature))) != HAL_OK ||
