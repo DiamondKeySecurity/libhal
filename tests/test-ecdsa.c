@@ -163,6 +163,72 @@ static int test_keygen_static(const hal_ecdsa_curve_t curve)
 #endif /* HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM */
 
 /*
+ * Run one keygen/sign/verify test with a newly generated key.
+ */
+
+static int test_keygen_sign_verify(const hal_ecdsa_curve_t curve)
+
+{
+  const hal_hash_descriptor_t *hash_descriptor = NULL;
+  uint8_t keybuf[hal_ecdsa_key_t_size];
+  hal_ecdsa_key_t *key = NULL;
+  hal_error_t err;
+
+  switch (curve) {
+
+  case HAL_ECDSA_CURVE_P256:
+    printf("ECDSA P-256 key generation / signature / verification test\n");
+    hash_descriptor = hal_hash_sha256;
+    break;
+
+  case HAL_ECDSA_CURVE_P384:
+    printf("ECDSA P-384 key generation / signature / verification test\n");
+    hash_descriptor = hal_hash_sha384;
+    break;
+
+  case HAL_ECDSA_CURVE_P521:
+    printf("ECDSA P-521 key generation / signature / verification test\n");
+    hash_descriptor = hal_hash_sha512;
+    break;
+
+  default:
+    printf("Unsupported ECDSA curve type\n");
+    return 0;
+  }
+
+  if ((err =  hal_ecdsa_key_gen(&key, keybuf, sizeof(keybuf), curve)) != HAL_OK)
+    return printf("hal_ecdsa_key_gen() failed: %s\n", hal_error_string(err)), 0;
+
+  uint8_t hashbuf[hash_descriptor->digest_length];
+
+  {
+    const uint8_t plaintext[] = "So long, and thanks...";
+    uint8_t statebuf[hash_descriptor->hash_state_length];
+    hal_hash_state_t state = { NULL };
+
+    if ((err = hal_hash_initialize(hash_descriptor, &state, statebuf, sizeof(statebuf))) != HAL_OK ||
+        (err = hal_hash_update(state, plaintext, strlen((const char *) plaintext))) != HAL_OK ||
+        (err = hal_hash_finalize(state, hashbuf, sizeof(hashbuf))) != HAL_OK)
+      return printf("Couldn't hash plaintext: %s\n", hal_error_string(err)), 0;
+  }
+
+  /*
+   * Lazy but probably-good-enough guess on signature size -- want
+   * explicit number in ecdsa_curve_t?
+   */
+  uint8_t sigbuf[hash_descriptor->digest_length * 3];
+  size_t  siglen;
+
+  if ((err = hal_ecdsa_sign(key, hashbuf, sizeof(hashbuf), sigbuf, &siglen, sizeof(sigbuf))) != HAL_OK)
+    return printf("hal_ecdsa_sign() failed: %s\n", hal_error_string(err)), 0;
+
+  if ((err = hal_ecdsa_verify(key, hashbuf, sizeof(hashbuf), sigbuf, siglen)) != HAL_OK)
+    return printf("hal_ecdsa_verify() failed: %s\n", hal_error_string(err)), 0;
+
+  return 1;
+}
+
+/*
  * Time a test.
  */
 
@@ -200,7 +266,10 @@ static int test_ecdsa(const hal_ecdsa_curve_t curve)
 {
   int ok = 1;
 
-  time_check(test_keygen_static(curve));
+  if (curve == HAL_ECDSA_CURVE_P256 || curve == HAL_ECDSA_CURVE_P384)
+    time_check(test_keygen_static(curve));
+
+  time_check(test_keygen_sign_verify(curve));
 
   return ok;
 }
