@@ -942,18 +942,20 @@ hal_error_t hal_ecdsa_key_to_der(const hal_ecdsa_key_t * const key,
 
   hal_error_t err;
 
-  size_t version_len, hlen, hlen2, hlen3, hlen4;
+  size_t version_len, hlen, hlen_oct, hlen_oid, hlen_exp0, hlen_bit, hlen_exp1;
 
-  if ((err = hal_asn1_encode_integer(version,                           NULL, &version_len, 0)) != HAL_OK ||
-      (err = hal_asn1_encode_header(ASN1_OCTET_STRING, q_len,           NULL, &hlen2,       0)) != HAL_OK ||
-      (err = hal_asn1_encode_header(ASN1_EXPLICIT_0,   curve->oid_len,  NULL, &hlen3,       0)) != HAL_OK ||
-      (err = hal_asn1_encode_header(ASN1_EXPLICIT_1,   (q_len + 1) * 2, NULL, &hlen4,       0)) != HAL_OK)
+  if ((err = hal_asn1_encode_integer(version,                                    NULL, &version_len, 0)) != HAL_OK ||
+      (err = hal_asn1_encode_header(ASN1_OCTET_STRING,          q_len,           NULL, &hlen_oct,    0)) != HAL_OK ||
+      (err = hal_asn1_encode_header(ASN1_OBJECT_IDENTIFIER,     curve->oid_len,  NULL, &hlen_oid,    0)) != HAL_OK ||
+      (err = hal_asn1_encode_header(ASN1_EXPLICIT_0, hlen_oid + curve->oid_len,  NULL, &hlen_exp0,   0)) != HAL_OK ||
+      (err = hal_asn1_encode_header(ASN1_BIT_STRING,            (q_len + 1) * 2, NULL, &hlen_bit,    0)) != HAL_OK ||
+      (err = hal_asn1_encode_header(ASN1_EXPLICIT_1, hlen_bit + (q_len + 1) * 2, NULL, &hlen_exp1,   0)) != HAL_OK)
     return err;
   
-  const size_t vlen = (version_len    +
-                       hlen2 + q_len +
-                       hlen3 + curve->oid_len +
-                       hlen4  + (q_len + 1) * 2);
+  const size_t vlen = (version_len   +
+                       hlen_oct + q_len +
+                       hlen_oid + hlen_exp0 + curve->oid_len +
+                       hlen_bit + hlen_exp1 + (q_len + 1) * 2);
 
   if ((err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, der, &hlen, der_max)) != HAL_OK)
     return err;
@@ -971,21 +973,27 @@ hal_error_t hal_ecdsa_key_to_der(const hal_ecdsa_key_t * const key,
     return err;
   d += version_len;
 
-  if ((err = hal_asn1_encode_header(ASN1_OCTET_STRING, q_len, d, NULL, der + der_max - d)) != HAL_OK)
+  if ((err = hal_asn1_encode_header(ASN1_OCTET_STRING, q_len, d, &hlen, der + der_max - d)) != HAL_OK)
     return err;
-  d += hlen2;
+  d += hlen;
   fp_to_unsigned_bin(unconst_fp_int(key->d), d + q_len - d_len);
   d += q_len;
 
-  if ((err = hal_asn1_encode_header(ASN1_EXPLICIT_0, curve->oid_len, d, NULL, der + der_max - d)) != HAL_OK)
+  if ((err = hal_asn1_encode_header(ASN1_EXPLICIT_0, hlen_oid + curve->oid_len, d, &hlen, der + der_max - d)) != HAL_OK)
     return err;
-  d += hlen3;
+  d += hlen;
+  if ((err = hal_asn1_encode_header(ASN1_OBJECT_IDENTIFIER, curve->oid_len, d, &hlen, der + der_max - d)) != HAL_OK)
+    return err;
+  d += hlen;
   memcpy(d, curve->oid, curve->oid_len);
   d += curve->oid_len;
 
-  if ((err = hal_asn1_encode_header(ASN1_EXPLICIT_1, (q_len + 1) * 2, d, NULL, der + der_max - d)) != HAL_OK)
+  if ((err = hal_asn1_encode_header(ASN1_EXPLICIT_1, hlen_bit + (q_len + 1) * 2, d, &hlen, der + der_max - d)) != HAL_OK)
     return err;
-  d += hlen4;
+  d += hlen;
+  if ((err = hal_asn1_encode_header(ASN1_EXPLICIT_1, (q_len + 1) * 2, d, &hlen, der + der_max - d)) != HAL_OK)
+    return err;
+  d += hlen;
   *d++ = 0x00;
   *d++ = 0x04;
   fp_to_unsigned_bin(unconst_fp_int(key->d), d + q_len - Qx_len);
@@ -1046,6 +1054,11 @@ hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key_,
   if ((err = hal_asn1_decode_header(ASN1_EXPLICIT_0, d, der_end - d, &hlen, &vlen)) != HAL_OK)
     return err;
   d += hlen;
+  if (vlen > der_end - d)
+    lose(HAL_ERROR_ASN1_PARSE_FAILED);
+  if ((err = hal_asn1_decode_header(ASN1_OBJECT_IDENTIFIER, d, vlen, &hlen, &vlen)) != HAL_OK)
+    return err;
+  d += hlen;
   for (key->curve = (hal_ecdsa_curve_t) 0; (curve = get_curve(key->curve)) != NULL; key->curve++)
     if (vlen == curve->oid_len && memcmp(d, curve->oid, vlen) == 0)
       break;
@@ -1054,6 +1067,11 @@ hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key_,
   d += vlen;
   
   if ((err = hal_asn1_decode_header(ASN1_EXPLICIT_1, d, der_end - d, &hlen, &vlen)) != HAL_OK)
+    return err;
+  d += hlen;
+  if (vlen > der_end - d)
+    lose(HAL_ERROR_ASN1_PARSE_FAILED);
+  if ((err = hal_asn1_decode_header(ASN1_BIT_STRING, d, vlen, &hlen, &vlen)) != HAL_OK)
     return err;
   d += hlen;
   if (vlen < 4 || (vlen & 1) != 0 || *d++ != 0x00 || *d++ != 0x04)
