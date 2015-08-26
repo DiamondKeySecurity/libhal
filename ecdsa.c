@@ -991,14 +991,14 @@ hal_error_t hal_ecdsa_key_to_der(const hal_ecdsa_key_t * const key,
   if ((err = hal_asn1_encode_header(ASN1_EXPLICIT_1, hlen_bit + (q_len + 1) * 2, d, &hlen, der + der_max - d)) != HAL_OK)
     return err;
   d += hlen;
-  if ((err = hal_asn1_encode_header(ASN1_EXPLICIT_1, (q_len + 1) * 2, d, &hlen, der + der_max - d)) != HAL_OK)
+  if ((err = hal_asn1_encode_header(ASN1_BIT_STRING, (q_len + 1) * 2, d, &hlen, der + der_max - d)) != HAL_OK)
     return err;
   d += hlen;
   *d++ = 0x00;
   *d++ = 0x04;
-  fp_to_unsigned_bin(unconst_fp_int(key->d), d + q_len - Qx_len);
+  fp_to_unsigned_bin(unconst_fp_int(key->Q->x), d + q_len - Qx_len);
   d += q_len;
-  fp_to_unsigned_bin(unconst_fp_int(key->d), d + q_len - Qy_len);
+  fp_to_unsigned_bin(unconst_fp_int(key->Q->y), d + q_len - Qy_len);
   d += q_len;
 
   assert(d == der + der_max);
@@ -1079,12 +1079,14 @@ hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key_,
   vlen = vlen/2 - 1;
   fp_read_unsigned_bin(key->Q->x, unconst_uint8_t(d), vlen);
   d += vlen;
-  fp_read_unsigned_bin(key->Q->x, unconst_uint8_t(d), vlen);
+  fp_read_unsigned_bin(key->Q->y, unconst_uint8_t(d), vlen);
   d += vlen;
+  fp_set(key->Q->z, 1);
 
   if (d != der_end)
     lose(HAL_ERROR_ASN1_PARSE_FAILED);
 
+  *key_ = key;
   return HAL_OK;
 
  fail:

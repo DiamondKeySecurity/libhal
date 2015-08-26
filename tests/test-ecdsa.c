@@ -157,7 +157,7 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
 
   set_next_random(tc->k, tc->k_len);
 
-  uint8_t sig[tc->sig_len];
+  uint8_t sig[tc->sig_len + 4];
   size_t  sig_len;
 
   if ((err = hal_ecdsa_sign(key1, tc->H, tc->H_len, sig, &sig_len, sizeof(sig))) != HAL_OK)
