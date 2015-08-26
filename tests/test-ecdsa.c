@@ -115,7 +115,7 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
 {
   hal_error_t err;
 
-  printf("Starting static test vector tests for P-%d\n", tc->d_len * 8);
+  printf("Starting static test vector tests for P-%lu\n", (unsigned long) (tc->d_len * 8));
 
   set_next_random(tc->d, tc->d_len);
 

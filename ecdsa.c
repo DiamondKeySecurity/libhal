@@ -79,7 +79,7 @@
  */
 
 #ifndef HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM
-#define HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM 1
+#define HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM 0
 #endif
 
 /*
@@ -1122,7 +1122,7 @@ hal_error_t hal_ecdsa_sign(const hal_ecdsa_key_t * const key,
 
   hal_error_t err;
 
-  fp_read_unsigned_bin(e, unconst_uint8_t(hash), sizeof(hash_len));
+  fp_read_unsigned_bin(e, unconst_uint8_t(hash), hash_len);
 
   do {
 
@@ -1246,7 +1246,7 @@ hal_error_t hal_ecdsa_verify(const hal_ecdsa_key_t * const key,
       fp_cmp_d(s, 1) == FP_LT || fp_cmp(s, n) != FP_LT)
     return HAL_ERROR_INVALID_SIGNATURE;
 
-  fp_read_unsigned_bin(e, unconst_uint8_t(hash), sizeof(hash_len));
+  fp_read_unsigned_bin(e, unconst_uint8_t(hash), hash_len);
 
   if (fp_invmod(s, n, w)     != FP_OKAY ||
       fp_mulmod(e, w, n, u1) != FP_OKAY ||
