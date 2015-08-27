@@ -57,15 +57,6 @@
 
 #include "test-ecdsa.h"
 
-/*
- * Supplied test vectors don't use ASN.1 encoding.  Don't want to
- * trust our own ASN.1 code for this (it's one of the things we're
- * testing) so use Python pyasn1 or ecdsa.der code to build what we
- * need and supply them as test vector data too.  This is probably
- * also the right way to test our encoding and decoding of private
- * keys too.
- */
-
 #if HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM
 
 /*

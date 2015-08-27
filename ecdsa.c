@@ -1,15 +1,17 @@
 /*
  * ecdsa.c
  * -------
- * Basic ECDSA functions.
+ * Elliptic Curve Digital Signature Algorithm for NIST prime curves.
  *
- * At some point we may want to refactor this to separate
- * functionality that appiles to all elliptic curve cryptography from
- * functions specific to ECDSA over the NIST Suite B prime curves, but
- * it's simplest to keep this all in one place initially.
+ * At some point we may want to refactor this code to separate
+ * functionality that applies to all elliptic curve cryptography into
+ * a separate module from functions specific to ECDSA over the NIST
+ * prime curves, but it's simplest to keep this all in one place
+ * initially.
  *
  * Much of the code in this module is based, at least loosely, on Tom
- * St Denis's libtomcrypt code.  
+ * St Denis's libtomcrypt code.  Algorithms for point addition and
+ * point doubling courtesy of the hyperelliptic.org formula database.
  *
  * Authors: Rob Austein
  * Copyright (c) 2015, SUNET
@@ -55,6 +57,7 @@
  *
  * We use a lot of one-element arrays (fp_int[1] instead of plain
  * fp_int) to avoid having to prefix every use of an fp_int with "&".
+ * Perhaps we should encapsulate this idiom in a typedef.
  *
  * Unfortunately, libtfm is bad about const-ification, but we want to
  * hide that from our users, so our public API uses const as
@@ -632,7 +635,7 @@ static hal_error_t point_scalar_multiply(const fp_int * const k,
 
 #if HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM
 
-#warning hal_ecdsa random number generator overriden for test purposes
+#warning hal_ecdsa random number generator overridden for test purposes
 #warning DO NOT USE THIS IN PRODUCTION
 
 typedef hal_error_t (*rng_override_test_function_t)(void *, const size_t);
@@ -719,8 +722,9 @@ static hal_error_t point_pick_random(const ecdsa_curve_t * const curve,
 }
 
 /*
- * Test whether a point really is on a particular curve (sometimes
- * called "validation when applied to a public key").
+ * Test whether a point really is on a particular curve.  This is
+ * called "validation" when applied to a public key, and is required
+ * before verifying a signature.
  */
 
 static int point_is_on_curve(const ec_point_t * const P,
@@ -891,7 +895,9 @@ hal_error_t hal_ecdsa_key_load_public(hal_ecdsa_key_t **key_,
 }
 
 /*
- * Load a private key from components.
+ * Load a private key from components; does all the same things as
+ * hal_ecdsa_key_load_public(), then loads the private key itself and
+ * adjusts the key type.
  *
  * For extra paranoia, we could check Q == dG.
  */
@@ -919,6 +925,9 @@ hal_error_t hal_ecdsa_key_load_private(hal_ecdsa_key_t **key_,
 
 /*
  * Write private key in RFC 5915 ASN.1 DER format.
+ *
+ * This is hand-coded, and is approaching the limit where one should
+ * probably be using an ASN.1 compiler like asn1c instead.
  */
 
 hal_error_t hal_ecdsa_key_to_der(const hal_ecdsa_key_t * const key,
@@ -1006,6 +1015,11 @@ hal_error_t hal_ecdsa_key_to_der(const hal_ecdsa_key_t * const key,
   return HAL_OK;
 }
 
+/*
+ * Convenience wrapper to return how many bytes a private key would
+ * take if encoded as DER.
+ */
+
 size_t hal_ecdsa_key_to_der_len(const hal_ecdsa_key_t * const key)
 {
   size_t len;
@@ -1014,6 +1028,9 @@ size_t hal_ecdsa_key_to_der_len(const hal_ecdsa_key_t * const key)
 
 /*
  * Read private key in RFC 5915 ASN.1 DER format.
+ *
+ * This is hand-coded, and is approaching the limit where one should
+ * probably be using an ASN.1 compiler like asn1c instead.
  */
 
 hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key_,
@@ -1127,7 +1144,7 @@ hal_error_t hal_ecdsa_sign(const hal_ecdsa_key_t * const key,
   do {
 
     /*
-     * Pick random curve point R, then calculate r = R.x % n.
+     * Pick random curve point R, then calculate r = Rx % n.
      * If r == 0, we can't use this point, so go try again.
      */
 
@@ -1188,6 +1205,10 @@ hal_error_t hal_ecdsa_sign(const hal_ecdsa_key_t * const key,
   return err;
 }
 
+/*
+ * Verify a signature using a caller-supplied hash.
+ */
+
 hal_error_t hal_ecdsa_verify(const hal_ecdsa_key_t * const key,
                                   const uint8_t * const hash, const size_t hash_len,
                                   const uint8_t * const signature, const size_t signature_len)
@@ -1198,6 +1219,9 @@ hal_error_t hal_ecdsa_verify(const hal_ecdsa_key_t * const key,
 
   if (curve == NULL)
     return HAL_ERROR_IMPOSSIBLE;
+
+  if (!point_is_on_curve(key->Q, curve))
+    return HAL_ERROR_KEY_NOT_ON_CURVE;
 
   fp_int * const n = unconst_fp_int(curve->n);
 
@@ -1212,7 +1236,7 @@ hal_error_t hal_ecdsa_verify(const hal_ecdsa_key_t * const key,
   memset(R,   0, sizeof(R));
 
   /*
-   * First, we have to parse the ASN.1 SEQUENCE { INTEGER r, INTEGER s }.
+   * Parse the ASN.1 SEQUENCE { INTEGER r, INTEGER s }.
    */
 
   if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, signature, signature_len, &len1, &len2)) != HAL_OK)

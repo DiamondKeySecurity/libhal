@@ -60,7 +60,7 @@ def long_to_bytes(l):
 def bytes_to_bits(b):
   #
   # This, on the other hand, is not just plain nasty, this is fancy nasty.
-  # This is nasty with rasins in it.
+  # This is nasty with raisins in it.
   #
   bits = bin(long(b.encode("hex"), 16))[2:]
   if len(bits) % 8:
