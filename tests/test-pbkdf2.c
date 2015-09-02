@@ -163,7 +163,7 @@ static int _test_pbkdf2(const uint8_t * const pwd,  const size_t pwd_len,
                         const uint8_t * const dk,   const size_t dk_len,
                         const unsigned count, const char * const label)
 {
-  printf("Starting test case %s\n", label);
+  printf("Starting PBKDF2 test case %s\n", label);
 
   uint8_t result[dk_len];
 
