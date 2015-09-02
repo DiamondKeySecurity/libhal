@@ -68,6 +68,23 @@
 #define ASN1_EXPLICIT_0         (ASN1_EXPLICIT_CONTEXT + 0)
 #define ASN1_EXPLICIT_1         (ASN1_EXPLICIT_CONTEXT + 1)
 
+/*
+ * Functions to strip const qualifiers from arguments to libtfm calls
+ * in a relatively type-safe manner.  These don't really have anything
+ * to do with ASN.1 per se, but all the code that needs them reads
+ * this header file, so this is the simplest place to put them.
+ */
+
+static inline fp_int *unconst_fp_int(const fp_int * const arg)
+{
+  return (fp_int *) arg;
+}
+
+static inline uint8_t *unconst_uint8_t(const uint8_t * const arg)
+{
+  return (uint8_t *) arg;
+}
+
 extern hal_error_t hal_asn1_encode_header(const uint8_t tag,
                                           const size_t value_len,
                                           uint8_t *der, size_t *der_len, const size_t der_max);
@@ -76,7 +93,7 @@ extern hal_error_t hal_asn1_decode_header(const uint8_t tag,
                                           const uint8_t * const der, size_t der_max,
                                           size_t *hlen, size_t *vlen);
 
-extern hal_error_t hal_asn1_encode_integer(fp_int *bn,
+extern hal_error_t hal_asn1_encode_integer(const fp_int * const bn,
                                            uint8_t *der, size_t *der_len, const size_t der_max);
 
 extern hal_error_t hal_asn1_decode_integer(fp_int *bn,

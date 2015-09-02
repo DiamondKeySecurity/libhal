@@ -58,7 +58,7 @@ static hal_error_t do_hmac(const hal_hash_descriptor_t * const d,
   assert(d != NULL && pw != NULL && data != NULL && mac != NULL);
 
   uint8_t sb[d->hmac_state_length];
-  hal_hmac_state_t s;
+  hal_hmac_state_t *s;
   hal_error_t err;
 
   if ((err = hal_hmac_initialize(d, &s, sb, sizeof(sb), pw, pw_len)) != HAL_OK)

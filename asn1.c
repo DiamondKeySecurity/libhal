@@ -105,7 +105,7 @@ hal_error_t hal_asn1_encode_header(const uint8_t tag,
  * NULL, just return the length of what we would have encoded.
  */
 
-hal_error_t hal_asn1_encode_integer(fp_int *bn,
+hal_error_t hal_asn1_encode_integer(const fp_int * const bn,
 				    uint8_t *der, size_t *der_len, const size_t der_max)
 {
   if (bn == NULL)
@@ -118,11 +118,11 @@ hal_error_t hal_asn1_encode_integer(fp_int *bn,
    * difference between libtfm's and ASN.1's encoding of zero.
    */
 
-  if (fp_cmp_d(bn, 0) == FP_LT)
+  if (fp_cmp_d(unconst_fp_int(bn), 0) == FP_LT)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  const int leading_zero = fp_iszero(bn) || (fp_count_bits(bn) & 7) == 0;
-  const size_t vlen = fp_unsigned_bin_size(bn) + leading_zero;
+  const int leading_zero = fp_iszero(bn) || (fp_count_bits(unconst_fp_int(bn)) & 7) == 0;
+  const size_t vlen = fp_unsigned_bin_size(unconst_fp_int(bn)) + leading_zero;
   hal_error_t err;
   size_t hlen;
 
@@ -141,7 +141,7 @@ hal_error_t hal_asn1_encode_integer(fp_int *bn,
   der += hlen;
   if (leading_zero)
     *der++ = 0x00;
-  fp_to_unsigned_bin(bn, der);
+  fp_to_unsigned_bin(unconst_fp_int(bn), der);
 
   return HAL_OK;
 }

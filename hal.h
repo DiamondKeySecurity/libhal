@@ -503,6 +503,12 @@ extern hal_error_t hal_get_random(void *buffer, const size_t length);
 #define HAL_MAX_HASH_DIGEST_LENGTH      SHA512_DIGEST_LEN
 
 /*
+ * Opaque driver structure for digest algorithms.
+ */
+
+typedef struct hal_hash_driver hal_hash_driver_t;
+
+/*
  * Public information about a digest algorithm.
  *
  * The _state_length values in the descriptor and the typed opaque
@@ -518,15 +524,15 @@ typedef struct {
   size_t hmac_state_length;
   const uint8_t * const digest_algorithm_id;
   size_t digest_algorithm_id_length;
-  const void *driver;
+  const hal_hash_driver_t *driver;
 } hal_hash_descriptor_t;
 
 /*
- * Typed opaque pointers to internal state.
+ * Opaque pointers to internal state.
  */
 
-typedef struct { void *state; } hal_hash_state_t;
-typedef struct { void *state; } hal_hmac_state_t;
+typedef struct hal_hash_state hal_hash_state_t;
+typedef struct hal_hmac_state hal_hmac_state_t;
 
 /*
  * Supported digest algorithms.  These are one-element arrays so that
@@ -549,24 +555,24 @@ extern void hal_hash_set_debug(int onoff);
 extern hal_error_t hal_hash_core_present(const hal_hash_descriptor_t * const descriptor);
 
 extern hal_error_t hal_hash_initialize(const hal_hash_descriptor_t * const descriptor,
-                                       hal_hash_state_t *state,
+                                       hal_hash_state_t **state,
                                        void *state_buffer, const size_t state_length);
 
-extern hal_error_t hal_hash_update(const hal_hash_state_t state,
+extern hal_error_t hal_hash_update(hal_hash_state_t *state,
                                    const uint8_t * data, const size_t length);
 
-extern hal_error_t hal_hash_finalize(const hal_hash_state_t state,
+extern hal_error_t hal_hash_finalize(hal_hash_state_t *state,
                                      uint8_t *digest, const size_t length);
 
 extern hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
-                                       hal_hmac_state_t *state,
+                                       hal_hmac_state_t **state,
                                        void *state_buffer, const size_t state_length,
                                        const uint8_t * const key, const size_t key_length);
 
-extern hal_error_t hal_hmac_update(const hal_hmac_state_t state,
+extern hal_error_t hal_hmac_update(hal_hmac_state_t *state,
                                    const uint8_t * data, const size_t length);
 
-extern hal_error_t hal_hmac_finalize(const hal_hmac_state_t state,
+extern hal_error_t hal_hmac_finalize(hal_hmac_state_t *state,
                                      uint8_t *hmac, const size_t length);
 
 /*
@@ -612,7 +618,7 @@ extern hal_error_t hal_modexp(const uint8_t * const msg, const size_t msg_len, /
 
 typedef enum { HAL_RSA_PRIVATE, HAL_RSA_PUBLIC } hal_rsa_key_type_t;
 
-typedef struct { void *key; } hal_rsa_key_t;
+typedef struct hal_rsa_key hal_rsa_key_t;
 
 extern const size_t hal_rsa_key_t_size;
 
@@ -620,7 +626,7 @@ extern void hal_rsa_set_debug(const int onoff);
 
 extern void hal_rsa_set_blinding(const int onoff);
 
-extern hal_error_t hal_rsa_key_load_private(hal_rsa_key_t *key,
+extern hal_error_t hal_rsa_key_load_private(hal_rsa_key_t **key,
                                             void *keybuf, const size_t keybuf_len,
                                             const uint8_t * const n,  const size_t n_len,
                                             const uint8_t * const e,  const size_t e_len,
@@ -631,45 +637,45 @@ extern hal_error_t hal_rsa_key_load_private(hal_rsa_key_t *key,
                                             const uint8_t * const dP, const size_t dP_len,
                                             const uint8_t * const dQ, const size_t dQ_len);
 
-extern hal_error_t hal_rsa_key_load_public(hal_rsa_key_t *key,
+extern hal_error_t hal_rsa_key_load_public(hal_rsa_key_t **key,
                                            void *keybuf, const size_t keybuf_len,
                                            const uint8_t * const n,  const size_t n_len,
                                            const uint8_t * const e,  const size_t e_len);
 
-extern hal_error_t hal_rsa_key_get_type(hal_rsa_key_t key,
+extern hal_error_t hal_rsa_key_get_type(const hal_rsa_key_t *key,
                                         hal_rsa_key_type_t *key_type);
 
-extern hal_error_t hal_rsa_key_get_modulus(hal_rsa_key_t key,
+extern hal_error_t hal_rsa_key_get_modulus(const hal_rsa_key_t *key,
                                            uint8_t *modulus,
                                            size_t *modulus_len,
                                            const size_t modulus_max);
 
-extern hal_error_t hal_rsa_key_get_public_exponent(hal_rsa_key_t key,
+extern hal_error_t hal_rsa_key_get_public_exponent(const hal_rsa_key_t *key,
                                                    uint8_t *public_exponent,
                                                    size_t *public_exponent_len,
                                                    const size_t public_exponent_max);
 
-extern void hal_rsa_key_clear(hal_rsa_key_t key);
+extern void hal_rsa_key_clear(hal_rsa_key_t *key);
 
-extern hal_error_t hal_rsa_encrypt(hal_rsa_key_t key,
+extern hal_error_t hal_rsa_encrypt(const hal_rsa_key_t *key,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * output, const size_t output_len);
 
-extern hal_error_t hal_rsa_decrypt(hal_rsa_key_t key,
+extern hal_error_t hal_rsa_decrypt(const hal_rsa_key_t *key,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * output, const size_t output_len);
 
-extern hal_error_t hal_rsa_key_gen(hal_rsa_key_t *key,
+extern hal_error_t hal_rsa_key_gen(hal_rsa_key_t **key,
                                    void *keybuf, const size_t keybuf_len,
                                    const unsigned key_length,
                                    const uint8_t * const public_exponent, const size_t public_exponent_len);
 
-extern hal_error_t hal_rsa_key_to_der(hal_rsa_key_t key,
+extern hal_error_t hal_rsa_key_to_der(const hal_rsa_key_t *key,
                                       uint8_t *der, size_t *der_len, const size_t der_max);
 
-extern size_t hal_rsa_key_to_der_len(hal_rsa_key_t key);
+extern size_t hal_rsa_key_to_der_len(hal_rsa_key_t *key);
 
-extern hal_error_t hal_rsa_key_from_der(hal_rsa_key_t *key,
+extern hal_error_t hal_rsa_key_from_der(hal_rsa_key_t **key,
                                         void *keybuf, const size_t keybuf_len,
                                         const uint8_t * const der, const size_t der_len);
 

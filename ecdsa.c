@@ -153,21 +153,6 @@ const size_t hal_ecdsa_key_t_size = sizeof(struct hal_ecdsa_key);
 #define lose(_code_) do { err = _code_; goto fail; } while (0)
 
 /*
- * Functions to strip const qualifiers from arguments to libtfm calls
- * in a relatively type-safe manner.
- */
-
-static inline fp_int *unconst_fp_int(const fp_int * const arg)
-{
-  return (fp_int *) arg;
-}
-
-static inline uint8_t *unconst_uint8_t(const uint8_t * const arg)
-{
-  return (uint8_t *) arg;
-}
-
-/*
  * We can't (usefully) initialize fp_int variables at compile time, so
  * instead we load all the curve parameters the first time anything
  * asks for any of them.

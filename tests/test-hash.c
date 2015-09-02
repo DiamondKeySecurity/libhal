@@ -533,7 +533,7 @@ static int _test_hash(const hal_hash_descriptor_t * const descriptor,
                       const char * const label)
 {
   uint8_t statebuf[512], digest[512];
-  hal_hash_state_t state;
+  hal_hash_state_t *state = NULL;
   hal_error_t err;
 
   assert(descriptor != NULL && data != NULL && result != NULL && label != NULL);
@@ -597,7 +597,7 @@ static int _test_hmac(const hal_hash_descriptor_t * const descriptor,
                       const char * const label)
 {
   uint8_t statebuf[1024], digest[512];
-  hal_hmac_state_t state;
+  hal_hmac_state_t *state = NULL;
   hal_error_t err;
 
   assert(descriptor != NULL && data != NULL && result != NULL && label != NULL);

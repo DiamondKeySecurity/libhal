@@ -227,7 +227,7 @@ static int test_keygen_sign_verify(const hal_ecdsa_curve_t curve)
   {
     const uint8_t plaintext[] = "So long, and thanks...";
     uint8_t statebuf[hash_descriptor->hash_state_length];
-    hal_hash_state_t state = { NULL };
+    hal_hash_state_t *state = NULL;
 
     if ((err = hal_hash_initialize(hash_descriptor, &state, statebuf, sizeof(statebuf))) != HAL_OK ||
         (err = hal_hash_update(state, plaintext, strlen((const char *) plaintext))) != HAL_OK ||
