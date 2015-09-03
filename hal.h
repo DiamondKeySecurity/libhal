@@ -687,6 +687,8 @@ typedef enum { HAL_ECDSA_PRIVATE, HAL_ECDSA_PUBLIC } hal_ecdsa_key_type_t;
 
 typedef enum { HAL_ECDSA_CURVE_P256, HAL_ECDSA_CURVE_P384, HAL_ECDSA_CURVE_P521 } hal_ecdsa_curve_t;
 
+typedef enum { HAL_ECDSA_SIGNATURE_FORMAT_ASN1, HAL_ECDSA_SIGNATURE_FORMAT_PKCS11 } hal_ecdsa_signature_format_t;
+
 typedef struct hal_ecdsa_key hal_ecdsa_key_t;
 
 extern const size_t hal_ecdsa_key_t_size;
@@ -733,11 +735,13 @@ extern hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key,
 
 extern hal_error_t hal_ecdsa_sign(const hal_ecdsa_key_t * const key,
                                   const uint8_t * const hash, const size_t hash_len,
-                                  uint8_t *signature, size_t *signature_len, const size_t signature_max);
+                                  uint8_t *signature, size_t *signature_len, const size_t signature_max,
+                                  const hal_ecdsa_signature_format_t signature_format);
 
 extern hal_error_t hal_ecdsa_verify(const hal_ecdsa_key_t * const key,
                                   const uint8_t * const hash, const size_t hash_len,
-                                  const uint8_t * const signature, const size_t signature_len);
+                                  const uint8_t * const signature, const size_t signature_len,
+                                  const hal_ecdsa_signature_format_t signature_format);
 
 #endif /* _HAL_H_ */
 

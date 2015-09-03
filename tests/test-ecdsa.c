@@ -151,13 +151,13 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
   uint8_t sig[tc->sig_len + 4];
   size_t  sig_len;
 
-  if ((err = hal_ecdsa_sign(key1, tc->H, tc->H_len, sig, &sig_len, sizeof(sig))) != HAL_OK)
+  if ((err = hal_ecdsa_sign(key1, tc->H, tc->H_len, sig, &sig_len, sizeof(sig), HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
     return printf("hal_ecdsa_sign() failed: %s\n", hal_error_string(err)), 0;
 
   if (sig_len != tc->sig_len || memcmp(sig, tc->sig, tc->sig_len) != 0)
     return printf("Signature mismatch\n"), 0;
 
-  if ((err = hal_ecdsa_verify(key2, tc->H, tc->H_len, sig, sig_len)) != HAL_OK)
+  if ((err = hal_ecdsa_verify(key2, tc->H, tc->H_len, sig, sig_len, HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
     return printf("hal_ecdsa_verify(private) failed: %s\n", hal_error_string(err)), 0;
 
   hal_ecdsa_key_clear(key2);
@@ -177,7 +177,7 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
                                        tc->Qx, tc->Qx_len, tc->Qy, tc->Qy_len)) != HAL_OK)
     return printf("hal_ecdsa_load_public() failed: %s\n", hal_error_string(err)), 0;
 
-  if ((err = hal_ecdsa_verify(key2, tc->H, tc->H_len, sig, sig_len)) != HAL_OK)
+  if ((err = hal_ecdsa_verify(key2, tc->H, tc->H_len, sig, sig_len, HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
     return printf("hal_ecdsa_verify(public) failed: %s\n", hal_error_string(err)), 0;
 
   return 1;
@@ -242,10 +242,12 @@ static int test_keygen_sign_verify(const hal_ecdsa_curve_t curve)
   uint8_t sigbuf[hash_descriptor->digest_length * 3];
   size_t  siglen;
 
-  if ((err = hal_ecdsa_sign(key, hashbuf, sizeof(hashbuf), sigbuf, &siglen, sizeof(sigbuf))) != HAL_OK)
+  if ((err = hal_ecdsa_sign(key, hashbuf, sizeof(hashbuf),
+                            sigbuf, &siglen, sizeof(sigbuf), HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
     return printf("hal_ecdsa_sign() failed: %s\n", hal_error_string(err)), 0;
 
-  if ((err = hal_ecdsa_verify(key, hashbuf, sizeof(hashbuf), sigbuf, siglen)) != HAL_OK)
+  if ((err = hal_ecdsa_verify(key, hashbuf, sizeof(hashbuf),
+                              sigbuf, siglen, HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
     return printf("hal_ecdsa_verify() failed: %s\n", hal_error_string(err)), 0;
 
   return 1;
