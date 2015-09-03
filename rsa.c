@@ -246,7 +246,7 @@ static hal_error_t modexp(const fp_int * const msg,
  * try.  Come back to this if it looks like a bottleneck.
  */
 
-static hal_error_t create_blinding_factors(const hal_rsa_key_t *key, fp_int *bf, fp_int *ubf)
+static hal_error_t create_blinding_factors(const hal_rsa_key_t * const key, fp_int *bf, fp_int *ubf)
 {
   assert(key != NULL && bf != NULL && ubf != NULL);
 
@@ -274,7 +274,7 @@ static hal_error_t create_blinding_factors(const hal_rsa_key_t *key, fp_int *bf,
  * RSA decryption via Chinese Remainder Theorem (Garner's formula).
  */
 
-static hal_error_t rsa_crt(const hal_rsa_key_t *key, fp_int *msg, fp_int *sig)
+static hal_error_t rsa_crt(const hal_rsa_key_t * const key, fp_int *msg, fp_int *sig)
 {
   assert(key != NULL && msg != NULL && sig != NULL);
 
@@ -345,7 +345,7 @@ static hal_error_t rsa_crt(const hal_rsa_key_t *key, fp_int *msg, fp_int *sig)
  * to the caller.
  */
 
-hal_error_t hal_rsa_encrypt(const hal_rsa_key_t *key,
+hal_error_t hal_rsa_encrypt(const hal_rsa_key_t * const key,
                             const uint8_t * const input,  const size_t input_len,
                             uint8_t * output, const size_t output_len)
 {
@@ -370,7 +370,7 @@ hal_error_t hal_rsa_encrypt(const hal_rsa_key_t *key,
   return err;
 }
 
-hal_error_t hal_rsa_decrypt(const hal_rsa_key_t *key,
+hal_error_t hal_rsa_decrypt(const hal_rsa_key_t * const key,
                             const uint8_t * const input,  const size_t input_len,
                             uint8_t * output, const size_t output_len)
 {
@@ -496,7 +496,7 @@ hal_error_t hal_rsa_key_load_public(hal_rsa_key_t **key_,
  * Extract the key type.
  */
 
-hal_error_t hal_rsa_key_get_type(const hal_rsa_key_t *key,
+hal_error_t hal_rsa_key_get_type(const hal_rsa_key_t * const key,
                                  hal_rsa_key_type_t *key_type)
 {
   if (key == NULL || key_type == NULL)
@@ -510,7 +510,8 @@ hal_error_t hal_rsa_key_get_type(const hal_rsa_key_t *key,
  * Extract public key components.
  */
 
-static hal_error_t extract_component(const hal_rsa_key_t *key, const size_t offset,
+static hal_error_t extract_component(const hal_rsa_key_t * const key,
+                                     const size_t offset,
                                      uint8_t *res, size_t *res_len, const size_t res_max)
 {
   if (key == NULL)
@@ -534,13 +535,13 @@ static hal_error_t extract_component(const hal_rsa_key_t *key, const size_t offs
   return HAL_OK;
 }
 
-hal_error_t hal_rsa_key_get_modulus(const hal_rsa_key_t *key,
+hal_error_t hal_rsa_key_get_modulus(const hal_rsa_key_t * const key,
                                     uint8_t *res, size_t *res_len, const size_t res_max)
 {
   return extract_component(key, offsetof(hal_rsa_key_t, n), res, res_len, res_max);
 }
 
-hal_error_t hal_rsa_key_get_public_exponent(const hal_rsa_key_t *key,
+hal_error_t hal_rsa_key_get_public_exponent(const hal_rsa_key_t * const key,
                                             uint8_t *res, size_t *res_len, const size_t res_max)
 {
   return extract_component(key, offsetof(hal_rsa_key_t, e), res, res_len, res_max);
@@ -655,7 +656,7 @@ hal_error_t hal_rsa_key_gen(hal_rsa_key_t **key_,
   _(&key->dQ);                  \
   _(&key->u);
 
-hal_error_t hal_rsa_key_to_der(const hal_rsa_key_t *key,
+hal_error_t hal_rsa_key_to_der(const hal_rsa_key_t * const key,
                                uint8_t *der, size_t *der_len, const size_t der_max)
 {
   hal_error_t err = HAL_OK;
@@ -702,7 +703,7 @@ hal_error_t hal_rsa_key_to_der(const hal_rsa_key_t *key,
   return HAL_OK;
 }
 
-size_t hal_rsa_key_to_der_len(hal_rsa_key_t *key)
+size_t hal_rsa_key_to_der_len(const hal_rsa_key_t * const key)
 {
   size_t len = 0;
   return hal_rsa_key_to_der(key, NULL, &len, 0) == HAL_OK ? len : 0;
