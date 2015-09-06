@@ -1,12 +1,12 @@
-/* 
+/*
  * novena-eim.c
  * ------------
  * This module contains the userland magic to set up and use the EIM bus.
  *
- * 
+ *
  * Author: Pavel Shatov
  * Copyright (c) 2014-2015, NORDUnet A/S All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -118,9 +118,9 @@ enum IMX6DQ_REGISTER_OFFSET
         IOMUXC_SW_PAD_CTL_PAD_EIM_AD15          = 0x020E0464,
         IOMUXC_SW_PAD_CTL_PAD_EIM_WAIT_B        = 0x020E0468,
         IOMUXC_SW_PAD_CTL_PAD_EIM_BCLK          = 0x020E046C,
-        
+
         CCM_CCGR6                               = 0x020C4080,
-        
+
         EIM_CS0GCR1                             = 0x021B8000,
         EIM_CS0GCR2                             = 0x021B8004,
         EIM_CS0RCR1                             = 0x021B8008,
@@ -166,17 +166,17 @@ struct CCM_CCGR6
         unsigned int    cg1_usdhc1              : 2;
         unsigned int    cg2_usdhc2              : 2;
         unsigned int    cg3_usdhc3              : 2;
-        
+
         unsigned int    cg3_usdhc4              : 2;
         unsigned int    cg5_eim_slow            : 2;
         unsigned int    cg6_vdoaxiclk           : 2;
         unsigned int    cg7_vpu                 : 2;
-        
+
         unsigned int    cg8_reserved            : 2;
         unsigned int    cg9_reserved            : 2;
         unsigned int    cg10_reserved           : 2;
         unsigned int    cg11_reserved           : 2;
-        
+
         unsigned int    cg12_reserved           : 2;
         unsigned int    cg13_reserved           : 2;
         unsigned int    cg14_reserved           : 2;

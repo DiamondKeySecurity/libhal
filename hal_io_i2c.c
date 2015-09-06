@@ -1,11 +1,11 @@
-/* 
+/*
  * hal_io_i2c.c
  * ------------
  * This module contains common code to talk to the FPGA over the I2C bus.
- * 
+ *
  * Author: Paul Selkirk
  * Copyright (c) 2014-2015, NORDUnet A/S All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:

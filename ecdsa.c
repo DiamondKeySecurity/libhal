@@ -250,7 +250,7 @@ static inline void ff_add(const ecdsa_curve_t * const curve,
 }
 
 static inline void ff_sub(const ecdsa_curve_t * const curve,
-                          const fp_int * const a, 
+                          const fp_int * const a,
                           const fp_int * const b,
                           fp_int *c)
 {
@@ -408,7 +408,7 @@ static inline void point_add(const ec_point_t * const P,
 
     if (fp_cmp(unconst_fp_int(P->y), unconst_fp_int(Q->y)) == FP_EQ)
       return point_double(P, R, curve);
-    
+
     fp_int Qy_neg[1];
     fp_sub(unconst_fp_int(curve->q), unconst_fp_int(Q->y), Qy_neg);
     const int zero_sum = fp_cmp(unconst_fp_int(P->y), Qy_neg) == FP_EQ;
@@ -717,7 +717,7 @@ static int point_is_on_curve(const ec_point_t * const P,
 {
   assert(P != NULL && curve != NULL);
 
-  fp_int t1[1]; fp_init(t1); 
+  fp_int t1[1]; fp_init(t1);
   fp_int t2[1]; fp_init(t2);
 
   /*
@@ -909,6 +909,117 @@ hal_error_t hal_ecdsa_key_load_private(hal_ecdsa_key_t **key_,
 }
 
 /*
+ * Write public key in X9.62 ECPoint format (ASN.1 OCTET STRING, first octet is compression flag).
+ */
+
+hal_error_t hal_ecdsa_key_to_ecpoint(const hal_ecdsa_key_t * const key,
+                                     uint8_t *der, size_t *der_len, const size_t der_max)
+{
+  if (key == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  const ecdsa_curve_t * const curve = get_curve(key->curve);
+  if (curve == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  const size_t q_len  = fp_unsigned_bin_size(unconst_fp_int(curve->q));
+  const size_t Qx_len = fp_unsigned_bin_size(unconst_fp_int(key->Q->x));
+  const size_t Qy_len = fp_unsigned_bin_size(unconst_fp_int(key->Q->y));
+  assert(q_len >= Qx_len && q_len >= Qy_len);
+
+  const size_t vlen = q_len * 2 + 1;
+  size_t hlen;
+
+  hal_error_t err = hal_asn1_encode_header(ASN1_OCTET_STRING, vlen, der, &hlen, der_max);
+
+  if (der_len != NULL)
+    *der_len = hlen + vlen;
+
+  if (der == NULL || err != HAL_OK)
+    return err;
+
+  assert(hlen + vlen <= der_max);
+
+  uint8_t *d = der + hlen;
+  memset(d, 0, vlen);
+
+  *d++ = 0x04;                  /* uncompressed */
+
+  fp_to_unsigned_bin(unconst_fp_int(key->Q->x), d + q_len - Qx_len);
+  d += q_len;
+
+  fp_to_unsigned_bin(unconst_fp_int(key->Q->y), d + q_len - Qy_len);
+  d += q_len;
+
+  assert(d <= der + der_max);
+
+  return HAL_OK;
+}
+
+/*
+ * Convenience wrapper to return how many bytes a key would take if
+ * encoded as an ECPoint.
+ */
+
+size_t hal_ecdsa_key_to_ecpoint_len(const hal_ecdsa_key_t * const key)
+{
+  size_t len;
+  return hal_ecdsa_key_to_ecpoint(key, NULL, &len, 0) == HAL_OK ? len : 0;
+}
+
+/*
+ * Read public key in X9.62 ECPoint format (ASN.1 OCTET STRING, first octet is compression flag).
+ * ECPoint format doesn't include a curve identifier, so caller has to supply one.
+ */
+
+hal_error_t hal_ecdsa_key_from_ecpoint(hal_ecdsa_key_t **key_,
+                                       void *keybuf, const size_t keybuf_len,
+                                       const uint8_t * const der, const size_t der_len,
+                                       const hal_ecdsa_curve_t curve)
+{
+  hal_ecdsa_key_t *key = keybuf;
+
+  if (key_ == NULL || key == NULL || keybuf_len < sizeof(*key) || get_curve(curve) == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  memset(keybuf, 0, keybuf_len);
+  key->type = HAL_ECDSA_PUBLIC;
+  key->curve = curve;
+
+  size_t hlen, vlen;
+  hal_error_t err;
+
+  if ((err = hal_asn1_decode_header(ASN1_OCTET_STRING, der, der_len, &hlen, &vlen)) != HAL_OK)
+    return err;
+
+  const uint8_t * const der_end = der + hlen + vlen;
+  const uint8_t *d = der + hlen;
+
+  if (vlen < 3 || (vlen & 1) == 0 || *d++ != 0x04)
+    lose(HAL_ERROR_ASN1_PARSE_FAILED);
+
+  vlen = vlen/2 - 1;
+
+  fp_read_unsigned_bin(key->Q->x, unconst_uint8_t(d), vlen);
+  d += vlen;
+
+  fp_read_unsigned_bin(key->Q->y, unconst_uint8_t(d), vlen);
+  d += vlen;
+
+  fp_set(key->Q->z, 1);
+
+  if (d != der_end)
+    lose(HAL_ERROR_ASN1_PARSE_FAILED);
+
+  *key_ = key;
+  return HAL_OK;
+
+ fail:
+  memset(keybuf, 0, keybuf_len);
+  return err;
+}
+
+/*
  * Write private key in RFC 5915 ASN.1 DER format.
  *
  * This is hand-coded, and is approaching the limit where one should
@@ -945,20 +1056,19 @@ hal_error_t hal_ecdsa_key_to_der(const hal_ecdsa_key_t * const key,
       (err = hal_asn1_encode_header(ASN1_BIT_STRING,            (q_len + 1) * 2, NULL, &hlen_bit,    0)) != HAL_OK ||
       (err = hal_asn1_encode_header(ASN1_EXPLICIT_1, hlen_bit + (q_len + 1) * 2, NULL, &hlen_exp1,   0)) != HAL_OK)
     return err;
-  
+
   const size_t vlen = (version_len   +
                        hlen_oct + q_len +
                        hlen_oid + hlen_exp0 + curve->oid_len +
                        hlen_bit + hlen_exp1 + (q_len + 1) * 2);
 
-  if ((err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, der, &hlen, der_max)) != HAL_OK)
-    return err;
+  err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, der, &hlen, der_max);
 
   if (der_len != NULL)
     *der_len = hlen + vlen;
 
-  if (der == NULL)
-    return HAL_OK;
+  if (der == NULL || err != HAL_OK)
+    return err;
 
   uint8_t *d = der + hlen;
   memset(d, 0, vlen);
@@ -1067,7 +1177,7 @@ hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key_,
   if (curve == NULL)
     lose(HAL_ERROR_ASN1_PARSE_FAILED);
   d += vlen;
-  
+
   if ((err = hal_asn1_decode_header(ASN1_EXPLICIT_1, d, der_end - d, &hlen, &vlen)) != HAL_OK)
     return err;
   d += hlen;
@@ -1102,14 +1212,11 @@ hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key_,
  * to the byte length of the order of the base point.
  */
 
-hal_error_t encode_signature_pkcs11(const ecdsa_curve_t * const curve,
-                                    const fp_int * const r, const fp_int * const s,
-                                    uint8_t *signature, size_t *signature_len, const size_t signature_max)
+static hal_error_t encode_signature_pkcs11(const ecdsa_curve_t * const curve,
+                                           const fp_int * const r, const fp_int * const s,
+                                           uint8_t *signature, size_t *signature_len, const size_t signature_max)
 {
   assert(curve != NULL && r != NULL && s != NULL);
-
-  if (signature == NULL || signature_len == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
 
   const size_t n_len = fp_unsigned_bin_size(unconst_fp_int(curve->n));
   const size_t r_len = fp_unsigned_bin_size(unconst_fp_int(r));
@@ -1118,13 +1225,18 @@ hal_error_t encode_signature_pkcs11(const ecdsa_curve_t * const curve,
   if (n_len < r_len || n_len < s_len)
     return HAL_ERROR_IMPOSSIBLE;
 
+  if (signature_len != NULL)
+    *signature_len = n_len * 2;
+
+  if (signature == NULL)
+    return HAL_OK;
+
   if (signature_max < n_len * 2)
     return HAL_ERROR_RESULT_TOO_LONG;
 
   memset(signature, 0, n_len * 2);
   fp_to_unsigned_bin(unconst_fp_int(r), signature + 1 * n_len - r_len);
   fp_to_unsigned_bin(unconst_fp_int(s), signature + 2 * n_len - s_len);
-  *signature_len = n_len * 2;
 
   return HAL_OK;
 }
@@ -1135,9 +1247,9 @@ hal_error_t encode_signature_pkcs11(const ecdsa_curve_t * const curve,
  * the octet string (which must therefore be of even length).
  */
 
-hal_error_t decode_signature_pkcs11(const ecdsa_curve_t * const curve,
-                                    fp_int *r, fp_int *s,
-                                    const uint8_t * const signature, const size_t signature_len)
+static hal_error_t decode_signature_pkcs11(const ecdsa_curve_t * const curve,
+                                           fp_int *r, fp_int *s,
+                                           const uint8_t * const signature, const size_t signature_len)
 {
   assert(curve != NULL && r != NULL && s != NULL);
 
@@ -1159,46 +1271,46 @@ hal_error_t decode_signature_pkcs11(const ecdsa_curve_t * const curve,
  * Encode a signature in ASN.1 format SEQUENCE { INTEGER r, INTEGER s }.
  */
 
-hal_error_t encode_signature_asn1(const ecdsa_curve_t * const curve,
-                                  const fp_int * const r, const fp_int * const s,
-                                  uint8_t *signature, size_t *signature_len, const size_t signature_max)
+static hal_error_t encode_signature_asn1(const ecdsa_curve_t * const curve,
+                                         const fp_int * const r, const fp_int * const s,
+                                         uint8_t *signature, size_t *signature_len, const size_t signature_max)
 {
   assert(curve != NULL && r != NULL && s != NULL);
 
-  if (signature == NULL || signature_len == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  hal_error_t err = HAL_ERROR_IMPOSSIBLE;
-  size_t r_len, s_len;
+  size_t hlen, r_len, s_len;
+  hal_error_t err;
 
   if ((err = hal_asn1_encode_integer(r, NULL, &r_len, 0)) != HAL_OK ||
-      (err = hal_asn1_encode_integer(s, NULL, &s_len, 0)) != HAL_OK ||
-      (err = hal_asn1_encode_header(ASN1_SEQUENCE, r_len + s_len,
-                                    signature, signature_len, signature_max)) != HAL_OK)
-    goto fail;
+      (err = hal_asn1_encode_integer(s, NULL, &s_len, 0)) != HAL_OK)
+    return err;
 
-  uint8_t * const r_out = signature + *signature_len;
+  const size_t vlen = r_len + s_len;
+
+  err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, signature, &hlen, signature_max);
+
+  if (signature_len != NULL)
+    *signature_len = hlen + vlen;
+
+  if (signature == NULL || err != HAL_OK)
+    return err;
+
+  uint8_t * const r_out = signature + hlen;
   uint8_t * const s_out = r_out + r_len;
-  *signature_len += r_len + s_len;
-  assert(*signature_len <= signature_max);
 
   if ((err = hal_asn1_encode_integer(r, r_out, NULL, signature_max - (r_out - signature))) != HAL_OK ||
       (err = hal_asn1_encode_integer(s, s_out, NULL, signature_max - (s_out - signature))) != HAL_OK)
-    goto fail;
+    return err;
 
-  err = HAL_OK;
-
- fail:
-  return err;
+  return HAL_OK;
 }
 
 /*
  * Decode a signature from ASN.1 format SEQUENCE { INTEGER r, INTEGER s }.
  */
 
-hal_error_t decode_signature_asn1(const ecdsa_curve_t * const curve,
-                                  fp_int *r, fp_int *s,
-                                  const uint8_t * const signature, const size_t signature_len)
+static hal_error_t decode_signature_asn1(const ecdsa_curve_t * const curve,
+                                         fp_int *r, fp_int *s,
+                                         const uint8_t * const signature, const size_t signature_len)
 {
   assert(curve != NULL && r != NULL && s != NULL);
 

@@ -9,7 +9,7 @@
  * (but no simpler).
  *
  * Much of the code in this module is based, at least loosely, on Tom
- * St Denis's libtomcrypt code.  
+ * St Denis's libtomcrypt code.
  *
  * Authors: Rob Austein
  * Copyright (c) 2015, SUNET
@@ -394,7 +394,7 @@ hal_error_t hal_rsa_decrypt(const hal_rsa_key_t * const key,
     err = modexp(&i, &key->d, &key->n, &o);
   else
     err = rsa_crt(key, &i, &o);
-  
+
   if (err != HAL_OK || (err = unpack_fp(&o, output, output_len)) != HAL_OK)
     goto fail;
 
@@ -549,7 +549,7 @@ hal_error_t hal_rsa_key_get_public_exponent(const hal_rsa_key_t * const key,
 
 /*
  * Generate a prime factor for an RSA keypair.
- * 
+ *
  * Get random bytes, munge a few bits, and stuff into a bignum.  Keep
  * doing this until we find a result that's (probably) prime and for
  * which result - 1 is relatively prime with respect to e.
@@ -695,7 +695,7 @@ hal_error_t hal_rsa_key_to_der(const hal_rsa_key_t * const key,
    */
 
   der += hlen;
-  
+
 #define _(x) { size_t i; if ((err = hal_asn1_encode_integer(x, der, &i, vlen)) != HAL_OK) return err; der += i; vlen -= i; }
   RSAPrivateKey_fields;
 #undef _

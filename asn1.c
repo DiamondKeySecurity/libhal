@@ -58,8 +58,18 @@
 #include "asn1_internal.h"
 
 /*
- * Encode tag and length fields of an ASN.1 object.  If der is NULL,
- * just return the size that would be encoded.
+ * Encode tag and length fields of an ASN.1 object.
+ *
+ * Sets *der_len to the size of of the ASN.1 header (tag and length
+ * fields); caller supplied length of value field, so presumably
+ * already knows it.
+ *
+ * If der is NULL, just return the size of the header that would be
+ * encoded and returns HAL_OK.
+ *
+ * If der isn't NULL, returns HAL_ERROR_RESULT_TOO_LONG unless full
+ * header plus value will fit; this is a bit weird, but is useful when
+ * using this to construct encoders for complte ASN.1 objects.
  */
 
 hal_error_t hal_asn1_encode_header(const uint8_t tag,
@@ -126,17 +136,15 @@ hal_error_t hal_asn1_encode_integer(const fp_int * const bn,
   hal_error_t err;
   size_t hlen;
 
-  if ((err = hal_asn1_encode_header(ASN1_INTEGER, vlen, der, &hlen, der_max)) != HAL_OK)
-    return err;
+  err = hal_asn1_encode_header(ASN1_INTEGER, vlen, der, &hlen, der_max);
 
   if (der_len != NULL)
     *der_len = hlen + vlen;
 
-  if (der == NULL)
-    return HAL_OK;
+  if (der == NULL || err != HAL_OK)
+    return err;
 
-  if (hlen + vlen > der_max)
-    return HAL_ERROR_RESULT_TOO_LONG;
+  assert(hlen + vlen <= der_max);
 
   der += hlen;
   if (leading_zero)

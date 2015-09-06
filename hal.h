@@ -39,23 +39,23 @@
  *   3 bits segment selector       | up to 8 segments
  *   5 bits core selector          | up to 32 cores/segment (see note below)
  *   8 bits register selector      | up to 256 registers/core (see modexp below)
- * 
+ *
  * i.e, the address is structured as:
  * sss ccccc rrrrrrrr
- * 
+ *
  * The I2C and UART communication channels use this 16-bit address format
  * directly in their read and write commands.
- * 
+ *
  * The EIM communications channel translates this 16-bit address into a
  * 32-bit memory-mapped address in the range 0x08000000..807FFFF:
  * 00001000000000 sss 0 ccccc rrrrrrrr 00
- * 
+ *
  * EIM, as implemented on the Novena, uses a 19-bit address space:
  *   Bits 18..16 are the semgent selector.
  *   Bits 15..10 are the core selector.
  *   Bits 9..2 are the register selector.
  *   Bits 1..0 are zero, because reads and writes are always word aligned.
- * 
+ *
  * Note that EIM can support 64 cores per segment, but we sacrifice one bit
  * in order to map it into a 16-bit address space.
  */
@@ -732,6 +732,16 @@ extern size_t hal_ecdsa_key_to_der_len(const hal_ecdsa_key_t * const key);
 extern hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key,
                                           void *keybuf, const size_t keybuf_len,
                                           const uint8_t * const der, const size_t der_len);
+
+extern hal_error_t hal_ecdsa_key_to_ecpoint(const hal_ecdsa_key_t * const key,
+                                            uint8_t *der, size_t *der_len, const size_t der_max);
+
+extern size_t hal_ecdsa_key_to_ecpoint_len(const hal_ecdsa_key_t * const key);
+
+extern hal_error_t hal_ecdsa_key_from_ecpoint(hal_ecdsa_key_t **key,
+                                              void *keybuf, const size_t keybuf_len,
+                                              const uint8_t * const der, const size_t der_len,
+                                              const hal_ecdsa_curve_t curve);
 
 extern hal_error_t hal_ecdsa_sign(const hal_ecdsa_key_t * const key,
                                   const uint8_t * const hash, const size_t hash_len,
