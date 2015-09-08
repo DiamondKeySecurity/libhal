@@ -511,6 +511,7 @@ typedef struct {
   const uint8_t * const digest_algorithm_id;
   size_t digest_algorithm_id_length;
   const void *driver;
+  unsigned can_restore_state : 1;
 } hal_hash_descriptor_t;
 
 /*
@@ -560,6 +561,9 @@ extern hal_error_t hal_hmac_update(const hal_hmac_state_t state,
 
 extern hal_error_t hal_hmac_finalize(const hal_hmac_state_t state,
                                      uint8_t *hmac, const size_t length);
+extern void hal_hash_cleanup(hal_hash_state_t *state);
+
+extern void hal_hmac_cleanup(hal_hmac_state_t *state);
 
 /*
  * AES key wrap functions.
