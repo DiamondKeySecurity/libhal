@@ -287,8 +287,8 @@ int main(int argc, char *argv[])
    * Initialize EIM and report what core we're running.
    */
 
-  if ((err = hal_io_read(MODEXP_ADDR_NAME0,   name,    sizeof(name)))    != HAL_OK ||
-      (err = hal_io_read(MODEXP_ADDR_VERSION, version, sizeof(version))) != HAL_OK) {
+  if ((err = hal_io_read(MODEXPS6_ADDR_NAME0,   name,    sizeof(name)))    != HAL_OK ||
+      (err = hal_io_read(MODEXPS6_ADDR_VERSION, version, sizeof(version))) != HAL_OK) {
     printf("Initialization failed: %s\n", hal_error_string(err));
     return 1;
   }
