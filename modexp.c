@@ -91,60 +91,41 @@ static hal_error_t set_register(const off_t addr,
 }
 
 /*
- * Get value of a block memory.
+ * Get value of a data buffer.  We reverse the order of 32-bit words
+ * in the buffer during the transfer to match what the modexps6 core
+ * expects.
  */
 
-static hal_error_t get_blockmem(const off_t reset_addr,
-                                const off_t data_addr,
-                                uint8_t *value,
-                                const size_t length,
-                                const size_t io_len)
+static hal_error_t get_buffer(const off_t data_addr,
+                              uint8_t *value,
+                              const size_t length)
 {
-  uint8_t discard[4];
   size_t i;
 
   assert(value != NULL && length % 4 == 0);
 
-  assert(io_len >= length && io_len % 4 == 0);
-
-  check(set_register(reset_addr, 1));
-
-  for (i = 0; i < io_len - length; i += 4) {
-    check(hal_io_read(data_addr, discard, 4));
-    if (discard[0] != 0 || discard[1] != 0 || discard[2] != 0 || discard[3] != 0)
-      return HAL_ERROR_IO_UNEXPECTED;
-  }
-
   for (i = 0; i < length; i += 4)
-    check(hal_io_read(data_addr, &value[i], 4));
+    check(hal_io_read(data_addr + i/4, &value[length - 4 - i], 4));
 
   return HAL_OK;
 }
 
 /*
- * Set value of a block memory.
+ * Set value of a data buffer.  We reverse the order of 32-bit words
+ * in the buffer during the transfer to match what the modexps6 core
+ * expects.
  */
 
-static hal_error_t set_blockmem(const off_t reset_addr,
-                                const off_t data_addr,
-                                const uint8_t * const value,
-                                const size_t length,
-                                const size_t io_len)
+static hal_error_t set_buffer(const off_t data_addr,
+                              const uint8_t * const value,
+                              const size_t length)
 {
-  const uint8_t zero[4] = { 0, 0, 0, 0 };
   size_t i;
 
   assert(value != NULL && length % 4 == 0);
 
-  assert(io_len >= length && io_len % 4 == 0);
-
-  check(set_register(reset_addr, 1));
-
-  for (i = 0; i < io_len - length; i += 4)
-    check(hal_io_write(data_addr, zero, 4));
-
   for (i = 0; i < length; i += 4)
-    check(hal_io_write(data_addr, &value[i], 4));
+    check(hal_io_write(data_addr + i/4, &value[length - 4 - i], 4));
 
   return HAL_OK;
 }
@@ -175,35 +156,52 @@ hal_error_t hal_modexp(const uint8_t * const msg, const size_t msg_len, /* Messa
     return HAL_ERROR_BAD_ARGUMENTS;
 
   /*
-   * This insanity is a work-around for a current bug in the ModExp
-   * core: we have to zero-pad everything out to the size of the
-   * modulus plus 32-bits.  Some kind of overflow issue.  All of this
-   * "io_len" nonsense can go away once that's fixed.
+   * We probably ought to take the mode (fast vs constant-time) as an
+   * argument, but for the moment we just guess that really short
+   * exponent means we're using the public key and can use fast mode,
+   * all other cases are something to do with the private key and
+   * therefore must use constant-time mode.
+   *
+   * Unclear whether it's worth trying to figure out exactly how long
+   * the operands are: assuming a multiple of eight is safe, but makes
+   * a bit more work for the core; checking to see how many bits are
+   * really set leaves the core sitting idle while the main CPU does
+   * these checks.  No way to know which is faster without testing;
+   * take simple approach for the moment.
    */
 
-  const size_t io_len = mod_len + 4;
-  assert((io_len & 3) == 0);
+  /* Select mode (1 = fast, 0 = safe) */
+  check(set_register(MODEXPS6_ADDR_MODE, (exp_len <= 4)));
 
-  check(set_blockmem(MODEXP_MODULUS_PTR_RST, MODEXP_MODULUS_DATA, mod, mod_len, io_len));
-  check(set_blockmem(MODEXP_MESSAGE_PTR_RST, MODEXP_MESSAGE_DATA, msg, msg_len, io_len));
-  check(set_register(MODEXP_MODULUS_LENGTH, /* mod_len */ io_len / 4));
+  /* Set modulus size in bits */
+  check(set_register(MODEXPS6_ADDR_MODULUS_WIDTH, mod_len * 8));
 
-  check(set_blockmem(MODEXP_EXPONENT_PTR_RST, MODEXP_EXPONENT_DATA, exp, exp_len, exp_len));
-  check(set_register(MODEXP_EXPONENT_LENGTH, exp_len / 4));
+  /* Write new modulus */
+  check(set_buffer(MODEXPS6_ADDR_MODULUS, mod, mod_len));
 
-  check(hal_io_wait_ready(MODEXP_ADDR_STATUS));
+  /* Pre-calcuate speed-up coefficient */
+  check(hal_io_init(MODEXPS6_ADDR_CTRL));
 
-  check(set_register(MODEXP_ADDR_CTRL, 1));
+  /* Wait for calculation to complete */
+  check(hal_io_wait_ready(MODEXPS6_ADDR_STATUS));
 
-  /*
-   * ModExp core is not very fast (yet), so wait a long time for a
-   * response, but not forever.
-   */
+  /* Write new message */
+  check(set_buffer(MODEXPS6_ADDR_MESSAGE, msg, msg_len));
 
-  int timeout = 0x7FFFFFFF;
-  check(hal_io_wait(MODEXP_ADDR_STATUS, STATUS_READY, &timeout));
+  /* Set new exponent length in bits */
+  check(set_register(MODEXPS6_ADDR_EXPONENT_WIDTH, exp_len * 8));
 
-  check(get_blockmem(MODEXP_RESULT_PTR_RST, MODEXP_RESULT_DATA, result, mod_len, io_len));
+  /* Set new exponent */
+  check(set_buffer(MODEXPS6_ADDR_EXPONENT, exp, exp_len));
+
+  /* Start calculation */
+  check(hal_io_next(MODEXPS6_ADDR_CTRL));
+
+  /* Wait for result */
+  check(hal_io_wait_valid(MODEXPS6_ADDR_STATUS));
+
+  /* Extract result */
+  check(get_buffer(MODEXPS6_ADDR_RESULT, result, mod_len));
 
   return HAL_OK;
 }
