@@ -1105,7 +1105,7 @@ hal_error_t hal_ecdsa_key_to_der(const hal_ecdsa_key_t * const key,
   fp_to_unsigned_bin(unconst_fp_int(key->Q->y), d + q_len - Qy_len);
   d += q_len;
 
-  assert(d == der + der_max);
+  assert(d <= der + der_max);
 
   return HAL_OK;
 }
