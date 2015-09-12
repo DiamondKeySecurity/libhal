@@ -219,8 +219,12 @@ static int test_keygen_sign_verify(const hal_ecdsa_curve_t curve)
     return 0;
   }
 
+  printf("Generating key\n");
+
   if ((err =  hal_ecdsa_key_gen(&key, keybuf, sizeof(keybuf), curve)) != HAL_OK)
     return printf("hal_ecdsa_key_gen() failed: %s\n", hal_error_string(err)), 0;
+
+  printf("Generating digest\n");
 
   uint8_t hashbuf[hash_descriptor->digest_length];
 
@@ -242,9 +246,13 @@ static int test_keygen_sign_verify(const hal_ecdsa_curve_t curve)
   uint8_t sigbuf[hash_descriptor->digest_length * 3];
   size_t  siglen;
 
+  printf("Signing\n");
+
   if ((err = hal_ecdsa_sign(key, hashbuf, sizeof(hashbuf),
                             sigbuf, &siglen, sizeof(sigbuf), HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
     return printf("hal_ecdsa_sign() failed: %s\n", hal_error_string(err)), 0;
+
+  printf("Verifying\n");
 
   if ((err = hal_ecdsa_verify(key, hashbuf, sizeof(hashbuf),
                               sigbuf, siglen, HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
@@ -282,18 +290,6 @@ static void _time_check(const struct timeval t0, const int ok)
     ok &= _ok;                                  \
   } while (0)
 
-/*
- * Run tests for one ECDSA curve.
- */
-
-static int test_ecdsa(const ecdsa_tc_t * const tc)
-
-{
-  int ok = 1;
-  time_check(test_against_static_vectors(tc));
-  time_check(test_keygen_sign_verify(tc->curve));
-  return ok;
-}
 
 int main(int argc, char *argv[])
 {
@@ -312,11 +308,22 @@ int main(int argc, char *argv[])
 
   printf("\"%8.8s\"  \"%4.4s\"\n\n", name, version);
 
-  for (int i = 0; i < sizeof(ecdsa_tc)/sizeof(*ecdsa_tc); i++)
-    if (!test_ecdsa(&ecdsa_tc[i]))
-      return 1;
+  int ok = 1;
 
-  return 0;
+  /*
+   * Test vectors (where we have them).
+   */
+  for (int i = 0; i < sizeof(ecdsa_tc)/sizeof(*ecdsa_tc); i++)
+    time_check(test_against_static_vectors(&ecdsa_tc[i]));
+
+  /*
+   * Generate/sign/verify test for each curve.
+   */
+  time_check(test_keygen_sign_verify(HAL_ECDSA_CURVE_P256));
+  time_check(test_keygen_sign_verify(HAL_ECDSA_CURVE_P384));
+  time_check(test_keygen_sign_verify(HAL_ECDSA_CURVE_P521));
+
+  return !ok;
 }
 
 /*
