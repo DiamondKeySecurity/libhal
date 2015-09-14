@@ -144,7 +144,7 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
     return printf("hal_ecdsa_key_from_der() failed: %s\n", hal_error_string(err)), 0;
 
   if (memcmp(key1, key2, hal_ecdsa_key_t_size) != 0)
-    return printf("Key mismatch after read/write cycle\n"), 0;
+    return printf("Private key mismatch after read/write cycle\n"), 0;
 
   set_next_random(tc->k, tc->k_len);
 
@@ -179,6 +179,21 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
 
   if ((err = hal_ecdsa_verify(key2, tc->H, tc->H_len, sig, sig_len, HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
     return printf("hal_ecdsa_verify(public) failed: %s\n", hal_error_string(err)), 0;
+
+  uint8_t point[hal_ecdsa_key_to_ecpoint_len(key1)];
+  size_t  point_len;
+
+  if ((err = hal_ecdsa_key_to_ecpoint(key1, point, &point_len, sizeof(point))) != HAL_OK)
+    return printf("hal_ecdsa_key_to_point() failed: %s\n", hal_error_string(err)), 0;
+
+  hal_ecdsa_key_clear(key1);
+  key1 = NULL;
+
+  if ((err = hal_ecdsa_key_from_ecpoint(&key1, keybuf1, sizeof(keybuf1), point, point_len, tc->curve)) != HAL_OK)
+    return printf("hal_ecdsa_key_from_point() failed: %s\n", hal_error_string(err)), 0;
+
+  if (memcmp(key1, key2, hal_ecdsa_key_t_size) != 0)
+    return printf("Public key mismatch after read/write cycle\n"), 0;
 
   return 1;
 }

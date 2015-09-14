@@ -998,7 +998,7 @@ hal_error_t hal_ecdsa_key_from_ecpoint(hal_ecdsa_key_t **key_,
   if (vlen < 3 || (vlen & 1) == 0 || *d++ != 0x04)
     lose(HAL_ERROR_ASN1_PARSE_FAILED);
 
-  vlen = vlen/2 - 1;
+  vlen /= 2;
 
   fp_read_unsigned_bin(key->Q->x, unconst_uint8_t(d), vlen);
   d += vlen;
