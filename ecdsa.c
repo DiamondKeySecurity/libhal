@@ -77,6 +77,17 @@
 #include "asn1_internal.h"
 
 /*
+ * Whether to use the new mixed Jacobian-affine point addition and
+ * point scalar multiplication algorithms.  In theory these are both
+ * faster and simpler than the previous approach, so this conditional
+ * will probably go away soon.
+ */
+
+#ifndef HAL_ECDSA_USE_MIXED_JACOBIAN_AFFINE_ADDITION
+#define HAL_ECDSA_USE_MIXED_JACOBIAN_AFFINE_ADDITION 1
+#endif
+
+/*
  * Whether we're using static test vectors instead of the random
  * number generator.  Do NOT enable this in production (doh).
  */
@@ -303,14 +314,26 @@ static inline int point_is_infinite(const ec_point_t * const P)
  * Set a point to be the point at infinity.  For Jacobian projective
  * coordinates, it's customary to use (1 : 1 : 0) as the
  * representitive value.
+ *
+ * If a curve is supplied, we want the Montgomery form of the point at
+ * infinity for that curve.
  */
 
-static inline void point_set_infinite(ec_point_t *P)
+static inline void point_set_infinite(ec_point_t *P, const ecdsa_curve_t * const curve)
 {
   assert(P != NULL);
-  fp_set(P->x, 1);
-  fp_set(P->y, 1);
-  fp_set(P->z, 0);
+
+  if (curve != NULL) {
+    fp_copy(unconst_fp_int(curve->mu), P->x);
+    fp_copy(unconst_fp_int(curve->mu), P->y);
+    fp_zero(P->z);
+  }
+
+  else {
+    fp_set(P->x, 1);
+    fp_set(P->y, 1);
+    fp_zero(P->z);
+  }
 }
 
 /*
@@ -339,7 +362,7 @@ static inline void point_double(const ec_point_t * const P,
 {
   assert(P != NULL && R != NULL && curve != NULL);
 
-  assert(!point_is_infinite(P));
+  const int was_infinite = point_is_infinite(P);
 
   fp_int alpha[1], beta[1], gamma[1], delta[1],  t1[1], t2[1];
 
@@ -375,8 +398,126 @@ static inline void point_double(const ec_point_t * const P,
   ff_add  (curve,  t2,    t2,     t2);
   ff_sub  (curve,  t1,    t2,     R->y);
 
+  assert(was_infinite == point_is_infinite(P));
+
   fp_zero(alpha); fp_zero(beta); fp_zero(gamma); fp_zero(delta); fp_zero(t1); fp_zero(t2);
 }
+
+#if HAL_ECDSA_USE_MIXED_JACOBIAN_AFFINE_ADDITION
+
+/**
+ * Add two EC points
+ * @param P             The point to add
+ * @param Q             The point to add
+ * @param R             [out] The destination of the double
+ * @param curve         The curve parameters structure
+ *
+ * Algorithm is madd-2007-bl from
+ * http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html
+ *
+ * The special cases are unfortunate, but are probably unavoidable for
+ * this type of curve.  We do what we can to make this constant-time
+ * in spite of the special cases.  The one we really can't do much
+ * about is P == Q, because in that case we have to switch to the
+ * point doubling algorithm.
+ */
+
+static inline void point_add(const ec_point_t * const P,
+                             const ec_point_t * const Q,
+                             ec_point_t *R,
+                             const ecdsa_curve_t * const curve)
+{
+  assert(P != NULL && Q != NULL && R != NULL && curve != NULL);
+
+  /*
+   * Q must be in affine form.
+   */
+
+  assert(fp_cmp(unconst_fp_int(Q->z), unconst_fp_int(curve->mu)) == FP_EQ);
+
+#warning What happens here if P and Q are not equal but map to the same point in affine space?
+
+  const int same_xz = (fp_cmp(unconst_fp_int(P->z), unconst_fp_int(Q->z)) == FP_EQ &&
+                       fp_cmp(unconst_fp_int(P->x), unconst_fp_int(Q->x)) == FP_EQ);
+
+  /*
+   * If P == Q, we must use point doubling instead of point addition,
+   * and there's nothing we can do to mask the timing differences.
+   * So just do it, right away.
+   */
+
+  if (same_xz && fp_cmp(unconst_fp_int(P->y), unconst_fp_int(Q->y)) == FP_EQ)
+    return point_double(P, R, curve);
+
+  /*
+   * Check now for the other special cases, but defer handling them
+   * until the end, to mask timing differences.
+   */
+
+  const int P_was_infinite = point_is_infinite(P);
+
+  fp_int Qy_neg[1];
+  fp_sub(unconst_fp_int(curve->q), unconst_fp_int(Q->y), Qy_neg);
+  const int result_is_infinite = fp_cmp(unconst_fp_int(P->y), Qy_neg) == FP_EQ && same_xz;
+  fp_zero(Qy_neg);
+
+  /*
+   * Main point addition algorithm.
+   */
+
+  fp_int Z1Z1[1], H[1], HH[1], I[1], J[1], r[1], V[1], t[1];
+
+  fp_init(Z1Z1), fp_init(H), fp_init(HH), fp_init(I), fp_init(J), fp_init(r), fp_init(V), fp_init(t);
+
+  ff_sqr  (curve,  P->z,           Z1Z1);       /* Z1Z1 = Pz ** 2 */
+
+  ff_mul  (curve,  Q->x,   Z1Z1,   H);          /* H = (Qx * Z1Z1) - Px */
+  ff_sub  (curve,  H,      P->x,   H);
+
+  ff_sqr  (curve,  H,              HH);         /* HH = H ** 2 */
+
+  ff_add  (curve,  HH,     HH,     I);          /* I = 4 * HH */
+  ff_add  (curve,  I,      I,      I);
+
+  ff_mul  (curve,  H,      I,      J);          /* J = H * I */
+
+  ff_mul  (curve,  P->z,   Z1Z1,   r);          /* r = 2 * ((Qy * Pz * Z1Z1) - Py) */
+  ff_mul  (curve,  Q->y,   r,      r);
+  ff_sub  (curve,  r,      P->y,   r);
+  ff_add  (curve,  r,      r,      r);
+
+  ff_mul  (curve,  P->x,   I,      V);          /* V = Px * I */
+
+  ff_sqr  (curve,  r,              R->x);       /* Rx = (r ** 2) - J - (2 * V) */
+  ff_sub  (curve,  R->x,   J,      R->x);
+  ff_sub  (curve,  R->x,   V,      R->x);
+  ff_sub  (curve,  R->x,   V,      R->x);
+
+  ff_mul  (curve,  P->y,   J,      t);         /* Ry = (r * (V - Rx)) - (2 * Py * J) */
+  ff_sub  (curve,  V,      R->x,   R->y);
+  ff_mul  (curve,  r,      R->y,   R->y);
+  ff_sub  (curve,  R->y,   t,      R->y);
+  ff_sub  (curve,  R->y,   t,      R->y);
+
+  ff_add  (curve,  P->z,   H,      R->z);       /* Rz = ((Pz + H) ** 2) - Z1Z1 - HH */
+  ff_sqr  (curve,  R->z,           R->z);
+  ff_sub  (curve,  R->z,   Z1Z1,   R->z);
+  ff_sub  (curve,  R->z,   HH,     R->z);
+
+  fp_zero(Z1Z1), fp_zero(H), fp_zero(HH), fp_zero(I), fp_zero(J), fp_zero(r), fp_zero(V), fp_zero(t);
+
+  /*
+   * Handle deferred special cases, then we're done.
+   */
+
+  if (P_was_infinite)
+    point_copy(Q, R);
+
+  else if (result_is_infinite)
+    point_set_infinite(R, curve);
+}
+
+#else /* HAL_ECDSA_USE_MIXED_JACOBIAN_AFFINE_ADDITION */
 
 /**
  * Add two EC points
@@ -398,6 +539,16 @@ static inline void point_add(const ec_point_t * const P,
                              const ecdsa_curve_t * const curve)
 {
   assert(P != NULL && Q != NULL && R != NULL && curve != NULL);
+
+  if (point_is_infinite(P)) {
+    point_copy(Q, R);
+    return;
+  }
+  if (point_is_infinite(Q)) {
+    point_copy(P, R);
+    return;
+  }
+
 
   if (fp_cmp(unconst_fp_int(P->x), unconst_fp_int(Q->x)) == FP_EQ &&
       fp_cmp(unconst_fp_int(P->z), unconst_fp_int(Q->z)) == FP_EQ) {
@@ -421,7 +572,7 @@ static inline void point_add(const ec_point_t * const P,
      */
 
     if (zero_sum)
-      return point_set_infinite(R);
+      return point_set_infinite(R, curve);
   }
 
   fp_int Z1Z1[1], Z2Z2[1], U1[1], U2[1], S1[1], S2[1], H[1], I[1], J[1], r[1], V[1], t[1];
@@ -476,6 +627,8 @@ static inline void point_add(const ec_point_t * const P,
   fp_zero(H), fp_zero(I), fp_zero(J), fp_zero(r), fp_zero(V), fp_zero(t);
 }
 
+#endif /* HAL_ECDSA_USE_MIXED_JACOBIAN_AFFINE_ADDITION */
+
 /**
  * Map a point in projective Jacbobian coordinates back to affine space
  * @param P        [in/out] The point to map
@@ -523,6 +676,94 @@ static inline hal_error_t point_to_affine(ec_point_t *P,
   fp_zero(t2);
   return err;
 }
+
+#if HAL_ECDSA_USE_MIXED_JACOBIAN_AFFINE_ADDITION
+
+/**
+ * Perform a point multiplication.
+ * @param k             The scalar to multiply by
+ * @param P             The base point
+ * @param R             [out] Destination for kP
+ * @param curve         Curve parameters
+ * @param map           Boolean whether to map back to affine (1: map, 0: leave projective)
+ * @return HAL_OK on success
+ *
+ * P must be in affine form.
+ */
+
+static hal_error_t point_scalar_multiply(const fp_int * const k,
+                                         const ec_point_t * const P_,
+                                         ec_point_t *R,
+                                         const ecdsa_curve_t * const curve,
+                                         const int map)
+{
+  assert(k != NULL && P_ != NULL && R != NULL &&  curve != NULL);
+
+  if (fp_iszero(k) || fp_cmp_d(unconst_fp_int(P_->z), 1) != FP_EQ)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  /*
+   * Convert P to Montgomery form.
+   */
+
+  ec_point_t P[1];
+  memset(P, 0, sizeof(P));
+
+  if (fp_mulmod(unconst_fp_int(P_->x), unconst_fp_int(curve->mu), unconst_fp_int(curve->q), P->x) != FP_OKAY ||
+      fp_mulmod(unconst_fp_int(P_->y), unconst_fp_int(curve->mu), unconst_fp_int(curve->q), P->y) != FP_OKAY) {
+    memset(P, 0, sizeof(P));
+    return HAL_ERROR_IMPOSSIBLE;
+  }
+
+  fp_copy(unconst_fp_int(curve->mu), P->z);
+
+  /*
+   * Initialize table.
+   * M[0] is a dummy for constant timing.
+   * M[1] is where we accumulate the result.
+   */
+
+  ec_point_t M[2][1];
+  memset(M, 0, sizeof(M));
+  point_set_infinite(M[0], curve);
+  point_set_infinite(M[1], curve);
+
+  /*
+   * Walk down bits of the scalar, performing dummy operations to mask
+   * timing.
+   *
+   * Note that, in order for the timing protection to work, the
+   * number of iterations in the loop has to depend on the order of
+   * the base point rather than on the scalar.
+   */
+
+  for (int bit_index = fp_count_bits(unconst_fp_int(curve->n)) - 1; bit_index >= 0; bit_index--) {
+
+    const int digit_index = bit_index / DIGIT_BIT;
+    const fp_digit  digit = digit_index < k->used ? k->dp[digit_index] : 0;
+    const fp_digit   mask = ((fp_digit) 1) << (bit_index % DIGIT_BIT);
+    const int         bit = (digit & mask) != 0;
+
+    point_double (M[1],        M[1],    curve);
+    point_add    (M[bit],  P,  M[bit],  curve);
+
+  }
+
+  /*
+   * Copy result, map back to affine if requested, then done.
+   */
+
+  point_copy(M[1], R);
+
+  hal_error_t err = map ? point_to_affine(R, curve) : HAL_OK;
+
+  memset(P, 0, sizeof(P));
+  memset(M, 0, sizeof(M));
+
+  return err;
+}
+
+#else /* HAL_ECDSA_USE_MIXED_JACOBIAN_AFFINE_ADDITION */
 
 /**
  * Perform a point multiplication.
@@ -608,6 +849,8 @@ static hal_error_t point_scalar_multiply(const fp_int * const k,
   memset(M, 0, sizeof(M));
   return err;
 }
+
+#endif /* HAL_ECDSA_USE_MIXED_JACOBIAN_AFFINE_ADDITION */
 
 /*
  * Testing only: ECDSA key generation and signature both have a
@@ -1509,16 +1752,21 @@ hal_error_t hal_ecdsa_verify(const hal_ecdsa_key_t * const key,
   fp_copy(unconst_fp_int(curve->Gy), u1G->y);
   fp_set(u1G->z, 1);
 
-  if ((err = point_scalar_multiply(u1, u1G,    u1G, curve, 0)) != HAL_OK ||
-      (err = point_scalar_multiply(u2, key->Q, u2Q, curve, 0)) != HAL_OK)
+  if ((err = point_scalar_multiply(u1, u1G,    u1G, curve, 1)) != HAL_OK ||
+      (err = point_scalar_multiply(u2, key->Q, u2Q, curve, 1)) != HAL_OK)
     return err;
 
   if (point_is_infinite(u1G))
     point_copy(u2Q, R);
   else if (point_is_infinite(u2Q))
     point_copy(u1G, R);
+  else if (fp_mulmod(unconst_fp_int(u1G->x), unconst_fp_int(curve->mu), unconst_fp_int(curve->q), u1G->x) != FP_OKAY ||
+           fp_mulmod(unconst_fp_int(u1G->y), unconst_fp_int(curve->mu), unconst_fp_int(curve->q), u1G->y) != FP_OKAY ||
+           fp_mulmod(unconst_fp_int(u2Q->x), unconst_fp_int(curve->mu), unconst_fp_int(curve->q), u2Q->x) != FP_OKAY ||
+           fp_mulmod(unconst_fp_int(u2Q->y), unconst_fp_int(curve->mu), unconst_fp_int(curve->q), u2Q->y) != FP_OKAY)
+    return HAL_ERROR_IMPOSSIBLE;
   else
-    point_add(u1G, u2Q, R, curve);
+    fp_copy(unconst_fp_int(curve->mu), u1G->z), fp_copy(unconst_fp_int(curve->mu), u2Q->z), point_add(u1G, u2Q, R, curve);
 
   /*
    * Signature is OK if
