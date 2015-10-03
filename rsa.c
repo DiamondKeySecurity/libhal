@@ -53,6 +53,10 @@
  * configured to know about the largest bignum one wants it to be able
  * to support at compile time.  This should not be a serious problem.
  *
+ * We use a lot of one-element arrays (fp_int[1] instead of plain
+ * fp_int) to avoid having to prefix every use of an fp_int with "&".
+ * Perhaps we should encapsulate this idiom in a typedef.
+ *
  * Unfortunately, libtfm is bad about const-ification, but we want to
  * hide that from our users, so our public API uses const as
  * appropriate and we use inline functions to remove const constraints
@@ -110,17 +114,26 @@ void hal_rsa_set_blinding(const int onoff)
 
 struct hal_rsa_key {
   hal_rsa_key_type_t type;      /* What kind of key this is */
-  fp_int n;                     /* The modulus */
-  fp_int e;                     /* Public exponent */
-  fp_int d;                     /* Private exponent */
-  fp_int p;                     /* 1st prime factor */
-  fp_int q;                     /* 2nd prime factor */
-  fp_int u;                     /* 1/q mod p */
-  fp_int dP;                    /* d mod (p - 1) */
-  fp_int dQ;                    /* d mod (q - 1) */
+  fp_int n[1];                  /* The modulus */
+  fp_int e[1];                  /* Public exponent */
+  fp_int d[1];                  /* Private exponent */
+  fp_int p[1];                  /* 1st prime factor */
+  fp_int q[1];                  /* 2nd prime factor */
+  fp_int u[1];                  /* 1/q mod p */
+  fp_int dP[1];                 /* d mod (p - 1) */
+  fp_int dQ[1];                 /* d mod (q - 1) */
 };
 
 const size_t hal_rsa_key_t_size = sizeof(hal_rsa_key_t);
+
+/*
+ * Initializers.  We want to be able to initialize automatic fp_int
+ * variables a sane value (less error prone), but picky compilers
+ * whine about the number of curly braces required.  So we define a
+ * macro which isolates that madness in one place.
+ */
+
+#define INIT_FP_INT     {{{0}}}
 
 /*
  * Error handling.
@@ -178,12 +191,12 @@ static hal_error_t modexp(const fp_int * msg,
 
   assert(msg != NULL && exp != NULL && mod != NULL && res != NULL);
 
-  fp_int reduced_msg;
+  fp_int reduced_msg[1] = INIT_FP_INT;
 
   if (fp_cmp_mag(unconst_fp_int(msg), unconst_fp_int(mod)) != FP_LT) {
-    fp_init(&reduced_msg);
-    fp_mod(unconst_fp_int(msg), unconst_fp_int(mod), &reduced_msg);
-    msg = &reduced_msg;
+    fp_init(reduced_msg);
+    fp_mod(unconst_fp_int(msg), unconst_fp_int(mod), reduced_msg);
+    msg = reduced_msg;
   }
 
   const size_t exp_len = (fp_unsigned_bin_size(unconst_fp_int(exp)) + 3) & ~3;
@@ -258,7 +271,7 @@ static hal_error_t create_blinding_factors(const hal_rsa_key_t * const key, fp_i
 {
   assert(key != NULL && bf != NULL && ubf != NULL);
 
-  uint8_t rnd[fp_unsigned_bin_size(unconst_fp_int(&key->n))];
+  uint8_t rnd[fp_unsigned_bin_size(unconst_fp_int(key->n))];
   hal_error_t err = HAL_OK;
 
   if ((err = hal_get_random(rnd, sizeof(rnd))) != HAL_OK)
@@ -268,10 +281,10 @@ static hal_error_t create_blinding_factors(const hal_rsa_key_t * const key, fp_i
   fp_read_unsigned_bin(bf,  rnd, sizeof(rnd));
   fp_copy(bf, ubf);
 
-  if ((err = modexp(bf, &key->e, &key->n, bf)) != HAL_OK)
+  if ((err = modexp(bf, key->e, key->n, bf)) != HAL_OK)
     goto fail;
 
-  FP_CHECK(fp_invmod(ubf, unconst_fp_int(&key->n), ubf));
+  FP_CHECK(fp_invmod(ubf, unconst_fp_int(key->n), ubf));
 
  fail:
   memset(rnd, 0, sizeof(rnd));
@@ -287,62 +300,62 @@ static hal_error_t rsa_crt(const hal_rsa_key_t * const key, fp_int *msg, fp_int 
   assert(key != NULL && msg != NULL && sig != NULL);
 
   hal_error_t err = HAL_OK;
-  fp_int t, m1, m2, bf, ubf;
-
-  fp_init(&t);
-  fp_init(&m1);
-  fp_init(&m2);
+  fp_int t[1]   = INIT_FP_INT;
+  fp_int m1[1]  = INIT_FP_INT;
+  fp_int m2[1]  = INIT_FP_INT;
+  fp_int bf[1]  = INIT_FP_INT;
+  fp_int ubf[1] = INIT_FP_INT;
 
   /*
    * Handle blinding if requested.
    */
   if (blinding) {
-    if ((err = create_blinding_factors(key, &bf, &ubf)) != HAL_OK)
+    if ((err = create_blinding_factors(key, bf, ubf)) != HAL_OK)
       goto fail;
-    FP_CHECK(fp_mulmod(msg, &bf, unconst_fp_int(&key->n), msg));
+    FP_CHECK(fp_mulmod(msg, bf, unconst_fp_int(key->n), msg));
   }
 
   /*
    * m1 = msg ** dP mod p
    * m2 = msg ** dQ mod q
    */
-  if ((err = modexp(msg, &key->dP, &key->p, &m1)) != HAL_OK ||
-      (err = modexp(msg, &key->dQ, &key->q, &m2)) != HAL_OK)
+  if ((err = modexp(msg, key->dP, key->p, m1)) != HAL_OK ||
+      (err = modexp(msg, key->dQ, key->q, m2)) != HAL_OK)
     goto fail;
 
   /*
    * t = m1 - m2.
    */
-  fp_sub(&m1, &m2, &t);
+  fp_sub(m1, m2, t);
 
   /*
    * Add zero (mod p) if needed to make t positive.  If doing this
    * once or twice doesn't help, something is very wrong.
    */
-  if (fp_cmp_d(&t, 0) == FP_LT)
-    fp_add(&t, unconst_fp_int(&key->p), &t);
-  if (fp_cmp_d(&t, 0) == FP_LT)
-    fp_add(&t, unconst_fp_int(&key->p), &t);
-  if (fp_cmp_d(&t, 0) == FP_LT)
+  if (fp_cmp_d(t, 0) == FP_LT)
+    fp_add(t, unconst_fp_int(key->p), t);
+  if (fp_cmp_d(t, 0) == FP_LT)
+    fp_add(t, unconst_fp_int(key->p), t);
+  if (fp_cmp_d(t, 0) == FP_LT)
     lose(HAL_ERROR_IMPOSSIBLE);
 
   /*
    * sig = (t * u mod p) * q + m2
    */
-  FP_CHECK(fp_mulmod(&t, unconst_fp_int(&key->u), unconst_fp_int(&key->p), &t));
-  fp_mul(&t, unconst_fp_int(&key->q), &t);
-  fp_add(&t, &m2, sig);
+  FP_CHECK(fp_mulmod(t, unconst_fp_int(key->u), unconst_fp_int(key->p), t));
+  fp_mul(t, unconst_fp_int(key->q), t);
+  fp_add(t, m2, sig);
 
   /*
    * Unblind if necessary.
    */
   if (blinding)
-    FP_CHECK(fp_mulmod(sig, &ubf, unconst_fp_int(&key->n), sig));
+    FP_CHECK(fp_mulmod(sig, ubf, unconst_fp_int(key->n), sig));
 
  fail:
-  fp_zero(&t);
-  fp_zero(&m1);
-  fp_zero(&m2);
+  fp_zero(t);
+  fp_zero(m1);
+  fp_zero(m2);
   return err;
 }
 
@@ -362,19 +375,18 @@ hal_error_t hal_rsa_encrypt(const hal_rsa_key_t * const key,
   if (key == NULL || input == NULL || output == NULL || input_len > output_len)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  fp_int i, o;
-  fp_init(&i);
-  fp_init(&o);
+  fp_int i[1] = INIT_FP_INT;
+  fp_int o[1] = INIT_FP_INT;
 
-  fp_read_unsigned_bin(&i, unconst_uint8_t(input), input_len);
+  fp_read_unsigned_bin(i, unconst_uint8_t(input), input_len);
 
-  if ((err = modexp(&i, &key->e, &key->n, &o)) != HAL_OK ||
-      (err = unpack_fp(&o, output, output_len))   != HAL_OK)
+  if ((err = modexp(i, key->e, key->n, o)) != HAL_OK ||
+      (err = unpack_fp(o, output, output_len))   != HAL_OK)
     goto fail;
 
  fail:
-  fp_zero(&i);
-  fp_zero(&o);
+  fp_zero(i);
+  fp_zero(o);
   return err;
 }
 
@@ -387,28 +399,27 @@ hal_error_t hal_rsa_decrypt(const hal_rsa_key_t * const key,
   if (key == NULL || input == NULL || output == NULL || input_len > output_len)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  fp_int i, o;
-  fp_init(&i);
-  fp_init(&o);
+  fp_int i[1] = INIT_FP_INT;
+  fp_int o[1] = INIT_FP_INT;
 
-  fp_read_unsigned_bin(&i, unconst_uint8_t(input), input_len);
+  fp_read_unsigned_bin(i, unconst_uint8_t(input), input_len);
 
   /*
    * Do CRT if we have all the necessary key components, otherwise
    * just do brute force ModExp.
    */
 
-  if (fp_iszero(&key->p) || fp_iszero(&key->q) || fp_iszero(&key->u) || fp_iszero(&key->dP) || fp_iszero(&key->dQ))
-    err = modexp(&i, &key->d, &key->n, &o);
+  if (fp_iszero(key->p) || fp_iszero(key->q) || fp_iszero(key->u) || fp_iszero(key->dP) || fp_iszero(key->dQ))
+    err = modexp(i, key->d, key->n, o);
   else
-    err = rsa_crt(key, &i, &o);
+    err = rsa_crt(key, i, o);
 
-  if (err != HAL_OK || (err = unpack_fp(&o, output, output_len)) != HAL_OK)
+  if (err != HAL_OK || (err = unpack_fp(o, output, output_len)) != HAL_OK)
     goto fail;
 
  fail:
-  fp_zero(&i);
-  fp_zero(&o);
+  fp_zero(i);
+  fp_zero(o);
   return err;
 }
 
@@ -454,7 +465,7 @@ static hal_error_t load_key(const hal_rsa_key_type_t type,
 
   key->type = type;
 
-#define _(x) do { fp_init(&key->x); if (x == NULL) goto fail; fp_read_unsigned_bin(&key->x, unconst_uint8_t(x), x##_len); } while (0)
+#define _(x) do { fp_init(key->x); if (x == NULL) goto fail; fp_read_unsigned_bin(key->x, unconst_uint8_t(x), x##_len); } while (0)
   switch (type) {
   case HAL_RSA_PRIVATE:
     _(d); _(p); _(q); _(u); _(dP); _(dQ);
@@ -569,9 +580,7 @@ static hal_error_t find_prime(const unsigned prime_length,
 {
   uint8_t buffer[prime_length];
   hal_error_t err;
-  fp_int t;
-
-  fp_init(&t);
+  fp_int t[1] = INIT_FP_INT;
 
   do {
     if ((err = hal_get_random(buffer, sizeof(buffer))) != HAL_OK)
@@ -581,9 +590,9 @@ static hal_error_t find_prime(const unsigned prime_length,
     fp_read_unsigned_bin(result, buffer, sizeof(buffer));
 
   } while (!fp_isprime(result) ||
-           (fp_sub_d(result, 1, &t), fp_gcd(&t, unconst_fp_int(e), &t), fp_cmp_d(&t, 1) != FP_EQ));
+           (fp_sub_d(result, 1, t), fp_gcd(t, unconst_fp_int(e), t), fp_cmp_d(t, 1) != FP_EQ));
 
-  fp_zero(&t);
+  fp_zero(t);
   return HAL_OK;
 }
 
@@ -598,41 +607,42 @@ hal_error_t hal_rsa_key_gen(hal_rsa_key_t **key_,
 {
   hal_rsa_key_t *key = keybuf;
   hal_error_t err = HAL_OK;
-  fp_int p_1, q_1;
+  fp_int p_1[1] = INIT_FP_INT;
+  fp_int q_1[1] = INIT_FP_INT;
 
   if (key_ == NULL || keybuf == NULL || keybuf_len < sizeof(hal_rsa_key_t))
     return HAL_ERROR_BAD_ARGUMENTS;
 
   memset(keybuf, 0, keybuf_len);
   key->type = HAL_RSA_PRIVATE;
-  fp_read_unsigned_bin(&key->e, (uint8_t *) public_exponent, public_exponent_len);
+  fp_read_unsigned_bin(key->e, (uint8_t *) public_exponent, public_exponent_len);
 
   if (key_length < bitsToBytes(1024) || key_length > bitsToBytes(8192))
     return HAL_ERROR_UNSUPPORTED_KEY;
 
-  if (fp_cmp_d(&key->e, 0x010001) != FP_EQ)
+  if (fp_cmp_d(key->e, 0x010001) != FP_EQ)
     return HAL_ERROR_UNSUPPORTED_KEY;
 
   /*
    * Find a good pair of prime numbers.
    */
 
-  if ((err = find_prime(key_length / 2, &key->e, &key->p)) != HAL_OK ||
-      (err = find_prime(key_length / 2, &key->e, &key->q)) != HAL_OK)
+  if ((err = find_prime(key_length / 2, key->e, key->p)) != HAL_OK ||
+      (err = find_prime(key_length / 2, key->e, key->q)) != HAL_OK)
     return err;
 
   /*
    * Calculate remaining key components.
    */
 
-  fp_init(&p_1); fp_sub_d(&key->p, 1, &p_1);
-  fp_init(&q_1); fp_sub_d(&key->q, 1, &q_1);
-  fp_mul(&key->p, &key->q, &key->n);                    /* n = p * q */
-  fp_lcm(&p_1, &q_1, &key->d);
-  FP_CHECK(fp_invmod(&key->e, &key->d, &key->d));       /* d = (1/e) % lcm(p-1, q-1) */
-  FP_CHECK(fp_mod(&key->d, &p_1, &key->dP));            /* dP = d % (p-1) */
-  FP_CHECK(fp_mod(&key->d, &q_1, &key->dQ));            /* dQ = d % (q-1) */
-  FP_CHECK(fp_invmod(&key->q, &key->p, &key->u));       /* u = (1/q) % p */
+  fp_init(p_1); fp_sub_d(key->p, 1, p_1);
+  fp_init(q_1); fp_sub_d(key->q, 1, q_1);
+  fp_mul(key->p, key->q, key->n);                    /* n = p * q */
+  fp_lcm(p_1, q_1, key->d);
+  FP_CHECK(fp_invmod(key->e, key->d, key->d));       /* d = (1/e) % lcm(p-1, q-1) */
+  FP_CHECK(fp_mod(key->d, p_1, key->dP));            /* dP = d % (p-1) */
+  FP_CHECK(fp_mod(key->d, q_1, key->dQ));            /* dQ = d % (q-1) */
+  FP_CHECK(fp_invmod(key->q, key->p, key->u));       /* u = (1/q) % p */
 
   *key_ = key;
 
@@ -641,8 +651,8 @@ hal_error_t hal_rsa_key_gen(hal_rsa_key_t **key_,
  fail:
   if (err != HAL_OK)
     memset(keybuf, 0, keybuf_len);
-  fp_zero(&p_1);
-  fp_zero(&q_1);
+  fp_zero(p_1);
+  fp_zero(q_1);
   return err;
 }
 
@@ -654,15 +664,15 @@ hal_error_t hal_rsa_key_gen(hal_rsa_key_t **key_,
  */
 
 #define RSAPrivateKey_fields    \
-  _(&version);                  \
-  _(&key->n);                   \
-  _(&key->e);                   \
-  _(&key->d);                   \
-  _(&key->p);                   \
-  _(&key->q);                   \
-  _(&key->dP);                  \
-  _(&key->dQ);                  \
-  _(&key->u);
+  _(version);                   \
+  _(key->n);                    \
+  _(key->e);                    \
+  _(key->d);                    \
+  _(key->p);                    \
+  _(key->q);                    \
+  _(key->dP);                   \
+  _(key->dQ);                   \
+  _(key->u);
 
 hal_error_t hal_rsa_key_to_der(const hal_rsa_key_t * const key,
                                uint8_t *der, size_t *der_len, const size_t der_max)
@@ -672,8 +682,7 @@ hal_error_t hal_rsa_key_to_der(const hal_rsa_key_t * const key,
   if (key == NULL || der_len == NULL || key->type != HAL_RSA_PRIVATE)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  fp_int version;
-  fp_zero(&version);
+  fp_int version[1] = INIT_FP_INT;
 
   /*
    * Calculate data length.
@@ -738,14 +747,13 @@ hal_error_t hal_rsa_key_from_der(hal_rsa_key_t **key_,
 
   der += hlen;
 
-  fp_int version;
-  fp_init(&version);
+  fp_int version[1] = INIT_FP_INT;
 
 #define _(x) { size_t i; if ((err = hal_asn1_decode_integer(x, der, &i, vlen)) != HAL_OK) return err; der += i; vlen -= i; }
   RSAPrivateKey_fields;
 #undef _
 
-  if (fp_cmp_d(&version, 0) != FP_EQ)
+  if (fp_cmp_d(version, 0) != FP_EQ)
     return HAL_ERROR_ASN1_PARSE_FAILED;
 
   *key_ = key;

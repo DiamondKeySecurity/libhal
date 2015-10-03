@@ -161,15 +161,26 @@ struct hal_ecdsa_key {
 const size_t hal_ecdsa_key_t_size = sizeof(struct hal_ecdsa_key);
 
 /*
+ * Initializers.  We want to be able to initialize automatic fp_int
+ * and ec_point_t variables to a sane value (less error prone), but
+ * picky compilers whine about the number of curly braces required.
+ * So we define macros which isolate that madness in one place, and
+ * use those macros everywhere.
+ */
+
+#define INIT_FP_INT	{{{0}}}
+#define	INIT_EC_POINT_T	{{INIT_FP_INT}}
+
+/*
  * Error handling.
  */
 
 #define lose(_code_) do { err = _code_; goto fail; } while (0)
 
 /*
- * We can't (usefully) initialize fp_int variables at compile time, so
- * instead we load all the curve parameters the first time anything
- * asks for any of them.
+ * We can't (usefully) initialize fp_int variables to non-zero values
+ * at compile time, so instead we load all the curve parameters the
+ * first time anything asks for any of them.
  */
 
 static const ecdsa_curve_t * const get_curve(const hal_ecdsa_curve_t curve)
@@ -252,8 +263,7 @@ static inline void ff_add(const ecdsa_curve_t * const curve,
                           const fp_int * const b,
                           fp_int *c)
 {
-  fp_int t[2][1];
-  memset(t, 0, sizeof(t));
+  fp_int t[2][1] = {INIT_FP_INT};
 
   fp_add(unconst_fp_int(a), unconst_fp_int(b), t[0]);
   fp_sub(t[0], unconst_fp_int(curve->q), t[1]);
@@ -268,8 +278,7 @@ static inline void ff_sub(const ecdsa_curve_t * const curve,
                           const fp_int * const b,
                           fp_int *c)
 {
-  fp_int t[2][1];
-  memset(t, 0, sizeof(t));
+  fp_int t[2][1] = {INIT_FP_INT};
 
   fp_sub(unconst_fp_int(a), unconst_fp_int(b), t[0]);
   fp_add(t[0], unconst_fp_int(curve->q), t[1]);
@@ -393,8 +402,8 @@ static inline hal_error_t point_to_affine(ec_point_t *P,
 
   hal_error_t err = HAL_ERROR_IMPOSSIBLE;
 
-  fp_int t1[1]; fp_init(t1);
-  fp_int t2[1]; fp_init(t2);
+  fp_int t1[1] = INIT_FP_INT;
+  fp_int t2[1] = INIT_FP_INT;
 
   fp_int * const q = unconst_fp_int(curve->q);
 
@@ -438,9 +447,12 @@ static inline void point_double(const ec_point_t * const P,
 
   const int was_infinite = point_is_infinite(P);
 
-  fp_int alpha[1], beta[1], gamma[1], delta[1],  t1[1], t2[1];
-
-  fp_init(alpha); fp_init(beta); fp_init(gamma); fp_init(delta); fp_init(t1); fp_init(t2);
+  fp_int alpha[1] = INIT_FP_INT;
+  fp_int beta[1]  = INIT_FP_INT;
+  fp_int gamma[1] = INIT_FP_INT;
+  fp_int delta[1] = INIT_FP_INT;
+  fp_int t1[1]    = INIT_FP_INT;
+  fp_int t2[1]    = INIT_FP_INT;
 
   ff_sqr  (curve,  P->z,          delta);       /* delta = Pz ** 2 */
   ff_sqr  (curve,  P->y,          gamma);       /* gamma = Py ** 2 */
@@ -528,8 +540,7 @@ static inline void point_add(const ec_point_t * const P,
 
   const int P_was_infinite = point_is_infinite(P);
 
-  fp_int Qy_neg[1];
-  fp_init(Qy_neg);
+  fp_int Qy_neg[1] = INIT_FP_INT;
   fp_sub(unconst_fp_int(curve->q), unconst_fp_int(Q->y), Qy_neg);
   const int result_is_infinite = fp_cmp(unconst_fp_int(P->y), Qy_neg) == FP_EQ && same_xz;
   fp_zero(Qy_neg);
@@ -538,9 +549,14 @@ static inline void point_add(const ec_point_t * const P,
    * Main point addition algorithm.
    */
 
-  fp_int Z1Z1[1], H[1], HH[1], I[1], J[1], r[1], V[1], t[1];
-
-  fp_init(Z1Z1), fp_init(H), fp_init(HH), fp_init(I), fp_init(J), fp_init(r), fp_init(V), fp_init(t);
+  fp_int Z1Z1[1] = INIT_FP_INT;
+  fp_int H[1]    = INIT_FP_INT;
+  fp_int HH[1]   = INIT_FP_INT;
+  fp_int I[1]    = INIT_FP_INT;
+  fp_int J[1]    = INIT_FP_INT;
+  fp_int r[1]    = INIT_FP_INT;
+  fp_int V[1]    = INIT_FP_INT;
+  fp_int t[1]    = INIT_FP_INT;
 
   ff_sqr  (curve,  P->z,           Z1Z1);       /* Z1Z1 = Pz ** 2 */
 
@@ -618,7 +634,7 @@ static hal_error_t point_scalar_multiply(const fp_int * const k,
    */
 
   ec_point_t P[1];
-  memcpy(P, P_, sizeof(P));
+  point_copy(P_, P);
 
   if ((err = point_to_montgomery(P, curve)) != HAL_OK) {
     memset(P, 0, sizeof(P));
@@ -631,8 +647,8 @@ static hal_error_t point_scalar_multiply(const fp_int * const k,
    * M[1] is where we accumulate the result.
    */
 
-  ec_point_t M[2][1];
-  memset(M, 0, sizeof(M));
+  ec_point_t M[2][1] = {INIT_EC_POINT_T};
+
   point_set_infinite(M[0], curve);
   point_set_infinite(M[1], curve);
 
@@ -779,8 +795,8 @@ static int point_is_on_curve(const ec_point_t * const P,
 {
   assert(P != NULL && curve != NULL);
 
-  fp_int t1[1]; fp_init(t1);
-  fp_int t2[1]; fp_init(t2);
+  fp_int t1[1] = INIT_FP_INT;
+  fp_int t2[1] = INIT_FP_INT;
 
   /*
    * Compute y**2 - x**3 + 3*x.
@@ -1104,7 +1120,7 @@ hal_error_t hal_ecdsa_key_to_der(const hal_ecdsa_key_t * const key,
   const size_t Qy_len = fp_unsigned_bin_size(unconst_fp_int(key->Q->y));
   assert(q_len >= d_len && q_len >= Qx_len && q_len >= Qy_len);
 
-  fp_int version[1];
+  fp_int version[1] = INIT_FP_INT;
   fp_set(version, 1);
 
   hal_error_t err;
@@ -1211,7 +1227,7 @@ hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key_,
   const uint8_t * const der_end = der + hlen + vlen;
   const uint8_t *d = der + hlen;
   const ecdsa_curve_t *curve = NULL;
-  fp_int version[1];
+  fp_int version[1] = INIT_FP_INT;
 
   if ((err = hal_asn1_decode_integer(version, d, &hlen, vlen)) != HAL_OK)
     goto fail;
@@ -1418,16 +1434,15 @@ hal_error_t hal_ecdsa_sign(const hal_ecdsa_key_t * const key,
   if (curve == NULL)
     return HAL_ERROR_IMPOSSIBLE;
 
-  fp_int k[1]; fp_init(k);
-  fp_int r[1]; fp_init(r);
-  fp_int s[1]; fp_init(s);
-  fp_int e[1]; fp_init(e);
+  fp_int k[1] = INIT_FP_INT;
+  fp_int r[1] = INIT_FP_INT;
+  fp_int s[1] = INIT_FP_INT;
+  fp_int e[1] = INIT_FP_INT;
 
   fp_int * const n = unconst_fp_int(curve->n);
   fp_int * const d = unconst_fp_int(key->d);
 
-  ec_point_t R[1];
-  memset(R, 0, sizeof(R));
+  ec_point_t R[1] = INIT_EC_POINT_T;
 
   hal_error_t err;
 
@@ -1518,13 +1533,18 @@ hal_error_t hal_ecdsa_verify(const hal_ecdsa_key_t * const key,
   fp_int * const n = unconst_fp_int(curve->n);
 
   hal_error_t err;
-  fp_int r[1], s[1], e[1], w[1], u1[1], u2[1], v[1];
-  ec_point_t u1G[1], u2Q[1], R[1];
 
-  fp_init(w); fp_init(u1); fp_init(u2); fp_init(v);
-  memset(u1G, 0, sizeof(u1G));
-  memset(u2Q, 0, sizeof(u2Q));
-  memset(R,   0, sizeof(R));
+  fp_int r[1]  = INIT_FP_INT;
+  fp_int s[1]  = INIT_FP_INT;
+  fp_int e[1]  = INIT_FP_INT;
+  fp_int w[1]  = INIT_FP_INT;
+  fp_int u1[1] = INIT_FP_INT;
+  fp_int u2[1] = INIT_FP_INT;
+  fp_int v[1]  = INIT_FP_INT;
+
+  ec_point_t u1G[1] = INIT_EC_POINT_T;
+  ec_point_t u2Q[1] = INIT_EC_POINT_T;
+  ec_point_t R[1]   = INIT_EC_POINT_T;
 
   /*
    * Start by decoding the signature.
