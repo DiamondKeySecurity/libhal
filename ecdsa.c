@@ -363,8 +363,8 @@ static inline hal_error_t point_to_montgomery(ec_point_t *P,
   if (fp_cmp_d(unconst_fp_int(P->z), 1) != FP_EQ)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if (fp_mulmod(unconst_fp_int(P->x), unconst_fp_int(curve->mu), unconst_fp_int(curve->q), P->x) != FP_OKAY ||
-      fp_mulmod(unconst_fp_int(P->y), unconst_fp_int(curve->mu), unconst_fp_int(curve->q), P->y) != FP_OKAY)
+  if (fp_mulmod(P->x, unconst_fp_int(curve->mu), unconst_fp_int(curve->q), P->x) != FP_OKAY ||
+      fp_mulmod(P->y, unconst_fp_int(curve->mu), unconst_fp_int(curve->q), P->y) != FP_OKAY)
     return HAL_ERROR_IMPOSSIBLE;
 
   fp_copy(unconst_fp_int(curve->mu), P->z);
@@ -529,6 +529,7 @@ static inline void point_add(const ec_point_t * const P,
   const int P_was_infinite = point_is_infinite(P);
 
   fp_int Qy_neg[1];
+  fp_init(Qy_neg);
   fp_sub(unconst_fp_int(curve->q), unconst_fp_int(Q->y), Qy_neg);
   const int result_is_infinite = fp_cmp(unconst_fp_int(P->y), Qy_neg) == FP_EQ && same_xz;
   fp_zero(Qy_neg);
