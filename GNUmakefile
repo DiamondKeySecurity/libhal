@@ -66,5 +66,5 @@ distclean: clean
 
 tags: TAGS
 
-TAGS: *.[ch]
+TAGS: *.[ch] tests/*.[ch]
 	etags $^

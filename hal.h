@@ -459,6 +459,17 @@ typedef enum { HAL_ERROR_LIST N_HAL_ERRORS } hal_error_t;
 #include <stdint.h>
 #include <sys/types.h>
 
+/*
+ * Typedef to isolate code from our current choice of representation
+ * for a Cryptech bus address.
+ */
+
+typedef off_t hal_addr_t;
+
+/*
+ * Error translation.
+ */
+
 extern const char *hal_error_string(const hal_error_t err);
 
 /*
@@ -466,14 +477,14 @@ extern const char *hal_error_string(const hal_error_t err);
  */
 
 extern void hal_io_set_debug(int onoff);
-extern hal_error_t hal_io_write(off_t offset, const uint8_t *buf, size_t len);
-extern hal_error_t hal_io_read(off_t offset, uint8_t *buf, size_t len);
-extern hal_error_t hal_io_expected(off_t offset, const uint8_t *expected, size_t len);
-extern hal_error_t hal_io_init(off_t offset);
-extern hal_error_t hal_io_next(off_t offset);
-extern hal_error_t hal_io_wait(off_t offset, uint8_t status, int *count);
-extern hal_error_t hal_io_wait_ready(off_t offset);
-extern hal_error_t hal_io_wait_valid(off_t offset);
+extern hal_error_t hal_io_write(hal_addr_t offset, const uint8_t *buf, size_t len);
+extern hal_error_t hal_io_read(hal_addr_t offset, uint8_t *buf, size_t len);
+extern hal_error_t hal_io_expected(hal_addr_t offset, const uint8_t *expected, size_t len);
+extern hal_error_t hal_io_init(hal_addr_t offset);
+extern hal_error_t hal_io_next(hal_addr_t offset);
+extern hal_error_t hal_io_wait(hal_addr_t offset, uint8_t status, int *count);
+extern hal_error_t hal_io_wait_ready(hal_addr_t offset);
+extern hal_error_t hal_io_wait_valid(hal_addr_t offset);
 
 /*
  * Higher level public API.

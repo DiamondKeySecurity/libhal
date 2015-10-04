@@ -72,7 +72,7 @@ static hal_error_t init(void)
  *
  * sss ccccc rrrrrrrr => 00001000000000 sss 0 ccccc rrrrrrrr 00
  */
-static off_t eim_offset(off_t offset)
+static hal_addr_t eim_offset(hal_addr_t offset)
 {
   return EIM_BASE_ADDR + ((offset & ~0x1fff) << 3) + ((offset & 0x1fff) << 2);
 }
@@ -93,7 +93,7 @@ static void dump(char *label, const uint8_t *buf, size_t len)
   }
 }
 
-hal_error_t hal_io_write(off_t offset, const uint8_t *buf, size_t len)
+hal_error_t hal_io_write(hal_addr_t offset, const uint8_t *buf, size_t len)
 {
   hal_error_t err;
 
@@ -115,7 +115,7 @@ hal_error_t hal_io_write(off_t offset, const uint8_t *buf, size_t len)
   return HAL_OK;
 }
 
-hal_error_t hal_io_read(off_t offset, uint8_t *buf, size_t len)
+hal_error_t hal_io_read(hal_addr_t offset, uint8_t *buf, size_t len)
 {
   uint8_t *rbuf = buf;
   int rlen = len;
@@ -139,7 +139,7 @@ hal_error_t hal_io_read(off_t offset, uint8_t *buf, size_t len)
   return HAL_OK;
 }
 
-hal_error_t hal_io_expected(off_t offset, const uint8_t *expected, size_t len)
+hal_error_t hal_io_expected(hal_addr_t offset, const uint8_t *expected, size_t len)
 {
   hal_error_t err;
   uint8_t buf[4];
@@ -160,19 +160,19 @@ hal_error_t hal_io_expected(off_t offset, const uint8_t *expected, size_t len)
   return HAL_OK;
 }
 
-hal_error_t hal_io_init(off_t offset)
+hal_error_t hal_io_init(hal_addr_t offset)
 {
   uint8_t buf[4] = { 0, 0, 0, CTRL_INIT };
   return hal_io_write(offset, buf, sizeof(buf));
 }
 
-hal_error_t hal_io_next(off_t offset)
+hal_error_t hal_io_next(hal_addr_t offset)
 {
   uint8_t buf[4] = { 0, 0, 0, CTRL_NEXT };
   return hal_io_write(offset, buf, sizeof(buf));
 }
 
-hal_error_t hal_io_wait(off_t offset, uint8_t status, int *count)
+hal_error_t hal_io_wait(hal_addr_t offset, uint8_t status, int *count)
 {
   hal_error_t err;
   uint8_t buf[4];
@@ -194,13 +194,13 @@ hal_error_t hal_io_wait(off_t offset, uint8_t status, int *count)
   }
 }
 
-hal_error_t hal_io_wait_ready(off_t offset)
+hal_error_t hal_io_wait_ready(hal_addr_t offset)
 {
   int limit = EIM_IO_TIMEOUT;
   return hal_io_wait(offset, STATUS_READY, &limit);
 }
 
-hal_error_t hal_io_wait_valid(off_t offset)
+hal_error_t hal_io_wait_valid(hal_addr_t offset)
 {
   int limit = EIM_IO_TIMEOUT;
   return hal_io_wait(offset, STATUS_VALID, &limit);

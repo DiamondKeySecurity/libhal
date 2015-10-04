@@ -66,11 +66,11 @@
 
 struct hal_hash_driver {
   size_t length_length;                 /* Length of the length field */
-  off_t block_addr;                     /* Where to write hash blocks */
-  off_t ctrl_addr;                      /* Control register */
-  off_t status_addr;                    /* Status register */
-  off_t digest_addr;                    /* Where to read digest */
-  off_t name_addr;                      /* Where to read core name */
+  hal_addr_t block_addr;                     /* Where to write hash blocks */
+  hal_addr_t ctrl_addr;                      /* Control register */
+  hal_addr_t status_addr;                    /* Status register */
+  hal_addr_t digest_addr;                    /* Where to read digest */
+  hal_addr_t name_addr;                      /* Where to read core name */
   char core_name[8];                    /* Expected name of core */
   uint8_t ctrl_mode;                    /* Digest mode, for cores that have modes */
 };

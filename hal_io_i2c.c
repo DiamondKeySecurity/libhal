@@ -166,14 +166,14 @@ static hal_error_t i2c_read(uint8_t *b)
 #define UNKNOWN   0xfe
 #define ERROR     0xfd
 
-static hal_error_t hal_io_send_write_cmd(off_t offset, const uint8_t *data)
+static hal_error_t hal_io_send_write_cmd(hal_addr_t offset, const uint8_t *data)
 {
   uint8_t buf[9] = { SOC, WRITE_CMD, (offset >> 8) & 0xff, offset & 0xff,
                      data[0], data[1], data[2], data[3], EOC };
   return i2c_write(buf, sizeof(buf));
 }
 
-static hal_error_t hal_io_send_read_cmd(off_t offset)
+static hal_error_t hal_io_send_read_cmd(hal_addr_t offset)
 {
   uint8_t buf[5] = { SOC, READ_CMD, (offset >> 8) & 0xff, offset & 0xff, EOC };
   return i2c_write(buf, sizeof(buf));
@@ -233,7 +233,7 @@ static hal_error_t hal_io_compare(uint8_t *buf, const uint8_t *expected, size_t 
   return HAL_OK;
 }
 
-static hal_error_t hal_io_get_write_resp(off_t offset)
+static hal_error_t hal_io_get_write_resp(hal_addr_t offset)
 {
   uint8_t buf[5];
   uint8_t expected[5] = { SOR, WRITE_OK, (offset >> 8) & 0xff, offset & 0xff, EOR };
@@ -245,7 +245,7 @@ static hal_error_t hal_io_get_write_resp(off_t offset)
   return hal_io_compare(buf, expected, sizeof(expected));
 }
 
-static hal_error_t hal_io_get_read_resp(off_t offset, uint8_t *data)
+static hal_error_t hal_io_get_read_resp(hal_addr_t offset, uint8_t *data)
 {
   uint8_t buf[9];
   uint8_t expected[4] = { SOR, READ_OK, (offset >> 8) & 0xff, offset & 0xff };
@@ -266,7 +266,7 @@ static hal_error_t hal_io_get_read_resp(off_t offset, uint8_t *data)
   return HAL_OK;
 }
 
-static hal_error_t hal_io_get_read_resp_expected(off_t offset, const uint8_t *data)
+static hal_error_t hal_io_get_read_resp_expected(hal_addr_t offset, const uint8_t *data)
 {
   uint8_t buf[9];
   uint8_t expected[9] = { SOR, READ_OK, (offset >> 8) & 0xff, offset & 0xff,
@@ -281,7 +281,7 @@ static hal_error_t hal_io_get_read_resp_expected(off_t offset, const uint8_t *da
   return hal_io_compare(buf, expected, sizeof(buf));
 }
 
-hal_error_t hal_io_write(off_t offset, const uint8_t *buf, size_t len)
+hal_error_t hal_io_write(hal_addr_t offset, const uint8_t *buf, size_t len)
 {
   hal_error_t err;
 
@@ -293,7 +293,7 @@ hal_error_t hal_io_write(off_t offset, const uint8_t *buf, size_t len)
   return HAL_OK;
 }
 
-hal_error_t hal_io_read(off_t offset, uint8_t *buf, size_t len)
+hal_error_t hal_io_read(hal_addr_t offset, uint8_t *buf, size_t len)
 {
   hal_error_t err;
 
@@ -305,7 +305,7 @@ hal_error_t hal_io_read(off_t offset, uint8_t *buf, size_t len)
   return HAL_OK;
 }
 
-hal_error_t hal_io_expected(off_t offset, const uint8_t *buf, size_t len)
+hal_error_t hal_io_expected(hal_addr_t offset, const uint8_t *buf, size_t len)
 {
   hal_error_t err;
 
@@ -317,19 +317,19 @@ hal_error_t hal_io_expected(off_t offset, const uint8_t *buf, size_t len)
   return HAL_OK;
 }
 
-hal_error_t hal_io_init(off_t offset)
+hal_error_t hal_io_init(hal_addr_t offset)
 {
   uint8_t buf[4] = { 0, 0, 0, CTRL_INIT };
   return hal_io_write(offset, buf, 4);
 }
 
-hal_error_t hal_io_next(off_t offset)
+hal_error_t hal_io_next(hal_addr_t offset)
 {
   uint8_t buf[4] = { 0, 0, 0, CTRL_NEXT };
   return hal_io_write(offset, buf, 4);
 }
 
-hal_error_t hal_io_wait(off_t offset, uint8_t status, int *count)
+hal_error_t hal_io_wait(hal_addr_t offset, uint8_t status, int *count)
 {
   hal_error_t err;
   uint8_t buf[4];
@@ -352,13 +352,13 @@ hal_error_t hal_io_wait(off_t offset, uint8_t status, int *count)
   }
 }
 
-hal_error_t hal_io_wait_ready(off_t offset)
+hal_error_t hal_io_wait_ready(hal_addr_t offset)
 {
   int limit = 10;
   return hal_io_wait(offset, STATUS_READY, &limit);
 }
 
-hal_error_t hal_io_wait_valid(off_t offset)
+hal_error_t hal_io_wait_valid(hal_addr_t offset)
 {
   int limit = 10;
   return hal_io_wait(offset, STATUS_VALID, &limit);

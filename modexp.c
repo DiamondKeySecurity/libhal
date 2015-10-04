@@ -76,7 +76,7 @@ void hal_modexp_set_debug(const int onoff)
  * Set an ordinary register.
  */
 
-static hal_error_t set_register(const off_t addr,
+static hal_error_t set_register(const hal_addr_t addr,
                                 uint32_t value)
 {
   uint8_t w[4];
@@ -96,7 +96,7 @@ static hal_error_t set_register(const off_t addr,
  * expects.
  */
 
-static hal_error_t get_buffer(const off_t data_addr,
+static hal_error_t get_buffer(const hal_addr_t data_addr,
                               uint8_t *value,
                               const size_t length)
 {
@@ -116,7 +116,7 @@ static hal_error_t get_buffer(const off_t data_addr,
  * expects.
  */
 
-static hal_error_t set_buffer(const off_t data_addr,
+static hal_error_t set_buffer(const hal_addr_t data_addr,
                               const uint8_t * const value,
                               const size_t length)
 {
