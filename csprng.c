@@ -50,6 +50,9 @@ hal_error_t hal_get_random(const hal_core_t *core, void *buffer, const size_t le
   hal_error_t err;
   size_t i;
 
+  if ((err = hal_core_check_name(&core, CSPRNG_NAME)) != HAL_OK)
+    return err;
+
   for (i = 0; i < length; i += 4) {
     const int last = (length - i) < 4;
 
