@@ -98,6 +98,9 @@ hal_error_t hal_io_write(const hal_core_t *core, hal_addr_t offset, const uint8_
 {
   hal_error_t err;
 
+  if (core == NULL)
+    return HAL_ERROR_CORE_NOT_FOUND;
+
   if (len % 4 != 0)
     return HAL_ERROR_IO_BAD_COUNT;
 
@@ -121,6 +124,9 @@ hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf,
   uint8_t *rbuf = buf;
   int rlen = len;
   hal_error_t err;
+
+  if (core == NULL)
+    return HAL_ERROR_CORE_NOT_FOUND;
 
   if (len % 4 != 0)
     return HAL_ERROR_IO_BAD_COUNT;
