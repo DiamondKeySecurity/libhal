@@ -41,6 +41,7 @@
 #include <stdint.h>
 
 #include "hal.h"
+#include "verilog_constants.h"
 
 #define I2C_dev                 "/dev/i2c-2"
 #define I2C_addr                0x0f

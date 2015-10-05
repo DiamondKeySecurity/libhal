@@ -542,23 +542,14 @@ static int _test_hash(const hal_hash_descriptor_t * const descriptor,
 
   printf("Starting %s test\n", label);
 
-  err = hal_hash_core_present(descriptor);
+  const hal_core_t *core = hal_core_find(descriptor->core_name, NULL);
 
-  switch (err) {
-
-  case HAL_OK:
-    break;
-
-  case HAL_ERROR_IO_UNEXPECTED:
-    printf("Core not present, skipping test\n");
+  if (core == NULL) {
+    printf("Core not found, skipping test\n");
     return 1;
-
-  default:
-    printf("Failed while checking for core: %s\n", hal_error_string(err));
-    return 0;
   }
 
-  if ((err = hal_hash_initialize(descriptor, &state, statebuf, sizeof(statebuf))) != HAL_OK) {
+  if ((err = hal_hash_initialize(core, descriptor, &state, statebuf, sizeof(statebuf))) != HAL_OK) {
     printf("Failed while initializing hash: %s\n", hal_error_string(err));
     return 0;
   }
@@ -606,23 +597,14 @@ static int _test_hmac(const hal_hash_descriptor_t * const descriptor,
 
   printf("Starting %s test\n", label);
 
-  err = hal_hash_core_present(descriptor);
+  const hal_core_t *core = hal_core_find(descriptor->core_name, NULL);
 
-  switch (err) {
-
-  case HAL_OK:
-    break;
-
-  case HAL_ERROR_IO_UNEXPECTED:
-    printf("Core not present, skipping test\n");
+  if (core == NULL) {
+    printf("Core not found, skipping test\n");
     return 1;
-
-  default:
-    printf("Failed while checking for core: %s\n", hal_error_string(err));
-    return 0;
   }
 
-  if ((err = hal_hmac_initialize(descriptor, &state, statebuf, sizeof(statebuf), key, key_len)) != HAL_OK) {
+  if ((err = hal_hmac_initialize(core, descriptor, &state, statebuf, sizeof(statebuf), key, key_len)) != HAL_OK) {
     printf("Failed while initializing HMAC: %s\n", hal_error_string(err));
     return 0;
   }

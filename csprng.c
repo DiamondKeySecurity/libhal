@@ -38,12 +38,13 @@
 #include <stdio.h>
 
 #include "hal.h"
+#include "verilog_constants.h"
 
 #ifndef WAIT_FOR_CSPRNG_VALID
 #define WAIT_FOR_CSPRNG_VALID   0
 #endif
 
-hal_error_t hal_get_random(void *buffer, const size_t length)
+hal_error_t hal_get_random(const hal_core_t *core, void *buffer, const size_t length)
 {
   uint8_t temp[4], *buf = buffer;
   hal_error_t err;
@@ -52,10 +53,10 @@ hal_error_t hal_get_random(void *buffer, const size_t length)
   for (i = 0; i < length; i += 4) {
     const int last = (length - i) < 4;
 
-    if (WAIT_FOR_CSPRNG_VALID && (err = hal_io_wait_valid(CSPRNG_ADDR_STATUS)) != HAL_OK)
+    if (WAIT_FOR_CSPRNG_VALID && (err = hal_io_wait_valid(core)) != HAL_OK)
       return err;
 
-    if ((err = hal_io_read(CSPRNG_ADDR_RANDOM, (last ? temp : &buf[i]), 4)) != HAL_OK)
+    if ((err = hal_io_read(core, CSPRNG_ADDR_RANDOM, (last ? temp : &buf[i]), 4)) != HAL_OK)
       return err;
 
     if (last)

@@ -113,7 +113,7 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
   uint8_t keybuf1[hal_ecdsa_key_t_size];
   hal_ecdsa_key_t *key1 = NULL;
 
-  if ((err = hal_ecdsa_key_gen(&key1, keybuf1, sizeof(keybuf1), tc->curve)) != HAL_OK)
+  if ((err = hal_ecdsa_key_gen(NULL, &key1, keybuf1, sizeof(keybuf1), tc->curve)) != HAL_OK)
     return printf("hal_ecdsa_key_gen() failed: %s\n", hal_error_string(err)), 0;
 
   uint8_t Qx[tc->Qx_len], Qy[tc->Qy_len];
@@ -151,13 +151,13 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
   uint8_t sig[tc->sig_len + 4];
   size_t  sig_len;
 
-  if ((err = hal_ecdsa_sign(key1, tc->H, tc->H_len, sig, &sig_len, sizeof(sig), HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
+  if ((err = hal_ecdsa_sign(NULL, key1, tc->H, tc->H_len, sig, &sig_len, sizeof(sig), HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
     return printf("hal_ecdsa_sign() failed: %s\n", hal_error_string(err)), 0;
 
   if (sig_len != tc->sig_len || memcmp(sig, tc->sig, tc->sig_len) != 0)
     return printf("Signature mismatch\n"), 0;
 
-  if ((err = hal_ecdsa_verify(key2, tc->H, tc->H_len, sig, sig_len, HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
+  if ((err = hal_ecdsa_verify(NULL, key2, tc->H, tc->H_len, sig, sig_len, HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
     return printf("hal_ecdsa_verify(private) failed: %s\n", hal_error_string(err)), 0;
 
   hal_ecdsa_key_clear(key2);
@@ -177,7 +177,7 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
                                        tc->Qx, tc->Qx_len, tc->Qy, tc->Qy_len)) != HAL_OK)
     return printf("hal_ecdsa_load_public() failed: %s\n", hal_error_string(err)), 0;
 
-  if ((err = hal_ecdsa_verify(key2, tc->H, tc->H_len, sig, sig_len, HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
+  if ((err = hal_ecdsa_verify(NULL, key2, tc->H, tc->H_len, sig, sig_len, HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
     return printf("hal_ecdsa_verify(public) failed: %s\n", hal_error_string(err)), 0;
 
   uint8_t point[hal_ecdsa_key_to_ecpoint_len(key1)];
@@ -236,7 +236,7 @@ static int test_keygen_sign_verify(const hal_ecdsa_curve_t curve)
 
   printf("Generating key\n");
 
-  if ((err =  hal_ecdsa_key_gen(&key, keybuf, sizeof(keybuf), curve)) != HAL_OK)
+  if ((err =  hal_ecdsa_key_gen(NULL, &key, keybuf, sizeof(keybuf), curve)) != HAL_OK)
     return printf("hal_ecdsa_key_gen() failed: %s\n", hal_error_string(err)), 0;
 
   printf("Generating digest\n");
@@ -248,7 +248,7 @@ static int test_keygen_sign_verify(const hal_ecdsa_curve_t curve)
     uint8_t statebuf[hash_descriptor->hash_state_length];
     hal_hash_state_t *state = NULL;
 
-    if ((err = hal_hash_initialize(hash_descriptor, &state, statebuf, sizeof(statebuf))) != HAL_OK ||
+    if ((err = hal_hash_initialize(NULL, hash_descriptor, &state, statebuf, sizeof(statebuf))) != HAL_OK ||
         (err = hal_hash_update(state, plaintext, strlen((const char *) plaintext))) != HAL_OK ||
         (err = hal_hash_finalize(state, hashbuf, sizeof(hashbuf))) != HAL_OK)
       return printf("Couldn't hash plaintext: %s\n", hal_error_string(err)), 0;
@@ -263,13 +263,13 @@ static int test_keygen_sign_verify(const hal_ecdsa_curve_t curve)
 
   printf("Signing\n");
 
-  if ((err = hal_ecdsa_sign(key, hashbuf, sizeof(hashbuf),
+  if ((err = hal_ecdsa_sign(NULL, key, hashbuf, sizeof(hashbuf),
                             sigbuf, &siglen, sizeof(sigbuf), HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
     return printf("hal_ecdsa_sign() failed: %s\n", hal_error_string(err)), 0;
 
   printf("Verifying\n");
 
-  if ((err = hal_ecdsa_verify(key, hashbuf, sizeof(hashbuf),
+  if ((err = hal_ecdsa_verify(NULL, key, hashbuf, sizeof(hashbuf),
                               sigbuf, siglen, HAL_ECDSA_SIGNATURE_FORMAT_ASN1)) != HAL_OK)
     return printf("hal_ecdsa_verify() failed: %s\n", hal_error_string(err)), 0;
 
@@ -306,22 +306,24 @@ static void _time_check(const struct timeval t0, const int ok)
   } while (0)
 
 
+static void show_core(const hal_core_t *core, const char *whinge)
+{
+  const hal_core_info_t *core_info = hal_core_info(core);
+  if (core_info != NULL)
+    printf("\"%8.8s\"  \"%4.4s\"\n", core_info->name, core_info->version);
+  else if (whinge != NULL)
+    printf("%s core not present\n", whinge);
+}
+
 int main(int argc, char *argv[])
 {
-  uint8_t name[8], version[4];
-  hal_error_t err;
+  const hal_core_t *sha256_core = hal_core_find(SHA256_NAME, NULL);
+  const hal_core_t *sha512_core = hal_core_find(SHA512_NAME, NULL);
+  const hal_core_t *csprng_core = hal_core_find(CSPRNG_NAME, NULL);
 
-  /*
-   * Initialize EIM and report what core we're running.
-   */
-
-  if ((err = hal_io_read(CSPRNG_ADDR_NAME0,   name,    sizeof(name)))    != HAL_OK ||
-      (err = hal_io_read(CSPRNG_ADDR_VERSION, version, sizeof(version))) != HAL_OK) {
-    printf("Initialization failed: %s\n", hal_error_string(err));
-    return 1;
-  }
-
-  printf("\"%8.8s\"  \"%4.4s\"\n\n", name, version);
+  show_core(sha256_core, "sha-256");
+  show_core(sha512_core, "sha-512");
+  show_core(csprng_core, "csprng");
 
   int ok = 1;
 
@@ -334,9 +336,15 @@ int main(int argc, char *argv[])
   /*
    * Generate/sign/verify test for each curve.
    */
-  time_check(test_keygen_sign_verify(HAL_ECDSA_CURVE_P256));
-  time_check(test_keygen_sign_verify(HAL_ECDSA_CURVE_P384));
-  time_check(test_keygen_sign_verify(HAL_ECDSA_CURVE_P521));
+
+  if (csprng_core != NULL && sha256_core != NULL) {
+    time_check(test_keygen_sign_verify(HAL_ECDSA_CURVE_P256));
+  }
+
+  if (csprng_core != NULL && sha512_core != NULL) {
+    time_check(test_keygen_sign_verify(HAL_ECDSA_CURVE_P384));
+    time_check(test_keygen_sign_verify(HAL_ECDSA_CURVE_P521));
+  }
 
   return !ok;
 }

@@ -71,6 +71,7 @@
 #include <assert.h>
 
 #include "hal.h"
+#include "verilog_constants.h"
 #include <tfm.h>
 #include "asn1_internal.h"
 
@@ -182,12 +183,16 @@ static hal_error_t unpack_fp(const fp_int * const bn, uint8_t *buffer, const siz
  * wrap result back up as a bignum.
  */
 
-static hal_error_t modexp(const fp_int * msg,
+static hal_error_t modexp(const hal_core_t *core,
+                          const fp_int * msg,
                           const fp_int * const exp,
                           const fp_int * const mod,
                           fp_int *res)
 {
   hal_error_t err = HAL_OK;
+
+  if ((err = hal_core_check_name(&core, MODEXPS6_NAME)) != HAL_OK)
+    return err;
 
   assert(msg != NULL && exp != NULL && mod != NULL && res != NULL);
 
@@ -210,7 +215,8 @@ static hal_error_t modexp(const fp_int * msg,
   if ((err = unpack_fp(msg, msgbuf, sizeof(msgbuf))) != HAL_OK ||
       (err = unpack_fp(exp, expbuf, sizeof(expbuf))) != HAL_OK ||
       (err = unpack_fp(mod, modbuf, sizeof(modbuf))) != HAL_OK ||
-      (err = hal_modexp(msgbuf, sizeof(msgbuf),
+      (err = hal_modexp(core,
+                        msgbuf, sizeof(msgbuf),
                         expbuf, sizeof(expbuf),
                         modbuf, sizeof(modbuf),
                         resbuf, sizeof(resbuf))) != HAL_OK)
@@ -237,7 +243,7 @@ static hal_error_t modexp(const fp_int * msg,
 
 int fp_exptmod(fp_int *a, fp_int *b, fp_int *c, fp_int *d)
 {
-  return modexp(a, b, c, d) == HAL_OK ? FP_OKAY : FP_VAL;
+  return modexp(NULL, a, b, c, d) == HAL_OK ? FP_OKAY : FP_VAL;
 }
 
 #else /* HAL_RSA_USE_MODEXP */
@@ -267,21 +273,21 @@ static hal_error_t modexp(const fp_int * const msg,
  * try.  Come back to this if it looks like a bottleneck.
  */
 
-static hal_error_t create_blinding_factors(const hal_rsa_key_t * const key, fp_int *bf, fp_int *ubf)
+static hal_error_t create_blinding_factors(const hal_core_t *core, const hal_rsa_key_t * const key, fp_int *bf, fp_int *ubf)
 {
   assert(key != NULL && bf != NULL && ubf != NULL);
 
   uint8_t rnd[fp_unsigned_bin_size(unconst_fp_int(key->n))];
   hal_error_t err = HAL_OK;
 
-  if ((err = hal_get_random(rnd, sizeof(rnd))) != HAL_OK)
+  if ((err = hal_get_random(NULL, rnd, sizeof(rnd))) != HAL_OK)
     goto fail;
 
   fp_init(bf);
   fp_read_unsigned_bin(bf,  rnd, sizeof(rnd));
   fp_copy(bf, ubf);
 
-  if ((err = modexp(bf, key->e, key->n, bf)) != HAL_OK)
+  if ((err = modexp(core, bf, key->e, key->n, bf)) != HAL_OK)
     goto fail;
 
   FP_CHECK(fp_invmod(ubf, unconst_fp_int(key->n), ubf));
@@ -295,7 +301,7 @@ static hal_error_t create_blinding_factors(const hal_rsa_key_t * const key, fp_i
  * RSA decryption via Chinese Remainder Theorem (Garner's formula).
  */
 
-static hal_error_t rsa_crt(const hal_rsa_key_t * const key, fp_int *msg, fp_int *sig)
+static hal_error_t rsa_crt(const hal_core_t *core, const hal_rsa_key_t * const key, fp_int *msg, fp_int *sig)
 {
   assert(key != NULL && msg != NULL && sig != NULL);
 
@@ -310,7 +316,7 @@ static hal_error_t rsa_crt(const hal_rsa_key_t * const key, fp_int *msg, fp_int 
    * Handle blinding if requested.
    */
   if (blinding) {
-    if ((err = create_blinding_factors(key, bf, ubf)) != HAL_OK)
+    if ((err = create_blinding_factors(core, key, bf, ubf)) != HAL_OK)
       goto fail;
     FP_CHECK(fp_mulmod(msg, bf, unconst_fp_int(key->n), msg));
   }
@@ -319,8 +325,8 @@ static hal_error_t rsa_crt(const hal_rsa_key_t * const key, fp_int *msg, fp_int 
    * m1 = msg ** dP mod p
    * m2 = msg ** dQ mod q
    */
-  if ((err = modexp(msg, key->dP, key->p, m1)) != HAL_OK ||
-      (err = modexp(msg, key->dQ, key->q, m2)) != HAL_OK)
+  if ((err = modexp(core, msg, key->dP, key->p, m1)) != HAL_OK ||
+      (err = modexp(core, msg, key->dQ, key->q, m2)) != HAL_OK)
     goto fail;
 
   /*
@@ -366,7 +372,8 @@ static hal_error_t rsa_crt(const hal_rsa_key_t * const key, fp_int *msg, fp_int 
  * to the caller.
  */
 
-hal_error_t hal_rsa_encrypt(const hal_rsa_key_t * const key,
+hal_error_t hal_rsa_encrypt(const hal_core_t *core,
+                            const hal_rsa_key_t * const key,
                             const uint8_t * const input,  const size_t input_len,
                             uint8_t * output, const size_t output_len)
 {
@@ -380,7 +387,7 @@ hal_error_t hal_rsa_encrypt(const hal_rsa_key_t * const key,
 
   fp_read_unsigned_bin(i, unconst_uint8_t(input), input_len);
 
-  if ((err = modexp(i, key->e, key->n, o)) != HAL_OK ||
+  if ((err = modexp(core, i, key->e, key->n, o)) != HAL_OK ||
       (err = unpack_fp(o, output, output_len))   != HAL_OK)
     goto fail;
 
@@ -390,7 +397,8 @@ hal_error_t hal_rsa_encrypt(const hal_rsa_key_t * const key,
   return err;
 }
 
-hal_error_t hal_rsa_decrypt(const hal_rsa_key_t * const key,
+hal_error_t hal_rsa_decrypt(const hal_core_t *core,
+                            const hal_rsa_key_t * const key,
                             const uint8_t * const input,  const size_t input_len,
                             uint8_t * output, const size_t output_len)
 {
@@ -410,9 +418,9 @@ hal_error_t hal_rsa_decrypt(const hal_rsa_key_t * const key,
    */
 
   if (fp_iszero(key->p) || fp_iszero(key->q) || fp_iszero(key->u) || fp_iszero(key->dP) || fp_iszero(key->dQ))
-    err = modexp(i, key->d, key->n, o);
+    err = modexp(core, i, key->d, key->n, o);
   else
-    err = rsa_crt(key, i, o);
+    err = rsa_crt(core, key, i, o);
 
   if (err != HAL_OK || (err = unpack_fp(o, output, output_len)) != HAL_OK)
     goto fail;
@@ -583,7 +591,7 @@ static hal_error_t find_prime(const unsigned prime_length,
   fp_int t[1] = INIT_FP_INT;
 
   do {
-    if ((err = hal_get_random(buffer, sizeof(buffer))) != HAL_OK)
+    if ((err = hal_get_random(NULL, buffer, sizeof(buffer))) != HAL_OK)
       return err;
     buffer[0                 ] |= 0xc0;
     buffer[sizeof(buffer) - 1] |= 0x01;
@@ -600,7 +608,8 @@ static hal_error_t find_prime(const unsigned prime_length,
  * Generate a new RSA keypair.
  */
 
-hal_error_t hal_rsa_key_gen(hal_rsa_key_t **key_,
+hal_error_t hal_rsa_key_gen(const hal_core_t *core,
+                            hal_rsa_key_t **key_,
                             void *keybuf, const size_t keybuf_len,
                             const unsigned key_length,
                             const uint8_t * const public_exponent, const size_t public_exponent_len)

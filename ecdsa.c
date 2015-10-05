@@ -717,7 +717,7 @@ static inline hal_error_t get_random(void *buffer, const size_t length)
   if (rng_test_override_function)
     return rng_test_override_function(buffer, length);
   else
-    return hal_get_random(buffer, length);
+    return hal_get_random(NULL, buffer, length);
 }
 
 #else /* HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM */
@@ -830,7 +830,8 @@ static int point_is_on_curve(const ec_point_t * const P,
  * Generate a new ECDSA key.
  */
 
-hal_error_t hal_ecdsa_key_gen(hal_ecdsa_key_t **key_,
+hal_error_t hal_ecdsa_key_gen(const hal_core_t *core,
+                              hal_ecdsa_key_t **key_,
                               void *keybuf, const size_t keybuf_len,
                               const hal_ecdsa_curve_t curve_)
 {
@@ -1422,7 +1423,8 @@ static hal_error_t decode_signature_asn1(const ecdsa_curve_t * const curve,
  * Sign a caller-supplied hash.
  */
 
-hal_error_t hal_ecdsa_sign(const hal_ecdsa_key_t * const key,
+hal_error_t hal_ecdsa_sign(const hal_core_t *core,
+                           const hal_ecdsa_key_t * const key,
                            const uint8_t * const hash, const size_t hash_len,
                            uint8_t *signature, size_t *signature_len, const size_t signature_max,
                            const hal_ecdsa_signature_format_t signature_format)
@@ -1515,7 +1517,8 @@ hal_error_t hal_ecdsa_sign(const hal_ecdsa_key_t * const key,
  * Verify a signature using a caller-supplied hash.
  */
 
-hal_error_t hal_ecdsa_verify(const hal_ecdsa_key_t * const key,
+hal_error_t hal_ecdsa_verify(const hal_core_t *core,
+                             const hal_ecdsa_key_t * const key,
                              const uint8_t * const hash, const size_t hash_len,
                              const uint8_t * const signature, const size_t signature_len,
                              const hal_ecdsa_signature_format_t signature_format)

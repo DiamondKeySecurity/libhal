@@ -27,7 +27,7 @@
 
 INC		= hal.h
 LIB		= libhal.a
-OBJ		= ${IO_OBJ} csprng.o hash.o aes_keywrap.o pbkdf2.o \
+OBJ		= ${IO_OBJ} core.o csprng.o hash.o aes_keywrap.o pbkdf2.o \
 		  modexp.o rsa.o ecdsa.o asn1.o errorstrings.o
 
 IO_OBJ_EIM	= hal_io_eim.o novena-eim.o

@@ -33,390 +33,61 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*
- * Each Cryptech core has a set of 4-byte registers, which are accessed
- * through a 16-bit address. The address space is divided as follows:
- *   3 bits segment selector       | up to 8 segments
- *   5 bits core selector          | up to 32 cores/segment (see note below)
- *   8 bits register selector      | up to 256 registers/core (see modexp below)
- *
- * i.e, the address is structured as:
- * sss ccccc rrrrrrrr
- *
- * The I2C and UART communication channels use this 16-bit address format
- * directly in their read and write commands.
- *
- * The EIM communications channel translates this 16-bit address into a
- * 32-bit memory-mapped address in the range 0x08000000..807FFFF:
- * 00001000000000 sss 0 ccccc rrrrrrrr 00
- *
- * EIM, as implemented on the Novena, uses a 19-bit address space:
- *   Bits 18..16 are the semgent selector.
- *   Bits 15..10 are the core selector.
- *   Bits 9..2 are the register selector.
- *   Bits 1..0 are zero, because reads and writes are always word aligned.
- *
- * Note that EIM can support 64 cores per segment, but we sacrifice one bit
- * in order to map it into a 16-bit address space.
- */
-
 #ifndef _HAL_H_
 #define _HAL_H_
 
-
 /*
- * Default sizes.
+ * A handy macro from cryptlib.
  */
-#define CORE_SIZE               (0x100)
-#define SEGMENT_SIZE            (0x20 * CORE_SIZE)
-
-
-/*
- * Segments.
- */
-#define SEGMENT_OFFSET_GLOBALS  (0 * SEGMENT_SIZE)
-#define SEGMENT_OFFSET_HASHES   (1 * SEGMENT_SIZE)
-#define SEGMENT_OFFSET_RNGS     (2 * SEGMENT_SIZE)
-#define SEGMENT_OFFSET_CIPHERS  (3 * SEGMENT_SIZE)
-#define SEGMENT_OFFSET_MATH     (4 * SEGMENT_SIZE)
-
-
-/*
- * Addresses and codes common to all cores.
- */
-#define ADDR_NAME0              (0x00)
-#define ADDR_NAME1              (0x01)
-#define ADDR_VERSION            (0x02)
-#define ADDR_CTRL               (0x08)
-#define CTRL_INIT               (1)
-#define CTRL_NEXT               (2)
-#define ADDR_STATUS             (0x09)
-#define STATUS_READY            (1)
-#define STATUS_VALID            (2)
-
-
-/* A handy macro from cryptlib */
 #ifndef bitsToBytes
 #define bitsToBytes(x)          (x / 8)
 #endif
 
-
 /*
- * Board segment.
- * Board-level registers and communication channel registers.
+ * Current name and version values.
+ *
+ * Should these even be here?  Dunno.
+ * Should the versions be here even if the names should be?
  */
-#define BOARD_ADDR_BASE         (SEGMENT_OFFSET_GLOBALS + (0 * CORE_SIZE))
-#define BOARD_ADDR_NAME0        (BOARD_ADDR_BASE + ADDR_NAME0)
-#define BOARD_ADDR_NAME1        (BOARD_ADDR_BASE + ADDR_NAME1)
-#define BOARD_ADDR_VERSION      (BOARD_ADDR_BASE + ADDR_VERSION)
-#define BOARD_ADDR_DUMMY        (BOARD_ADDR_BASE + 0xFF)
 
-#define COMM_ADDR_BASE          (SEGMENT_OFFSET_GLOBALS + (1 * CORE_SIZE))
-#define COMM_ADDR_NAME0         (COMM_ADDR_BASE + ADDR_NAME0)
-#define COMM_ADDR_NAME1         (COMM_ADDR_BASE + ADDR_NAME1)
-#define COMM_ADDR_VERSION       (COMM_ADDR_BASE + ADDR_VERSION)
-
-/* Current name and version values */
-#define NOVENA_BOARD_NAME0      "PVT1"
-#define NOVENA_BOARD_NAME1      "    "
+#define NOVENA_BOARD_NAME	"PVT1    "
 #define NOVENA_BOARD_VERSION    "0.10"
 
-#define EIM_INTERFACE_NAME0     "eim "
-#define EIM_INTERFACE_NAME1     "    "
+#define EIM_INTERFACE_NAME      "eim     "
 #define EIM_INTERFACE_VERSION   "0.10"
 
-#define I2C_INTERFACE_NAME0     "i2c "
-#define I2C_INTERFACE_NAME1     "    "
+#define I2C_INTERFACE_NAME      "i2c     "
 #define I2C_INTERFACE_VERSION   "0.10"
 
-
-/*
- * Hashes segment.
- */
-
-/* Addresses common to all hash cores */
-#define ADDR_BLOCK              (0x10)
-#define ADDR_DIGEST             (0x20)      /* except SHA512 */
-
-/* Addresses and codes for the specific hash cores */
-#define SHA1_ADDR_BASE          (SEGMENT_OFFSET_HASHES + (0 * CORE_SIZE))
-#define SHA1_ADDR_NAME0         (SHA1_ADDR_BASE + ADDR_NAME0)
-#define SHA1_ADDR_NAME1         (SHA1_ADDR_BASE + ADDR_NAME1)
-#define SHA1_ADDR_VERSION       (SHA1_ADDR_BASE + ADDR_VERSION)
-#define SHA1_ADDR_CTRL          (SHA1_ADDR_BASE + ADDR_CTRL)
-#define SHA1_ADDR_STATUS        (SHA1_ADDR_BASE + ADDR_STATUS)
-#define SHA1_ADDR_BLOCK         (SHA1_ADDR_BASE + ADDR_BLOCK)
-#define SHA1_ADDR_DIGEST        (SHA1_ADDR_BASE + ADDR_DIGEST)
-#define SHA1_BLOCK_LEN          bitsToBytes(512)
-#define SHA1_LENGTH_LEN         bitsToBytes(64)
-#define SHA1_DIGEST_LEN         bitsToBytes(160)
-
-#define SHA256_ADDR_BASE        (SEGMENT_OFFSET_HASHES + (1 * CORE_SIZE))
-#define SHA256_ADDR_NAME0       (SHA256_ADDR_BASE + ADDR_NAME0)
-#define SHA256_ADDR_NAME1       (SHA256_ADDR_BASE + ADDR_NAME1)
-#define SHA256_ADDR_VERSION     (SHA256_ADDR_BASE + ADDR_VERSION)
-#define SHA256_ADDR_CTRL        (SHA256_ADDR_BASE + ADDR_CTRL)
-#define SHA256_ADDR_STATUS      (SHA256_ADDR_BASE + ADDR_STATUS)
-#define SHA256_ADDR_BLOCK       (SHA256_ADDR_BASE + ADDR_BLOCK)
-#define SHA256_ADDR_DIGEST      (SHA256_ADDR_BASE + ADDR_DIGEST)
-#define SHA256_BLOCK_LEN        bitsToBytes(512)
-#define SHA256_LENGTH_LEN       bitsToBytes(64)
-#define SHA256_DIGEST_LEN       bitsToBytes(256)
-
-#define SHA512_ADDR_BASE        (SEGMENT_OFFSET_HASHES + (2 * CORE_SIZE))
-#define SHA512_ADDR_NAME0       (SHA512_ADDR_BASE + ADDR_NAME0)
-#define SHA512_ADDR_NAME1       (SHA512_ADDR_BASE + ADDR_NAME1)
-#define SHA512_ADDR_VERSION     (SHA512_ADDR_BASE + ADDR_VERSION)
-#define SHA512_ADDR_CTRL        (SHA512_ADDR_BASE + ADDR_CTRL)
-#define SHA512_ADDR_STATUS      (SHA512_ADDR_BASE + ADDR_STATUS)
-#define SHA512_ADDR_BLOCK       (SHA512_ADDR_BASE + ADDR_BLOCK)
-#define SHA512_ADDR_DIGEST      (SHA512_ADDR_BASE + 0x40)
-#define SHA512_BLOCK_LEN        bitsToBytes(1024)
-#define SHA512_LENGTH_LEN       bitsToBytes(128)
-#define SHA512_224_DIGEST_LEN   bitsToBytes(224)
-#define SHA512_256_DIGEST_LEN   bitsToBytes(256)
-#define SHA384_DIGEST_LEN       bitsToBytes(384)
-#define SHA512_DIGEST_LEN       bitsToBytes(512)
-#define MODE_SHA_512_224        (0 << 2)
-#define MODE_SHA_512_256        (1 << 2)
-#define MODE_SHA_384            (2 << 2)
-#define MODE_SHA_512            (3 << 2)
-
-/* Current name and version values */
-#define SHA1_NAME0              "sha1"
-#define SHA1_NAME1              "    "
-#define SHA1_VERSION            "0.50"
-
-#define SHA256_NAME0            "sha2"
-#define SHA256_NAME1            "-256"
-#define SHA256_VERSION          "0.80"
-
-#define SHA512_NAME0            "sha2"
-#define SHA512_NAME1            "-512"
-#define SHA512_VERSION          "0.80"
-
-
-/*
- * TRNG segment.
- */
-
-/* addresses and codes for the TRNG cores */
-#define TRNG_ADDR_BASE          (SEGMENT_OFFSET_RNGS + (0x00 * CORE_SIZE))
-#define TRNG_ADDR_NAME0         (TRNG_ADDR_BASE + ADDR_NAME0)
-#define TRNG_ADDR_NAME1         (TRNG_ADDR_BASE + ADDR_NAME1)
-#define TRNG_ADDR_VERSION       (TRNG_ADDR_BASE + ADDR_VERSION)
-#define TRNG_ADDR_CTRL          (TRNG_ADDR_BASE + 0x10)
-#define TRNG_CTRL_DISCARD       (1)
-#define TRNG_CTRL_TEST_MODE     (2)
-#define TRNG_ADDR_STATUS        (TRNG_ADDR_BASE + 0x11)
-/* No status bits defined (yet) */
-#define TRNG_ADDR_DELAY         (TRNG_ADDR_BASE + 0x13)
-
-#define ENTROPY1_ADDR_BASE      (SEGMENT_OFFSET_RNGS + (0x05 * CORE_SIZE))
-#define ENTROPY1_ADDR_NAME0     (ENTROPY1_ADDR_BASE + ADDR_NAME0)
-#define ENTROPY1_ADDR_NAME1     (ENTROPY1_ADDR_BASE + ADDR_NAME1)
-#define ENTROPY1_ADDR_VERSION   (ENTROPY1_ADDR_BASE + ADDR_VERSION)
-#define ENTROPY1_ADDR_CTRL      (ENTROPY1_ADDR_BASE + 0x10)
-#define ENTROPY1_CTRL_ENABLE    (1)
-#define ENTROPY1_ADDR_STATUS    (ENTROPY1_ADDR_BASE + 0x11)
-#define ENTROPY1_STATUS_VALID   (1)
-#define ENTROPY1_ADDR_ENTROPY   (ENTROPY1_ADDR_BASE + 0x20)
-#define ENTROPY1_ADDR_DELTA     (ENTROPY1_ADDR_BASE + 0x30)
-
-#define ENTROPY2_ADDR_BASE      (SEGMENT_OFFSET_RNGS + (0x06 * CORE_SIZE))
-#define ENTROPY2_ADDR_NAME0     (ENTROPY2_ADDR_BASE + ADDR_NAME0)
-#define ENTROPY2_ADDR_NAME1     (ENTROPY2_ADDR_BASE + ADDR_NAME1)
-#define ENTROPY2_ADDR_VERSION   (ENTROPY2_ADDR_BASE + ADDR_VERSION)
-#define ENTROPY2_ADDR_CTRL      (ENTROPY2_ADDR_BASE + 0x10)
-#define ENTROPY2_CTRL_ENABLE    (1)
-#define ENTROPY2_ADDR_STATUS    (ENTROPY2_ADDR_BASE + 0x11)
-#define ENTROPY2_STATUS_VALID   (1)
-#define ENTROPY2_ADDR_OPA       (ENTROPY2_ADDR_BASE + 0x18)
-#define ENTROPY2_ADDR_OPB       (ENTROPY2_ADDR_BASE + 0x19)
-#define ENTROPY2_ADDR_ENTROPY   (ENTROPY2_ADDR_BASE + 0x20)
-#define ENTROPY2_ADDR_RAW       (ENTROPY2_ADDR_BASE + 0x21)
-#define ENTROPY2_ADDR_ROSC      (ENTROPY2_ADDR_BASE + 0x22)
-
-#define MIXER_ADDR_BASE         (SEGMENT_OFFSET_RNGS + (0x0a * CORE_SIZE))
-#define MIXER_ADDR_NAME0        (MIXER_ADDR_BASE + ADDR_NAME0)
-#define MIXER_ADDR_NAME1        (MIXER_ADDR_BASE + ADDR_NAME1)
-#define MIXER_ADDR_VERSION      (MIXER_ADDR_BASE + ADDR_VERSION)
-#define MIXER_ADDR_CTRL         (MIXER_ADDR_BASE + 0x10)
-#define MIXER_CTRL_ENABLE       (1)
-#define MIXER_CTRL_RESTART      (2)
-#define MIXER_ADDR_STATUS       (MIXER_ADDR_BASE + 0x11)
-/* No status bits defined (yet) */
-#define MIXER_ADDR_TIMEOUT      (MIXER_ADDR_BASE + 0x20)
-
-#define CSPRNG_ADDR_BASE        (SEGMENT_OFFSET_RNGS + (0x0b * CORE_SIZE))
-#define CSPRNG_ADDR_NAME0       (CSPRNG_ADDR_BASE + ADDR_NAME0)
-#define CSPRNG_ADDR_NAME1       (CSPRNG_ADDR_BASE + ADDR_NAME1)
-#define CSPRNG_ADDR_VERSION     (CSPRNG_ADDR_BASE + ADDR_VERSION)
-#define CSPRNG_ADDR_CTRL        (CSPRNG_ADDR_BASE + 0x10)
-#define CSPRNG_CTRL_ENABLE      (1)
-#define CSPRNG_CTRL_SEED        (2)
-#define CSPRNG_ADDR_STATUS      (CSPRNG_ADDR_BASE + 0x11)
-#define CSPRNG_STATUS_VALID     (1)
-#define CSPRNG_ADDR_RANDOM      (CSPRNG_ADDR_BASE + 0x20)
-#define CSPRNG_ADDR_NROUNDS     (CSPRNG_ADDR_BASE + 0x40)
-#define CSPRNG_ADDR_NBLOCKS_LO  (CSPRNG_ADDR_BASE + 0x41)
-#define CSPRNG_ADDR_NBLOCKS_HI  (CSPRNG_ADDR_BASE + 0x42)
-
-/* Current name and version values */
-#define TRNG_NAME0              "trng"
-#define TRNG_NAME1              "    "
+#define TRNG_NAME               "trng    "
 #define TRNG_VERSION            "0.50"
 
-#define AVALANCHE_ENTROPY_NAME0   "extn"
-#define AVALANCHE_ENTROPY_NAME1   "oise"
+#define AVALANCHE_ENTROPY_NAME	"extnoise"
 #define AVALANCHE_ENTROPY_VERSION "0.10"
 
-#define ROSC_ENTROPY_NAME0      "rosc"
-#define ROSC_ENTROPY_NAME1      " ent"
+#define ROSC_ENTROPY_NAME       "rosc ent"
 #define ROSC_ENTROPY_VERSION    "0.10"
 
-#define CSPRNG_NAME0            "cspr"
-#define CSPRNG_NAME1            "ng  "
+#define CSPRNG_NAME             "csprng  "
 #define CSPRNG_VERSION          "0.50"
 
+#define SHA1_NAME               "sha1    "
+#define SHA1_VERSION            "0.50"
 
-/*
- * CIPHERS segment.
- */
+#define SHA256_NAME             "sha2-256"
+#define SHA256_VERSION          "0.80"
 
-/* AES core */
-#define AES_ADDR_BASE           (SEGMENT_OFFSET_CIPHERS + (0 * CORE_SIZE))
-#define AES_ADDR_NAME0          (AES_ADDR_BASE + ADDR_NAME0)
-#define AES_ADDR_NAME1          (AES_ADDR_BASE + ADDR_NAME1)
-#define AES_ADDR_VERSION        (AES_ADDR_BASE + ADDR_VERSION)
-#define AES_ADDR_CTRL           (AES_ADDR_BASE + ADDR_CTRL)
-#define AES_ADDR_STATUS         (AES_ADDR_BASE + ADDR_STATUS)
+#define SHA512_NAME             "sha2-512"
+#define SHA512_VERSION          "0.80"
 
-#define AES_ADDR_CONFIG         (AES_ADDR_BASE + 0x0a)
-#define AES_CONFIG_ENCDEC       (1)
-#define AES_CONFIG_KEYLEN       (2)
-
-#define AES_ADDR_KEY0           (AES_ADDR_BASE + 0x10)
-#define AES_ADDR_KEY1           (AES_ADDR_BASE + 0x11)
-#define AES_ADDR_KEY2           (AES_ADDR_BASE + 0x12)
-#define AES_ADDR_KEY3           (AES_ADDR_BASE + 0x13)
-#define AES_ADDR_KEY4           (AES_ADDR_BASE + 0x14)
-#define AES_ADDR_KEY5           (AES_ADDR_BASE + 0x15)
-#define AES_ADDR_KEY6           (AES_ADDR_BASE + 0x16)
-#define AES_ADDR_KEY7           (AES_ADDR_BASE + 0x17)
-
-#define AES_ADDR_BLOCK0         (AES_ADDR_BASE + 0x20)
-#define AES_ADDR_BLOCK1         (AES_ADDR_BASE + 0x21)
-#define AES_ADDR_BLOCK2         (AES_ADDR_BASE + 0x22)
-#define AES_ADDR_BLOCK3         (AES_ADDR_BASE + 0x23)
-
-#define AES_ADDR_RESULT0        (AES_ADDR_BASE + 0x30)
-#define AES_ADDR_RESULT1        (AES_ADDR_BASE + 0x31)
-#define AES_ADDR_RESULT2        (AES_ADDR_BASE + 0x32)
-#define AES_ADDR_RESULT3        (AES_ADDR_BASE + 0x33)
-
-/* Current name and version values */
-#define AES_CORE_NAME0          "aes "
-#define AES_CORE_NAME1          "    "
+#define AES_CORE_NAME           "aes     "
 #define AES_CORE_VERSION        "0.80"
 
-
-/* Chacha core */
-#define CHACHA_ADDR_BASE        (SEGMENT_OFFSET_CIPHERS + (1 * CORE_SIZE))
-#define CHACHA_ADDR_NAME0       (CHACHA_ADDR_BASE + ADDR_NAME0)
-#define CHACHA_ADDR_NAME1       (CHACHA_ADDR_BASE + ADDR_NAME1)
-#define CHACHA_ADDR_VERSION     (CHACHA_ADDR_BASE + ADDR_VERSION)
-#define CHACHA_ADDR_CTRL        (CHACHA_ADDR_BASE + ADDR_CTRL)
-#define CHACHA_ADDR_STATUS      (CHACHA_ADDR_BASE + ADDR_STATUS)
-
-#define CHACHA_ADDR_KEYLEN      (CHACHA_ADDR_BASE + 0x0a)
-#define CHACHA_KEYLEN           (1)
-
-#define CHACHA_ADDR_ROUNDS      (CHACHA_ADDR_BASE + 0x0b)
-
-#define CHACHA_ADDR_KEY0        (CHACHA_ADDR_BASE + 0x10)
-#define CHACHA_ADDR_KEY1        (CHACHA_ADDR_BASE + 0x11)
-#define CHACHA_ADDR_KEY2        (CHACHA_ADDR_BASE + 0x12)
-#define CHACHA_ADDR_KEY3        (CHACHA_ADDR_BASE + 0x13)
-#define CHACHA_ADDR_KEY4        (CHACHA_ADDR_BASE + 0x14)
-#define CHACHA_ADDR_KEY5        (CHACHA_ADDR_BASE + 0x15)
-#define CHACHA_ADDR_KEY6        (CHACHA_ADDR_BASE + 0x16)
-#define CHACHA_ADDR_KEY7        (CHACHA_ADDR_BASE + 0x17)
-
-#define CHACHA_ADDR_IV0         (CHACHA_ADDR_BASE + 0x20)
-#define CHACHA_ADDR_IV1         (CHACHA_ADDR_BASE + 0x21)
-
-#define CHACHA_ADDR_DATA_IN0    (CHACHA_ADDR_BASE + 0x40)
-#define CHACHA_ADDR_DATA_IN1    (CHACHA_ADDR_BASE + 0x41)
-#define CHACHA_ADDR_DATA_IN2    (CHACHA_ADDR_BASE + 0x42)
-#define CHACHA_ADDR_DATA_IN3    (CHACHA_ADDR_BASE + 0x43)
-#define CHACHA_ADDR_DATA_IN4    (CHACHA_ADDR_BASE + 0x44)
-#define CHACHA_ADDR_DATA_IN5    (CHACHA_ADDR_BASE + 0x45)
-#define CHACHA_ADDR_DATA_IN6    (CHACHA_ADDR_BASE + 0x46)
-#define CHACHA_ADDR_DATA_IN7    (CHACHA_ADDR_BASE + 0x47)
-#define CHACHA_ADDR_DATA_IN8    (CHACHA_ADDR_BASE + 0x48)
-#define CHACHA_ADDR_DATA_IN9    (CHACHA_ADDR_BASE + 0x49)
-#define CHACHA_ADDR_DATA_IN10   (CHACHA_ADDR_BASE + 0x4a)
-#define CHACHA_ADDR_DATA_IN11   (CHACHA_ADDR_BASE + 0x4b)
-#define CHACHA_ADDR_DATA_IN12   (CHACHA_ADDR_BASE + 0x4c)
-#define CHACHA_ADDR_DATA_IN13   (CHACHA_ADDR_BASE + 0x4d)
-#define CHACHA_ADDR_DATA_IN14   (CHACHA_ADDR_BASE + 0x4e)
-#define CHACHA_ADDR_DATA_IN15   (CHACHA_ADDR_BASE + 0x4f)
-
-#define CHACHA_ADDR_DATA_OUT0   (CHACHA_ADDR_BASE + 0x80)
-#define CHACHA_ADDR_DATA_OUT1   (CHACHA_ADDR_BASE + 0x81)
-#define CHACHA_ADDR_DATA_OUT2   (CHACHA_ADDR_BASE + 0x82)
-#define CHACHA_ADDR_DATA_OUT3   (CHACHA_ADDR_BASE + 0x83)
-#define CHACHA_ADDR_DATA_OUT4   (CHACHA_ADDR_BASE + 0x84)
-#define CHACHA_ADDR_DATA_OUT5   (CHACHA_ADDR_BASE + 0x85)
-#define CHACHA_ADDR_DATA_OUT6   (CHACHA_ADDR_BASE + 0x86)
-#define CHACHA_ADDR_DATA_OUT7   (CHACHA_ADDR_BASE + 0x87)
-#define CHACHA_ADDR_DATA_OUT8   (CHACHA_ADDR_BASE + 0x88)
-#define CHACHA_ADDR_DATA_OUT9   (CHACHA_ADDR_BASE + 0x89)
-#define CHACHA_ADDR_DATA_OUT10  (CHACHA_ADDR_BASE + 0x8a)
-#define CHACHA_ADDR_DATA_OUT11  (CHACHA_ADDR_BASE + 0x8b)
-#define CHACHA_ADDR_DATA_OUT12  (CHACHA_ADDR_BASE + 0x8c)
-#define CHACHA_ADDR_DATA_OUT13  (CHACHA_ADDR_BASE + 0x8d)
-#define CHACHA_ADDR_DATA_OUT14  (CHACHA_ADDR_BASE + 0x8e)
-#define CHACHA_ADDR_DATA_OUT15  (CHACHA_ADDR_BASE + 0x8f)
-
-/* Current name and version values */
-#define CHACHA_NAME0            "chac"
-#define CHACHA_NAME1            "ha  "
+#define CHACHA_NAME             "chacha  "
 #define CHACHA_VERSION          "0.80"
 
-
-/*
- * MATH segment.
- */
-
-#define MATH_CORE_SIZE          (0x400)
-
-/*
- * ModExpS6 core.  MODEXPS6_OPERAND_BITS is size in bits of largest
- * supported modulus.
- */
-
-#define MODEXPS6_ADDR_BASE              (SEGMENT_OFFSET_MATH + (0x00 * MATH_CORE_SIZE))
-#define MODEXPS6_OPERAND_BITS           (4096)
-#define MODEXPS6_OPERAND_WORDS          (MODEXPS6_OPERAND_BITS/32)
-#define MODEXPS6_ADDR_REGISTERS         (MODEXPS6_ADDR_BASE + 0*MODEXPS6_OPERAND_WORDS)
-#define MODEXPS6_ADDR_OPERANDS          (MODEXPS6_ADDR_BASE + 4*MODEXPS6_OPERAND_WORDS)
-#define MODEXPS6_ADDR_NAME0             (MODEXPS6_ADDR_REGISTERS + ADDR_NAME0)
-#define MODEXPS6_ADDR_NAME1             (MODEXPS6_ADDR_REGISTERS + ADDR_NAME1)
-#define MODEXPS6_ADDR_VERSION           (MODEXPS6_ADDR_REGISTERS + ADDR_VERSION)
-#define MODEXPS6_ADDR_CTRL              (MODEXPS6_ADDR_REGISTERS + ADDR_CTRL)
-#define MODEXPS6_ADDR_STATUS            (MODEXPS6_ADDR_REGISTERS + ADDR_STATUS)
-#define MODEXPS6_ADDR_MODE              (MODEXPS6_ADDR_REGISTERS + 0x10)
-#define MODEXPS6_ADDR_MODULUS_WIDTH     (MODEXPS6_ADDR_REGISTERS + 0x11)
-#define MODEXPS6_ADDR_EXPONENT_WIDTH    (MODEXPS6_ADDR_REGISTERS + 0x12)
-#define MODEXPS6_ADDR_MODULUS           (MODEXPS6_ADDR_OPERANDS + 0*MODEXPS6_OPERAND_WORDS)
-#define MODEXPS6_ADDR_MESSAGE           (MODEXPS6_ADDR_OPERANDS + 1*MODEXPS6_OPERAND_WORDS)
-#define MODEXPS6_ADDR_EXPONENT          (MODEXPS6_ADDR_OPERANDS + 2*MODEXPS6_OPERAND_WORDS)
-#define MODEXPS6_ADDR_RESULT            (MODEXPS6_ADDR_OPERANDS + 3*MODEXPS6_OPERAND_WORDS)
-#define MODEXPS6_NAME0                  "mode"
-#define MODEXPS6_NAME1                  "xps6"
-#define MODEXPS6_VERSION                "0.10"
+#define MODEXPS6_NAME		"modexps6"
+#define MODEXPS6_VERSION	"0.10"
 
 /*
  * C API error codes.  Defined in this form so we can keep the tokens
@@ -442,6 +113,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_ASN1_PARSE_FAILED,         "ASN.1 parse failed")                           \
   DEFINE_HAL_ERROR(HAL_ERROR_KEY_NOT_ON_CURVE,          "EC key is not on its purported curve")         \
   DEFINE_HAL_ERROR(HAL_ERROR_INVALID_SIGNATURE,         "Invalid signature")                            \
+  DEFINE_HAL_ERROR(HAL_ERROR_CORE_NOT_FOUND,            "Requested core not found")                     \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -473,18 +145,45 @@ typedef off_t hal_addr_t;
 extern const char *hal_error_string(const hal_error_t err);
 
 /*
+ * Opaque structure representing a core.
+ */
+
+typedef struct hal_core hal_core_t;
+
+/*
  * Public I/O functions.
  */
 
 extern void hal_io_set_debug(int onoff);
-extern hal_error_t hal_io_write(hal_addr_t offset, const uint8_t *buf, size_t len);
-extern hal_error_t hal_io_read(hal_addr_t offset, uint8_t *buf, size_t len);
-extern hal_error_t hal_io_expected(hal_addr_t offset, const uint8_t *expected, size_t len);
-extern hal_error_t hal_io_init(hal_addr_t offset);
-extern hal_error_t hal_io_next(hal_addr_t offset);
-extern hal_error_t hal_io_wait(hal_addr_t offset, uint8_t status, int *count);
-extern hal_error_t hal_io_wait_ready(hal_addr_t offset);
-extern hal_error_t hal_io_wait_valid(hal_addr_t offset);
+extern hal_error_t hal_io_write(const hal_core_t *core, hal_addr_t offset, const uint8_t *buf, size_t len);
+extern hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf, size_t len);
+extern hal_error_t hal_io_init(const hal_core_t *core);
+extern hal_error_t hal_io_next(const hal_core_t *core);
+extern hal_error_t hal_io_wait(const hal_core_t *core, uint8_t status, int *count);
+extern hal_error_t hal_io_wait_ready(const hal_core_t *core);
+extern hal_error_t hal_io_wait_valid(const hal_core_t *core);
+
+/*
+ * Core management functions.
+ *
+ * Given our druthers, we'd handle public information about a core
+ * using the opaque type and individual access methods, but C's
+ * insistence on discarding array bounds information makes
+ * non-delimited character arrays problematic unless we wrap them in a
+ * structure.
+ */
+
+typedef struct {
+  char name[8];
+  char version[4];
+  hal_addr_t base;
+} hal_core_info_t;
+
+extern const hal_core_t *hal_core_find(const char *name, const hal_core_t *core);
+extern const hal_core_info_t *hal_core_info(const hal_core_t *core);
+extern hal_error_t hal_core_check_name(const hal_core_t **core, const char *name);
+extern hal_addr_t hal_core_base(const hal_core_t *core);
+extern const hal_core_t * hal_core_iterate(const hal_core_t *core);
 
 /*
  * Higher level public API.
@@ -494,7 +193,7 @@ extern hal_error_t hal_io_wait_valid(hal_addr_t offset);
  * Get random bytes from the CSPRNG.
  */
 
-extern hal_error_t hal_get_random(void *buffer, const size_t length);
+extern hal_error_t hal_get_random(const hal_core_t *core, void *buffer, const size_t length);
 
 /*
  * Hash and HMAC API.
@@ -530,11 +229,12 @@ typedef struct {
   const uint8_t * const digest_algorithm_id;
   size_t digest_algorithm_id_length;
   const hal_hash_driver_t *driver;
+  char core_name[8];
   unsigned can_restore_state : 1;
 } hal_hash_descriptor_t;
 
 /*
- * Opaque pointers to internal state.
+ * Opaque structures for internal state.
  */
 
 typedef struct hal_hash_state hal_hash_state_t;
@@ -558,9 +258,8 @@ extern const hal_hash_descriptor_t hal_hash_sha512[1];
 
 extern void hal_hash_set_debug(int onoff);
 
-extern hal_error_t hal_hash_core_present(const hal_hash_descriptor_t * const descriptor);
-
-extern hal_error_t hal_hash_initialize(const hal_hash_descriptor_t * const descriptor,
+extern hal_error_t hal_hash_initialize(const hal_core_t *core,
+                                       const hal_hash_descriptor_t * const descriptor,
                                        hal_hash_state_t **state,
                                        void *state_buffer, const size_t state_length);
 
@@ -570,7 +269,8 @@ extern hal_error_t hal_hash_update(hal_hash_state_t *state,
 extern hal_error_t hal_hash_finalize(hal_hash_state_t *state,
                                      uint8_t *digest, const size_t length);
 
-extern hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
+extern hal_error_t hal_hmac_initialize(const hal_core_t *core,
+                                       const hal_hash_descriptor_t * const descriptor,
                                        hal_hmac_state_t **state,
                                        void *state_buffer, const size_t state_length,
                                        const uint8_t * const key, const size_t key_length);
@@ -588,11 +288,13 @@ extern void hal_hmac_cleanup(hal_hmac_state_t **state);
  * AES key wrap functions.
  */
 
-extern hal_error_t hal_aes_keywrap(const uint8_t *kek, const size_t kek_length,
+extern hal_error_t hal_aes_keywrap(const hal_core_t *core,
+                                   const uint8_t *kek, const size_t kek_length,
                                    const uint8_t *plaintext, const size_t plaintext_length,
                                    uint8_t *cyphertext, size_t *ciphertext_length);
 
-extern hal_error_t hal_aes_keyunwrap(const uint8_t *kek, const size_t kek_length,
+extern hal_error_t hal_aes_keyunwrap(const hal_core_t *core,
+                                     const uint8_t *kek, const size_t kek_length,
                                      const uint8_t *ciphertext, const size_t ciphertext_length,
                                      unsigned char *plaintext, size_t *plaintext_length);
 
@@ -603,7 +305,8 @@ extern size_t hal_aes_keywrap_ciphertext_length(const size_t plaintext_length);
  * the pseudo-random function (PRF).
  */
 
-extern hal_error_t hal_pbkdf2(const hal_hash_descriptor_t * const descriptor,
+extern hal_error_t hal_pbkdf2(const hal_core_t *core,
+                              const hal_hash_descriptor_t * const descriptor,
 			      const uint8_t * const password, const size_t password_length,
 			      const uint8_t * const salt,     const size_t salt_length,
 			      uint8_t       * derived_key,    const size_t derived_key_length,
@@ -615,7 +318,8 @@ extern hal_error_t hal_pbkdf2(const hal_hash_descriptor_t * const descriptor,
 
 extern void hal_modexp_set_debug(const int onoff);
 
-extern hal_error_t hal_modexp(const uint8_t * const msg, const size_t msg_len, /* Message */
+extern hal_error_t hal_modexp(const hal_core_t *core,
+                              const uint8_t * const msg, const size_t msg_len, /* Message */
                               const uint8_t * const exp, const size_t exp_len, /* Exponent */
                               const uint8_t * const mod, const size_t mod_len, /* Modulus */
                               uint8_t * result, const size_t result_len);
@@ -666,15 +370,18 @@ extern hal_error_t hal_rsa_key_get_public_exponent(const hal_rsa_key_t * const k
 
 extern void hal_rsa_key_clear(hal_rsa_key_t *key);
 
-extern hal_error_t hal_rsa_encrypt(const hal_rsa_key_t * const key,
+extern hal_error_t hal_rsa_encrypt(const hal_core_t *core,
+                                   const hal_rsa_key_t * const key,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * output, const size_t output_len);
 
-extern hal_error_t hal_rsa_decrypt(const hal_rsa_key_t * const key,
+extern hal_error_t hal_rsa_decrypt(const hal_core_t *core,
+                                   const hal_rsa_key_t * const key,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * output, const size_t output_len);
 
-extern hal_error_t hal_rsa_key_gen(hal_rsa_key_t **key,
+extern hal_error_t hal_rsa_key_gen(const hal_core_t *core,
+                                   hal_rsa_key_t **key,
                                    void *keybuf, const size_t keybuf_len,
                                    const unsigned key_length,
                                    const uint8_t * const public_exponent, const size_t public_exponent_len);
@@ -729,7 +436,8 @@ extern hal_error_t hal_ecdsa_key_get_public(const hal_ecdsa_key_t * const key,
 
 extern void hal_ecdsa_key_clear(hal_ecdsa_key_t *key);
 
-extern hal_error_t hal_ecdsa_key_gen(hal_ecdsa_key_t **key,
+extern hal_error_t hal_ecdsa_key_gen(const hal_core_t *core,
+                                     hal_ecdsa_key_t **key,
                                      void *keybuf, const size_t keybuf_len,
                                      const hal_ecdsa_curve_t curve);
 
@@ -752,15 +460,17 @@ extern hal_error_t hal_ecdsa_key_from_ecpoint(hal_ecdsa_key_t **key,
                                               const uint8_t * const der, const size_t der_len,
                                               const hal_ecdsa_curve_t curve);
 
-extern hal_error_t hal_ecdsa_sign(const hal_ecdsa_key_t * const key,
+extern hal_error_t hal_ecdsa_sign(const hal_core_t *core,
+                                  const hal_ecdsa_key_t * const key,
                                   const uint8_t * const hash, const size_t hash_len,
                                   uint8_t *signature, size_t *signature_len, const size_t signature_max,
                                   const hal_ecdsa_signature_format_t signature_format);
 
-extern hal_error_t hal_ecdsa_verify(const hal_ecdsa_key_t * const key,
-                                  const uint8_t * const hash, const size_t hash_len,
-                                  const uint8_t * const signature, const size_t signature_len,
-                                  const hal_ecdsa_signature_format_t signature_format);
+extern hal_error_t hal_ecdsa_verify(const hal_core_t *core,
+                                    const hal_ecdsa_key_t * const key,
+                                    const uint8_t * const hash, const size_t hash_len,
+                                    const uint8_t * const signature, const size_t signature_len,
+                                    const hal_ecdsa_signature_format_t signature_format);
 
 #endif /* _HAL_H_ */
 

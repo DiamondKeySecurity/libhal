@@ -48,6 +48,7 @@
 #include <assert.h>
 
 #include "hal.h"
+#include "verilog_constants.h"
 
 /*
  * How long the ciphertext will be for a given plaintext length.
@@ -66,7 +67,7 @@ size_t hal_aes_keywrap_ciphertext_length(const size_t plaintext_length)
 
 typedef enum { KEK_encrypting, KEK_decrypting } kek_action_t;
 
-static hal_error_t load_kek(const uint8_t *K, const size_t K_len, const kek_action_t action)
+static hal_error_t load_kek(const hal_core_t *core, const uint8_t *K, const size_t K_len, const kek_action_t action)
 {
   uint8_t config[4];
   hal_error_t err;
@@ -104,9 +105,9 @@ static hal_error_t load_kek(const uint8_t *K, const size_t K_len, const kek_acti
    * Load the KEK and tell the core to expand it.
    */
 
-  if ((err = hal_io_write(AES_ADDR_KEY0, K, K_len))                 != HAL_OK ||
-      (err = hal_io_write(AES_ADDR_CONFIG, config, sizeof(config))) != HAL_OK ||
-      (err = hal_io_init(AES_ADDR_CTRL))                            != HAL_OK)
+  if ((err = hal_io_write(core, AES_ADDR_KEY0, K, K_len))                 != HAL_OK ||
+      (err = hal_io_write(core, AES_ADDR_CONFIG, config, sizeof(config))) != HAL_OK ||
+      (err = hal_io_init(core))                                           != HAL_OK)
     return err;
 
   return HAL_OK;
@@ -127,18 +128,18 @@ static hal_error_t load_kek(const uint8_t *K, const size_t K_len, const kek_acti
  * Just be VERY careful if you change anything here.
  */
 
-static hal_error_t do_block(uint8_t *b1, uint8_t *b2)
+static hal_error_t do_block(const hal_core_t *core, uint8_t *b1, uint8_t *b2)
 {
   hal_error_t err;
 
   assert(b1 != NULL && b2 != NULL);
 
-  if ((err = hal_io_write(AES_ADDR_BLOCK0, b1, 8)) != HAL_OK ||
-      (err = hal_io_write(AES_ADDR_BLOCK2, b2, 8)) != HAL_OK ||
-      (err = hal_io_next(AES_ADDR_CTRL))           != HAL_OK ||
-      (err = hal_io_wait_ready(AES_ADDR_STATUS))   != HAL_OK ||
-      (err = hal_io_read(AES_ADDR_RESULT0, b1, 8)) != HAL_OK ||
-      (err = hal_io_read(AES_ADDR_RESULT2, b2, 8)) != HAL_OK)
+  if ((err = hal_io_write(core, AES_ADDR_BLOCK0, b1, 8)) != HAL_OK ||
+      (err = hal_io_write(core, AES_ADDR_BLOCK2, b2, 8)) != HAL_OK ||
+      (err = hal_io_next(core))                          != HAL_OK ||
+      (err = hal_io_wait_ready(core))                    != HAL_OK ||
+      (err = hal_io_read(core, AES_ADDR_RESULT0, b1, 8)) != HAL_OK ||
+      (err = hal_io_read(core, AES_ADDR_RESULT2, b2, 8)) != HAL_OK)
     return err;
 
   return HAL_OK;
@@ -155,7 +156,8 @@ static hal_error_t do_block(uint8_t *b1, uint8_t *b2)
  * buffer size.
  */
 
-hal_error_t hal_aes_keywrap(const uint8_t *K, const size_t K_len,
+hal_error_t hal_aes_keywrap(const hal_core_t *core,
+                            const uint8_t *K, const size_t K_len,
                             const uint8_t * const Q,
                             const size_t m,
                             uint8_t *C,
@@ -168,10 +170,13 @@ hal_error_t hal_aes_keywrap(const uint8_t *K, const size_t K_len,
 
   assert(calculated_C_len % 8 == 0);
 
+  if ((err = hal_core_check_name(&core, AES_CORE_NAME)) != HAL_OK)
+    return err;
+
   if (Q == NULL || C == NULL || C_len == NULL || *C_len < calculated_C_len)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if ((err = load_kek(K, K_len, KEK_encrypting)) != HAL_OK)
+  if ((err = load_kek(core, K, K_len, KEK_encrypting)) != HAL_OK)
     return err;
 
   *C_len = calculated_C_len;
@@ -192,7 +197,7 @@ hal_error_t hal_aes_keywrap(const uint8_t *K, const size_t K_len,
   n = calculated_C_len/8 - 1;
 
   if (n == 1) {
-    if ((err = do_block(C, C + 8)) != HAL_OK)
+    if ((err = do_block(core, C, C + 8)) != HAL_OK)
       return err;
   }
 
@@ -200,7 +205,7 @@ hal_error_t hal_aes_keywrap(const uint8_t *K, const size_t K_len,
     for (j = 0; j <= 5; j++) {
       for (i = 1; i <= n; i++) {
         uint32_t t = n * j + i;
-        if ((err = do_block(C, C + i * 8)) != HAL_OK)
+        if ((err = do_block(core, C, C + i * 8)) != HAL_OK)
           return err;
         C[7] ^= t & 0xFF; t >>= 8;
         C[6] ^= t & 0xFF; t >>= 8;
@@ -220,7 +225,8 @@ hal_error_t hal_aes_keywrap(const uint8_t *K, const size_t K_len,
  * Q should be the same size as C.  Q and C can overlap.
  */
 
-hal_error_t hal_aes_keyunwrap(const uint8_t *K, const size_t K_len,
+hal_error_t hal_aes_keyunwrap(const hal_core_t * core,
+                              const uint8_t *K, const size_t K_len,
                               const uint8_t * const C,
                               const size_t C_len,
                               uint8_t *Q,
@@ -231,10 +237,13 @@ hal_error_t hal_aes_keyunwrap(const uint8_t *K, const size_t K_len,
   long i, j;
   size_t m;
 
+  if ((err = hal_core_check_name(&core, AES_CORE_NAME)) != HAL_OK)
+    return err;
+
   if (C == NULL || Q == NULL || C_len % 8 != 0 || C_len < 16 || Q_len == NULL || *Q_len < C_len)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if ((err = load_kek(K, K_len, KEK_decrypting)) != HAL_OK)
+  if ((err = load_kek(core, K, K_len, KEK_decrypting)) != HAL_OK)
     return err;
 
   n = (C_len / 8) - 1;
@@ -243,7 +252,7 @@ hal_error_t hal_aes_keyunwrap(const uint8_t *K, const size_t K_len,
     memmove(Q, C, C_len);
 
   if (n == 1) {
-    if ((err = do_block(Q, Q + 8)) != HAL_OK)
+    if ((err = do_block(core, Q, Q + 8)) != HAL_OK)
       return err;
   }
 
@@ -255,7 +264,7 @@ hal_error_t hal_aes_keyunwrap(const uint8_t *K, const size_t K_len,
         Q[6] ^= t & 0xFF; t >>= 8;
         Q[5] ^= t & 0xFF; t >>= 8;
         Q[4] ^= t & 0xFF;
-        if ((err = do_block(Q, Q + i * 8)) != HAL_OK)
+        if ((err = do_block(core, Q, Q + i * 8)) != HAL_OK)
           return err;
       }
     }

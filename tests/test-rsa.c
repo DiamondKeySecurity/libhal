@@ -55,7 +55,8 @@
  * Run one modexp test.
  */
 
-static int test_modexp(const char * const kind,
+static int test_modexp(const hal_core_t *core,
+                       const char * const kind,
                        const rsa_tc_t * const tc,
                        const rsa_tc_bn_t * const msg, /* Input message */
                        const rsa_tc_bn_t * const exp, /* Exponent */
@@ -65,7 +66,7 @@ static int test_modexp(const char * const kind,
 
   printf("%s test for %lu-bit RSA key\n", kind, (unsigned long) tc->size);
 
-  if (hal_modexp(msg->val, msg->len, exp->val, exp->len,
+  if (hal_modexp(core, msg->val, msg->len, exp->val, exp->len,
                  tc->n.val, tc->n.len, result, sizeof(result)) != HAL_OK) {
     printf("ModExp failed\n");
     return 0;
@@ -83,7 +84,9 @@ static int test_modexp(const char * const kind,
  * Run one RSA CRT test.
  */
 
-static int test_decrypt(const char * const kind, const rsa_tc_t * const tc)
+static int test_decrypt(const hal_core_t *core,
+                        const char * const kind,
+                        const rsa_tc_t * const tc)
 {
   printf("%s test for %lu-bit RSA key\n", kind, (unsigned long) tc->size);
 
@@ -107,7 +110,7 @@ static int test_decrypt(const char * const kind, const rsa_tc_t * const tc)
 
   uint8_t result[tc->n.len];
 
-  if ((err = hal_rsa_decrypt(key, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
+  if ((err = hal_rsa_decrypt(core, key, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
     printf("RSA CRT failed: %s\n", hal_error_string(err));
 
   const int mismatch = (err == HAL_OK && memcmp(result, tc->s.val, tc->s.len) != 0);
@@ -124,7 +127,9 @@ static int test_decrypt(const char * const kind, const rsa_tc_t * const tc)
  * Run one RSA key generation + CRT test.
  */
 
-static int test_gen(const char * const kind, const rsa_tc_t * const tc)
+static int test_gen(const hal_core_t *core,
+                    const char * const kind,
+                    const rsa_tc_t * const tc)
 {
   printf("%s test for %lu-bit RSA key\n", kind, (unsigned long) tc->size);
 
@@ -136,7 +141,7 @@ static int test_gen(const char * const kind, const rsa_tc_t * const tc)
 
   const uint8_t f4[] = { 0x01, 0x00, 0x01 };
 
-  if ((err = hal_rsa_key_gen(&key1, keybuf1, sizeof(keybuf1), bitsToBytes(tc->size), f4, sizeof(f4))) != HAL_OK) {
+  if ((err = hal_rsa_key_gen(core, &key1, keybuf1, sizeof(keybuf1), bitsToBytes(tc->size), f4, sizeof(f4))) != HAL_OK) {
     printf("RSA key generation failed: %s\n", hal_error_string(err));
     return 0;
   }
@@ -185,7 +190,7 @@ static int test_gen(const char * const kind, const rsa_tc_t * const tc)
 
   uint8_t result[tc->n.len];
 
-  if ((err = hal_rsa_decrypt(key1, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
+  if ((err = hal_rsa_decrypt(core, key1, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
     printf("RSA CRT failed: %s\n", hal_error_string(err));
 
   snprintf(fn, sizeof(fn), "test-rsa-sig-%04lu.der", (unsigned long) tc->size);
@@ -209,7 +214,7 @@ static int test_gen(const char * const kind, const rsa_tc_t * const tc)
   if (err != HAL_OK)            /* Deferred failure from hal_rsa_decrypt(), above */
     return 0;
 
-  if ((err = hal_rsa_encrypt(key1, result, sizeof(result), result, sizeof(result))) != HAL_OK)
+  if ((err = hal_rsa_encrypt(core, key1, result, sizeof(result), result, sizeof(result))) != HAL_OK)
     printf("RSA signature check failed: %s\n", hal_error_string(err));
 
   const int mismatch = (err == HAL_OK && memcmp(result, tc->m.val, tc->m.len) != 0);
@@ -258,42 +263,32 @@ static void _time_check(const struct timeval t0, const int ok)
  * and try generating a signature with that.
  */
 
-static int test_rsa(const rsa_tc_t * const tc)
+static int test_rsa(const hal_core_t *core, const rsa_tc_t * const tc)
 {
   int ok = 1;
 
   /* RSA encryption */
-  time_check(test_modexp("Verification", tc, &tc->s, &tc->e, &tc->m));
+  time_check(test_modexp(core, "Verification", tc, &tc->s, &tc->e, &tc->m));
 
   /* Brute force RSA decryption */
-  time_check(test_modexp("Signature (ModExp)", tc, &tc->m, &tc->d, &tc->s));
+  time_check(test_modexp(core, "Signature (ModExp)", tc, &tc->m, &tc->d, &tc->s));
 
   /* RSA decyrption using CRT */
-  time_check(test_decrypt("Signature (CRT)", tc));
+  time_check(test_decrypt(core, "Signature (CRT)", tc));
 
   /* Key generation and CRT -- not test vector, so writes key and sig to file */
-  time_check(test_gen("Generation and CRT", tc));
+  time_check(test_gen(core, "Generation and CRT", tc));
 
   return ok;
 }
 
 int main(int argc, char *argv[])
 {
-  uint8_t name[8], version[4];
-  hal_error_t err;
-  int i;
+  const hal_core_t *core = hal_core_find(MODEXPS6_NAME, NULL);
+  const hal_core_info_t *core_info = hal_core_info(core);
 
-  /*
-   * Initialize EIM and report what core we're running.
-   */
-
-  if ((err = hal_io_read(MODEXPS6_ADDR_NAME0,   name,    sizeof(name)))    != HAL_OK ||
-      (err = hal_io_read(MODEXPS6_ADDR_VERSION, version, sizeof(version))) != HAL_OK) {
-    printf("Initialization failed: %s\n", hal_error_string(err));
-    return 1;
-  }
-
-  printf("\"%8.8s\"  \"%4.4s\"\n\n", name, version);
+  if (core_info != NULL)
+    printf("\"%8.8s\"  \"%4.4s\"\n\n", core_info->name, core_info->version);
 
   /*
    * Run the test cases.
@@ -303,8 +298,8 @@ int main(int argc, char *argv[])
 
   /* Normal test */
 
-  for (i = 0; i < (sizeof(rsa_tc)/sizeof(*rsa_tc)); i++)
-    if (!test_rsa(&rsa_tc[i]))
+  for (int i = 0; i < (sizeof(rsa_tc)/sizeof(*rsa_tc)); i++)
+    if (!test_rsa(core, &rsa_tc[i]))
       return 1;
 
   return 0;

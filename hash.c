@@ -43,6 +43,7 @@
 #include <sys/ioctl.h>
 
 #include "hal.h"
+#include "verilog_constants.h"
 
 /*
  * HMAC magic numbers.
@@ -66,12 +67,8 @@
 
 struct hal_hash_driver {
   size_t length_length;                 /* Length of the length field */
-  hal_addr_t block_addr;                     /* Where to write hash blocks */
-  hal_addr_t ctrl_addr;                      /* Control register */
-  hal_addr_t status_addr;                    /* Status register */
-  hal_addr_t digest_addr;                    /* Where to read digest */
-  hal_addr_t name_addr;                      /* Where to read core name */
-  char core_name[8];                    /* Expected name of core */
+  hal_addr_t block_addr;  		/* Where to write hash blocks */
+  hal_addr_t digest_addr;               /* Where to read digest */
   uint8_t ctrl_mode;                    /* Digest mode, for cores that have modes */
 };
 
@@ -81,6 +78,7 @@ struct hal_hash_driver {
  */
 
 struct hal_hash_state {
+  const hal_core_t *core;
   const hal_hash_descriptor_t *descriptor;
   const hal_hash_driver_t *driver;
   uint64_t msg_length_high;                     /* Total data hashed in this message */
@@ -116,45 +114,27 @@ struct hal_hmac_state {
  */
 
 static const hal_hash_driver_t sha1_driver = {
-  SHA1_LENGTH_LEN,
-  SHA1_ADDR_BLOCK, SHA1_ADDR_CTRL, SHA1_ADDR_STATUS, SHA1_ADDR_DIGEST,
-  SHA1_ADDR_NAME0, (SHA1_NAME0 SHA1_NAME1),
-  0
+  SHA1_LENGTH_LEN, SHA1_ADDR_BLOCK, SHA1_ADDR_DIGEST, 0
 };
 
 static const hal_hash_driver_t sha256_driver = {
-  SHA256_LENGTH_LEN,
-  SHA256_ADDR_BLOCK, SHA256_ADDR_CTRL, SHA256_ADDR_STATUS, SHA256_ADDR_DIGEST,
-  SHA256_ADDR_NAME0, (SHA256_NAME0 SHA256_NAME1),
-  0
+  SHA256_LENGTH_LEN, SHA256_ADDR_BLOCK, SHA256_ADDR_DIGEST, 0
 };
 
 static const hal_hash_driver_t sha512_224_driver = {
-  SHA512_LENGTH_LEN,
-  SHA512_ADDR_BLOCK, SHA512_ADDR_CTRL, SHA512_ADDR_STATUS, SHA512_ADDR_DIGEST,
-  SHA512_ADDR_NAME0, (SHA512_NAME0 SHA512_NAME1),
-  MODE_SHA_512_224
+  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_512_224
 };
 
 static const hal_hash_driver_t sha512_256_driver = {
-  SHA512_LENGTH_LEN,
-  SHA512_ADDR_BLOCK, SHA512_ADDR_CTRL, SHA512_ADDR_STATUS, SHA512_ADDR_DIGEST,
-  SHA512_ADDR_NAME0, (SHA512_NAME0 SHA512_NAME1),
-  MODE_SHA_512_256
+  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_512_256
 };
 
 static const hal_hash_driver_t sha384_driver = {
-  SHA512_LENGTH_LEN,
-  SHA512_ADDR_BLOCK, SHA512_ADDR_CTRL, SHA512_ADDR_STATUS, SHA512_ADDR_DIGEST,
-  SHA512_ADDR_NAME0, (SHA512_NAME0 SHA512_NAME1),
-  MODE_SHA_384
+  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_384
 };
 
 static const hal_hash_driver_t sha512_driver = {
-  SHA512_LENGTH_LEN,
-  SHA512_ADDR_BLOCK, SHA512_ADDR_CTRL, SHA512_ADDR_STATUS, SHA512_ADDR_DIGEST,
-  SHA512_ADDR_NAME0, (SHA512_NAME0 SHA512_NAME1),
-  MODE_SHA_512
+  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_512
 };
 
 /*
@@ -190,42 +170,42 @@ const hal_hash_descriptor_t hal_hash_sha1[1] = {{
   SHA1_BLOCK_LEN, SHA1_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha1, sizeof(dalgid_sha1),
-  &sha1_driver, 0
+  &sha1_driver, SHA1_NAME, 0
 }};
 
 const hal_hash_descriptor_t hal_hash_sha256[1] = {{
   SHA256_BLOCK_LEN, SHA256_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha256, sizeof(dalgid_sha256),
-  &sha256_driver, 1
+  &sha256_driver, SHA256_NAME, 1
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512_224[1] = {{
   SHA512_BLOCK_LEN, SHA512_224_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha512_224, sizeof(dalgid_sha512_224),
-  &sha512_224_driver, 0
+  &sha512_224_driver, SHA512_NAME, 0
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512_256[1] = {{
   SHA512_BLOCK_LEN, SHA512_256_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha512_256, sizeof(dalgid_sha512_256),
-  &sha512_256_driver, 0
+  &sha512_256_driver, SHA512_NAME, 0
 }};
 
 const hal_hash_descriptor_t hal_hash_sha384[1] = {{
   SHA512_BLOCK_LEN, SHA384_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha384, sizeof(dalgid_sha384),
-  &sha384_driver, 0
+  &sha384_driver, SHA512_NAME, 0
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512[1] = {{
   SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha512, sizeof(dalgid_sha512),
-  &sha512_driver, 0
+  &sha512_driver, SHA512_NAME, 0
 }};
 
 /*
@@ -253,31 +233,29 @@ static const hal_hash_driver_t *check_driver(const hal_hash_descriptor_t * const
 }
 
 /*
- * Report whether cores are present.
+ * Internal utility to check core against descriptor, including
+ * attempting to locate an appropriate core if we weren't given one.
  */
 
-hal_error_t hal_hash_core_present(const hal_hash_descriptor_t * const descriptor)
+static hal_error_t check_core(const hal_core_t **core,
+                              const hal_hash_descriptor_t * const descriptor)
 {
-  const hal_hash_driver_t * const driver = check_driver(descriptor);
-
-  if (driver == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  return hal_io_expected(driver->name_addr,
-                         (const uint8_t *) driver->core_name,
-                         sizeof(driver->core_name));
+  assert(descriptor != NULL && descriptor->driver != NULL);
+  return hal_core_check_name(core, descriptor->core_name);
 }
 
 /*
  * Initialize hash state.
  */
 
-hal_error_t hal_hash_initialize(const hal_hash_descriptor_t * const descriptor,
+hal_error_t hal_hash_initialize(const hal_core_t *core,
+                                const hal_hash_descriptor_t * const descriptor,
                                 hal_hash_state_t **state_,
                                 void *state_buffer, const size_t state_length)
 {
   const hal_hash_driver_t * const driver = check_driver(descriptor);
   hal_hash_state_t *state = state_buffer;
+  hal_error_t err;
 
   if (driver == NULL || state_ == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -285,12 +263,16 @@ hal_error_t hal_hash_initialize(const hal_hash_descriptor_t * const descriptor,
   if (state_buffer != NULL && state_length < descriptor->hash_state_length)
     return HAL_ERROR_BAD_ARGUMENTS;
 
+  if ((err = check_core(&core, descriptor)) != HAL_OK)
+    return err;
+
   if (state_buffer == NULL && (state = malloc(descriptor->hash_state_length)) == NULL)
       return HAL_ERROR_ALLOCATION_FAILURE;
 
   memset(state, 0, sizeof(*state));
   state->descriptor = descriptor;
   state->driver = driver;
+  state->core = core;
     
   if (state_buffer == NULL)
     state->flags |= STATE_FLAG_STATE_ALLOCATED;
@@ -324,7 +306,8 @@ void hal_hash_cleanup(hal_hash_state_t **state_)
  * read current hash state from core.
  */
 
-static hal_error_t hash_read_digest(const hal_hash_driver_t * const driver,
+static hal_error_t hash_read_digest(const hal_core_t *core,
+                                    const hal_hash_driver_t * const driver,
                                     uint8_t *digest,
                                     const size_t digest_length)
 {
@@ -332,17 +315,18 @@ static hal_error_t hash_read_digest(const hal_hash_driver_t * const driver,
 
   assert(digest != NULL && digest_length % 4 == 0);
 
-  if ((err = hal_io_wait_valid(driver->status_addr)) != HAL_OK)
+  if ((err = hal_io_wait_valid(core)) != HAL_OK)
     return err;
 
-  return hal_io_read(driver->digest_addr, digest, digest_length);
+  return hal_io_read(core, driver->digest_addr, digest, digest_length);
 }
 
 /*
  * Write hash state back to core.
  */
 
-static hal_error_t hash_write_digest(const hal_hash_driver_t * const driver,
+static hal_error_t hash_write_digest(const hal_core_t *core,
+                                     const hal_hash_driver_t * const driver,
                                      const uint8_t * const digest,
                                      const size_t digest_length)
 {
@@ -350,10 +334,10 @@ static hal_error_t hash_write_digest(const hal_hash_driver_t * const driver,
 
   assert(digest != NULL && digest_length % 4 == 0);
 
-  if ((err = hal_io_wait_ready(driver->status_addr)) != HAL_OK)
+  if ((err = hal_io_wait_ready(core)) != HAL_OK)
     return err;
 
-  return hal_io_write(driver->digest_addr, digest, digest_length);
+  return hal_io_write(core, driver->digest_addr, digest, digest_length);
 }
 
 /*
@@ -374,16 +358,16 @@ static hal_error_t hash_write_block(hal_hash_state_t * const state)
   if (debug)
     fprintf(stderr, "[ %s ]\n", state->block_count == 0 ? "init" : "next");
 
-  if ((err = hal_io_wait_ready(state->driver->status_addr)) != HAL_OK)
+  if ((err = hal_io_wait_ready(state->core)) != HAL_OK)
     return err;
 
   if (state->descriptor->can_restore_state &&
       state->block_count != 0 &&
-      (err = hash_write_digest(state->driver, state->core_state,
+      (err = hash_write_digest(state->core, state->driver, state->core_state,
                                state->descriptor->digest_length)) != HAL_OK)
     return err;
 
-  if ((err = hal_io_write(state->driver->block_addr, state->block,
+  if ((err = hal_io_write(state->core, state->driver->block_addr, state->block,
                           state->descriptor->block_length)) != HAL_OK)
     return err;
 
@@ -391,15 +375,15 @@ static hal_error_t hash_write_block(hal_hash_state_t * const state)
   ctrl_cmd[3] = state->block_count == 0 ? CTRL_INIT : CTRL_NEXT;
   ctrl_cmd[3] |= state->driver->ctrl_mode;
 
-  if ((err = hal_io_write(state->driver->ctrl_addr, ctrl_cmd, sizeof(ctrl_cmd))) != HAL_OK)
+  if ((err = hal_io_write(state->core, ADDR_CTRL, ctrl_cmd, sizeof(ctrl_cmd))) != HAL_OK)
     return err;
 
   if (state->descriptor->can_restore_state &&
-      (err = hash_read_digest(state->driver, state->core_state,
+      (err = hash_read_digest(state->core, state->driver, state->core_state,
                               state->descriptor->digest_length)) != HAL_OK)
     return err;
 
-  return hal_io_wait_valid(state->driver->status_addr);
+  return hal_io_wait_valid(state->core);
 }
 
 /*
@@ -530,7 +514,7 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,            	/* Opaque sta
   state->block_count++;
 
   /* All data pushed to core, now we just need to read back the result */
-  if ((err = hash_read_digest(state->driver, digest_buffer, state->descriptor->digest_length)) != HAL_OK)
+  if ((err = hash_read_digest(state->core, state->driver, digest_buffer, state->descriptor->digest_length)) != HAL_OK)
     return err;
 
   return HAL_OK;
@@ -540,7 +524,8 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,            	/* Opaque sta
  * Initialize HMAC state.
  */
 
-hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
+hal_error_t hal_hmac_initialize(const hal_core_t *core,
+                                const hal_hash_descriptor_t * const descriptor,
                                 hal_hmac_state_t **state_,
                                 void *state_buffer, const size_t state_length,
                                 const uint8_t * const key, const size_t key_length)
@@ -555,6 +540,9 @@ hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
 
   if (state_buffer != NULL && state_length < descriptor->hmac_state_length)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if ((err = check_core(&core, descriptor)) != HAL_OK)
+    return err;
 
   if (state_buffer == NULL && (state = malloc(descriptor->hmac_state_length)) == NULL)
     return HAL_ERROR_ALLOCATION_FAILURE;
@@ -573,7 +561,7 @@ hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
     return HAL_ERROR_UNSUPPORTED_KEY;
 #endif
 
-  if ((err = hal_hash_initialize(descriptor, &h, &state->hash_state,
+  if ((err = hal_hash_initialize(core, descriptor, &h, &state->hash_state,
                                  sizeof(state->hash_state))) != HAL_OK)
     goto fail;
 
@@ -593,7 +581,7 @@ hal_error_t hal_hmac_initialize(const hal_hash_descriptor_t * const descriptor,
 
   else if ((err = hal_hash_update(h, key, key_length))                         != HAL_OK ||
            (err = hal_hash_finalize(h, state->keybuf, sizeof(state->keybuf)))  != HAL_OK ||
-           (err = hal_hash_initialize(descriptor, &h, &state->hash_state,
+           (err = hal_hash_initialize(core, descriptor, &h, &state->hash_state,
                                       sizeof(state->hash_state)))              != HAL_OK)
     goto fail;
 
@@ -693,7 +681,7 @@ hal_error_t hal_hmac_finalize(hal_hmac_state_t *state,
    */
 
   if ((err = hal_hash_finalize(h, d, sizeof(d)))                           != HAL_OK ||
-      (err = hal_hash_initialize(descriptor, &h, &state->hash_state,
+      (err = hal_hash_initialize(h->core, descriptor, &h, &state->hash_state,
                                  sizeof(state->hash_state)))               != HAL_OK ||
       (err = hal_hash_update(h, state->keybuf, descriptor->block_length))  != HAL_OK ||
       (err = hal_hash_update(h, d, descriptor->digest_length))             != HAL_OK ||
