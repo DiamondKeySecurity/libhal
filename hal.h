@@ -189,7 +189,7 @@
 
 #define SHA256_NAME0            "sha2"
 #define SHA256_NAME1            "-256"
-#define SHA256_VERSION          "0.80"
+#define SHA256_VERSION          "0.81"
 
 #define SHA512_NAME0            "sha2"
 #define SHA512_NAME1            "-512"
@@ -265,7 +265,7 @@
 /* Current name and version values */
 #define TRNG_NAME0              "trng"
 #define TRNG_NAME1              "    "
-#define TRNG_VERSION            "0.50"
+#define TRNG_VERSION            "0.51"
 
 #define AVALANCHE_ENTROPY_NAME0   "extn"
 #define AVALANCHE_ENTROPY_NAME1   "oise"
