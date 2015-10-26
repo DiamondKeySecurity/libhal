@@ -47,7 +47,7 @@ all: ${LIB}
 ${OBJ}: ${INC}
 
 ${LIB}: ${OBJ}
-	ar rcs $@ $^
+	${AR} rcs $@ $^
 
 asn1.o rsa.o ecdsa.o: asn1_internal.h
 
