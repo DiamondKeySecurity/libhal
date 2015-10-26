@@ -32,12 +32,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
-#include <assert.h>
-
 #include "hal.h"
 
 #define DEFINE_HAL_ERROR(_code_,_text_) \

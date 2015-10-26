@@ -32,10 +32,7 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <assert.h>
 #include <stdint.h>
-#include <stddef.h>
-#include <stdio.h>
 
 #include "hal.h"
 

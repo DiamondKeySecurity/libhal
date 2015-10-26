@@ -41,8 +41,6 @@
  * then split the result back to 64-bit blocks immediately afterwards.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>

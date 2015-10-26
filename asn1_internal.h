@@ -42,7 +42,6 @@
 #define _HAL_ASN1_H_
 
 #include <stdint.h>
-#include <stdlib.h>
 
 #include <tfm.h>
 

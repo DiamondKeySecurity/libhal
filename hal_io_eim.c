@@ -34,12 +34,8 @@
  */
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/ioctl.h>
 #include <stdint.h>
-#include <arpa/inet.h>
+#include <arpa/inet.h>		/* htonl/ntohl */
 
 #include "novena-eim.h"
 #include "hal.h"

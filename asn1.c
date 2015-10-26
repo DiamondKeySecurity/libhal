@@ -46,11 +46,7 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdio.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <stddef.h>
-#include <string.h>
 #include <assert.h>
 
 #include "hal.h"
