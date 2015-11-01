@@ -27,7 +27,7 @@
 
 INC	= ../hal.h
 LIB	= ../libhal.a
-BIN	= eim_peek_poke
+BIN	= eim_peek_poke cores
 
 CFLAGS	= -g3 -Wall -fPIC -std=c99 -I..
 
