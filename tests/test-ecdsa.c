@@ -282,7 +282,7 @@ static void _time_check(const struct timeval t0, const int ok)
   struct timeval t;
   gettimeofday(&t, NULL);
   t.tv_sec -= t0.tv_sec;
-  t.tv_usec = t0.tv_usec;
+  t.tv_usec -= t0.tv_usec;
   if (t.tv_usec < 0) {
     t.tv_usec += 1000000;
     t.tv_sec  -= 1;
@@ -322,11 +322,13 @@ int main(int argc, char *argv[])
 
   int ok = 1;
 
+#if HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM
   /*
    * Test vectors (where we have them).
    */
   for (int i = 0; i < sizeof(ecdsa_tc)/sizeof(*ecdsa_tc); i++)
     time_check(test_against_static_vectors(&ecdsa_tc[i]));
+#endif
 
   /*
    * Generate/sign/verify test for each curve.
