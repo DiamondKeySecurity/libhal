@@ -44,6 +44,7 @@
 #include <assert.h>
 
 #include "hal.h"
+#include "verilog_constants.h"
 
 /*
  * Whether we want debug output.
@@ -74,7 +75,8 @@ void hal_modexp_set_debug(const int onoff)
  * Set an ordinary register.
  */
 
-static hal_error_t set_register(const off_t addr,
+static hal_error_t set_register(const hal_core_t *core,
+                                const hal_addr_t addr,
                                 uint32_t value)
 {
   uint8_t w[4];
@@ -85,7 +87,7 @@ static hal_error_t set_register(const off_t addr,
     value >>= 8;
   }
 
-  return hal_io_write(addr, w, sizeof(w));
+  return hal_io_write(core, addr, w, sizeof(w));
 }
 
 /*
@@ -94,7 +96,8 @@ static hal_error_t set_register(const off_t addr,
  * expects.
  */
 
-static hal_error_t get_buffer(const off_t data_addr,
+static hal_error_t get_buffer(const hal_core_t *core,
+                              const hal_addr_t data_addr,
                               uint8_t *value,
                               const size_t length)
 {
@@ -103,7 +106,7 @@ static hal_error_t get_buffer(const off_t data_addr,
   assert(value != NULL && length % 4 == 0);
 
   for (i = 0; i < length; i += 4)
-    check(hal_io_read(data_addr + i/4, &value[length - 4 - i], 4));
+    check(hal_io_read(core, data_addr + i/4, &value[length - 4 - i], 4));
 
   return HAL_OK;
 }
@@ -114,7 +117,8 @@ static hal_error_t get_buffer(const off_t data_addr,
  * expects.
  */
 
-static hal_error_t set_buffer(const off_t data_addr,
+static hal_error_t set_buffer(const hal_core_t *core,
+                              const hal_addr_t data_addr,
                               const uint8_t * const value,
                               const size_t length)
 {
@@ -123,7 +127,7 @@ static hal_error_t set_buffer(const off_t data_addr,
   assert(value != NULL && length % 4 == 0);
 
   for (i = 0; i < length; i += 4)
-    check(hal_io_write(data_addr + i/4, &value[length - 4 - i], 4));
+    check(hal_io_write(core, data_addr + i/4, &value[length - 4 - i], 4));
 
   return HAL_OK;
 }
@@ -132,7 +136,8 @@ static hal_error_t set_buffer(const off_t data_addr,
  * Run one modexp operation.
  */
 
-hal_error_t hal_modexp(const uint8_t * const msg, const size_t msg_len, /* Message */
+hal_error_t hal_modexp(const hal_core_t *core,
+                       const uint8_t * const msg, const size_t msg_len, /* Message */
                        const uint8_t * const exp, const size_t exp_len, /* Exponent */
                        const uint8_t * const mod, const size_t mod_len, /* Modulus */
                        uint8_t *result, const size_t result_len)
@@ -169,37 +174,37 @@ hal_error_t hal_modexp(const uint8_t * const msg, const size_t msg_len, /* Messa
    */
 
   /* Select mode (1 = fast, 0 = safe) */
-  check(set_register(MODEXPS6_ADDR_MODE, (exp_len <= 4)));
+  check(set_register(core, MODEXPS6_ADDR_MODE, (exp_len <= 4)));
 
   /* Set modulus size in bits */
-  check(set_register(MODEXPS6_ADDR_MODULUS_WIDTH, mod_len * 8));
+  check(set_register(core, MODEXPS6_ADDR_MODULUS_WIDTH, mod_len * 8));
 
   /* Write new modulus */
-  check(set_buffer(MODEXPS6_ADDR_MODULUS, mod, mod_len));
+  check(set_buffer(core, MODEXPS6_ADDR_MODULUS, mod, mod_len));
 
   /* Pre-calcuate speed-up coefficient */
-  check(hal_io_init(MODEXPS6_ADDR_CTRL));
+  check(hal_io_init(core));
 
   /* Wait for calculation to complete */
-  check(hal_io_wait_ready(MODEXPS6_ADDR_STATUS));
+  check(hal_io_wait_ready(core));
 
   /* Write new message */
-  check(set_buffer(MODEXPS6_ADDR_MESSAGE, msg, msg_len));
+  check(set_buffer(core, MODEXPS6_ADDR_MESSAGE, msg, msg_len));
 
   /* Set new exponent length in bits */
-  check(set_register(MODEXPS6_ADDR_EXPONENT_WIDTH, exp_len * 8));
+  check(set_register(core, MODEXPS6_ADDR_EXPONENT_WIDTH, exp_len * 8));
 
   /* Set new exponent */
-  check(set_buffer(MODEXPS6_ADDR_EXPONENT, exp, exp_len));
+  check(set_buffer(core, MODEXPS6_ADDR_EXPONENT, exp, exp_len));
 
   /* Start calculation */
-  check(hal_io_next(MODEXPS6_ADDR_CTRL));
+  check(hal_io_next(core));
 
   /* Wait for result */
-  check(hal_io_wait_valid(MODEXPS6_ADDR_STATUS));
+  check(hal_io_wait_valid(core));
 
   /* Extract result */
-  check(get_buffer(MODEXPS6_ADDR_RESULT, result, mod_len));
+  check(get_buffer(core, MODEXPS6_ADDR_RESULT, result, mod_len));
 
   return HAL_OK;
 }

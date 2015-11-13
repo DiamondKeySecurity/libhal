@@ -152,7 +152,8 @@ static void print_hex(const uint8_t * const val, const size_t len)
     printf(" %02x", val[i]);
 }
 
-static int _test_pbkdf2(const uint8_t * const pwd,  const size_t pwd_len,
+static int _test_pbkdf2(const hal_core_t *core,
+                        const uint8_t * const pwd,  const size_t pwd_len,
                         const uint8_t * const salt, const size_t salt_len,
                         const uint8_t * const dk,   const size_t dk_len,
                         const unsigned count, const char * const label)
@@ -161,7 +162,7 @@ static int _test_pbkdf2(const uint8_t * const pwd,  const size_t pwd_len,
 
   uint8_t result[dk_len];
 
-  hal_error_t err = hal_pbkdf2(hal_hash_sha1, pwd, pwd_len, salt, salt_len,
+  hal_error_t err = hal_pbkdf2(core, hal_hash_sha1, pwd, pwd_len, salt, salt_len,
                                result, dk_len, count);
 
   if (err != HAL_OK) {
@@ -187,35 +188,27 @@ static int _test_pbkdf2(const uint8_t * const pwd,  const size_t pwd_len,
 }
 
 #define test_pbkdf2(_n_) \
-  _test_pbkdf2(pbkdf2_tc_##_n_##_password, sizeof(pbkdf2_tc_##_n_##_password),  \
+  _test_pbkdf2(core,                                                            \
+               pbkdf2_tc_##_n_##_password, sizeof(pbkdf2_tc_##_n_##_password),  \
                pbkdf2_tc_##_n_##_salt,     sizeof(pbkdf2_tc_##_n_##_salt),      \
                pbkdf2_tc_##_n_##_DK,       sizeof(pbkdf2_tc_##_n_##_DK),        \
                pbkdf2_tc_##_n_##_count,    #_n_)
 
 int main (int argc, char *argv[])
 {
-  hal_error_t err = hal_hash_core_present(hal_hash_sha1);
+  const hal_core_t *core = hal_core_find(SHA1_NAME, NULL);
   int ok = 1;
 
-  switch (err) {
+  if (core == NULL)
+    printf("SHA-1 core not present, not testing PBKDF2\n");
 
-  case HAL_OK:
+  else {
     ok &= test_pbkdf2(1);
     ok &= test_pbkdf2(2);
     ok &= test_pbkdf2(3);
     ok &= test_pbkdf2(4);
     ok &= test_pbkdf2(5);
     ok &= test_pbkdf2(6);
-    break;
-
-  case HAL_ERROR_IO_UNEXPECTED:
-    printf("SHA-1 core not present, not testing PBKDF2\n");
-    break;
-
-  default:
-    printf("Unexpected error while probing for hash core: %s\n", hal_error_string(err));
-    ok = 0;
-    break;
   }
 
     return !ok;

@@ -37,13 +37,15 @@
 #include <stdint.h>
 
 #include "hal.h"
+#include "verilog_constants.h"
 
 /*
  * Utility to encapsulate the HMAC operations.  May need refactoring
  * if and when we get clever about reusing HMAC state for speed.
  */
 
-static hal_error_t do_hmac(const hal_hash_descriptor_t * const d,
+static hal_error_t do_hmac(const hal_core_t *core,
+                           const hal_hash_descriptor_t * const d,
                            const uint8_t * const pw,   const size_t pw_len,
                            const uint8_t * const data, const size_t data_len,
                            const uint32_t  block,
@@ -55,7 +57,7 @@ static hal_error_t do_hmac(const hal_hash_descriptor_t * const d,
   hal_hmac_state_t *s;
   hal_error_t err;
 
-  if ((err = hal_hmac_initialize(d, &s, sb, sizeof(sb), pw, pw_len)) != HAL_OK)
+  if ((err = hal_hmac_initialize(core, d, &s, sb, sizeof(sb), pw, pw_len)) != HAL_OK)
     return err;
 
   if ((err = hal_hmac_update(s, data, data_len)) != HAL_OK)
@@ -74,7 +76,8 @@ static hal_error_t do_hmac(const hal_hash_descriptor_t * const d,
  * Derive a key from a passphrase using the PBKDF2 algorithm.
  */
 
-hal_error_t hal_pbkdf2(const hal_hash_descriptor_t * const descriptor,
+hal_error_t hal_pbkdf2(const hal_core_t *core,
+                       const hal_hash_descriptor_t * const descriptor,
                        const uint8_t * const password, const size_t password_length,
                        const uint8_t * const salt,     const size_t salt_length,
                        uint8_t       * derived_key,          size_t derived_key_length,
@@ -123,8 +126,8 @@ hal_error_t hal_pbkdf2(const hal_hash_descriptor_t * const descriptor,
      * This seeds the result, and constitutes iteration one.
      */
 
-    if ((err = do_hmac(descriptor, password, password_length, salt, salt_length,
-                       block, mac, sizeof(mac))) != HAL_OK)
+    if ((err = do_hmac(core, descriptor, password, password_length,
+                       salt, salt_length, block, mac, sizeof(mac))) != HAL_OK)
       return err;
 
     memcpy(result, mac, descriptor->digest_length);
@@ -136,7 +139,7 @@ hal_error_t hal_pbkdf2(const hal_hash_descriptor_t * const descriptor,
 
     for (iteration = 2; iteration <= iterations_desired; iteration++) {
 
-      if ((err = do_hmac(descriptor, password, password_length,
+      if ((err = do_hmac(core, descriptor, password, password_length,
                          mac, descriptor->digest_length,
                          0, mac, sizeof(mac))) != HAL_OK)
         return err;

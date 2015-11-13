@@ -39,6 +39,7 @@
 
 #include "novena-eim.h"
 #include "hal.h"
+#include "verilog_constants.h"
 
 static int debug = 0;
 static int inited = 0;
@@ -68,7 +69,7 @@ static hal_error_t init(void)
  *
  * sss ccccc rrrrrrrr => 00001000000000 sss 0 ccccc rrrrrrrr 00
  */
-static off_t eim_offset(off_t offset)
+static hal_addr_t eim_offset(hal_addr_t offset)
 {
   return EIM_BASE_ADDR + ((offset & ~0x1fff) << 3) + ((offset & 0x1fff) << 2);
 }
@@ -89,9 +90,12 @@ static void dump(char *label, const uint8_t *buf, size_t len)
   }
 }
 
-hal_error_t hal_io_write(off_t offset, const uint8_t *buf, size_t len)
+hal_error_t hal_io_write(const hal_core_t *core, hal_addr_t offset, const uint8_t *buf, size_t len)
 {
   hal_error_t err;
+
+  if (core == NULL)
+    return HAL_ERROR_CORE_NOT_FOUND;
 
   if (len % 4 != 0)
     return HAL_ERROR_IO_BAD_COUNT;
@@ -101,7 +105,7 @@ hal_error_t hal_io_write(off_t offset, const uint8_t *buf, size_t len)
 
   dump("write ", buf, len);
 
-  offset = eim_offset(offset);
+  offset = eim_offset(offset + hal_core_base(core));
   for (; len > 0; offset += 4, buf += 4, len -= 4) {
     uint32_t val;
     val = htonl(*(uint32_t *)buf);
@@ -111,11 +115,14 @@ hal_error_t hal_io_write(off_t offset, const uint8_t *buf, size_t len)
   return HAL_OK;
 }
 
-hal_error_t hal_io_read(off_t offset, uint8_t *buf, size_t len)
+hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf, size_t len)
 {
   uint8_t *rbuf = buf;
   int rlen = len;
   hal_error_t err;
+
+  if (core == NULL)
+    return HAL_ERROR_CORE_NOT_FOUND;
 
   if (len % 4 != 0)
     return HAL_ERROR_IO_BAD_COUNT;
@@ -123,7 +130,7 @@ hal_error_t hal_io_read(off_t offset, uint8_t *buf, size_t len)
   if ((err = init()) != HAL_OK)
     return err;
 
-  offset = eim_offset(offset);
+  offset = eim_offset(offset + hal_core_base(core));
   for (; rlen > 0; offset += 4, rbuf += 4, rlen -= 4) {
     uint32_t val;
     eim_read_32(offset, &val);
@@ -135,40 +142,19 @@ hal_error_t hal_io_read(off_t offset, uint8_t *buf, size_t len)
   return HAL_OK;
 }
 
-hal_error_t hal_io_expected(off_t offset, const uint8_t *expected, size_t len)
-{
-  hal_error_t err;
-  uint8_t buf[4];
-  size_t i;
-
-  if (len % 4 != 0)
-    return HAL_ERROR_IO_BAD_COUNT;
-
-  dump("expect", expected, len);
-
-  for (i = 0; i < len; i++) {
-    if ((i & 3) == 0 && (err = hal_io_read(offset + i/4, buf, sizeof(buf))) != HAL_OK)
-      return err;
-    if (buf[i & 3] != expected[i])
-      return HAL_ERROR_IO_UNEXPECTED;
-  }
-
-  return HAL_OK;
-}
-
-hal_error_t hal_io_init(off_t offset)
+hal_error_t hal_io_init(const hal_core_t *core)
 {
   uint8_t buf[4] = { 0, 0, 0, CTRL_INIT };
-  return hal_io_write(offset, buf, sizeof(buf));
+  return hal_io_write(core, ADDR_CTRL, buf, sizeof(buf));
 }
 
-hal_error_t hal_io_next(off_t offset)
+hal_error_t hal_io_next(const hal_core_t *core)
 {
   uint8_t buf[4] = { 0, 0, 0, CTRL_NEXT };
-  return hal_io_write(offset, buf, sizeof(buf));
+  return hal_io_write(core, ADDR_CTRL, buf, sizeof(buf));
 }
 
-hal_error_t hal_io_wait(off_t offset, uint8_t status, int *count)
+hal_error_t hal_io_wait(const hal_core_t *core, uint8_t status, int *count)
 {
   hal_error_t err;
   uint8_t buf[4];
@@ -179,7 +165,7 @@ hal_error_t hal_io_wait(off_t offset, uint8_t status, int *count)
     if (count && (*count > 0) && (i >= *count))
       return HAL_ERROR_IO_TIMEOUT;
 
-    if ((err = hal_io_read(offset, buf, sizeof(buf))) != HAL_OK)
+    if ((err = hal_io_read(core, ADDR_STATUS, buf, sizeof(buf))) != HAL_OK)
       return err;
 
     if ((buf[3] & status) != 0) {
@@ -190,16 +176,16 @@ hal_error_t hal_io_wait(off_t offset, uint8_t status, int *count)
   }
 }
 
-hal_error_t hal_io_wait_ready(off_t offset)
+hal_error_t hal_io_wait_ready(const hal_core_t *core)
 {
   int limit = EIM_IO_TIMEOUT;
-  return hal_io_wait(offset, STATUS_READY, &limit);
+  return hal_io_wait(core, STATUS_READY, &limit);
 }
 
-hal_error_t hal_io_wait_valid(off_t offset)
+hal_error_t hal_io_wait_valid(const hal_core_t *core)
 {
   int limit = EIM_IO_TIMEOUT;
-  return hal_io_wait(offset, STATUS_VALID, &limit);
+  return hal_io_wait(core, STATUS_VALID, &limit);
 }
 
 /*
