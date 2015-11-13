@@ -80,7 +80,7 @@ static int sanity(void)
     }
 
     if (data != rnd) {
-        printf("Data bus fail: expected %08x, got %08x, diff %08x\n", rnd, data, data ^ rnd);
+        printf("Data bus fail: expected %08lx, got %08lx, diff %08lx\n", rnd, data, data ^ rnd);
         return 1;
     }
 
@@ -97,7 +97,7 @@ static void _time_check(char *label, const struct timeval t0, const int err)
   float rounds;
   gettimeofday(&t, NULL);
   t.tv_sec -= t0.tv_sec;
-  t.tv_usec = t0.tv_usec;
+  t.tv_usec -= t0.tv_usec;
   if (t.tv_usec < 0) {
     t.tv_usec += 1000000;
     t.tv_sec  -= 1;

@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (name[0] != 0)
-	    printf("%08x: %8s %4s\n", cores[i], name, version);
+	    printf("%08lx: %8s %4s\n", cores[i], name, version);
     }
 
     return 0;
