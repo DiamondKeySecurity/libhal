@@ -48,33 +48,26 @@
  * Sanity test - are the cores present, and can we get a random number?
  */
 
-static int sanity(void)
+static int sanity(const hal_core_t *board_core, const hal_core_t *csprng_core)
 {
     uint32_t rnd, data;
-    int n = 10;
     hal_error_t err;
 
-    if (((err = hal_io_expected(BOARD_ADDR_NAME0, (const uint8_t *) NOVENA_BOARD_NAME0, 4)) != HAL_OK) ||
-        ((err = hal_io_expected(CSPRNG_ADDR_NAME0, (const uint8_t *) CSPRNG_NAME0, 4)) != HAL_OK)) {
-        printf("initialization failed (is the bitstream loaded?): %s\n",
-               hal_error_string(err));
+    if (board_core == NULL || csprng_core == NULL) {
+        printf("initialization failed (is the bitstream loaded?)\n");
         return 1;
     }
 
-    if ((err = hal_io_wait(CSPRNG_ADDR_STATUS, CSPRNG_STATUS_VALID, &n)) != HAL_OK) {
-        printf("waiting for CSPRNG: %s\n", hal_error_string(err));
-        return 1;
-    }
-    if ((err = hal_io_read(CSPRNG_ADDR_RANDOM, (uint8_t *) &rnd, sizeof(rnd))) != HAL_OK) {
+    if ((err = hal_get_random(csprng_core, (void *) &rnd, sizeof(rnd))) != HAL_OK) {
         printf("reading CSPRNG: %s\n", hal_error_string(err));
         return 1;
     }
 
-    if ((err = hal_io_write(BOARD_ADDR_DUMMY, (const uint8_t *) &rnd, sizeof(rnd))) != HAL_OK) {
+    if ((err = hal_io_write(board_core, 0xFF, (const uint8_t *) &rnd, sizeof(rnd))) != HAL_OK) {
         printf("writing dummy: %s\n", hal_error_string(err));
         return 1;
     }
-    if ((err = hal_io_read(BOARD_ADDR_DUMMY, (uint8_t *) &data, sizeof(data))) != HAL_OK) {
+    if ((err = hal_io_read(board_core, 0xFF, (uint8_t *) &data, sizeof(data))) != HAL_OK) {
         printf("reading dummy: %s\n", hal_error_string(err));
         return 1;
     }
@@ -119,13 +112,13 @@ static void _time_check(char *label, const struct timeval t0, const int err)
  * Read and write over and over again.
  */
 
-static int test_read(void)
+static int test_read(const hal_core_t *board_core)
 {
     uint32_t i, data;
     hal_error_t err;
 
     for (i = 0; i < TEST_NUM_ROUNDS; ++i) {
-        if ((err = hal_io_read(BOARD_ADDR_DUMMY, (uint8_t *) &data, sizeof(data))) != HAL_OK) {
+	if ((err = hal_io_read(board_core, 0xFF, (uint8_t *) &data, sizeof(data))) != HAL_OK) {
             printf("reading dummy: %s\n", hal_error_string(err));
             return 1;
         }
@@ -134,13 +127,13 @@ static int test_read(void)
     return 0;
 }
 
-static int test_write(void)
+static int test_write(const hal_core_t *board_core)
 {
     uint32_t i;
     hal_error_t err;
 
     for (i = 0; i < TEST_NUM_ROUNDS; ++i) {
-        if ((err = hal_io_write(BOARD_ADDR_DUMMY, (const uint8_t *) &i, sizeof(i))) != HAL_OK) {
+	if ((err = hal_io_write(board_core, 0xFF, (const uint8_t *) &i, sizeof(i))) != HAL_OK) {
             printf("writing dummy: %s\n", hal_error_string(err));
             return 1;
         }
@@ -151,13 +144,15 @@ static int test_write(void)
 
 int main(void)
 {
+    const hal_core_t *board_core = hal_core_find(NOVENA_BOARD_NAME, NULL);
+    const hal_core_t *csprng_core = hal_core_find(CSPRNG_NAME, NULL);
     int err = 0;
 
-    if (sanity() != 0)
+    if (sanity(board_core, csprng_core) != 0)
         return 1;
 
-    time_check("read  ", test_read());
-    time_check("write ", test_write());
+    time_check("read  ", test_read(board_core));
+    time_check("write ", test_write(board_core));
 
     return err;
 }

@@ -106,9 +106,7 @@ static int name_matches(const hal_core_t *const core, const char * const name)
 /* Extra space to leave after particular cores.  Yummy. */
 
 static const struct { const char *name; hal_addr_t extra; } gaps[] = {
-  { "trng",     4 * CORE_SIZE }, /* Four empty slots after trng */
-  { "rosc ent", 3 * CORE_SIZE }, /* Three empty slots after rosc */
-  { "csprng",   4 * CORE_SIZE }, /* Four empty slots after csprng */
+  { "csprng",  11 * CORE_SIZE }, /* empty slots after csprng */
   { "modexps6", 3 * CORE_SIZE }, /* ModexpS6 uses four slots */
 };
 

@@ -40,41 +40,16 @@
 #include <sys/time.h>
 
 #include <hal.h>
-
-off_t cores[] = {
-    BOARD_ADDR_BASE,
-    COMM_ADDR_BASE,
-    SHA1_ADDR_BASE,
-    SHA256_ADDR_BASE,
-    SHA512_ADDR_BASE,
-    TRNG_ADDR_BASE,
-    ENTROPY1_ADDR_BASE,
-    ENTROPY2_ADDR_BASE,
-    MIXER_ADDR_BASE,
-    CSPRNG_ADDR_BASE,
-    AES_ADDR_BASE,
-    CHACHA_ADDR_BASE,
-    MODEXPS6_ADDR_BASE
-};
+#include <verilog_constants.h>
 
 int main(int argc, char *argv[])
 {
-    uint8_t name[9] = {0}, version[5] = {0};
-    hal_error_t err;
-    int i;
+    const hal_core_t *core;
+    const hal_core_info_t *info;
 
-    /*
-     * Initialize EIM and report what cores we've got.
-     */
-    for (i = 0; i < sizeof(cores)/sizeof(cores[0]); ++i) {
-	if ((err = hal_io_read(cores[i], name, 8)) != HAL_OK ||
-	    (err = hal_io_read(cores[i] + 2, version, 4)) != HAL_OK) {
-	    printf("hal_io_read failed: %s\n", hal_error_string(err));
-	    return 1;
-	}
-
-	if (name[0] != 0)
-	    printf("%08lx: %8s %4s\n", cores[i], name, version);
+    for (core = hal_core_iterate(NULL); core != NULL; core = hal_core_iterate(core)) {
+	info = hal_core_info(core);
+	printf("%08lx: %8.8s %4.4s\n", info->base, info->name, info->version);
     }
 
     return 0;
