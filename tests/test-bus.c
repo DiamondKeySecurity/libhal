@@ -45,21 +45,16 @@
 #define TEST_NUM_ROUNDS         2000000
 
 /*
- * Sanity test - are the cores present, and can we get a random number?
+ * Sanity test - can we read and write the dummy register?
  */
 
-static int sanity(const hal_core_t *board_core, const hal_core_t *csprng_core)
+static int sanity(const hal_core_t *board_core)
 {
-    uint32_t rnd, data;
+    uint32_t rnd = 0xdeadbeef, data;
     hal_error_t err;
 
-    if (board_core == NULL || csprng_core == NULL) {
+    if (board_core == NULL) {
         printf("initialization failed (is the bitstream loaded?)\n");
-        return 1;
-    }
-
-    if ((err = hal_get_random(csprng_core, (void *) &rnd, sizeof(rnd))) != HAL_OK) {
-        printf("reading CSPRNG: %s\n", hal_error_string(err));
         return 1;
     }
 
@@ -145,10 +140,9 @@ static int test_write(const hal_core_t *board_core)
 int main(void)
 {
     const hal_core_t *board_core = hal_core_find(NOVENA_BOARD_NAME, NULL);
-    const hal_core_t *csprng_core = hal_core_find(CSPRNG_NAME, NULL);
     int err = 0;
 
-    if (sanity(board_core, csprng_core) != 0)
+    if (sanity(board_core) != 0)
         return 1;
 
     time_check("read  ", test_read(board_core));
