@@ -68,7 +68,7 @@ static int sanity(const hal_core_t *board_core)
     }
 
     if (data != rnd) {
-        printf("Data bus fail: expected %08lx, got %08lx, diff %08lx\n", rnd, data, data ^ rnd);
+        printf("Data bus fail: expected %08x, got %08x, diff %08x\n", rnd, data, data ^ rnd);
         return 1;
     }
 

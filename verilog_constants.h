@@ -41,7 +41,7 @@
 #define _VERILOG_CONSTANTS_H_
 
 /*
- * Common to all (well, almost all) cores.
+ * Common to all cores.
  */
 #define ADDR_NAME0              (0x00)
 #define ADDR_NAME1              (0x01)

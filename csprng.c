@@ -38,7 +38,7 @@
 #include "verilog_constants.h"
 
 #ifndef WAIT_FOR_CSPRNG_VALID
-#define WAIT_FOR_CSPRNG_VALID   0
+#define WAIT_FOR_CSPRNG_VALID   1
 #endif
 
 hal_error_t hal_get_random(const hal_core_t *core, void *buffer, const size_t length)

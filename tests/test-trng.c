@@ -46,7 +46,7 @@
 #include <verilog_constants.h>
 
 #ifndef WAIT_FOR_CSPRNG_VALID
-#define WAIT_FOR_CSPRNG_VALID   0
+#define WAIT_FOR_CSPRNG_VALID   1
 #endif
 
 static void show_core(const hal_core_t *core, const char *whinge)
@@ -71,12 +71,7 @@ static hal_error_t test_random(const char *name)
         return HAL_ERROR_CORE_NOT_FOUND;
 
     for (i = 0; i < 8; ++i) {
-	/* The entropy sources are faster than the bus speed, so querying
-	 * the "status_valid" bit always returns true. Also, at the
-	 * moment, the trng cores use bit 0 for valid, while all the other
-	 * cores use bit 1, so we query the "status_ready" bit.
-	 */
-	if (WAIT_FOR_CSPRNG_VALID && (err = hal_io_wait_ready(core)) != HAL_OK) {
+	if (WAIT_FOR_CSPRNG_VALID && (err = hal_io_wait_valid(core)) != HAL_OK) {
 	    printf("hal_io_wait_valid: %s\n", hal_error_string(err));
 	    return err;
         }
@@ -89,7 +84,7 @@ static hal_error_t test_random(const char *name)
             return err;
         }
 
-        printf("%08lx ", rnd);
+        printf("%08x ", rnd);
     }
     printf("\n");
 
@@ -105,13 +100,13 @@ int main(void)
     /* Exercise the API function. This gets random data from the CSPRNG,
      * so we end up hitting that twice.
      */
-    printf("hal_get_random:\n");
+    printf("hal_get_random\n");
     if ((err = hal_get_random(NULL, (void *) &rnd, sizeof(rnd))) != HAL_OK) {
 	printf("hal_get_random: %s\n", hal_error_string(err));
     }
     else {
 	for (i = 0; i < 8; ++i) {
-	    printf("%08lx ", rnd[i]);
+	    printf("%08x ", rnd[i]);
 	}
 	printf("\n");
     }
