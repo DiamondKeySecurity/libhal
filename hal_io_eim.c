@@ -107,9 +107,7 @@ hal_error_t hal_io_write(const hal_core_t *core, hal_addr_t offset, const uint8_
 
   offset = eim_offset(offset + hal_core_base(core));
   for (; len > 0; offset += 4, buf += 4, len -= 4) {
-    uint32_t val;
-    val = htonl(*(uint32_t *)buf);
-    eim_write_32(offset, &val);
+    eim_write_32(offset, (uint32_t *)buf);
   }
 
   return HAL_OK;
@@ -132,9 +130,7 @@ hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf,
 
   offset = eim_offset(offset + hal_core_base(core));
   for (; rlen > 0; offset += 4, rbuf += 4, rlen -= 4) {
-    uint32_t val;
-    eim_read_32(offset, &val);
-    *(uint32_t *)rbuf = ntohl(val);
+    eim_read_32(offset, (uint32_t *)rbuf);
   }
 
   dump("read  ", buf, len);
