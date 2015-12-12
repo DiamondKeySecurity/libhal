@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 
     for (core = hal_core_iterate(NULL); core != NULL; core = hal_core_iterate(core)) {
 	info = hal_core_info(core);
-	printf("%08lx: %8.8s %4.4s\n", info->base, info->name, info->version);
+	printf("%08lx: %8.8s %4.4s\n", (unsigned long)info->base, info->name, info->version);
     }
 
     return 0;

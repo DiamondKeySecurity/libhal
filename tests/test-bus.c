@@ -91,7 +91,8 @@ static void _time_check(char *label, const struct timeval t0, const int err)
     t.tv_sec  -= 1;
   }
   rounds = (float)TEST_NUM_ROUNDS/((float)t.tv_sec + ((float)t.tv_usec / 1000000));
-  printf("%s%lu.%06lu seconds, %u/sec\n", label, t.tv_sec, t.tv_usec, (unsigned)rounds);
+  printf("%s%lu.%06lu seconds, %u/sec\n", label,
+	 (unsigned long)t.tv_sec, (unsigned long)t.tv_usec, (unsigned)rounds);
 }
 
 #define time_check(_label_, _expr_)             \
