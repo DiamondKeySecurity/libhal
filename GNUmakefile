@@ -28,13 +28,20 @@
 INC		= hal.h
 LIB		= libhal.a
 OBJ		= ${IO_OBJ} core.o csprng.o hash.o aes_keywrap.o pbkdf2.o \
-		  modexp.o rsa.o ecdsa.o asn1.o errorstrings.o
+		  modexp.o rsa.o ecdsa.o asn1.o errorstrings.o ${RPC_OBJ}
 
 IO_OBJ_EIM	= hal_io_eim.o novena-eim.o
 IO_OBJ_I2C 	= hal_io_i2c.o
 
 # Default I/O bus is EIM, override this to use I2C instead
 IO_OBJ		= ${IO_OBJ_EIM}
+
+RPC_OBJ_CLIENT	= hal_rpc.o rpc_client.o
+RPC_OBJ_SERVER	= hal_rpc.o rpc_server.o
+
+# Default should be to build the RPC server, but we haven't written even the skeleton of that yet.
+# We'll probably end up needing a makefile conditional to handle all this properly
+RPC_OBJ		= ${RPC_OBJ_CLIENT}
 
 TFMDIR		:= $(abspath ../thirdparty/libtfm)
 CFLAGS		+= -g3 -Wall -fPIC -std=c99 -I${TFMDIR} -DHAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM=1

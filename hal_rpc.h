@@ -1,6 +1,6 @@
 /*
- * halrpc.h
- * ----------
+ * hal_rpc.h
+ * ---------
  * Remote procedure call API to extrude libhal across the green/yellow boundary.
  *
  * Authors: Rob Austein, Paul Selkirk
@@ -33,14 +33,12 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _HALRPC_H_
-#define _HALRPC_H_
+#ifndef _HAL_RPC_H_
+#define _HAL_RPC_H_
 
-/*
- * Get random bytes.
- */
-
-extern hal_error_t hal_rpc_get_random(void *buffer, const size_t length);
+#include <stdint.h>
+#include <stdlib.h>
+#include "hal.h"
 
 /*
  * Session handles are pretty much as in PKCS #11: from our viewpoint,
@@ -68,16 +66,22 @@ extern hal_error_t hal_rpc_get_random(void *buffer, const size_t length);
 typedef struct { uint32_t handle; } hal_rpc_client_handle_t;
 typedef struct { uint32_t handle; } hal_rpc_session_handle_t;
 
-typedef enum { HAL_RPC_PIN_USER_REGULAR, HAL_RPC_PIN_USER_SO } hal_rpc_pin_user_t;
+typedef enum { HAL_RPC_USER_NONE, HAL_RPC_USER_NORMAL, HAL_RPC_USER_SO } hal_rpc_user_t;
 
-extern hal_error_t hal_rpc_set_pin(const hal_rpc_pin_user_t which,
+extern hal_error_t hal_rpc_set_pin(const hal_rpc_user_t which,
                                    const char * const newpin, const size_t newpin_len);
 
 extern hal_error_t hal_rpc_login(const hal_rpc_client_handle_t client,
-                                 const hal_rpc_pin_user_t user,
-                                 const char * const newpin, const size_t newpin_len);
+                                 const hal_rpc_user_t user,
+                                 const char * const pin, const size_t pin_len);
 
 extern hal_error_t hal_rpc_logout(const hal_rpc_client_handle_t client);
+
+/*
+ * Get random bytes.
+ */
+
+extern hal_error_t hal_rpc_get_random(void *buffer, const size_t length);
 
 /*
  * Combined hash and HMAC functions: pass NULL key for plain hashing.
@@ -92,10 +96,12 @@ typedef struct { uint32_t handle; } hal_rpc_hash_handle_t;
 
 extern const hal_rpc_hash_handle_t hal_rpc_hash_handle_none;
 
-extern hal_error_t hal_rpc_hash_get_digest_len(const hal_rpc_hash_alg_t alg, size_t *length);
+extern hal_error_t hal_rpc_hash_get_digest_length(const hal_rpc_hash_alg_t alg, size_t *length);
 
 extern hal_error_t hal_rpc_hash_get_digest_algorithm_id(const hal_rpc_hash_alg_t alg,
                                                         uint8_t *id, size_t *len, const size_t len_max);
+
+extern hal_error_t hal_rpc_hash_get_algorithm(const hal_rpc_hash_handle_t hash, hal_rpc_hash_alg_t *alg);
 
 /*
  * Once started, a hash or HMAC operation is bound to a particular
@@ -145,15 +151,20 @@ extern hal_error_t hal_rpc_hash_finalize(const hal_rpc_hash_handle_t hash,
 #define	HAL_RPC_PKEY_NAME_MAX 128
 
 typedef enum {
-  HAL_RPC_PKEY_RSA_PRIVATE,   HAL_RPC_PKEY_RSA_PUBLIC,
-  HAL_RPC_PKEY_ECDSA_PRIVATE, HAL_RPC_PKEY_ECDSA_PUBLIC
+  HAL_RPC_PKEY_RSA_PRIVATE,
+  HAL_RPC_PKEY_RSA_PUBLIC,
+  HAL_RPC_PKEY_ECDSA_PRIVATE,
+  HAL_RPC_PKEY_ECDSA_PUBLIC
 } hal_rpc_pkey_key_type_t;
 
 typedef enum {
-  HAL_RPC_PKEY_CURVE_ECDSA_P256, HAL_RPC_PKEY_CURVE_ECDSA_P384, HAL_RPC_PKEY_CURVE_ECDSA_P521
+  HAL_RPC_PKEY_CURVE_NONE,
+  HAL_RPC_PKEY_CURVE_ECDSA_P256,
+  HAL_RPC_PKEY_CURVE_ECDSA_P384,
+  HAL_RPC_PKEY_CURVE_ECDSA_P521
 } hal_rpc_pkey_curve_t;
 
-typedef struct { uint33_t handle; } hal_rpc_pkey_handle_t;
+typedef struct { uint32_t handle; } hal_rpc_pkey_handle_t;
 
 typedef uint32_t hal_rpc_pkey_flags_t;
 
@@ -164,7 +175,8 @@ typedef uint32_t hal_rpc_pkey_flags_t;
 extern hal_error_t hal_rpc_pkey_load(const hal_rpc_client_handle_t client,
                                      const hal_rpc_session_handle_t session,
                                      hal_rpc_pkey_handle_t *pkey,
-                                     const hal_rpc_pkey_key_type type,
+                                     const hal_rpc_pkey_key_type_t type,
+                                     const hal_rpc_pkey_curve_t curve,
                                      const uint8_t * const name, const size_t name_len,
                                      const uint8_t * const der, const size_t der_len,
                                      const hal_rpc_pkey_flags_t flags);
@@ -172,7 +184,7 @@ extern hal_error_t hal_rpc_pkey_load(const hal_rpc_client_handle_t client,
 extern hal_error_t hal_rpc_pkey_find(const hal_rpc_client_handle_t client,
                                      const hal_rpc_session_handle_t session,
                                      hal_rpc_pkey_handle_t *pkey,
-                                     const hal_rpc_pkey_key_type type,
+                                     const hal_rpc_pkey_key_type_t type,
                                      const uint8_t * const name, const size_t name_len);
 
 extern hal_error_t hal_rpc_pkey_generate_rsa(const hal_rpc_client_handle_t client,
@@ -192,10 +204,10 @@ extern hal_error_t hal_rpc_pkey_generate_ec(const hal_rpc_client_handle_t client
 
 extern hal_error_t hal_rpc_pkey_delete(const hal_rpc_pkey_handle_t pkey);
 
-extern hal_error_t hal_rpc_pkey_get_key_type(const hal_rpc_pkey_handle pkey,
-                                             hal_rpc_pkey_key_type_t *key_type);
+extern hal_error_t hal_rpc_pkey_get_key_type(const hal_rpc_pkey_handle_t pkey,
+                                             hal_rpc_pkey_key_type_t *type);
 
-extern hal_error_t hal_rpc_pkey_get_key_flags(const hal_rpc_pkey_handle pkey,
+extern hal_error_t hal_rpc_pkey_get_key_flags(const hal_rpc_pkey_handle_t pkey,
                                               hal_rpc_pkey_flags_t *flags);
 
 extern size_t hal_rpc_pkey_get_public_key_len(const hal_rpc_pkey_handle_t pkey);
@@ -216,7 +228,7 @@ extern hal_error_t hal_rpc_pkey_verify(const hal_rpc_session_handle_t session,
                                        uint8_t * output, const size_t output_len);
 
 typedef struct {
-  hal_rpc_pkey_key_type_t key_type;
+  hal_rpc_pkey_key_type_t type;
   hal_rpc_pkey_curve_t curve;
   hal_rpc_pkey_flags_t flags;
   char name[HAL_RPC_PKEY_NAME_MAX];
@@ -227,7 +239,7 @@ extern hal_error_t hal_rpc_pkey_list(hal_rpc_pkey_key_info_t *result,
                                      unsigned *result_len,
                                      const unsigned result_max);
 
-#endif /* _HALRPC_H_ */
+#endif /* _HAL_RPC_H_ */
 
 /*
  * Local variables:

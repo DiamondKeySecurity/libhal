@@ -6,8 +6,11 @@ autom4te.cache
 config.log
 config.status
 tests/test-aes-key-wrap
+tests/test-bus
 tests/test-ecdsa
 tests/test-hash
 tests/test-pbkdf2
 tests/test-rsa
+tests/test-trng
+utils/cores
 utils/eim_peek_poke
