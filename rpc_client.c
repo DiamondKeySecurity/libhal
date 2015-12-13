@@ -64,18 +64,18 @@ static hal_error_t logout(const hal_rpc_client_handle_t client)
   return HAL_ERROR_IMPOSSIBLE;
 }
 
-static hal_error_t hash_get_digest_len(const hal_rpc_hash_alg_t alg, size_t *length)
+static hal_error_t hash_get_digest_len(const hal_digest_algorithm_t alg, size_t *length)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }
 
-static hal_error_t hash_get_digest_algorithm_id(const hal_rpc_hash_alg_t alg,
+static hal_error_t hash_get_digest_algorithm_id(const hal_digest_algorithm_t alg,
                                                 uint8_t *id, size_t *len, const size_t len_max)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }
 
-static hal_error_t hash_get_algorithm(const hal_rpc_hash_handle_t hash, hal_rpc_hash_alg_t *alg)
+static hal_error_t hash_get_algorithm(const hal_rpc_hash_handle_t hash, hal_digest_algorithm_t *alg)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }
@@ -83,7 +83,7 @@ static hal_error_t hash_get_algorithm(const hal_rpc_hash_handle_t hash, hal_rpc_
 static hal_error_t hash_initialize(const hal_rpc_client_handle_t client,
                                    const hal_rpc_session_handle_t session,
                                    hal_rpc_hash_handle_t *hash,
-                                   const hal_rpc_hash_alg_t alg,
+                                   const hal_digest_algorithm_t alg,
                                    const uint8_t * const key, const size_t key_len)
 {
   return HAL_ERROR_IMPOSSIBLE;
@@ -213,7 +213,7 @@ static hal_error_t pkey_mixed_sign(const hal_rpc_session_handle_t session,
   if (input != NULL)
     return pkey_remote_sign(session, pkey, hash, input,  input_len, output, output_len);
 
-  hal_rpc_hash_alg_t alg;
+  hal_digest_algorithm_t alg;
   size_t digest_len;
   hal_error_t err;
 
@@ -238,7 +238,7 @@ static hal_error_t pkey_mixed_verify(const hal_rpc_session_handle_t session,
   if (input != NULL)
     return pkey_remote_verify(session, pkey, hash, input,  input_len, output, output_len);
 
-  hal_rpc_hash_alg_t alg;
+  hal_digest_algorithm_t alg;
   size_t digest_len;
   hal_error_t err;
 

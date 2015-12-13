@@ -221,7 +221,17 @@ typedef struct hal_hash_driver hal_hash_driver_t;
  * problem.
  */
 
+typedef enum {
+  hal_digest_algorithm_sha1,
+  hal_digest_algorithm_sha256,
+  hal_digest_algorithm_sha512_224,
+  hal_digest_algorithm_sha512_256,
+  hal_digest_algorithm_sha384,
+  hal_digest_algorithm_sha512
+} hal_digest_algorithm_t;
+
 typedef struct {
+  hal_digest_algorithm_t digest_algorithm;
   size_t block_length;
   size_t digest_length;
   size_t hash_state_length;
@@ -283,6 +293,10 @@ extern hal_error_t hal_hmac_finalize(hal_hmac_state_t *state,
 extern void hal_hash_cleanup(hal_hash_state_t **state);
 
 extern void hal_hmac_cleanup(hal_hmac_state_t **state);
+
+extern const hal_hash_descriptor_t *hal_hash_get_descriptor(const hal_hash_state_t * const state);
+
+extern const hal_hash_descriptor_t *hal_hmac_get_descriptor(const hal_hmac_state_t * const state);
 
 /*
  * AES key wrap functions.

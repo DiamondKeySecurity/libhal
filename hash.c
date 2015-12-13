@@ -52,13 +52,6 @@
  * Driver.  This encapsulates whatever per-algorithm voodoo we need
  * this week.  At the moment, this is mostly Cryptech core addresses,
  * but this is subject to change without notice.
- *
- * Most of the addresses in the current version could be calculated
- * from a single address (the core base address), but this week's
- * theory prefers the precomputed composite addresses, and doing it
- * this way saves some microscopic bit of addition at runtime.
- * Whatever.  It'll probably all change again once we have a dynamic
- * memory map, so it's not really worth overthinking at the moment.
  */
 
 struct hal_hash_driver {
@@ -103,10 +96,6 @@ struct hal_hmac_state {
 
 /*
  * Drivers for known digest algorithms.
- *
- * Initialization of the core_name field is not a typo, we're
- * concatenating two string constants and trusting the compiler to
- * whine if the resulting string doesn't fit into the field.
  */
 
 static const hal_hash_driver_t sha1_driver = {
@@ -163,6 +152,7 @@ static const uint8_t
  */
 
 const hal_hash_descriptor_t hal_hash_sha1[1] = {{
+  hal_digest_algorithm_sha1,
   SHA1_BLOCK_LEN, SHA1_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha1, sizeof(dalgid_sha1),
@@ -170,6 +160,7 @@ const hal_hash_descriptor_t hal_hash_sha1[1] = {{
 }};
 
 const hal_hash_descriptor_t hal_hash_sha256[1] = {{
+  hal_digest_algorithm_sha256,
   SHA256_BLOCK_LEN, SHA256_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha256, sizeof(dalgid_sha256),
@@ -177,6 +168,7 @@ const hal_hash_descriptor_t hal_hash_sha256[1] = {{
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512_224[1] = {{
+  hal_digest_algorithm_sha512_224,
   SHA512_BLOCK_LEN, SHA512_224_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha512_224, sizeof(dalgid_sha512_224),
@@ -184,6 +176,7 @@ const hal_hash_descriptor_t hal_hash_sha512_224[1] = {{
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512_256[1] = {{
+  hal_digest_algorithm_sha512_256,
   SHA512_BLOCK_LEN, SHA512_256_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha512_256, sizeof(dalgid_sha512_256),
@@ -191,6 +184,7 @@ const hal_hash_descriptor_t hal_hash_sha512_256[1] = {{
 }};
 
 const hal_hash_descriptor_t hal_hash_sha384[1] = {{
+  hal_digest_algorithm_sha384,
   SHA512_BLOCK_LEN, SHA384_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha384, sizeof(dalgid_sha384),
@@ -198,11 +192,39 @@ const hal_hash_descriptor_t hal_hash_sha384[1] = {{
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512[1] = {{
+  hal_digest_algorithm_sha512,
   SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha512, sizeof(dalgid_sha512),
   &sha512_driver, SHA512_NAME, 0
 }};
+
+/*
+ * Static state blocks.  This library is intended for a style of
+ * embedded programming in which one avoids heap-based allocation
+ * functions such as malloc() wherever possible and instead uses
+ * static variables when just allocating on the stack won't do.
+ *
+ * The number of each kind of state block to be allocated this way
+ * must be configured at compile-time.  Sorry, that's life in the
+ * deeply embedded universe.
+ */
+
+#ifndef	HAL_STATIC_HASH_STATE_BLOCKS
+#define	HAL_STATIC_HASH_STATE_BLOCKS 0
+#endif
+
+#ifndef	HAL_STATIC_HMAC_STATE_BLOCKS
+#define	HAL_STATIC_HMAC_STATE_BLOCKS 0
+#endif
+
+#if HAL_STATIC_HASH_STATE_BLOCKS > 0
+static hal_hash_state_t static_hash_state[HAL_STATIC_HASH_STATE_BLOCKS];
+#endif
+
+#if HAL_STATIC_HMAC_STATE_BLOCKS > 0
+static hal_hmac_state_t static_hmac_state[HAL_STATIC_HMAC_STATE_BLOCKS];
+#endif
 
 /*
  * Debugging control.
@@ -216,6 +238,38 @@ void hal_hash_set_debug(int onoff)
 }
 
 /*
+ * Internal utilities to allocate static state blocks.
+ */
+
+static inline hal_hash_state_t *alloc_static_hash_state(void)
+{
+
+#if HAL_STATIC_HASH_STATE_BLOCKS > 0
+
+  for (int i = 0; i < sizeof(static_hash_state)/sizeof(*static_hash_state); i++)
+    if ((static_hash_state[i].flags & STATE_FLAG_STATE_ALLOCATED) == 0)
+      return &static_hash_state[i];
+
+#endif  
+
+  return NULL;
+}
+
+static inline hal_hmac_state_t *alloc_static_hmac_state(void)
+{
+
+#if HAL_STATIC_HMAC_STATE_BLOCKS > 0
+
+  for (int i = 0; i < sizeof(static_hmac_state)/sizeof(*static_hmac_state); i++)
+    if ((static_hmac_state[i].hash_state.flags & STATE_FLAG_STATE_ALLOCATED) == 0)
+      return &static_hmac_state[i];
+
+#endif  
+
+  return NULL;
+}
+
+/*
  * Internal utility to do whatever checking we need of a descriptor,
  * then extract the driver pointer in a way that works nicely with
  * initialization of an automatic const pointer.
@@ -223,7 +277,7 @@ void hal_hash_set_debug(int onoff)
  * Returns the driver pointer on success, NULL on failure.
  */
 
-static const hal_hash_driver_t *check_driver(const hal_hash_descriptor_t * const descriptor)
+static inline const hal_hash_driver_t *check_driver(const hal_hash_descriptor_t * const descriptor)
 {
   return descriptor == NULL ? NULL : descriptor->driver;
 }
@@ -233,8 +287,8 @@ static const hal_hash_driver_t *check_driver(const hal_hash_descriptor_t * const
  * attempting to locate an appropriate core if we weren't given one.
  */
 
-static hal_error_t check_core(const hal_core_t **core,
-                              const hal_hash_descriptor_t * const descriptor)
+static inline hal_error_t check_core(const hal_core_t **core,
+                                     const hal_hash_descriptor_t * const descriptor)
 {
   assert(descriptor != NULL && descriptor->driver != NULL);
   return hal_core_check_name(core, descriptor->core_name);
@@ -262,7 +316,7 @@ hal_error_t hal_hash_initialize(const hal_core_t *core,
   if ((err = check_core(&core, descriptor)) != HAL_OK)
     return err;
 
-  if (state_buffer == NULL && (state = malloc(descriptor->hash_state_length)) == NULL)
+  if (state_buffer == NULL && (state = alloc_static_hash_state()) == NULL)
       return HAL_ERROR_ALLOCATION_FAILURE;
 
   memset(state, 0, sizeof(*state));
@@ -293,7 +347,6 @@ void hal_hash_cleanup(hal_hash_state_t **state_)
     return;
 
   memset(state, 0, state->descriptor->hash_state_length);
-  free(state);
   *state_ = NULL;
 }
 
@@ -540,7 +593,7 @@ hal_error_t hal_hmac_initialize(const hal_core_t *core,
   if ((err = check_core(&core, descriptor)) != HAL_OK)
     return err;
 
-  if (state_buffer == NULL && (state = malloc(descriptor->hmac_state_length)) == NULL)
+  if (state_buffer == NULL && (state = alloc_static_hmac_state()) == NULL)
     return HAL_ERROR_ALLOCATION_FAILURE;
 
   hal_hash_state_t *h = &state->hash_state;
@@ -637,7 +690,6 @@ void hal_hmac_cleanup(hal_hmac_state_t **state_)
     return;
 
   memset(state, 0, h->descriptor->hmac_state_length);
-  free(state);
   *state_ = NULL;
 }
 
@@ -685,6 +737,20 @@ hal_error_t hal_hmac_finalize(hal_hmac_state_t *state,
     return err;
 
   return HAL_OK;
+}
+
+/*
+ * Pull descriptor pointer from state block.
+ */
+
+const hal_hash_descriptor_t *hal_hash_get_descriptor(const hal_hash_state_t * const state)
+{
+  return state == NULL ? NULL : state->descriptor;
+}
+
+const hal_hash_descriptor_t *hal_hmac_get_descriptor(const hal_hmac_state_t * const state)
+{
+  return state == NULL ? NULL : state->hash_state.descriptor;
 }
 
 /*

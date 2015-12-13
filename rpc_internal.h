@@ -93,17 +93,17 @@ typedef struct {
 
 typedef struct {
 
-  hal_error_t (*get_digest_length)(const hal_rpc_hash_alg_t alg, size_t *length);
+  hal_error_t (*get_digest_length)(const hal_digest_algorithm_t alg, size_t *length);
 
-  hal_error_t (*get_digest_algorithm_id)(const hal_rpc_hash_alg_t alg,
+  hal_error_t (*get_digest_algorithm_id)(const hal_digest_algorithm_t alg,
                                          uint8_t *id, size_t *len, const size_t len_max);
 
-  hal_error_t (*get_algorithm)(const hal_rpc_hash_handle_t hash, hal_rpc_hash_alg_t *alg);
+  hal_error_t (*get_algorithm)(const hal_rpc_hash_handle_t hash, hal_digest_algorithm_t *alg);
 
   hal_error_t (*initialize)(const hal_rpc_client_handle_t client,
                             const hal_rpc_session_handle_t session,
                             hal_rpc_hash_handle_t *hash,
-                            const hal_rpc_hash_alg_t alg,
+                            const hal_digest_algorithm_t alg,
                             const uint8_t * const key, const size_t key_length);
 
   hal_error_t (*update)(const hal_rpc_hash_handle_t hash,

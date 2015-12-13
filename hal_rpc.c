@@ -146,20 +146,20 @@ hal_error_t hal_rpc_logout(const hal_rpc_client_handle_t client)
   return misc_dispatch->logout(client);
 }
 
-hal_error_t hal_rpc_hash_get_digest_length(const hal_rpc_hash_alg_t alg, size_t *length)
+hal_error_t hal_rpc_hash_get_digest_length(const hal_digest_algorithm_t alg, size_t *length)
 {
   if (length == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
   return hash_dispatch->get_digest_length(alg, length);
 }
 
-hal_error_t hal_rpc_hash_get_digest_algorithm_id(const hal_rpc_hash_alg_t alg,
+hal_error_t hal_rpc_hash_get_digest_algorithm_id(const hal_digest_algorithm_t alg,
 						 uint8_t *id, size_t *len, const size_t len_max)
 {
   return hash_dispatch->get_digest_algorithm_id(alg, id, len, len_max);
 }
 
-hal_error_t hal_rpc_hash_get_algorithm(const hal_rpc_hash_handle_t hash, hal_rpc_hash_alg_t *alg)
+hal_error_t hal_rpc_hash_get_algorithm(const hal_rpc_hash_handle_t hash, hal_digest_algorithm_t *alg)
 {
   if (hash.handle == hal_rpc_hash_handle_none.handle || alg == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -169,7 +169,7 @@ hal_error_t hal_rpc_hash_get_algorithm(const hal_rpc_hash_handle_t hash, hal_rpc
 hal_error_t hal_rpc_hash_initialize(const hal_rpc_client_handle_t client,
 				    const hal_rpc_session_handle_t session,
 				    hal_rpc_hash_handle_t *hash,
-				    const hal_rpc_hash_alg_t alg,
+				    const hal_digest_algorithm_t alg,
 				    const uint8_t * const key, const size_t key_len)
 {
   if (hash == NULL)

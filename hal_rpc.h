@@ -87,21 +87,16 @@ extern hal_error_t hal_rpc_get_random(void *buffer, const size_t length);
  * Combined hash and HMAC functions: pass NULL key for plain hashing.
  */
 
-typedef enum {
-  hal_rpc_hash_alg__sha1,       hal_rpc_hash_alg__sha256, hal_rpc_hash_alg__sha512_224,
-  hal_rpc_hash_alg__sha512_256, hal_rpc_hash_alg__sha384, hal_rpc_hash_alg__sha512
-} hal_rpc_hash_alg_t;
-
 typedef struct { uint32_t handle; } hal_rpc_hash_handle_t;
 
 extern const hal_rpc_hash_handle_t hal_rpc_hash_handle_none;
 
-extern hal_error_t hal_rpc_hash_get_digest_length(const hal_rpc_hash_alg_t alg, size_t *length);
+extern hal_error_t hal_rpc_hash_get_digest_length(const hal_digest_algorithm_t alg, size_t *length);
 
-extern hal_error_t hal_rpc_hash_get_digest_algorithm_id(const hal_rpc_hash_alg_t alg,
+extern hal_error_t hal_rpc_hash_get_digest_algorithm_id(const hal_digest_algorithm_t alg,
                                                         uint8_t *id, size_t *len, const size_t len_max);
 
-extern hal_error_t hal_rpc_hash_get_algorithm(const hal_rpc_hash_handle_t hash, hal_rpc_hash_alg_t *alg);
+extern hal_error_t hal_rpc_hash_get_algorithm(const hal_rpc_hash_handle_t hash, hal_digest_algorithm_t *alg);
 
 /*
  * Once started, a hash or HMAC operation is bound to a particular
@@ -111,7 +106,7 @@ extern hal_error_t hal_rpc_hash_get_algorithm(const hal_rpc_hash_handle_t hash, 
 extern hal_error_t hal_rpc_hash_initialize(const hal_rpc_client_handle_t client,
                                            const hal_rpc_session_handle_t session,
                                            hal_rpc_hash_handle_t *hash,
-                                           const hal_rpc_hash_alg_t alg,
+                                           const hal_digest_algorithm_t alg,
                                            const uint8_t * const key, const size_t key_length);
 
 extern hal_error_t hal_rpc_hash_update(const hal_rpc_hash_handle_t hash,
