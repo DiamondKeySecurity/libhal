@@ -36,7 +36,7 @@
 #include <string.h>
 
 #include "hal.h"
-#include "rpc_internal.h"
+#include "hal_internal.h"
 
 /*
  * Need table and handle allocation, including some kind of in_use
@@ -94,10 +94,10 @@ static inline handle_slot_t *alloc_handle(const int is_hmac)
 #if HAL_STATIC_HASH_STATE_BLOCKS > 0
   if (!is_hmac) {
     for (int i = 0; i < sizeof(hash_handle)/sizeof(*hash_handle); i++) {
-      if (hash_handle[i].state.hash == NULL) {
-        hash_handle[i].hash_handle.handle = i | glop;
-        return &hash_handle[i];
-      }
+      if (hash_handle[i].state.hash != NULL)
+        continue;
+      hash_handle[i].hash_handle.handle = i | glop;
+      return &hash_handle[i];
     }
   }
 #endif
@@ -105,10 +105,10 @@ static inline handle_slot_t *alloc_handle(const int is_hmac)
 #if HAL_STATIC_HMAC_STATE_BLOCKS > 0
   if (is_hmac) {
     for (int i = 0; i < sizeof(hmac_handle)/sizeof(*hmac_handle); i++) {
-      if (hmac_handle[i].state.hmac == NULL) {
-        hmac_handle[i].hash_handle.handle = i | glop | HANDLE_FLAG_HMAC;
-        return &hmac_handle[i];
-      }
+      if (hmac_handle[i].state.hmac != NULL)
+        continue;
+      hmac_handle[i].hash_handle.handle = i | glop | HANDLE_FLAG_HMAC;
+      return &hmac_handle[i];
     }
   }
 #endif
@@ -134,7 +134,7 @@ static inline handle_slot_t *find_handle(const hal_rpc_hash_handle_t handle)
     return &hash_handle[i];
 #endif
 
-#if HAL_STATIC_HASH_STATE_BLOCKS > 0
+#if HAL_STATIC_HMAC_STATE_BLOCKS > 0
   if (is_hmac && i < sizeof(hmac_handle)/sizeof(*hmac_handle) &&
       hmac_handle[i].hash_handle.handle == handle.handle && hmac_handle[i].state.hmac != NULL)
     return &hmac_handle[i];
@@ -227,10 +227,10 @@ static hal_error_t get_algorithm(const hal_rpc_hash_handle_t handle, hal_digest_
 }
 
 static hal_error_t initialize(const hal_rpc_client_handle_t client,
-                       const hal_rpc_session_handle_t session,
-                       hal_rpc_hash_handle_t *hash,
-                       const hal_digest_algorithm_t alg,
-                       const uint8_t * const key, const size_t key_len)
+                              const hal_rpc_session_handle_t session,
+                              hal_rpc_hash_handle_t *hash,
+                              const hal_digest_algorithm_t alg,
+                              const uint8_t * const key, const size_t key_len)
 {
   const hal_hash_descriptor_t *descriptor;
   handle_slot_t *slot;
@@ -254,7 +254,7 @@ static hal_error_t initialize(const hal_rpc_client_handle_t client,
 }
 
 static hal_error_t update(const hal_rpc_hash_handle_t handle,
-                   const uint8_t * data, const size_t length)
+                          const uint8_t * data, const size_t length)
 {
   handle_slot_t *slot = find_handle(handle);
 

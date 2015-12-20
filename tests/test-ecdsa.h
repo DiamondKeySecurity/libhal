@@ -264,7 +264,7 @@ static const uint8_t p384_w[] = { /* 48 bytes */
 };
 
 typedef struct {
-  hal_ecdsa_curve_t curve;
+  hal_curve_name_t curve;
   const uint8_t *       H; size_t        H_len;
   const uint8_t *       M; size_t        M_len;
   const uint8_t *      Qx; size_t       Qx_len;
@@ -286,7 +286,7 @@ typedef struct {
 } ecdsa_tc_t;
 
 static const ecdsa_tc_t ecdsa_tc[] = {
-  { HAL_ECDSA_CURVE_P256,
+  { HAL_CURVE_P256,
     p256_H,        sizeof(p256_H),
     p256_M,        sizeof(p256_M),
     p256_Qx,       sizeof(p256_Qx),
@@ -306,7 +306,7 @@ static const ecdsa_tc_t ecdsa_tc[] = {
     p256_v,        sizeof(p256_v),
     p256_w,        sizeof(p256_w),
   },
-  { HAL_ECDSA_CURVE_P384,
+  { HAL_CURVE_P384,
     p384_H,        sizeof(p384_H),
     p384_M,        sizeof(p384_M),
     p384_Qx,       sizeof(p384_Qx),

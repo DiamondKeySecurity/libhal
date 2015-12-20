@@ -150,8 +150,8 @@ typedef struct {
 } ec_point_t;
 
 struct hal_ecdsa_key {
-  hal_ecdsa_key_type_t type;            /* Public or private is */
-  hal_ecdsa_curve_t curve;              /* Curve descriptor */
+  hal_key_type_t type;                  /* Public or private */
+  hal_curve_name_t curve;               /* Curve descriptor */
   ec_point_t Q[1];                      /* Public key */
   fp_int d[1];                          /* Private key */
 };
@@ -181,7 +181,7 @@ const size_t hal_ecdsa_key_t_size = sizeof(struct hal_ecdsa_key);
  * first time anything asks for any of them.
  */
 
-static const ecdsa_curve_t * const get_curve(const hal_ecdsa_curve_t curve)
+static const ecdsa_curve_t * const get_curve(const hal_curve_name_t curve)
 {
   static ecdsa_curve_t curve_p256, curve_p384, curve_p521;
   static int initialized = 0;
@@ -230,10 +230,10 @@ static const ecdsa_curve_t * const get_curve(const hal_ecdsa_curve_t curve)
   }
 
   switch (curve) {
-  case HAL_ECDSA_CURVE_P256: return &curve_p256;
-  case HAL_ECDSA_CURVE_P384: return &curve_p384;
-  case HAL_ECDSA_CURVE_P521: return &curve_p521;
-  default:                   return NULL;
+  case HAL_CURVE_P256:  return &curve_p256;
+  case HAL_CURVE_P384:  return &curve_p384;
+  case HAL_CURVE_P521:  return &curve_p521;
+  default:              return NULL;
   }
 }
 
@@ -831,7 +831,7 @@ static int point_is_on_curve(const ec_point_t * const P,
 hal_error_t hal_ecdsa_key_gen(const hal_core_t *core,
                               hal_ecdsa_key_t **key_,
                               void *keybuf, const size_t keybuf_len,
-                              const hal_ecdsa_curve_t curve_)
+                              const hal_curve_name_t curve_)
 {
   const ecdsa_curve_t * const curve = get_curve(curve_);
   hal_ecdsa_key_t *key = keybuf;
@@ -842,7 +842,7 @@ hal_error_t hal_ecdsa_key_gen(const hal_core_t *core,
 
   memset(keybuf, 0, keybuf_len);
 
-  key->type = HAL_ECDSA_PRIVATE;
+  key->type = HAL_KEY_TYPE_EC_PRIVATE;
   key->curve = curve_;
 
   if ((err = point_pick_random(curve, key->d, key->Q)) != HAL_OK)
@@ -859,7 +859,7 @@ hal_error_t hal_ecdsa_key_gen(const hal_core_t *core,
  */
 
 hal_error_t hal_ecdsa_key_get_type(const hal_ecdsa_key_t * const key,
-                                   hal_ecdsa_key_type_t *key_type)
+                                   hal_key_type_t *key_type)
 {
   if (key == NULL || key_type == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -873,7 +873,7 @@ hal_error_t hal_ecdsa_key_get_type(const hal_ecdsa_key_t * const key,
  */
 
 hal_error_t hal_ecdsa_key_get_curve(const hal_ecdsa_key_t * const key,
-                                    hal_ecdsa_curve_t *curve)
+                                    hal_curve_name_t *curve)
 {
   if (key == NULL || curve == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -929,7 +929,7 @@ void hal_ecdsa_key_clear(hal_ecdsa_key_t *key)
 
 hal_error_t hal_ecdsa_key_load_public(hal_ecdsa_key_t **key_,
                                       void *keybuf, const size_t keybuf_len,
-                                      const hal_ecdsa_curve_t curve_,
+                                      const hal_curve_name_t curve_,
                                       const uint8_t * const x, const size_t x_len,
                                       const uint8_t * const y, const size_t y_len)
 {
@@ -941,7 +941,7 @@ hal_error_t hal_ecdsa_key_load_public(hal_ecdsa_key_t **key_,
 
   memset(keybuf, 0, keybuf_len);
 
-  key->type = HAL_ECDSA_PUBLIC;
+  key->type = HAL_KEY_TYPE_EC_PUBLIC;
   key->curve = curve_;
 
   fp_read_unsigned_bin(key->Q->x, unconst_uint8_t(x), x_len);
@@ -966,7 +966,7 @@ hal_error_t hal_ecdsa_key_load_public(hal_ecdsa_key_t **key_,
 
 hal_error_t hal_ecdsa_key_load_private(hal_ecdsa_key_t **key_,
                                        void *keybuf, const size_t keybuf_len,
-                                       const hal_ecdsa_curve_t curve_,
+                                       const hal_curve_name_t curve_,
                                        const uint8_t * const x, const size_t x_len,
                                        const uint8_t * const y, const size_t y_len,
                                        const uint8_t * const d, const size_t d_len)
@@ -980,7 +980,7 @@ hal_error_t hal_ecdsa_key_load_private(hal_ecdsa_key_t **key_,
   if ((err = hal_ecdsa_key_load_public(key_, keybuf, keybuf_len, curve_, x, x_len, y, y_len)) != HAL_OK)
     return err;
 
-  key->type = HAL_ECDSA_PRIVATE;
+  key->type = HAL_KEY_TYPE_EC_PRIVATE;
   fp_read_unsigned_bin(key->d, unconst_uint8_t(d), d_len);
   return HAL_OK;
 }
@@ -1052,7 +1052,7 @@ size_t hal_ecdsa_key_to_ecpoint_len(const hal_ecdsa_key_t * const key)
 hal_error_t hal_ecdsa_key_from_ecpoint(hal_ecdsa_key_t **key_,
                                        void *keybuf, const size_t keybuf_len,
                                        const uint8_t * const der, const size_t der_len,
-                                       const hal_ecdsa_curve_t curve)
+                                       const hal_curve_name_t curve)
 {
   hal_ecdsa_key_t *key = keybuf;
 
@@ -1060,7 +1060,7 @@ hal_error_t hal_ecdsa_key_from_ecpoint(hal_ecdsa_key_t **key_,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   memset(keybuf, 0, keybuf_len);
-  key->type = HAL_ECDSA_PUBLIC;
+  key->type = HAL_KEY_TYPE_EC_PUBLIC;
   key->curve = curve;
 
   size_t hlen, vlen;
@@ -1106,7 +1106,7 @@ hal_error_t hal_ecdsa_key_from_ecpoint(hal_ecdsa_key_t **key_,
 hal_error_t hal_ecdsa_key_to_der(const hal_ecdsa_key_t * const key,
                                  uint8_t *der, size_t *der_len, const size_t der_max)
 {
-  if (key == NULL || key->type != HAL_ECDSA_PRIVATE)
+  if (key == NULL || key->type != HAL_KEY_TYPE_EC_PRIVATE)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   const ecdsa_curve_t * const curve = get_curve(key->curve);
@@ -1215,7 +1215,7 @@ hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key_,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   memset(keybuf, 0, keybuf_len);
-  key->type = HAL_ECDSA_PRIVATE;
+  key->type = HAL_KEY_TYPE_EC_PRIVATE;
 
   size_t hlen, vlen;
   hal_error_t err;
@@ -1248,7 +1248,7 @@ hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key_,
   if ((err = hal_asn1_decode_header(ASN1_OBJECT_IDENTIFIER, d, vlen, &hlen, &vlen)) != HAL_OK)
     return err;
   d += hlen;
-  for (key->curve = (hal_ecdsa_curve_t) 0; (curve = get_curve(key->curve)) != NULL; key->curve++)
+  for (key->curve = (hal_curve_name_t) 0; (curve = get_curve(key->curve)) != NULL; key->curve++)
     if (vlen == curve->oid_len && memcmp(d, curve->oid, vlen) == 0)
       break;
   if (curve == NULL)
@@ -1427,7 +1427,7 @@ hal_error_t hal_ecdsa_sign(const hal_core_t *core,
                            uint8_t *signature, size_t *signature_len, const size_t signature_max,
                            const hal_ecdsa_signature_format_t signature_format)
 {
-  if (key == NULL || hash == NULL || signature == NULL || signature_len == NULL || key->type != HAL_ECDSA_PRIVATE)
+  if (key == NULL || hash == NULL || signature == NULL || signature_len == NULL || key->type != HAL_KEY_TYPE_EC_PRIVATE)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   const ecdsa_curve_t * const curve = get_curve(key->curve);

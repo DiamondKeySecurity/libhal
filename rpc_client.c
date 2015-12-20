@@ -33,7 +33,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "rpc_internal.h"
+#include "hal.h"
+#include "hal_internal.h"
 
 /*
  * RPC calls.  Not implemented yet.
@@ -104,11 +105,11 @@ static hal_error_t hash_finalize(const hal_rpc_hash_handle_t hash,
 static hal_error_t pkey_load(const hal_rpc_client_handle_t client,
                              const hal_rpc_session_handle_t session,
                              hal_rpc_pkey_handle_t *pkey,
-                             const hal_rpc_pkey_key_type_t type,
-                             const hal_rpc_pkey_curve_t curve,
+                             const hal_key_type_t type,
+                             const hal_curve_name_t curve,
                              const uint8_t * const name, const size_t name_len,
                              const uint8_t * const der, const size_t der_len,
-                             const hal_rpc_pkey_flags_t flags)
+                             const hal_key_flags_t flags)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }
@@ -116,7 +117,7 @@ static hal_error_t pkey_load(const hal_rpc_client_handle_t client,
 static hal_error_t pkey_find(const hal_rpc_client_handle_t client,
                              const hal_rpc_session_handle_t session,
                              hal_rpc_pkey_handle_t *pkey,
-                             const hal_rpc_pkey_key_type_t type,
+                             const hal_key_type_t type,
                              const uint8_t * const name, const size_t name_len)
 {
   return HAL_ERROR_IMPOSSIBLE;
@@ -128,7 +129,7 @@ static hal_error_t pkey_generate_rsa(const hal_rpc_client_handle_t client,
                                      const uint8_t * const name, const size_t name_len,
                                      const unsigned key_len,
                                      const uint8_t * const exp, const size_t exp_len,
-                                     const hal_rpc_pkey_flags_t flags)
+                                     const hal_key_flags_t flags)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }
@@ -137,8 +138,13 @@ static hal_error_t pkey_generate_ec(const hal_rpc_client_handle_t client,
                                     const hal_rpc_session_handle_t session,
                                     hal_rpc_pkey_handle_t *pkey,
                                     const uint8_t * const name, const size_t name_len,
-                                    const hal_rpc_pkey_curve_t curve,
-                                    const hal_rpc_pkey_flags_t flags)
+                                    const hal_curve_name_t curve,
+                                    const hal_key_flags_t flags)
+{
+  return HAL_ERROR_IMPOSSIBLE;
+}
+
+static hal_error_t pkey_close(const hal_rpc_pkey_handle_t pkey)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }
@@ -149,13 +155,13 @@ static hal_error_t pkey_delete(const hal_rpc_pkey_handle_t pkey)
 }
 
 static hal_error_t pkey_get_key_type(const hal_rpc_pkey_handle_t pkey,
-                                     hal_rpc_pkey_key_type_t *type)
+                                     hal_key_type_t *type)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }
 
 static hal_error_t pkey_get_key_flags(const hal_rpc_pkey_handle_t pkey,
-                                      hal_rpc_pkey_flags_t *flags)
+                                      hal_key_flags_t *flags)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }
@@ -175,7 +181,7 @@ static hal_error_t pkey_remote_sign(const hal_rpc_session_handle_t session,
                                     const hal_rpc_pkey_handle_t pkey,
                                     const hal_rpc_hash_handle_t hash,
                                     const uint8_t * const input,  const size_t input_len,
-                                    uint8_t * output, const size_t output_len)
+                                    uint8_t * signature, size_t *signature_len, const size_t signature_max)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }
@@ -184,7 +190,7 @@ static hal_error_t pkey_remote_verify(const hal_rpc_session_handle_t session,
                                       const hal_rpc_pkey_handle_t pkey,
                                       const hal_rpc_hash_handle_t hash,
                                       const uint8_t * const input, const size_t input_len,
-                                      uint8_t * output, const size_t output_len)
+                                      const uint8_t * const signature, const size_t signature_len)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }
@@ -208,10 +214,11 @@ static hal_error_t pkey_mixed_sign(const hal_rpc_session_handle_t session,
                                    const hal_rpc_pkey_handle_t pkey,
                                    const hal_rpc_hash_handle_t hash,
                                    const uint8_t * const input,  const size_t input_len,
-                                   uint8_t * output, const size_t output_len)
+                                   uint8_t * signature, size_t *signature_len, const size_t signature_max)
 {
   if (input != NULL)
-    return pkey_remote_sign(session, pkey, hash, input,  input_len, output, output_len);
+    return pkey_remote_sign(session, pkey, hash, input, input_len,
+                            signature, signature_len, signature_max);
 
   hal_digest_algorithm_t alg;
   size_t digest_len;
@@ -226,17 +233,19 @@ static hal_error_t pkey_mixed_sign(const hal_rpc_session_handle_t session,
   if ((err = hal_rpc_hash_finalize(hash, digest, digest_len)) != HAL_OK)
     return err;
 
-  return pkey_remote_sign(session, pkey, hal_rpc_hash_handle_none, digest, digest_len, output, output_len);
+  return pkey_remote_sign(session, pkey, hal_rpc_hash_handle_none, digest, digest_len,
+                          signature, signature_len, signature_max);
 }
 
 static hal_error_t pkey_mixed_verify(const hal_rpc_session_handle_t session,
                                      const hal_rpc_pkey_handle_t pkey,
                                      const hal_rpc_hash_handle_t hash,
                                      const uint8_t * const input, const size_t input_len,
-                                     uint8_t * output, const size_t output_len)
+                                     const uint8_t * const signature, const size_t signature_len)
 {
   if (input != NULL)
-    return pkey_remote_verify(session, pkey, hash, input,  input_len, output, output_len);
+    return pkey_remote_verify(session, pkey, hash, input, input_len,
+                              signature, signature_len);
 
   hal_digest_algorithm_t alg;
   size_t digest_len;
@@ -251,7 +260,8 @@ static hal_error_t pkey_mixed_verify(const hal_rpc_session_handle_t session,
   if ((err = hal_rpc_hash_finalize(hash, digest, digest_len)) != HAL_OK)
     return err;
 
-  return pkey_remote_verify(session, pkey, hal_rpc_hash_handle_none, digest, digest_len, output, output_len);
+  return pkey_remote_verify(session, pkey, hal_rpc_hash_handle_none, digest, digest_len,
+                            signature, signature_len);
 }
 
 /*
@@ -263,18 +273,19 @@ const hal_rpc_misc_dispatch_t hal_rpc_remote_misc_dispatch = {
 };
 
 const hal_rpc_hash_dispatch_t hal_rpc_remote_hash_dispatch = {
-  hash_get_digest_len, hash_get_digest_algorithm_id, hash_get_algorithm, hash_initialize, hash_update, hash_finalize
+  hash_get_digest_len, hash_get_digest_algorithm_id, hash_get_algorithm,
+  hash_initialize, hash_update, hash_finalize
 };
 
 const hal_rpc_pkey_dispatch_t hal_rpc_remote_pkey_dispatch = {
-  pkey_load, pkey_find, pkey_generate_rsa, pkey_generate_ec, pkey_delete,
+  pkey_load, pkey_find, pkey_generate_rsa, pkey_generate_ec, pkey_close, pkey_delete,
   pkey_get_key_type, pkey_get_key_flags, pkey_get_public_key_len, pkey_get_public_key,
   pkey_remote_sign, pkey_remote_verify,
   pkey_list
 };
 
 const hal_rpc_pkey_dispatch_t hal_rpc_mixed_pkey_dispatch = {
-  pkey_load, pkey_find, pkey_generate_rsa, pkey_generate_ec, pkey_delete,
+  pkey_load, pkey_find, pkey_generate_rsa, pkey_generate_ec, pkey_close, pkey_delete,
   pkey_get_key_type, pkey_get_key_flags, pkey_get_public_key_len, pkey_get_public_key,
   pkey_mixed_sign, pkey_mixed_verify,
   pkey_list

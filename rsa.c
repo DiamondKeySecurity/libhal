@@ -116,7 +116,7 @@ void hal_rsa_set_blinding(const int onoff)
  */
 
 struct hal_rsa_key {
-  hal_rsa_key_type_t type;      /* What kind of key this is */
+  hal_key_type_t type;      /* What kind of key this is */
   fp_int n[1];                  /* The modulus */
   fp_int e[1];                  /* Public exponent */
   fp_int d[1];                  /* Private exponent */
@@ -454,7 +454,7 @@ void hal_rsa_key_clear(hal_rsa_key_t *key)
  * calculate everything else from them.
  */
 
-static hal_error_t load_key(const hal_rsa_key_type_t type,
+static hal_error_t load_key(const hal_key_type_t type,
                             hal_rsa_key_t **key_,
                             void *keybuf, const size_t keybuf_len,
                             const uint8_t * const n,  const size_t n_len,
@@ -477,12 +477,14 @@ static hal_error_t load_key(const hal_rsa_key_type_t type,
 
 #define _(x) do { fp_init(key->x); if (x == NULL) goto fail; fp_read_unsigned_bin(key->x, unconst_uint8_t(x), x##_len); } while (0)
   switch (type) {
-  case HAL_RSA_PRIVATE:
+  case HAL_KEY_TYPE_RSA_PRIVATE:
     _(d); _(p); _(q); _(u); _(dP); _(dQ);
-  case HAL_RSA_PUBLIC:
+  case HAL_KEY_TYPE_RSA_PUBLIC:
     _(n); _(e);
     *key_ = key;
     return HAL_OK;
+  default:
+    goto fail;
   }
 #undef _
 
@@ -506,7 +508,7 @@ hal_error_t hal_rsa_key_load_private(hal_rsa_key_t **key_,
                                      const uint8_t * const dP, const size_t dP_len,
                                      const uint8_t * const dQ, const size_t dQ_len)
 {
-  return load_key(HAL_RSA_PRIVATE, key_, keybuf, keybuf_len,
+  return load_key(HAL_KEY_TYPE_RSA_PRIVATE, key_, keybuf, keybuf_len,
                   n, n_len, e, e_len,
                   d, d_len, p, p_len, q, q_len, u, u_len, dP, dP_len, dQ, dQ_len);
 }
@@ -516,7 +518,7 @@ hal_error_t hal_rsa_key_load_public(hal_rsa_key_t **key_,
                                     const uint8_t * const n,  const size_t n_len,
                                     const uint8_t * const e,  const size_t e_len)
 {
-  return load_key(HAL_RSA_PUBLIC, key_, keybuf, keybuf_len,
+  return load_key(HAL_KEY_TYPE_RSA_PUBLIC, key_, keybuf, keybuf_len,
                   n, n_len, e, e_len,
                   NULL, 0, NULL, 0, NULL, 0, NULL, 0, NULL, 0, NULL, 0);
 }
@@ -526,7 +528,7 @@ hal_error_t hal_rsa_key_load_public(hal_rsa_key_t **key_,
  */
 
 hal_error_t hal_rsa_key_get_type(const hal_rsa_key_t * const key,
-                                 hal_rsa_key_type_t *key_type)
+                                 hal_key_type_t *key_type)
 {
   if (key == NULL || key_type == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -625,7 +627,7 @@ hal_error_t hal_rsa_key_gen(const hal_core_t *core,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   memset(keybuf, 0, keybuf_len);
-  key->type = HAL_RSA_PRIVATE;
+  key->type = HAL_KEY_TYPE_RSA_PRIVATE;
   fp_read_unsigned_bin(key->e, (uint8_t *) public_exponent, public_exponent_len);
 
   if (key_length < bitsToBytes(1024) || key_length > bitsToBytes(8192))
@@ -690,7 +692,7 @@ hal_error_t hal_rsa_key_to_der(const hal_rsa_key_t * const key,
 {
   hal_error_t err = HAL_OK;
 
-  if (key == NULL || der_len == NULL || key->type != HAL_RSA_PRIVATE)
+  if (key == NULL || der_len == NULL || key->type != HAL_KEY_TYPE_RSA_PRIVATE)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   fp_int version[1] = INIT_FP_INT;
@@ -748,7 +750,7 @@ hal_error_t hal_rsa_key_from_der(hal_rsa_key_t **key_,
 
   hal_rsa_key_t *key = keybuf;
 
-  key->type = HAL_RSA_PRIVATE;
+  key->type = HAL_KEY_TYPE_RSA_PRIVATE;
 
   hal_error_t err = HAL_OK;
   size_t hlen, vlen;

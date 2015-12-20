@@ -36,15 +36,19 @@
 #ifndef _HAL_H_
 #define _HAL_H_
 
+#include <stdint.h>
+#include <sys/types.h>
+#include <stdlib.h>
+
 /*
  * A handy macro from cryptlib.
  */
 #ifndef bitsToBytes
-#define bitsToBytes(x)          (x / 8)
+#define bitsToBytes(x)          ((x) / 8)
 #endif
 
 /*
- * Current name and version values.
+ * Current name and version values for crypto cores.
  *
  * Should these even be here?  Dunno.
  * Should the versions be here even if the names should be?
@@ -114,6 +118,10 @@
   DEFINE_HAL_ERROR(HAL_ERROR_KEY_NOT_ON_CURVE,          "EC key is not on its purported curve")         \
   DEFINE_HAL_ERROR(HAL_ERROR_INVALID_SIGNATURE,         "Invalid signature")                            \
   DEFINE_HAL_ERROR(HAL_ERROR_CORE_NOT_FOUND,            "Requested core not found")                     \
+  DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_ACCESS,           "Could not access keystore")                    \
+  DEFINE_HAL_ERROR(HAL_ERROR_KEY_NOT_FOUND,             "Key not found")                                \
+  DEFINE_HAL_ERROR(HAL_ERROR_KEY_NAME_IN_USE,           "Key name in use")                              \
+  DEFINE_HAL_ERROR(HAL_ERROR_NO_KEY_SLOTS_AVAILABLE,    "No key slots available")                       \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -125,11 +133,14 @@ typedef enum { HAL_ERROR_LIST N_HAL_ERRORS } hal_error_t;
 #undef  DEFINE_HAL_ERROR
 
 /*
- * Public functions.
+ * Error translation.
  */
 
-#include <stdint.h>
-#include <sys/types.h>
+extern const char *hal_error_string(const hal_error_t err);
+
+/*
+ * Very low level public API for working directly with crypto cores.
+ */
 
 /*
  * Typedef to isolate code from our current choice of representation
@@ -137,12 +148,6 @@ typedef enum { HAL_ERROR_LIST N_HAL_ERRORS } hal_error_t;
  */
 
 typedef off_t hal_addr_t;
-
-/*
- * Error translation.
- */
-
-extern const char *hal_error_string(const hal_error_t err);
 
 /*
  * Opaque structure representing a core.
@@ -186,7 +191,7 @@ extern hal_addr_t hal_core_base(const hal_core_t *core);
 extern const hal_core_t * hal_core_iterate(const hal_core_t *core);
 
 /*
- * Higher level public API.
+ * Slightly higher level public API, still working directly with cores.
  */
 
 /*
@@ -340,10 +345,27 @@ extern hal_error_t hal_modexp(const hal_core_t *core,
 
 
 /*
- * RSA.
+ * Key types and curves, used in various places.
  */
 
-typedef enum { HAL_RSA_PRIVATE, HAL_RSA_PUBLIC } hal_rsa_key_type_t;
+typedef enum {
+  HAL_KEY_TYPE_NONE,
+  HAL_KEY_TYPE_RSA_PRIVATE,
+  HAL_KEY_TYPE_RSA_PUBLIC,
+  HAL_KEY_TYPE_EC_PRIVATE,
+  HAL_KEY_TYPE_EC_PUBLIC
+} hal_key_type_t;
+
+typedef enum {
+  HAL_CURVE_NONE,
+  HAL_CURVE_P256,
+  HAL_CURVE_P384,
+  HAL_CURVE_P521
+} hal_curve_name_t;
+
+/*
+ * RSA.
+ */
 
 typedef struct hal_rsa_key hal_rsa_key_t;
 
@@ -370,7 +392,7 @@ extern hal_error_t hal_rsa_key_load_public(hal_rsa_key_t **key,
                                            const uint8_t * const e,  const size_t e_len);
 
 extern hal_error_t hal_rsa_key_get_type(const hal_rsa_key_t * const key,
-                                        hal_rsa_key_type_t *key_type);
+                                        hal_key_type_t *key_type);
 
 extern hal_error_t hal_rsa_key_get_modulus(const hal_rsa_key_t * const key,
                                            uint8_t *modulus,
@@ -413,10 +435,6 @@ extern hal_error_t hal_rsa_key_from_der(hal_rsa_key_t **key,
  * ECDSA.
  */
 
-typedef enum { HAL_ECDSA_PRIVATE, HAL_ECDSA_PUBLIC } hal_ecdsa_key_type_t;
-
-typedef enum { HAL_ECDSA_CURVE_P256, HAL_ECDSA_CURVE_P384, HAL_ECDSA_CURVE_P521 } hal_ecdsa_curve_t;
-
 typedef enum { HAL_ECDSA_SIGNATURE_FORMAT_ASN1, HAL_ECDSA_SIGNATURE_FORMAT_PKCS11 } hal_ecdsa_signature_format_t;
 
 typedef struct hal_ecdsa_key hal_ecdsa_key_t;
@@ -427,22 +445,22 @@ extern void hal_ecdsa_set_debug(const int onoff);
 
 extern hal_error_t hal_ecdsa_key_load_private(hal_ecdsa_key_t **key,
                                               void *keybuf, const size_t keybuf_len,
-                                              const hal_ecdsa_curve_t curve,
+                                              const hal_curve_name_t curve,
                                               const uint8_t * const x, const size_t x_len,
                                               const uint8_t * const y, const size_t y_len,
                                               const uint8_t * const d, const size_t d_len);
 
 extern hal_error_t hal_ecdsa_key_load_public(hal_ecdsa_key_t **key,
                                              void *keybuf, const size_t keybuf_len,
-                                             const hal_ecdsa_curve_t curve,
+                                             const hal_curve_name_t curve,
                                              const uint8_t * const x, const size_t x_len,
                                              const uint8_t * const y, const size_t y_len);
 
 extern hal_error_t hal_ecdsa_key_get_type(const hal_ecdsa_key_t * const key,
-                                          hal_ecdsa_key_type_t *key_type);
+                                          hal_key_type_t *key_type);
 
 extern hal_error_t hal_ecdsa_key_get_curve(const hal_ecdsa_key_t * const key,
-                                           hal_ecdsa_curve_t *curve);
+                                           hal_curve_name_t *curve);
 
 extern hal_error_t hal_ecdsa_key_get_public(const hal_ecdsa_key_t * const key,
                                             uint8_t *x, size_t *x_len, const size_t x_max,
@@ -453,7 +471,7 @@ extern void hal_ecdsa_key_clear(hal_ecdsa_key_t *key);
 extern hal_error_t hal_ecdsa_key_gen(const hal_core_t *core,
                                      hal_ecdsa_key_t **key,
                                      void *keybuf, const size_t keybuf_len,
-                                     const hal_ecdsa_curve_t curve);
+                                     const hal_curve_name_t curve);
 
 extern hal_error_t hal_ecdsa_key_to_der(const hal_ecdsa_key_t * const key,
                                         uint8_t *der, size_t *der_len, const size_t der_max);
@@ -472,7 +490,7 @@ extern size_t hal_ecdsa_key_to_ecpoint_len(const hal_ecdsa_key_t * const key);
 extern hal_error_t hal_ecdsa_key_from_ecpoint(hal_ecdsa_key_t **key,
                                               void *keybuf, const size_t keybuf_len,
                                               const uint8_t * const der, const size_t der_len,
-                                              const hal_ecdsa_curve_t curve);
+                                              const hal_curve_name_t curve);
 
 extern hal_error_t hal_ecdsa_sign(const hal_core_t *core,
                                   const hal_ecdsa_key_t * const key,
@@ -485,6 +503,192 @@ extern hal_error_t hal_ecdsa_verify(const hal_core_t *core,
                                     const uint8_t * const hash, const size_t hash_len,
                                     const uint8_t * const signature, const size_t signature_len,
                                     const hal_ecdsa_signature_format_t signature_format);
+
+/*
+ * Higher level RPC-based mechanism for working with HSM at arm's
+ * length, using handles instead of direct access to the cores.
+ *
+ * Session handles are pretty much as in PKCS #11: from our viewpoint,
+ * a session is a lock-step stream of operations, so while operations
+ * from different sessions can interleave, operations within a single
+ * session cannot.
+ *
+ * Client handles are a small extension to the PKCS #11 model,
+ * intended to support multiple PKCS #11 using applications sharing a
+ * single HSM.  Technically, sessions are per-client, but in practice
+ * there's no sane reason why we'd use the same session handle
+ * concurrently in multiple clients.  Mostly, the client abstraction
+ * is to handle login and logout against the HSM's PIN.  Clients add
+ * nothing whatsoever to the security model (the HSM has no way of
+ * knowing whether the host is lumping multiple applications into a
+ * single "client"), the point of the exercise is just to make the
+ * C_Login()/C_Logout() semantics work as expected in the presence of
+ * multiple applications.
+ *
+ * NB: Unlike the other handles used in this protocol, session and
+ * client handles are created by the client (host) side of the RPC
+ * mechanism, not the server (HSM) side.
+ */
+
+typedef struct { uint32_t handle; } hal_rpc_client_handle_t;
+typedef struct { uint32_t handle; } hal_rpc_session_handle_t;
+
+typedef enum { HAL_RPC_USER_NONE, HAL_RPC_USER_NORMAL, HAL_RPC_USER_SO } hal_rpc_user_t;
+
+extern hal_error_t hal_rpc_set_pin(const hal_rpc_user_t which,
+                                   const char * const newpin, const size_t newpin_len);
+
+extern hal_error_t hal_rpc_login(const hal_rpc_client_handle_t client,
+                                 const hal_rpc_user_t user,
+                                 const char * const pin, const size_t pin_len);
+
+extern hal_error_t hal_rpc_logout(const hal_rpc_client_handle_t client);
+
+/*
+ * Get random bytes.
+ */
+
+extern hal_error_t hal_rpc_get_random(void *buffer, const size_t length);
+
+/*
+ * Combined hash and HMAC functions: pass NULL key for plain hashing.
+ */
+
+typedef struct { uint32_t handle; } hal_rpc_hash_handle_t;
+
+extern const hal_rpc_hash_handle_t hal_rpc_hash_handle_none;
+
+extern hal_error_t hal_rpc_hash_get_digest_length(const hal_digest_algorithm_t alg, size_t *length);
+
+extern hal_error_t hal_rpc_hash_get_digest_algorithm_id(const hal_digest_algorithm_t alg,
+                                                        uint8_t *id, size_t *len, const size_t len_max);
+
+extern hal_error_t hal_rpc_hash_get_algorithm(const hal_rpc_hash_handle_t hash, hal_digest_algorithm_t *alg);
+
+/*
+ * Once started, a hash or HMAC operation is bound to a particular
+ * session, so we only need the client and session arguments to initialize.
+ */
+
+extern hal_error_t hal_rpc_hash_initialize(const hal_rpc_client_handle_t client,
+                                           const hal_rpc_session_handle_t session,
+                                           hal_rpc_hash_handle_t *hash,
+                                           const hal_digest_algorithm_t alg,
+                                           const uint8_t * const key, const size_t key_length);
+
+extern hal_error_t hal_rpc_hash_update(const hal_rpc_hash_handle_t hash,
+                                       const uint8_t * data, const size_t length);
+
+extern hal_error_t hal_rpc_hash_finalize(const hal_rpc_hash_handle_t hash,
+                                         uint8_t *digest, const size_t length);
+
+/*
+ * Public key functions.
+ *
+ * The _sign() and _verify() methods accept a hash OR an input string;
+ * either "hash" should be hal_rpc_hash_handle_none or input should be NULL,
+ * but not both.
+ *
+ * Use of client and session handles here needs a bit more thought.
+ *
+ * Client handles are straightforward: basically, anything that
+ * creates a new pkey handle should take a client handle, which should
+ * suffice, as object handles never cross clients.
+ *
+ * Session handles are more interesting, as PKCS #11's versions of
+ * session and object handles do in effect allow one session to hand
+ * an object handle to another session.  So any action which can do
+ * significant work (ie, which is complicated enough that we can't
+ * guarantee an immediate response) needs to take a session handle.
+ *
+ * There will probably be a few cases where a session handle isn't
+ * strictly required but we ask for one anyway because the API turns
+ * out to be easier to understand that way (eg, we probably want to
+ * ask for a session handle anywhere we ask for a client handle,
+ * whether we need the session handle or not, so that users of this
+ * API don't have to remember which pkey-handle-creating calls require
+ * a session handle and which ones don't...).
+ */
+
+#define	HAL_RPC_PKEY_NAME_MAX 128
+
+typedef struct { uint32_t handle; } hal_rpc_pkey_handle_t;
+
+typedef uint32_t hal_key_flags_t;
+
+#define	HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE	(1 << 0)
+#define	HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT      (1 << 1)
+#define	HAL_KEY_FLAG_USAGE_DATAENCIPHERMENT	(1 << 2)
+
+extern hal_error_t hal_rpc_pkey_load(const hal_rpc_client_handle_t client,
+                                     const hal_rpc_session_handle_t session,
+                                     hal_rpc_pkey_handle_t *pkey,
+                                     const hal_key_type_t type,
+                                     const hal_curve_name_t curve,
+                                     const uint8_t * const name, const size_t name_len,
+                                     const uint8_t * const der, const size_t der_len,
+                                     const hal_key_flags_t flags);
+
+extern hal_error_t hal_rpc_pkey_find(const hal_rpc_client_handle_t client,
+                                     const hal_rpc_session_handle_t session,
+                                     hal_rpc_pkey_handle_t *pkey,
+                                     const hal_key_type_t type,
+                                     const uint8_t * const name, const size_t name_len);
+
+extern hal_error_t hal_rpc_pkey_generate_rsa(const hal_rpc_client_handle_t client,
+                                             const hal_rpc_session_handle_t session,
+                                             hal_rpc_pkey_handle_t *pkey,
+                                             const uint8_t * const name, const size_t name_len,
+                                             const unsigned key_length,
+                                             const uint8_t * const public_exponent, const size_t public_exponent_len,
+                                             const hal_key_flags_t flags);
+
+extern hal_error_t hal_rpc_pkey_generate_ec(const hal_rpc_client_handle_t client,
+                                            const hal_rpc_session_handle_t session,
+                                            hal_rpc_pkey_handle_t *pkey,
+                                            const uint8_t * const name, const size_t name_len,
+                                            const hal_curve_name_t curve,
+                                            const hal_key_flags_t flags);
+
+extern hal_error_t hal_rpc_pkey_close(const hal_rpc_pkey_handle_t pkey);
+
+extern hal_error_t hal_rpc_pkey_delete(const hal_rpc_pkey_handle_t pkey);
+
+extern hal_error_t hal_rpc_pkey_get_key_type(const hal_rpc_pkey_handle_t pkey,
+                                             hal_key_type_t *type);
+
+extern hal_error_t hal_rpc_pkey_get_key_flags(const hal_rpc_pkey_handle_t pkey,
+                                              hal_key_flags_t *flags);
+
+extern size_t hal_rpc_pkey_get_public_key_len(const hal_rpc_pkey_handle_t pkey);
+
+extern hal_error_t hal_rpc_pkey_get_public_key(const hal_rpc_pkey_handle_t pkey,
+                                               uint8_t *der, size_t *der_len, const size_t der_len_max);
+
+extern hal_error_t hal_rpc_pkey_sign(const hal_rpc_session_handle_t session,
+                                     const hal_rpc_pkey_handle_t pkey,
+                                     const hal_rpc_hash_handle_t hash,
+                                     const uint8_t * const input,  const size_t input_len,
+                                     uint8_t * signature, size_t *signature_len, const size_t signature_max);
+
+extern hal_error_t hal_rpc_pkey_verify(const hal_rpc_session_handle_t session,
+                                       const hal_rpc_pkey_handle_t pkey,
+                                       const hal_rpc_hash_handle_t hash,
+                                       const uint8_t * const input, const size_t input_len,
+                                       const uint8_t * const signature, const size_t signature_len);
+
+typedef struct {
+  hal_key_type_t type;
+  hal_curve_name_t curve;
+  hal_key_flags_t flags;
+  char name[HAL_RPC_PKEY_NAME_MAX];
+  size_t name_len;
+  /* ... */
+} hal_rpc_pkey_key_info_t;
+
+extern hal_error_t hal_rpc_pkey_list(hal_rpc_pkey_key_info_t *result,
+                                     unsigned *result_len,
+                                     const unsigned result_max);
 
 #endif /* _HAL_H_ */
 

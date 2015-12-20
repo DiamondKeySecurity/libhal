@@ -203,7 +203,7 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
  * Run one keygen/sign/verify test with a newly generated key.
  */
 
-static int test_keygen_sign_verify(const hal_ecdsa_curve_t curve)
+static int test_keygen_sign_verify(const hal_curve_name_t curve)
 
 {
   const hal_hash_descriptor_t *hash_descriptor = NULL;
@@ -213,17 +213,17 @@ static int test_keygen_sign_verify(const hal_ecdsa_curve_t curve)
 
   switch (curve) {
 
-  case HAL_ECDSA_CURVE_P256:
+  case HAL_CURVE_P256:
     printf("ECDSA P-256 key generation / signature / verification test\n");
     hash_descriptor = hal_hash_sha256;
     break;
 
-  case HAL_ECDSA_CURVE_P384:
+  case HAL_CURVE_P384:
     printf("ECDSA P-384 key generation / signature / verification test\n");
     hash_descriptor = hal_hash_sha384;
     break;
 
-  case HAL_ECDSA_CURVE_P521:
+  case HAL_CURVE_P521:
     printf("ECDSA P-521 key generation / signature / verification test\n");
     hash_descriptor = hal_hash_sha512;
     break;
@@ -339,12 +339,12 @@ int main(int argc, char *argv[])
    */
 
   if (csprng_core != NULL && sha256_core != NULL) {
-    time_check(test_keygen_sign_verify(HAL_ECDSA_CURVE_P256));
+    time_check(test_keygen_sign_verify(HAL_CURVE_P256));
   }
 
   if (csprng_core != NULL && sha512_core != NULL) {
-    time_check(test_keygen_sign_verify(HAL_ECDSA_CURVE_P384));
-    time_check(test_keygen_sign_verify(HAL_ECDSA_CURVE_P521));
+    time_check(test_keygen_sign_verify(HAL_CURVE_P384));
+    time_check(test_keygen_sign_verify(HAL_CURVE_P521));
   }
 
   return !ok;
