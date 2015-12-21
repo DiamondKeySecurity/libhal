@@ -38,12 +38,17 @@
 #include <sys/mman.h>
 #include <string.h>
 #include <sys/errno.h>
+#include <unistd.h>
 
 #include "hal.h"
 #include "hal_internal.h"
 
 #ifndef HAL_KS_MMAP_FILE
 #define HAL_KS_MMAP_FILE ".cryptech_hal_keystore"
+#endif
+
+#ifndef MAP_FILE
+#define MAP_FILE 0
 #endif
 
 static hal_ks_keydb_t *db;
@@ -56,12 +61,15 @@ const hal_ks_keydb_t *hal_ks_get_keydb(void)
   const char * const env  = getenv("CRYPTECH_KEYSTORE");
   const char * const home = getenv("HOME");
   const char * const base = HAL_KS_MMAP_FILE;
-  const unsigned pagemask = getpagesize() - 1;
+  const long pagemask = sysconf(_SC_PAGESIZE) - 1;
   const size_t len = (sizeof(hal_ks_keydb_t) + pagemask) & ~pagemask;
 
   char fn_[strlen(base) + (home == NULL ? 0 : strlen(home)) + 2];
   const char *fn = fn_;
   int fd;
+
+  if (pagemask < 0)
+    return NULL;
 
   if (env != NULL)
     fn = env;
