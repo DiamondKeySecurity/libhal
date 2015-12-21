@@ -50,38 +50,31 @@ from pyasn1.codec.der.decoder   import decode as DER_Decode
 
 wrapper = TextWrapper(width = 78, initial_indent = " " * 2, subsequent_indent = " " * 2)
 
-def long_to_bytes(l):
+def long_to_bytes(number, order):
   #
   # This is just plain nasty.
   #
-  s = "%x" % l
-  return ("0" + s if len(s) & 1 else s).decode("hex")
+  s = "%x" % number
+  s = ("0" * (order/8 - len(s))) + s
+  return s.decode("hex")
 
-def bytes_to_bits(b):
+def bytes_to_bits(bytes):
   #
   # This, on the other hand, is not just plain nasty, this is fancy nasty.
   # This is nasty with raisins in it.
   #
-  bits = bin(long(b.encode("hex"), 16))[2:]
-  if len(bits) % 8:
-    bits = ("0" * (8 - len(bits) % 8)) + bits
-  return tuple(int(i) for i in bits)
+  s = bin(long(bytes.encode("hex"), 16))[2:]
+  if len(s) % 8:
+    s = ("0" * (8 - len(s) % 8)) + s
+  return tuple(int(i) for i in s)
 
 ###
 
-class ECDSA_Sig_Value(Sequence):
-  componentType = NamedTypes(
-    NamedType("r", Integer()),
-    NamedType("s", Integer()))
+def encode_sig(r, s, order):
+  return long_to_bytes(r, order) + long_to_bytes(s, order)
 
-def encode_sig(r, s):
-  sig = ECDSA_Sig_Value()
-  sig["r"] = r
-  sig["s"] = s
-  return DER_Encode(sig)
-
-p256_sig = encode_sig(p256_r, p256_s)
-p384_sig = encode_sig(p384_r, p384_s)
+p256_sig = encode_sig(p256_r, p256_s, 256)
+p384_sig = encode_sig(p384_r, p384_s, 384)
 
 ###
 
@@ -93,9 +86,9 @@ class ECPrivateKey(Sequence):
     OptionalNamedType("parameters", ObjectIdentifier().subtype(explicitTag = Tag(tagClassContext, tagFormatSimple, 0))),
     OptionalNamedType("publicKey", BitString().subtype(explicitTag = Tag(tagClassContext, tagFormatSimple, 1))))
 
-def encode_key(d, Qx, Qy, oid):
-  private_key = long_to_bytes(d)
-  public_key  = bytes_to_bits(chr(0x04) + long_to_bytes(Qx) + long_to_bytes(Qy))
+def encode_key(d, Qx, Qy, order, oid):
+  private_key = long_to_bytes(d, order)
+  public_key  = bytes_to_bits(chr(0x04) + long_to_bytes(Qx, order) + long_to_bytes(Qy, order))
   parameters = oid
   key = ECPrivateKey()
   key["version"]    = 1
@@ -104,8 +97,8 @@ def encode_key(d, Qx, Qy, oid):
   key["publicKey"]  = public_key
   return DER_Encode(key)
 
-p256_key = encode_key(p256_d, p256_Qx, p256_Qy, "1.2.840.10045.3.1.7")
-p384_key = encode_key(p384_d, p384_Qx, p384_Qy, "1.3.132.0.34")
+p256_key = encode_key(p256_d, p256_Qx, p256_Qy, 256, "1.2.840.10045.3.1.7")
+p384_key = encode_key(p384_d, p384_Qx, p384_Qy, 384, "1.3.132.0.34")
 
 ###
 
@@ -125,11 +118,12 @@ for name in dir():
 vars = sorted(vars)
 
 for curve in curves:
+  order = int(curve[1:])
   for var in vars:
     name = curve + "_" + var
     value = globals().get(name, None)
     if isinstance(value, (int, long)):
-      value = long_to_bytes(value)
+      value = long_to_bytes(value, order)
     if value is not None:
       print
       print "static const uint8_t %s[] = { /* %d bytes */" % (name, len(value))
@@ -138,14 +132,14 @@ for curve in curves:
     
 print
 print "typedef struct {"
-print "  hal_ecdsa_curve_t curve;"
+print "  hal_curve_name_t curve;"
 for var in vars:
   print "  const uint8_t *%8s; size_t %8s_len;" % (var, var)
 print "} ecdsa_tc_t;"
 print
 print "static const ecdsa_tc_t ecdsa_tc[] = {"
 for curve in curves:
-  print "  { HAL_ECDSA_CURVE_%s," % curve.upper()
+  print "  { HAL_CURVE_%s," % curve.upper()
   for var in vars:
     name = curve + "_" + var
     if name in globals():

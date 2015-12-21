@@ -537,8 +537,7 @@ static hal_error_t sign_ecdsa(uint8_t *keybuf, const size_t keybuf_len,
     input = signature;
   }
 
-  if ((err = hal_ecdsa_sign(NULL, key, input, input_len, signature, signature_len, signature_max,
-                            HAL_ECDSA_SIGNATURE_FORMAT_PKCS11)) != HAL_OK)
+  if ((err = hal_ecdsa_sign(NULL, key, input, input_len, signature, signature_len, signature_max)) != HAL_OK)
     return err;
 
   return HAL_OK;
@@ -658,8 +657,7 @@ static hal_error_t verify_ecdsa(uint8_t *keybuf, const size_t keybuf_len,
     input = digest;
   }
 
-  if ((err = hal_ecdsa_verify(NULL, key, input, input_len, signature, signature_len,
-                            HAL_ECDSA_SIGNATURE_FORMAT_PKCS11)) != HAL_OK)
+  if ((err = hal_ecdsa_verify(NULL, key, input, input_len, signature, signature_len)) != HAL_OK)
     return err;
 
   return HAL_OK;

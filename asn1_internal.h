@@ -1,9 +1,12 @@
 /*
- * asn1.h
- * ------
- * Library internal header file for ASN.1 routines.
+ * asn1_internal.h
+ * ---------------
+ * Library internal header file for ASN.1 routines.  These functions
+ * are not part of the public libhal API.
  *
- * These functions are not part of the public libhal API.
+ * The only reason for not collapsing this header file into
+ * hal_internal.h is to maintain some isolation between the few
+ * modules which use libtfm and the rest of the library.
  *
  * More than 20 years after it was written, the best simple
  * introduction to ASN.1 is still Burt Kalski's "A Layman's Guide to a
@@ -40,8 +43,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _HAL_ASN1_H_
-#define _HAL_ASN1_H_
+#ifndef _HAL_ASN1_INTERNAL_H_
+#define _HAL_ASN1_INTERNAL_H_
 
 #include <stdint.h>
 
@@ -100,7 +103,7 @@ extern hal_error_t hal_asn1_encode_integer(const fp_int * const bn,
 extern hal_error_t hal_asn1_decode_integer(fp_int *bn,
                                            const uint8_t * const der, size_t *der_len, const size_t der_max);
 
-#endif /* _HAL_ASN1_H_ */
+#endif /* _HAL_ASN1_INTERNAL_H_ */
 
 /*
  * Local variables:

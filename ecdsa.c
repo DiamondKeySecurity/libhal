@@ -1345,87 +1345,13 @@ static hal_error_t decode_signature_pkcs11(const ecdsa_curve_t * const curve,
 }
 
 /*
- * Encode a signature in ASN.1 format SEQUENCE { INTEGER r, INTEGER s }.
- */
-
-static hal_error_t encode_signature_asn1(const ecdsa_curve_t * const curve,
-                                         const fp_int * const r, const fp_int * const s,
-                                         uint8_t *signature, size_t *signature_len, const size_t signature_max)
-{
-  assert(curve != NULL && r != NULL && s != NULL);
-
-  size_t hlen, r_len, s_len;
-  hal_error_t err;
-
-  if ((err = hal_asn1_encode_integer(r, NULL, &r_len, 0)) != HAL_OK ||
-      (err = hal_asn1_encode_integer(s, NULL, &s_len, 0)) != HAL_OK)
-    return err;
-
-  const size_t vlen = r_len + s_len;
-
-  err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, signature, &hlen, signature_max);
-
-  if (signature_len != NULL)
-    *signature_len = hlen + vlen;
-
-  if (signature == NULL || err != HAL_OK)
-    return err;
-
-  uint8_t * const r_out = signature + hlen;
-  uint8_t * const s_out = r_out + r_len;
-
-  if ((err = hal_asn1_encode_integer(r, r_out, NULL, signature_max - (r_out - signature))) != HAL_OK ||
-      (err = hal_asn1_encode_integer(s, s_out, NULL, signature_max - (s_out - signature))) != HAL_OK)
-    return err;
-
-  return HAL_OK;
-}
-
-/*
- * Decode a signature from ASN.1 format SEQUENCE { INTEGER r, INTEGER s }.
- */
-
-static hal_error_t decode_signature_asn1(const ecdsa_curve_t * const curve,
-                                         fp_int *r, fp_int *s,
-                                         const uint8_t * const signature, const size_t signature_len)
-{
-  assert(curve != NULL && r != NULL && s != NULL);
-
-  if (signature == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  size_t len1, len2;
-  hal_error_t err;
-
-  if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, signature, signature_len, &len1, &len2)) != HAL_OK)
-    return err;
-
-  const uint8_t *       der     = signature + len1;
-  const uint8_t * const der_end = der       + len2;
-
-  if ((err = hal_asn1_decode_integer(r, der, &len1, der_end - der)) != HAL_OK)
-    return err;
-  der += len1;
-
-  if ((err = hal_asn1_decode_integer(s, der, &len1, der_end - der)) != HAL_OK)
-    return err;
-  der += len1;
-
-  if (der != der_end)
-    return HAL_ERROR_ASN1_PARSE_FAILED;
-
-  return HAL_OK;
-}
-
-/*
  * Sign a caller-supplied hash.
  */
 
 hal_error_t hal_ecdsa_sign(const hal_core_t *core,
                            const hal_ecdsa_key_t * const key,
                            const uint8_t * const hash, const size_t hash_len,
-                           uint8_t *signature, size_t *signature_len, const size_t signature_max,
-                           const hal_ecdsa_signature_format_t signature_format)
+                           uint8_t *signature, size_t *signature_len, const size_t signature_max)
 {
   if (key == NULL || hash == NULL || signature == NULL || signature_len == NULL || key->type != HAL_KEY_TYPE_EC_PRIVATE)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -1487,21 +1413,8 @@ hal_error_t hal_ecdsa_sign(const hal_core_t *core,
    * Encode the signature, then we're done.
    */
 
-  switch (signature_format) {
-
-  case HAL_ECDSA_SIGNATURE_FORMAT_ASN1:
-    if ((err = encode_signature_asn1(curve, r, s, signature, signature_len, signature_max)) != HAL_OK)
-      goto fail;
-    break;
-
-  case HAL_ECDSA_SIGNATURE_FORMAT_PKCS11:
-    if ((err = encode_signature_pkcs11(curve, r, s, signature, signature_len, signature_max)) != HAL_OK)
-      goto fail;
-    break;
-
-  default:
-    lose(HAL_ERROR_BAD_ARGUMENTS);
-  }
+  if ((err = encode_signature_pkcs11(curve, r, s, signature, signature_len, signature_max)) != HAL_OK)
+    goto fail;
 
   err = HAL_OK;
 
@@ -1518,8 +1431,7 @@ hal_error_t hal_ecdsa_sign(const hal_core_t *core,
 hal_error_t hal_ecdsa_verify(const hal_core_t *core,
                              const hal_ecdsa_key_t * const key,
                              const uint8_t * const hash, const size_t hash_len,
-                             const uint8_t * const signature, const size_t signature_len,
-                             const hal_ecdsa_signature_format_t signature_format)
+                             const uint8_t * const signature, const size_t signature_len)
 {
   assert(key != NULL && hash != NULL && signature != NULL);
 
@@ -1551,21 +1463,8 @@ hal_error_t hal_ecdsa_verify(const hal_core_t *core,
    * Start by decoding the signature.
    */
 
-  switch (signature_format) {
-
-  case HAL_ECDSA_SIGNATURE_FORMAT_ASN1:
-    if ((err = decode_signature_asn1(curve, r, s, signature, signature_len)) != HAL_OK)
-      return err;
-    break;
-
-  case HAL_ECDSA_SIGNATURE_FORMAT_PKCS11:
-    if ((err = decode_signature_pkcs11(curve, r, s, signature, signature_len)) != HAL_OK)
-      return err;
-    break;
-
-  default:
-    return HAL_ERROR_BAD_ARGUMENTS;
-  }
+  if ((err = decode_signature_pkcs11(curve, r, s, signature, signature_len)) != HAL_OK)
+    return err;
 
   /*
    * Check that r and s are in the allowed range, read the hash, then
