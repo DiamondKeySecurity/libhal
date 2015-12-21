@@ -148,19 +148,19 @@ static int test_gen(const hal_core_t *core,
 
   size_t der_len = 0;
 
-  if ((err = hal_rsa_key_to_der(key1, NULL, &der_len, 0)) != HAL_OK) {
+  if ((err = hal_rsa_private_key_to_der(key1, NULL, &der_len, 0)) != HAL_OK) {
     printf("Getting DER length of RSA key failed: %s\n", hal_error_string(err));
     return 0;
   }
 
   uint8_t der[der_len];
 
-  if ((err = hal_rsa_key_to_der(key1, der, &der_len, sizeof(der))) != HAL_OK) {
+  if ((err = hal_rsa_private_key_to_der(key1, der, &der_len, sizeof(der))) != HAL_OK) {
     printf("Converting RSA key to DER failed: %s\n", hal_error_string(err));
     return 0;
   }
 
-  if ((err = hal_rsa_key_from_der(&key2, keybuf2, sizeof(keybuf2), der, sizeof(der))) != HAL_OK) {
+  if ((err = hal_rsa_private_key_from_der(&key2, keybuf2, sizeof(keybuf2), der, sizeof(der))) != HAL_OK) {
     printf("Converting RSA key back from DER failed: %s\n", hal_error_string(err));
     return 0;
   }

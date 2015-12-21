@@ -422,14 +422,14 @@ extern hal_error_t hal_rsa_key_gen(const hal_core_t *core,
                                    const unsigned key_length,
                                    const uint8_t * const public_exponent, const size_t public_exponent_len);
 
-extern hal_error_t hal_rsa_key_to_der(const hal_rsa_key_t * const key,
-                                      uint8_t *der, size_t *der_len, const size_t der_max);
+extern hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
+                                              uint8_t *der, size_t *der_len, const size_t der_max);
 
 extern size_t hal_rsa_key_to_der_len(const hal_rsa_key_t * const key);
 
-extern hal_error_t hal_rsa_key_from_der(hal_rsa_key_t **key,
-                                        void *keybuf, const size_t keybuf_len,
-                                        const uint8_t * const der, const size_t der_len);
+extern hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key,
+                                                void *keybuf, const size_t keybuf_len,
+                                                const uint8_t * const der, const size_t der_len);
 
 /*
  * ECDSA.
@@ -471,14 +471,14 @@ extern hal_error_t hal_ecdsa_key_gen(const hal_core_t *core,
                                      void *keybuf, const size_t keybuf_len,
                                      const hal_curve_name_t curve);
 
-extern hal_error_t hal_ecdsa_key_to_der(const hal_ecdsa_key_t * const key,
-                                        uint8_t *der, size_t *der_len, const size_t der_max);
+extern hal_error_t hal_ecdsa_private_key_to_der(const hal_ecdsa_key_t * const key,
+                                                uint8_t *der, size_t *der_len, const size_t der_max);
 
 extern size_t hal_ecdsa_key_to_der_len(const hal_ecdsa_key_t * const key);
 
-extern hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key,
-                                          void *keybuf, const size_t keybuf_len,
-                                          const uint8_t * const der, const size_t der_len);
+extern hal_error_t hal_ecdsa_private_key_from_der(hal_ecdsa_key_t **key,
+                                                  void *keybuf, const size_t keybuf_len,
+                                                  const uint8_t * const der, const size_t der_len);
 
 extern hal_error_t hal_ecdsa_key_to_ecpoint(const hal_ecdsa_key_t * const key,
                                             uint8_t *der, size_t *der_len, const size_t der_max);

@@ -1103,8 +1103,8 @@ hal_error_t hal_ecdsa_key_from_ecpoint(hal_ecdsa_key_t **key_,
  * probably be using an ASN.1 compiler like asn1c instead.
  */
 
-hal_error_t hal_ecdsa_key_to_der(const hal_ecdsa_key_t * const key,
-                                 uint8_t *der, size_t *der_len, const size_t der_max)
+hal_error_t hal_ecdsa_private_key_to_der(const hal_ecdsa_key_t * const key,
+                                         uint8_t *der, size_t *der_len, const size_t der_max)
 {
   if (key == NULL || key->type != HAL_KEY_TYPE_EC_PRIVATE)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -1195,7 +1195,7 @@ hal_error_t hal_ecdsa_key_to_der(const hal_ecdsa_key_t * const key,
 size_t hal_ecdsa_key_to_der_len(const hal_ecdsa_key_t * const key)
 {
   size_t len;
-  return hal_ecdsa_key_to_der(key, NULL, &len, 0) == HAL_OK ? len : 0;
+  return hal_ecdsa_private_key_to_der(key, NULL, &len, 0) == HAL_OK ? len : 0;
 }
 
 /*
@@ -1205,9 +1205,9 @@ size_t hal_ecdsa_key_to_der_len(const hal_ecdsa_key_t * const key)
  * probably be using an ASN.1 compiler like asn1c instead.
  */
 
-hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key_,
-                                   void *keybuf, const size_t keybuf_len,
-                                   const uint8_t * const der, const size_t der_len)
+hal_error_t hal_ecdsa_private_key_from_der(hal_ecdsa_key_t **key_,
+                                           void *keybuf, const size_t keybuf_len,
+                                           const uint8_t * const der, const size_t der_len)
 {
   hal_ecdsa_key_t *key = keybuf;
 

@@ -94,5 +94,5 @@ distclean: clean
 
 tags: TAGS
 
-TAGS: *.[ch] tests/*.[ch]
+TAGS: *.[ch] tests/*.[ch] utils/*.[ch]
 	etags $^

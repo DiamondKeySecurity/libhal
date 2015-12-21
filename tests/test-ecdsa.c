@@ -133,14 +133,14 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
   uint8_t keyder[tc->key_len];
   size_t keyder_len;
 
-  if ((err = hal_ecdsa_key_to_der(key1, keyder, &keyder_len, sizeof(keyder))) != HAL_OK)
-    return printf("hal_ecdsa_key_to_der() failed: %s\n", hal_error_string(err)), 0;
+  if ((err = hal_ecdsa_private_key_to_der(key1, keyder, &keyder_len, sizeof(keyder))) != HAL_OK)
+    return printf("hal_ecdsa_private_key_to_der() failed: %s\n", hal_error_string(err)), 0;
 
   uint8_t keybuf2[hal_ecdsa_key_t_size];
   hal_ecdsa_key_t *key2 = NULL;
 
-  if ((err = hal_ecdsa_key_from_der(&key2, keybuf2, sizeof(keybuf2), keyder, keyder_len)) != HAL_OK)
-    return printf("hal_ecdsa_key_from_der() failed: %s\n", hal_error_string(err)), 0;
+  if ((err = hal_ecdsa_private_key_from_der(&key2, keybuf2, sizeof(keybuf2), keyder, keyder_len)) != HAL_OK)
+    return printf("hal_ecdsa_private_key_from_der() failed: %s\n", hal_error_string(err)), 0;
 
   if (memcmp(key1, key2, hal_ecdsa_key_t_size) != 0)
     return printf("Private key mismatch after read/write cycle\n"), 0;

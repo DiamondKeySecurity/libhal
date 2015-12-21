@@ -687,8 +687,8 @@ hal_error_t hal_rsa_key_gen(const hal_core_t *core,
   _(key->dQ);                   \
   _(key->u);
 
-hal_error_t hal_rsa_key_to_der(const hal_rsa_key_t * const key,
-                               uint8_t *der, size_t *der_len, const size_t der_max)
+hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
+                                       uint8_t *der, size_t *der_len, const size_t der_max)
 {
   hal_error_t err = HAL_OK;
 
@@ -736,12 +736,12 @@ hal_error_t hal_rsa_key_to_der(const hal_rsa_key_t * const key,
 size_t hal_rsa_key_to_der_len(const hal_rsa_key_t * const key)
 {
   size_t len = 0;
-  return hal_rsa_key_to_der(key, NULL, &len, 0) == HAL_OK ? len : 0;
+  return hal_rsa_private_key_to_der(key, NULL, &len, 0) == HAL_OK ? len : 0;
 }
 
-hal_error_t hal_rsa_key_from_der(hal_rsa_key_t **key_,
-                                 void *keybuf, const size_t keybuf_len,
-                                 const uint8_t *der, const size_t der_len)
+hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key_,
+                                         void *keybuf, const size_t keybuf_len,
+                                         const uint8_t *der, const size_t der_len)
 {
   if (key_ == NULL || keybuf == NULL || keybuf_len < sizeof(hal_rsa_key_t) || der == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
