@@ -1248,7 +1248,7 @@ hal_error_t hal_ecdsa_key_from_der(hal_ecdsa_key_t **key_,
   if ((err = hal_asn1_decode_header(ASN1_OBJECT_IDENTIFIER, d, vlen, &hlen, &vlen)) != HAL_OK)
     return err;
   d += hlen;
-  for (key->curve = (hal_curve_name_t) 0; (curve = get_curve(key->curve)) != NULL; key->curve++)
+  for (key->curve = HAL_CURVE_NONE; (curve = get_curve(++key->curve)) != NULL; )
     if (vlen == curve->oid_len && memcmp(d, curve->oid, vlen) == 0)
       break;
   if (curve == NULL)
