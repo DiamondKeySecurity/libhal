@@ -103,6 +103,16 @@ extern hal_error_t hal_asn1_encode_integer(const fp_int * const bn,
 extern hal_error_t hal_asn1_decode_integer(fp_int *bn,
                                            const uint8_t * const der, size_t *der_len, const size_t der_max);
 
+extern hal_error_t hal_asn1_encode_spki(const uint8_t * const alg_oid,   const size_t alg_oid_len,
+                                        const uint8_t * const curve_oid, const size_t curve_oid_len,
+                                        const uint8_t * const pubkey,    const size_t pubkey_len,
+                                        uint8_t *der, size_t *der_len, const size_t der_max);
+
+extern hal_error_t hal_asn1_decode_spki(const uint8_t **alg_oid,   size_t *alg_oid_len,
+                                        const uint8_t **curve_oid, size_t *curve_oid_len,
+                                        const uint8_t **pubkey,    size_t *pubkey_len,
+                                        const uint8_t *const der,  const size_t der_len);
+
 #endif /* _HAL_ASN1_INTERNAL_H_ */
 
 /*

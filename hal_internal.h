@@ -159,7 +159,7 @@ typedef struct {
   size_t (*get_public_key_len)(const hal_rpc_pkey_handle_t pkey);
 
   hal_error_t  (*get_public_key)(const hal_rpc_pkey_handle_t pkey,
-                                 uint8_t *der, size_t *der_len, const size_t der_len_max);
+                                 uint8_t *der, size_t *der_len, const size_t der_max);
 
   hal_error_t  (*sign)(const hal_rpc_session_handle_t session,
                        const hal_rpc_pkey_handle_t pkey,

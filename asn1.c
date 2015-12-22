@@ -153,6 +153,85 @@ hal_error_t hal_asn1_encode_integer(const fp_int * const bn,
 }
 
 /*
+ * Encode a public key into an RFC 5280 SubjectPublicKeyInfo.
+ */
+
+hal_error_t hal_asn1_encode_spki(const uint8_t * const alg_oid,   const size_t alg_oid_len,
+                                 const uint8_t * const curve_oid, const size_t curve_oid_len,
+                                 const uint8_t * const pubkey,    const size_t pubkey_len,
+                                 uint8_t *der, size_t *der_len, const size_t der_max)
+{
+  if (alg_oid == NULL || alg_oid_len == 0 || pubkey == NULL || pubkey_len == 0 || (curve_oid == NULL && curve_oid_len != 0))
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  const uint8_t curve_oid_tag = curve_oid == NULL ? ASN1_NULL : ASN1_OBJECT_IDENTIFIER;
+
+  hal_error_t err;
+
+  size_t hlen, hlen_spki, hlen_algid, hlen_alg, hlen_curve, hlen_bit;
+
+  if ((err = hal_asn1_encode_header(ASN1_OBJECT_IDENTIFIER, alg_oid_len,   NULL, &hlen_alg,   0)) != HAL_OK ||
+      (err = hal_asn1_encode_header(curve_oid_tag,          curve_oid_len, NULL, &hlen_curve, 0)) != HAL_OK ||
+      (err = hal_asn1_encode_header(ASN1_BIT_STRING,        pubkey_len,    NULL, &hlen_bit,   0)) != HAL_OK)
+    return err;
+
+  const size_t algid_len = hlen_alg + alg_oid_len + hlen_curve + curve_oid_len;
+
+  if ((err = hal_asn1_encode_header(ASN1_SEQUENCE,          algid_len,     NULL, &hlen_algid, 0)) != HAL_OK)
+    return err;
+
+  const size_t vlen = hlen_algid + hlen_alg + alg_oid_len + hlen_curve + curve_oid_len + hlen_bit + pubkey_len;
+
+  if ((err = hal_asn1_encode_header(ASN1_SEQUENCE,          vlen,          NULL, &hlen_spki,  0)) != HAL_OK)
+    return err;
+
+  /*
+   * Handle pubkey early, in case it was staged into our output buffer.
+   */
+  if (der != NULL && hlen_spki + vlen <= der_max)
+    memmove(der + hlen_spki + vlen - pubkey_len, pubkey, pubkey_len);
+
+  err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, der, &hlen, der_max);
+
+  if (der_len != NULL)
+    *der_len = hlen + vlen;
+
+  if (der == NULL || err != HAL_OK)
+    return err;
+
+  uint8_t *d = der + hlen;
+  memset(d, 0, vlen);
+
+  if ((err = hal_asn1_encode_header(ASN1_SEQUENCE, algid_len, d, &hlen, der + der_max - d)) != HAL_OK)
+    return err;
+  d += hlen;
+
+  if ((err = hal_asn1_encode_header(ASN1_OBJECT_IDENTIFIER, alg_oid_len, d, &hlen, der + der_max - d)) != HAL_OK)
+    return err;
+  d += hlen;
+  memcpy(d, alg_oid, alg_oid_len);
+  d += alg_oid_len;
+
+  if ((err = hal_asn1_encode_header(curve_oid_tag, curve_oid_len, d, &hlen, der + der_max - d)) != HAL_OK)
+    return err;
+  d += hlen;
+  if (curve_oid != NULL)
+    memcpy(d, curve_oid, curve_oid_len);
+  d += curve_oid_len;
+
+  if ((err = hal_asn1_encode_header(ASN1_BIT_STRING, pubkey_len, d, &hlen, der + der_max - d)) != HAL_OK)
+    return err;
+  d += hlen;
+
+  d += pubkey_len;              /* pubkey handled early, above. */
+
+  assert(d == der + hlen_spki + vlen);
+  assert(d <= der + der_max);
+
+  return HAL_OK;
+}
+
+/*
  * Parse tag and length of an ASN.1 object.  Tag must match value
  * specified by the caller.  On success, sets hlen and vlen to lengths
  * of header and value, respectively.
@@ -215,6 +294,90 @@ hal_error_t hal_asn1_decode_integer(fp_int *bn,
 
   fp_init(bn);
   fp_read_unsigned_bin(bn, (uint8_t *) der + hlen, vlen);
+  return HAL_OK;
+}
+
+/*
+ * Decode a public key from an RFC 5280 SubjectPublicKeyInfo.
+ */
+
+hal_error_t hal_asn1_decode_spki(const uint8_t **alg_oid,   size_t *alg_oid_len,
+                                 const uint8_t **curve_oid, size_t *curve_oid_len,
+                                 const uint8_t **pubkey,    size_t *pubkey_len,
+                                 const uint8_t *const der,  const size_t der_len)
+{
+  if (alg_oid == NULL || alg_oid_len == NULL || curve_oid == NULL || curve_oid_len == NULL ||
+      pubkey == NULL || pubkey_len == NULL || der == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  size_t hlen, vlen;
+  hal_error_t err;
+
+  if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, der, der_len, &hlen, &vlen)) != HAL_OK)
+    return err;
+
+  const uint8_t * const der_end = der + hlen + vlen;
+  const uint8_t *d = der + hlen;
+
+  if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, der, der_end - d, &hlen, &vlen)) != HAL_OK)
+    return err;
+  d += hlen;
+
+  const uint8_t * const algid_end = d + vlen;
+
+  if ((err = hal_asn1_decode_header(ASN1_OBJECT_IDENTIFIER, d, algid_end - d, &hlen, &vlen)) != HAL_OK)
+    return err;
+  d += hlen;
+  if (vlen > algid_end - d)
+    return HAL_ERROR_ASN1_PARSE_FAILED;
+  *alg_oid = d;
+  *alg_oid_len = vlen;
+  d += vlen;
+
+  *curve_oid = NULL;
+  *curve_oid_len = 0;
+    
+  if (d < algid_end) {
+    switch (*d) {
+
+    case ASN1_OBJECT_IDENTIFIER:
+      if ((err = hal_asn1_decode_header(ASN1_OBJECT_IDENTIFIER, d, algid_end - d, &hlen, &vlen)) != HAL_OK)
+        return err;
+      d += hlen;
+      if (vlen > algid_end - d)
+        return HAL_ERROR_ASN1_PARSE_FAILED;
+      *curve_oid = d;
+      *curve_oid_len = vlen;
+      d += vlen;
+      break;
+
+    case ASN1_NULL:
+      if ((err = hal_asn1_decode_header(ASN1_NULL, d, algid_end - d, &hlen, &vlen)) != HAL_OK)
+        return err;
+      d += hlen;
+      if (vlen == 0)
+        break;
+
+    default:
+      return HAL_ERROR_ASN1_PARSE_FAILED;
+    }
+  }
+
+  if (d != algid_end)
+    return HAL_ERROR_ASN1_PARSE_FAILED;
+
+  if ((err = hal_asn1_decode_header(ASN1_BIT_STRING, d, der_end - d, &hlen, &vlen)) != HAL_OK)
+    return err;
+  d += hlen;
+  if (vlen >= algid_end - d || vlen == 0 || *d != 0x00)
+    return HAL_ERROR_ASN1_PARSE_FAILED;
+  *pubkey = ++d;
+  *pubkey_len = --vlen;
+  d += vlen;
+
+  if (d != der_end)
+    return HAL_ERROR_ASN1_PARSE_FAILED;
+
   return HAL_OK;
 }
 

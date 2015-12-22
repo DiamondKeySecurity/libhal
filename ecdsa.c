@@ -237,6 +237,22 @@ static const ecdsa_curve_t * const get_curve(const hal_curve_name_t curve)
   }
 }
 
+static inline const ecdsa_curve_t * oid_to_curve(hal_curve_name_t *curve_name,
+                                                 const uint8_t * const oid,
+                                                 const size_t oid_len)
+{
+  assert(curve_name != NULL && oid != NULL);
+
+  const ecdsa_curve_t *curve = NULL;
+  *curve_name = HAL_CURVE_NONE;
+
+  while ((curve = get_curve(++*curve_name)) != NULL)
+    if (oid_len == curve->oid_len && memcmp(oid, curve->oid, oid_len) == 0)
+      return curve;
+
+  return NULL;
+}
+
 /*
  * Finite field operations (hence "ff_").  These are basically just
  * the usual bignum operations, constrained by the field modulus.
@@ -1192,7 +1208,7 @@ hal_error_t hal_ecdsa_private_key_to_der(const hal_ecdsa_key_t * const key,
  * take if encoded as DER.
  */
 
-size_t hal_ecdsa_key_to_der_len(const hal_ecdsa_key_t * const key)
+size_t hal_ecdsa_private_key_to_der_len(const hal_ecdsa_key_t * const key)
 {
   size_t len;
   return hal_ecdsa_private_key_to_der(key, NULL, &len, 0) == HAL_OK ? len : 0;
@@ -1248,10 +1264,7 @@ hal_error_t hal_ecdsa_private_key_from_der(hal_ecdsa_key_t **key_,
   if ((err = hal_asn1_decode_header(ASN1_OBJECT_IDENTIFIER, d, vlen, &hlen, &vlen)) != HAL_OK)
     return err;
   d += hlen;
-  for (key->curve = HAL_CURVE_NONE; (curve = get_curve(++key->curve)) != NULL; )
-    if (vlen == curve->oid_len && memcmp(d, curve->oid, vlen) == 0)
-      break;
-  if (curve == NULL)
+  if ((curve = oid_to_curve(&key->curve, d, vlen)) == NULL)
     lose(HAL_ERROR_ASN1_PARSE_FAILED);
   d += vlen;
 
@@ -1281,6 +1294,104 @@ hal_error_t hal_ecdsa_private_key_from_der(hal_ecdsa_key_t **key_,
  fail:
   memset(keybuf, 0, keybuf_len);
   return err;
+}
+
+/*
+ * Write public key in SubjectPublicKeyInfo format, see RFCS 5280 and 5480.
+ */
+
+static const uint8_t oid_ecPublicKey[] = { 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01 };
+
+hal_error_t hal_ecdsa_public_key_to_der(const hal_ecdsa_key_t * const key,
+                                        uint8_t *der, size_t *der_len, const size_t der_max)
+{
+  if (key == NULL || (key->type != HAL_KEY_TYPE_EC_PRIVATE &&
+                      key->type != HAL_KEY_TYPE_EC_PUBLIC))
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  const ecdsa_curve_t * const curve = get_curve(key->curve);
+  if (curve == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  const size_t q_len  = fp_unsigned_bin_size(unconst_fp_int(curve->q));
+  const size_t Qx_len = fp_unsigned_bin_size(unconst_fp_int(key->Q->x));
+  const size_t Qy_len = fp_unsigned_bin_size(unconst_fp_int(key->Q->y));
+  const size_t ecpoint_len = q_len * 2 + 1;
+  assert(q_len >= Qx_len && q_len >= Qy_len);
+
+  if (der != NULL && ecpoint_len < der_max) {
+    memset(der, 0, ecpoint_len);
+
+    uint8_t *d = der;
+    *d++ = 0x04;                /* Uncompressed */
+
+    fp_to_unsigned_bin(unconst_fp_int(key->Q->x), d + q_len - Qx_len);
+    d += q_len;
+
+    fp_to_unsigned_bin(unconst_fp_int(key->Q->y), d + q_len - Qy_len);
+    d += q_len;
+
+    assert(d < der + der_max);
+  }
+
+  return hal_asn1_encode_spki(oid_ecPublicKey, sizeof(oid_ecPublicKey),
+                              curve->oid, curve->oid_len,
+                              der, ecpoint_len,
+                              der, der_len, der_max);
+}
+
+/*
+ * Convenience wrapper to return how many bytes a public key would
+ * take if encoded as DER.
+ */
+
+size_t hal_ecdsa_public_key_to_der_len(const hal_ecdsa_key_t * const key)
+{
+  size_t len;
+  return hal_ecdsa_public_key_to_der(key, NULL, &len, 0) == HAL_OK ? len : 0;
+}
+
+/*
+ * Read public key in SubjectPublicKeyInfo format, see RFCS 5280 and 5480.
+ */
+
+hal_error_t hal_ecdsa_public_key_from_der(hal_ecdsa_key_t **key_,
+                                           void *keybuf, const size_t keybuf_len,
+                                           const uint8_t * const der, const size_t der_len)
+{
+  hal_ecdsa_key_t *key = keybuf;
+
+  if (key_ == NULL || key == NULL || keybuf_len < sizeof(*key))
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  memset(keybuf, 0, keybuf_len);
+  key->type = HAL_KEY_TYPE_EC_PUBLIC;
+
+  const uint8_t *alg_oid = NULL, *curve_oid = NULL, *pubkey = NULL;
+  size_t         alg_oid_len,     curve_oid_len,     pubkey_len;
+  const ecdsa_curve_t *curve;
+  hal_error_t err;
+
+  if ((err = hal_asn1_decode_spki(&alg_oid, &alg_oid_len, &curve_oid, &curve_oid_len, &pubkey, &pubkey_len,
+                                  der, der_len)) != HAL_OK)
+    return err;
+
+  if (alg_oid == NULL || curve_oid == NULL || pubkey == NULL ||
+      alg_oid_len != sizeof(oid_ecPublicKey) || memcmp(alg_oid, oid_ecPublicKey, alg_oid_len) != 0 ||
+      (curve = oid_to_curve(&key->curve, curve_oid, curve_oid_len)) == NULL ||
+      pubkey_len < 3 || (pubkey_len & 1) == 0 || pubkey[0] != 0x04 ||
+      pubkey_len / 2 != fp_unsigned_bin_size(unconst_fp_int(curve->q)))
+    return HAL_ERROR_ASN1_PARSE_FAILED;
+
+  const uint8_t * const Qx = pubkey + 1;
+  const uint8_t * const Qy = Qx + pubkey_len / 2;
+
+  fp_read_unsigned_bin(key->Q->x, unconst_uint8_t(Qx), pubkey_len / 2);
+  fp_read_unsigned_bin(key->Q->y, unconst_uint8_t(Qy), pubkey_len / 2);
+  fp_set(key->Q->z, 1);
+
+  *key_ = key;
+  return HAL_OK;
 }
 
 /*

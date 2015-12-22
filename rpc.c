@@ -283,11 +283,11 @@ size_t hal_rpc_pkey_get_public_key_len(const hal_rpc_pkey_handle_t pkey)
 }
 
 hal_error_t hal_rpc_pkey_get_public_key(const hal_rpc_pkey_handle_t pkey,
-					uint8_t *der, size_t *der_len, const size_t der_len_max)
+					uint8_t *der, size_t *der_len, const size_t der_max)
 {
-  if (der == NULL || der_len == NULL || der_len_max == 0)
+  if (der == NULL || der_len == NULL || der_max == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
-  return pkey_dispatch->get_public_key(pkey, der, der_len, der_len_max);
+  return pkey_dispatch->get_public_key(pkey, der, der_len, der_max);
 }
 
 hal_error_t hal_rpc_pkey_sign(const hal_rpc_session_handle_t session,

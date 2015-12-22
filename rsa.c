@@ -733,7 +733,7 @@ hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
   return HAL_OK;
 }
 
-size_t hal_rsa_key_to_der_len(const hal_rsa_key_t * const key)
+size_t hal_rsa_private_key_to_der_len(const hal_rsa_key_t * const key)
 {
   size_t len = 0;
   return hal_rsa_private_key_to_der(key, NULL, &len, 0) == HAL_OK ? len : 0;
@@ -767,6 +767,100 @@ hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key_,
 #undef _
 
   if (fp_cmp_d(version, 0) != FP_EQ)
+    return HAL_ERROR_ASN1_PARSE_FAILED;
+
+  *key_ = key;
+
+  return HAL_OK;
+}
+
+/*
+ * ASN.1 public keys in SubjectPublicKeyInfo form, see RFCs 2313, 4055, and 5280.
+ */
+
+static const uint8_t oid_rsaEncryption[] = { 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01 };
+
+hal_error_t hal_rsa_public_key_to_der(const hal_rsa_key_t * const key,
+                                      uint8_t *der, size_t *der_len, const size_t der_max)
+{
+  if (key == NULL || (key->type != HAL_KEY_TYPE_RSA_PRIVATE &&
+                      key->type != HAL_KEY_TYPE_RSA_PUBLIC))
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  size_t hlen, n_len, e_len;
+  hal_error_t err;
+
+  if ((err = hal_asn1_encode_integer(key->n, NULL, &n_len, 0)) != HAL_OK ||
+      (err = hal_asn1_encode_integer(key->e, NULL, &e_len, 0)) != HAL_OK)
+    return err;
+
+  const size_t vlen = n_len + e_len;
+
+  if ((err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, der, &hlen, der_max)) != HAL_OK)
+    return err;
+
+  if (der != NULL) {
+    uint8_t * const n_out = der + hlen;
+    uint8_t * const e_out = n_out + n_len;
+
+    if ((err = hal_asn1_encode_integer(key->n, n_out, NULL, der + der_max - n_out)) != HAL_OK ||
+        (err = hal_asn1_encode_integer(key->e, e_out, NULL, der + der_max - e_out)) != HAL_OK)
+      return err;
+  }
+
+  return hal_asn1_encode_spki(oid_rsaEncryption, sizeof(oid_rsaEncryption),
+                              NULL, 0, der, hlen + vlen,
+                              der, der_len, der_max);
+
+}
+
+size_t hal_rsa_public_key_to_der_len(const hal_rsa_key_t * const key)
+{
+  size_t len = 0;
+  return hal_rsa_public_key_to_der(key, NULL, &len, 0) == HAL_OK ? len : 0;
+}
+
+hal_error_t hal_rsa_public_key_from_der(hal_rsa_key_t **key_,
+                                        void *keybuf, const size_t keybuf_len,
+                                        const uint8_t * const der, const size_t der_len)
+{
+  hal_rsa_key_t *key = keybuf;
+
+  if (key_ == NULL || key == NULL || keybuf_len < sizeof(*key) || der == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  memset(keybuf, 0, keybuf_len);
+
+  key->type = HAL_KEY_TYPE_RSA_PUBLIC;
+
+  const uint8_t *alg_oid = NULL, *null = NULL, *pubkey = NULL;
+  size_t         alg_oid_len,     null_len,     pubkey_len;
+  hal_error_t err;
+
+  if ((err = hal_asn1_decode_spki(&alg_oid, &alg_oid_len, &null, &null_len, &pubkey, &pubkey_len, der, der_len)) != HAL_OK)
+    return err;
+
+  if (null != NULL || null_len != 0 || alg_oid == NULL ||
+      alg_oid_len != sizeof(oid_rsaEncryption) || memcmp(alg_oid, oid_rsaEncryption, alg_oid_len) != 0)
+    return HAL_ERROR_ASN1_PARSE_FAILED;
+  
+  size_t len, hlen, vlen;
+
+  if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, pubkey, pubkey_len, &hlen, &vlen)) != HAL_OK)
+    return err;
+
+  const uint8_t * const pubkey_end = pubkey + hlen + vlen;
+  const uint8_t *d = pubkey + hlen;
+
+  if ((err = hal_asn1_decode_integer(key->n, d, &len, pubkey_end - d)) != HAL_OK)
+    return err;
+  d += len;
+
+  if ((err = hal_asn1_decode_integer(key->e, d, &len, pubkey_end - d)) != HAL_OK)
+    return err;
+  d += len;
+
+  if (d != pubkey_end)
     return HAL_ERROR_ASN1_PARSE_FAILED;
 
   *key_ = key;

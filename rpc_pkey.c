@@ -293,7 +293,7 @@ static hal_error_t generate_rsa(const hal_rpc_client_handle_t client,
                              public_exponent, public_exponent_len)) != HAL_OK)
     return err;
 
-  uint8_t der[hal_rsa_key_to_der_len(key)];
+  uint8_t der[hal_rsa_private_key_to_der_len(key)];
   size_t der_len;
 
   if ((err = hal_rsa_private_key_to_der(key, der, &der_len, sizeof(der))) == HAL_OK)
@@ -344,7 +344,7 @@ static hal_error_t generate_ec(const hal_rpc_client_handle_t client,
   if ((err = hal_ecdsa_key_gen(NULL, &key, keybuf, sizeof(keybuf), curve)) != HAL_OK)
     return err;
 
-  uint8_t der[hal_ecdsa_key_to_der_len(key)];
+  uint8_t der[hal_ecdsa_private_key_to_der_len(key)];
   size_t der_len;
 
   if ((err = hal_ecdsa_private_key_to_der(key, der, &der_len, sizeof(der))) == HAL_OK)
@@ -450,7 +450,47 @@ static hal_error_t get_key_flags(const hal_rpc_pkey_handle_t pkey,
 
 static size_t get_public_key_len(const hal_rpc_pkey_handle_t pkey)
 {
-  return 0;
+  pkey_slot_t *slot = find_handle(pkey);
+
+  if (slot == NULL)
+    return 0;
+
+  size_t result = 0;
+
+  uint8_t keybuf[hal_rsa_key_t_size > hal_ecdsa_key_t_size ? hal_rsa_key_t_size : hal_ecdsa_key_t_size];
+  hal_rsa_key_t   *rsa_key   = NULL;
+  hal_ecdsa_key_t *ecdsa_key = NULL;
+  uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
+  size_t der_len;
+
+  if (hal_ks_fetch(slot->type, slot->name, slot->name_len, NULL, NULL,
+                   der, &der_len, sizeof(der), &slot->ks_hint) == HAL_OK) {
+    switch (slot->type) {
+
+    case HAL_KEY_TYPE_RSA_PUBLIC:
+    case HAL_KEY_TYPE_EC_PUBLIC:
+      result = der_len;
+      break;
+
+    case HAL_KEY_TYPE_RSA_PRIVATE:
+      if (hal_rsa_private_key_from_der(&rsa_key, keybuf, sizeof(keybuf), der, der_len) == HAL_OK)
+        result = hal_rsa_public_key_to_der_len(rsa_key);
+      break;
+
+    case HAL_KEY_TYPE_EC_PRIVATE:
+      if (hal_ecdsa_private_key_from_der(&ecdsa_key, keybuf, sizeof(keybuf), der, der_len) == HAL_OK)
+        result = hal_ecdsa_public_key_to_der_len(ecdsa_key);
+      break;
+
+    default:
+      break;
+    }
+  }
+
+  memset(keybuf, 0, sizeof(keybuf));
+  memset(der,    0, sizeof(der));
+
+  return result;
 }
 
 /*
@@ -458,13 +498,54 @@ static size_t get_public_key_len(const hal_rpc_pkey_handle_t pkey)
  */
 
 static hal_error_t get_public_key(const hal_rpc_pkey_handle_t pkey,
-                                  uint8_t *der, size_t *der_len, const size_t der_len_max)
+                                  uint8_t *der, size_t *der_len, const size_t der_max)
 {
-  /*
-   * Still missing some of the public key format ASN.1 stuff, apparently.  Feh.
-   */
-  return HAL_ERROR_IMPOSSIBLE;
-#warning get_public_key() not implemented
+  pkey_slot_t *slot = find_handle(pkey);
+
+  if (slot == NULL)
+    return HAL_ERROR_KEY_NOT_FOUND;
+
+  uint8_t keybuf[hal_rsa_key_t_size > hal_ecdsa_key_t_size ? hal_rsa_key_t_size : hal_ecdsa_key_t_size];
+  hal_rsa_key_t   *rsa_key   = NULL;
+  hal_ecdsa_key_t *ecdsa_key = NULL;
+  uint8_t buf[HAL_KS_WRAPPED_KEYSIZE];
+  size_t buf_len;
+  hal_error_t err;
+
+  if ((err = hal_ks_fetch(slot->type, slot->name, slot->name_len, NULL, NULL,
+                          buf, &buf_len, sizeof(buf), &slot->ks_hint)) == HAL_OK) {
+    switch (slot->type) {
+
+    case HAL_KEY_TYPE_RSA_PUBLIC:
+    case HAL_KEY_TYPE_EC_PUBLIC:
+      if (der_len != NULL)
+        *der_len = buf_len;
+      if (der != NULL && der_max < buf_len)
+        err = HAL_ERROR_RESULT_TOO_LONG;
+      else if (der != NULL)
+        memcpy(der, buf, buf_len);
+      break;
+
+    case HAL_KEY_TYPE_RSA_PRIVATE:
+      if ((err = hal_rsa_private_key_from_der(&rsa_key, keybuf, sizeof(keybuf), buf, buf_len)) == HAL_OK)
+        err = hal_rsa_public_key_to_der(rsa_key, der, der_len, der_max);
+      break;
+
+    case HAL_KEY_TYPE_EC_PRIVATE:
+      if ((err = hal_ecdsa_private_key_from_der(&ecdsa_key, keybuf, sizeof(keybuf), buf, buf_len)) == HAL_OK)
+        err = hal_ecdsa_public_key_to_der(ecdsa_key, der, der_len, der_max);
+      break;
+
+    default:
+      err = HAL_ERROR_UNSUPPORTED_KEY;
+      break;
+    }
+  }
+
+  memset(keybuf, 0, sizeof(keybuf));
+  memset(buf,    0, sizeof(buf));
+
+  return err;
 }
 
 /*

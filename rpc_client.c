@@ -172,7 +172,7 @@ static size_t pkey_get_public_key_len(const hal_rpc_pkey_handle_t pkey)
 }
 
 static hal_error_t pkey_get_public_key(const hal_rpc_pkey_handle_t pkey,
-                                       uint8_t *der, size_t *der_len, const size_t der_len_max)
+                                       uint8_t *der, size_t *der_len, const size_t der_max)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }

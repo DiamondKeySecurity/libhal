@@ -127,7 +127,7 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
   if (tc->Qy_len != Qy_len || memcmp(tc->Qy, Qy, Qy_len) != 0)
     return printf("Qy mismatch\n"), 0;
 
-  if (hal_ecdsa_key_to_der_len(key1) != tc->key_len)
+  if (hal_ecdsa_private_key_to_der_len(key1) != tc->key_len)
     return printf("DER Key length mismatch\n"), 0;
 
   uint8_t keyder[tc->key_len];
