@@ -256,7 +256,8 @@ int fp_exptmod(fp_int *a, fp_int *b, fp_int *c, fp_int *d)
  * wait for the slow FPGA implementation.
  */
 
-static hal_error_t modexp(const fp_int * const msg,
+static hal_error_t modexp(const hal_core_t *core, /* ignored */
+                          const fp_int * const msg,
                           const fp_int * const exp,
                           const fp_int * const mod,
                           fp_int *res)
