@@ -8,6 +8,7 @@ config.status
 tests/test-aes-key-wrap
 tests/test-bus
 tests/test-ecdsa
+tests/test-ecdsa-*.der
 tests/test-hash
 tests/test-pbkdf2
 tests/test-rsa

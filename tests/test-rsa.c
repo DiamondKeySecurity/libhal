@@ -1,13 +1,7 @@
 /*
  * test-rsa.c
  * ----------
- * First stumblings towards a test harness for RSA using Cryptech
- * ModExp core.
- *
- * For the moment this just does modular exponentiation tests using
- * RSA keys and pre-formatted data-to-be-signed, without attempting
- * CRT or any of the other clever stuff we should be doing.  This is
- * not usable for any sane purpose other than testing.
+ * Test harness for RSA using Cryptech ModExp core.
  *
  * Authors: Rob Austein
  * Copyright (c) 2015, NORDUnet A/S
@@ -67,15 +61,11 @@ static int test_modexp(const hal_core_t *core,
   printf("%s test for %lu-bit RSA key\n", kind, (unsigned long) tc->size);
 
   if (hal_modexp(core, msg->val, msg->len, exp->val, exp->len,
-                 tc->n.val, tc->n.len, result, sizeof(result)) != HAL_OK) {
-    printf("ModExp failed\n");
-    return 0;
-  }
+                 tc->n.val, tc->n.len, result, sizeof(result)) != HAL_OK)
+    return printf("ModExp failed\n"), 0;
 
-  if (memcmp(result, val->val, val->len)) {
-    printf("MISMATCH\n");
-    return 0;
-  }
+  if (memcmp(result, val->val, val->len))
+    return printf("MISMATCH\n"), 0;
 
   return 1;
 }
@@ -103,10 +93,8 @@ static int test_decrypt(const hal_core_t *core,
                                       tc->q.val,  tc->q.len,
                                       tc->u.val,  tc->u.len,
                                       tc->dP.val, tc->dP.len,
-                                      tc->dQ.val, tc->dQ.len)) != HAL_OK) {
-    printf("RSA CRT key load failed: %s\n", hal_error_string(err));
-    return 0;
-  }
+                                      tc->dQ.val, tc->dQ.len)) != HAL_OK)
+    return printf("RSA CRT key load failed: %s\n", hal_error_string(err)), 0;
 
   uint8_t result[tc->n.len];
 
@@ -133,7 +121,7 @@ static int test_gen(const hal_core_t *core,
 {
   printf("%s test for %lu-bit RSA key\n", kind, (unsigned long) tc->size);
 
-  char fn[sizeof("test-rsa-key-xxxxxx.der")];
+  char fn[sizeof("test-rsa-private-key-xxxxxx.der")];
   uint8_t keybuf1[hal_rsa_key_t_size], keybuf2[hal_rsa_key_t_size];
   hal_rsa_key_t *key1 = NULL, *key2 = NULL;
   hal_error_t err = HAL_OK;
@@ -141,52 +129,39 @@ static int test_gen(const hal_core_t *core,
 
   const uint8_t f4[] = { 0x01, 0x00, 0x01 };
 
-  if ((err = hal_rsa_key_gen(core, &key1, keybuf1, sizeof(keybuf1), bitsToBytes(tc->size), f4, sizeof(f4))) != HAL_OK) {
-    printf("RSA key generation failed: %s\n", hal_error_string(err));
-    return 0;
-  }
+  if ((err = hal_rsa_key_gen(core, &key1, keybuf1, sizeof(keybuf1), bitsToBytes(tc->size), f4, sizeof(f4))) != HAL_OK)
+    return printf("RSA key generation failed: %s\n", hal_error_string(err)), 0;
 
   size_t der_len = 0;
 
-  if ((err = hal_rsa_private_key_to_der(key1, NULL, &der_len, 0)) != HAL_OK) {
-    printf("Getting DER length of RSA key failed: %s\n", hal_error_string(err));
-    return 0;
-  }
+  if ((err = hal_rsa_private_key_to_der(key1, NULL, &der_len, 0)) != HAL_OK)
+    return printf("Getting DER length of RSA key failed: %s\n", hal_error_string(err)), 0;
 
   uint8_t der[der_len];
 
-  if ((err = hal_rsa_private_key_to_der(key1, der, &der_len, sizeof(der))) != HAL_OK) {
-    printf("Converting RSA key to DER failed: %s\n", hal_error_string(err));
-    return 0;
-  }
+  err = hal_rsa_private_key_to_der(key1, der, &der_len, sizeof(der));
 
-  if ((err = hal_rsa_private_key_from_der(&key2, keybuf2, sizeof(keybuf2), der, sizeof(der))) != HAL_OK) {
-    printf("Converting RSA key back from DER failed: %s\n", hal_error_string(err));
-    return 0;
-  }
-
-  if (memcmp(keybuf1, keybuf2, hal_rsa_key_t_size) != 0) {
-    printf("RSA key mismatch after conversion to and back from DER\n");
-    return 0;
-  }
-
-  snprintf(fn, sizeof(fn), "test-rsa-key-%04lu.der", (unsigned long) tc->size);
+  snprintf(fn, sizeof(fn), "test-rsa-private-key-%04lu.der", (unsigned long) tc->size);
   printf("Writing %s\n", fn);
 
-  if ((f = fopen(fn, "wb")) == NULL) {
-    printf("Couldn't open %s: %s\n", fn, strerror(errno));
-    return 0;
-  }
+  if ((f = fopen(fn, "wb")) == NULL)
+    return printf("Couldn't open %s: %s\n", fn, strerror(errno)), 0;
 
-  if (fwrite(der, der_len, 1, f) != 1) {
-    printf("Length mismatch writing %s\n", fn);
-    return 0;
-  }
+  if (fwrite(der, der_len, 1, f) != 1)
+    return printf("Length mismatch writing %s\n", fn), 0;
 
-  if (fclose(f) == EOF) {
-    printf("Couldn't close %s: %s\n", fn, strerror(errno));
-    return 0;
-  }
+  if (fclose(f) == EOF)
+    return printf("Couldn't close %s: %s\n", fn, strerror(errno)), 0;
+
+  /* Deferred error from hal_rsa_private_key_to_der() */
+  if (err != HAL_OK)
+    return printf("Converting RSA private key to DER failed: %s\n", hal_error_string(err)), 0;
+
+  if ((err = hal_rsa_private_key_from_der(&key2, keybuf2, sizeof(keybuf2), der, sizeof(der))) != HAL_OK)
+    return printf("Converting RSA key back from DER failed: %s\n", hal_error_string(err)), 0;
+
+  if (memcmp(keybuf1, keybuf2, hal_rsa_key_t_size) != 0)
+    return printf("RSA key mismatch after conversion to and back from DER\n"), 0;
 
   uint8_t result[tc->n.len];
 
@@ -196,31 +171,61 @@ static int test_gen(const hal_core_t *core,
   snprintf(fn, sizeof(fn), "test-rsa-sig-%04lu.der", (unsigned long) tc->size);
   printf("Writing %s\n", fn);
 
-  if ((f = fopen(fn, "wb")) == NULL) {
-    printf("Couldn't open %s: %s\n", fn, strerror(errno));
-    return 0;
-  }
+  if ((f = fopen(fn, "wb")) == NULL)
+    return printf("Couldn't open %s: %s\n", fn, strerror(errno)), 0;
 
-  if (fwrite(result, sizeof(result), 1, f) != 1) {
-    printf("Length mismatch writing %s key\n", fn);
-    return 0;
-  }
+  if (fwrite(result, sizeof(result), 1, f) != 1)
+    return printf("Length mismatch writing %s key\n", fn), 0;
 
-  if (fclose(f) == EOF) {
-    printf("Couldn't close %s: %s\n", fn, strerror(errno));
-    return 0;
-  }
+  if (fclose(f) == EOF)
+    return printf("Couldn't close %s: %s\n", fn, strerror(errno)), 0;
 
   if (err != HAL_OK)            /* Deferred failure from hal_rsa_decrypt(), above */
     return 0;
 
   if ((err = hal_rsa_encrypt(core, key1, result, sizeof(result), result, sizeof(result))) != HAL_OK)
-    printf("RSA signature check failed: %s\n", hal_error_string(err));
+    printf("First RSA signature check failed: %s\n", hal_error_string(err));
 
-  const int mismatch = (err == HAL_OK && memcmp(result, tc->m.val, tc->m.len) != 0);
+  int mismatch = 0;
 
-  if (mismatch)
-    printf("MISMATCH\n");
+  if (err == HAL_OK && memcmp(result, tc->m.val, tc->m.len) != 0)
+    mismatch = (printf("MISMATCH\n"), 1);
+
+  hal_rsa_key_clear(key2);
+  key2 = NULL;
+
+  err = hal_rsa_public_key_to_der(key1, der, &der_len, sizeof(der));
+
+  snprintf(fn, sizeof(fn), "test-rsa-public-key-%04lu.der", (unsigned long) tc->size);
+  printf("Writing %s\n", fn);
+
+  if ((f = fopen(fn, "wb")) == NULL)
+    return printf("Couldn't open %s: %s\n", fn, strerror(errno)), 0;
+
+  if (fwrite(der, der_len, 1, f) != 1)
+    return printf("Length mismatch writing %s\n", fn), 0;
+
+  if (fclose(f) == EOF)
+    return printf("Couldn't close %s: %s\n", fn, strerror(errno)), 0;
+
+  /* Deferred error from hal_rsa_public_key_to_der() */
+  if (err != HAL_OK)
+    return printf("Converting RSA public key to DER failed: %s\n", hal_error_string(err)), 0;
+
+  if ((err = hal_rsa_private_key_from_der(&key2, keybuf2, sizeof(keybuf2), der, sizeof(der))) != HAL_OK)
+    return printf("Converting RSA key back from DER failed: %s\n", hal_error_string(err)), 0;
+
+  /*
+   * Can't directly compare private key with public key.  We could
+   * extract and compare the public key components, not much point if
+   * the public key passes the signature verification test below.
+   */
+
+  if ((err = hal_rsa_encrypt(core, key2, result, sizeof(result), result, sizeof(result))) != HAL_OK)
+    return printf("Second RSA signature check failed: %s\n", hal_error_string(err)), 0;
+
+  if (err == HAL_OK && memcmp(result, tc->m.val, tc->m.len) != 0)
+    mismatch = (printf("MISMATCH\n"), 1);
 
   hal_rsa_key_clear(key1);
   hal_rsa_key_clear(key2);

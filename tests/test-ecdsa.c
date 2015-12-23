@@ -49,6 +49,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <errno.h>
 
 #include <sys/time.h>
 
@@ -103,7 +104,9 @@ static void set_next_random(const uint8_t * const data, const size_t length)
 static int test_against_static_vectors(const ecdsa_tc_t * const tc)
 
 {
+  char fn[sizeof("test-ecdsa-private-key-xxxxxx.der")];
   hal_error_t err;
+  FILE *f;
 
   printf("Starting static test vector tests for P-%lu\n", (unsigned long) (tc->d_len * 8));
 
@@ -130,16 +133,30 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
   if (hal_ecdsa_private_key_to_der_len(key1) != tc->key_len)
     return printf("DER Key length mismatch\n"), 0;
 
-  uint8_t keyder[tc->key_len];
-  size_t keyder_len;
+  uint8_t der[tc->key_len];
+  size_t der_len;
 
-  if ((err = hal_ecdsa_private_key_to_der(key1, keyder, &keyder_len, sizeof(keyder))) != HAL_OK)
+  err = hal_ecdsa_private_key_to_der(key1, der, &der_len, sizeof(der));
+
+  snprintf(fn, sizeof(fn), "test-ecdsa-private-key-p%u.der", (unsigned) tc->d_len * 8);
+
+  if ((f = fopen(fn, "wb")) == NULL)
+    return printf("Couldn't open %s: %s\n", fn, strerror(errno)), 0;
+
+  if (fwrite(der, der_len, 1, f) != 1)
+    return printf("Length mismatch writing %s\n", fn), 0;
+
+  if (fclose(f) == EOF)
+    return printf("Couldn't close %s: %s\n", fn, strerror(errno)), 0;
+
+  /* Deferred error from hal_ecdsa_private_key_to_der() */
+  if (err != HAL_OK)
     return printf("hal_ecdsa_private_key_to_der() failed: %s\n", hal_error_string(err)), 0;
 
   uint8_t keybuf2[hal_ecdsa_key_t_size];
   hal_ecdsa_key_t *key2 = NULL;
 
-  if ((err = hal_ecdsa_private_key_from_der(&key2, keybuf2, sizeof(keybuf2), keyder, keyder_len)) != HAL_OK)
+  if ((err = hal_ecdsa_private_key_from_der(&key2, keybuf2, sizeof(keybuf2), der, der_len)) != HAL_OK)
     return printf("hal_ecdsa_private_key_from_der() failed: %s\n", hal_error_string(err)), 0;
 
   if (memcmp(key1, key2, hal_ecdsa_key_t_size) != 0)
@@ -192,7 +209,33 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
     return printf("hal_ecdsa_key_from_point() failed: %s\n", hal_error_string(err)), 0;
 
   if (memcmp(key1, key2, hal_ecdsa_key_t_size) != 0)
-    return printf("Public key mismatch after read/write cycle\n"), 0;
+    return printf("Public key mismatch after first read/write cycle\n"), 0;
+
+  hal_ecdsa_key_clear(key2);
+  key2 = NULL;
+
+  err = hal_ecdsa_public_key_to_der(key1, der, &der_len, sizeof(der));
+
+  snprintf(fn, sizeof(fn), "test-ecdsa-public-key-p%u.der", (unsigned) tc->d_len * 8);
+
+  if ((f = fopen(fn, "wb")) == NULL)
+    return printf("Couldn't open %s: %s\n", fn, strerror(errno)), 0;
+
+  if (fwrite(der, der_len, 1, f) != 1)
+    return printf("Length mismatch writing %s\n", fn), 0;
+
+  if (fclose(f) == EOF)
+    return printf("Couldn't close %s: %s\n", fn, strerror(errno)), 0;
+
+  /* Deferred error from hal_ecdsa_public_key_to_der() */
+  if (err != HAL_OK)
+    return printf("hal_ecdsa_public_key_to_der() failed: %s\n", hal_error_string(err)), 0;
+
+  if (memcmp(key1, key2, hal_ecdsa_key_t_size) != 0)
+    return printf("Public key mismatch after second read/write cycle\n"), 0;
+
+  hal_ecdsa_key_clear(key1);
+  hal_ecdsa_key_clear(key2);
 
   return 1;
 }
