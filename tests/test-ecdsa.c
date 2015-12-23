@@ -231,6 +231,9 @@ static int test_against_static_vectors(const ecdsa_tc_t * const tc)
   if (err != HAL_OK)
     return printf("hal_ecdsa_public_key_to_der() failed: %s\n", hal_error_string(err)), 0;
 
+  if ((err = hal_ecdsa_public_key_from_der(&key2, keybuf2, sizeof(keybuf2), der, der_len)) != HAL_OK)
+    return printf("hal_ecdsa_public_key_from_der() failed: %s\n", hal_error_string(err)), 0;
+
   if (memcmp(key1, key2, hal_ecdsa_key_t_size) != 0)
     return printf("Public key mismatch after second read/write cycle\n"), 0;
 

@@ -170,9 +170,9 @@ hal_error_t hal_asn1_encode_spki(const uint8_t * const alg_oid,   const size_t a
 
   size_t hlen, hlen_spki, hlen_algid, hlen_alg, hlen_curve, hlen_bit;
 
-  if ((err = hal_asn1_encode_header(ASN1_OBJECT_IDENTIFIER, alg_oid_len,   NULL, &hlen_alg,   0)) != HAL_OK ||
-      (err = hal_asn1_encode_header(curve_oid_tag,          curve_oid_len, NULL, &hlen_curve, 0)) != HAL_OK ||
-      (err = hal_asn1_encode_header(ASN1_BIT_STRING,        pubkey_len,    NULL, &hlen_bit,   0)) != HAL_OK)
+  if ((err = hal_asn1_encode_header(ASN1_OBJECT_IDENTIFIER, alg_oid_len,    NULL, &hlen_alg,   0)) != HAL_OK ||
+      (err = hal_asn1_encode_header(curve_oid_tag,          curve_oid_len,  NULL, &hlen_curve, 0)) != HAL_OK ||
+      (err = hal_asn1_encode_header(ASN1_BIT_STRING,        1 + pubkey_len, NULL, &hlen_bit,   0)) != HAL_OK)
     return err;
 
   const size_t algid_len = hlen_alg + alg_oid_len + hlen_curve + curve_oid_len;
@@ -180,7 +180,7 @@ hal_error_t hal_asn1_encode_spki(const uint8_t * const alg_oid,   const size_t a
   if ((err = hal_asn1_encode_header(ASN1_SEQUENCE,          algid_len,     NULL, &hlen_algid, 0)) != HAL_OK)
     return err;
 
-  const size_t vlen = hlen_algid + hlen_alg + alg_oid_len + hlen_curve + curve_oid_len + hlen_bit + pubkey_len;
+  const size_t vlen = hlen_algid + hlen_alg + alg_oid_len + hlen_curve + curve_oid_len + hlen_bit + 1 + pubkey_len;
 
   if ((err = hal_asn1_encode_header(ASN1_SEQUENCE,          vlen,          NULL, &hlen_spki,  0)) != HAL_OK)
     return err;
@@ -200,7 +200,7 @@ hal_error_t hal_asn1_encode_spki(const uint8_t * const alg_oid,   const size_t a
     return err;
 
   uint8_t *d = der + hlen;
-  memset(d, 0, vlen);
+  memset(d, 0, vlen - pubkey_len);
 
   if ((err = hal_asn1_encode_header(ASN1_SEQUENCE, algid_len, d, &hlen, der + der_max - d)) != HAL_OK)
     return err;
@@ -219,9 +219,10 @@ hal_error_t hal_asn1_encode_spki(const uint8_t * const alg_oid,   const size_t a
     memcpy(d, curve_oid, curve_oid_len);
   d += curve_oid_len;
 
-  if ((err = hal_asn1_encode_header(ASN1_BIT_STRING, pubkey_len, d, &hlen, der + der_max - d)) != HAL_OK)
+  if ((err = hal_asn1_encode_header(ASN1_BIT_STRING, 1 + pubkey_len, d, &hlen, der + der_max - d)) != HAL_OK)
     return err;
   d += hlen;
+  *d++ = 0x00;
 
   d += pubkey_len;              /* pubkey handled early, above. */
 
@@ -310,16 +311,17 @@ hal_error_t hal_asn1_decode_spki(const uint8_t **alg_oid,   size_t *alg_oid_len,
       pubkey == NULL || pubkey_len == NULL || der == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
+  const uint8_t * const der_end = der + der_len;
+  const uint8_t *d = der;
+
   size_t hlen, vlen;
   hal_error_t err;
 
-  if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, der, der_len, &hlen, &vlen)) != HAL_OK)
+  if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, d, der_end - d, &hlen, &vlen)) != HAL_OK)
     return err;
+  d += hlen;
 
-  const uint8_t * const der_end = der + hlen + vlen;
-  const uint8_t *d = der + hlen;
-
-  if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, der, der_end - d, &hlen, &vlen)) != HAL_OK)
+  if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, d, der_end - d, &hlen, &vlen)) != HAL_OK)
     return err;
   d += hlen;
 

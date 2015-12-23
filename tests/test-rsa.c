@@ -161,7 +161,7 @@ static int test_gen(const hal_core_t *core,
     return printf("Converting RSA key back from DER failed: %s\n", hal_error_string(err)), 0;
 
   if (memcmp(keybuf1, keybuf2, hal_rsa_key_t_size) != 0)
-    return printf("RSA key mismatch after conversion to and back from DER\n"), 0;
+    return printf("RSA private key mismatch after conversion to and back from DER\n"), 0;
 
   uint8_t result[tc->n.len];
 
@@ -175,7 +175,7 @@ static int test_gen(const hal_core_t *core,
     return printf("Couldn't open %s: %s\n", fn, strerror(errno)), 0;
 
   if (fwrite(result, sizeof(result), 1, f) != 1)
-    return printf("Length mismatch writing %s key\n", fn), 0;
+    return printf("Length mismatch writing %s\n", fn), 0;
 
   if (fclose(f) == EOF)
     return printf("Couldn't close %s: %s\n", fn, strerror(errno)), 0;
@@ -193,6 +193,15 @@ static int test_gen(const hal_core_t *core,
 
   hal_rsa_key_clear(key2);
   key2 = NULL;
+
+  if ((f = fopen(fn, "rb")) == NULL)
+    return printf("Couldn't open %s: %s\n", fn, strerror(errno)), 0;
+
+  if (fread(result, sizeof(result), 1, f) != 1)
+    return printf("Length mismatch reading %s\n", fn), 0;
+
+  if (fclose(f) == EOF)
+    return printf("Couldn't close %s: %s\n", fn, strerror(errno)), 0;
 
   err = hal_rsa_public_key_to_der(key1, der, &der_len, sizeof(der));
 
@@ -212,8 +221,8 @@ static int test_gen(const hal_core_t *core,
   if (err != HAL_OK)
     return printf("Converting RSA public key to DER failed: %s\n", hal_error_string(err)), 0;
 
-  if ((err = hal_rsa_private_key_from_der(&key2, keybuf2, sizeof(keybuf2), der, sizeof(der))) != HAL_OK)
-    return printf("Converting RSA key back from DER failed: %s\n", hal_error_string(err)), 0;
+  if ((err = hal_rsa_public_key_from_der(&key2, keybuf2, sizeof(keybuf2), der, der_len)) != HAL_OK)
+    return printf("Converting RSA public key back from DER failed: %s\n", hal_error_string(err)), 0;
 
   /*
    * Can't directly compare private key with public key.  We could

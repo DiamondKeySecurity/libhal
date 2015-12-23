@@ -36,7 +36,7 @@ CFLAGS	= -g3 -Wall -fPIC -std=c99 -I..
 all: ${BIN}
 
 test: all
-	for i in ${BIN}; do ./$$i; done
+	for i in ${BIN}; do (set -x; ./$$i); done
 
 clean:
 	rm -f *.o ${BIN}
