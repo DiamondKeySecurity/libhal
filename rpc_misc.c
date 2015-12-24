@@ -218,7 +218,7 @@ static hal_error_t logout_all(void)
   return HAL_OK;
 }
 
-const hal_rpc_misc_dispatch_t hal_rpc_remote_misc_dispatch = {
+const hal_rpc_misc_dispatch_t hal_rpc_local_misc_dispatch = {
   set_pin, login, logout, logout_all, is_logged_in, get_random
 };
 
