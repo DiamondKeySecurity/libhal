@@ -54,6 +54,20 @@ static hal_error_t set_pin(const hal_client_handle_t client,
   return HAL_ERROR_IMPOSSIBLE;
 }
 
+/*
+ * We may end up wanting to wrap a client-side cache around the
+ * login()/logout()/logout_all() calls and reimplement is_logged_in()
+ * on the client side using that cache, so that access checks don't
+ * need to cross the RPC boundary.  Then again, we might not, if the
+ * RPC call is fast enough, so implementing all before the RPC would
+ * qualify as premature optimization.  There aren't all that many
+ * things on the client side that would use this anyway, so the whole
+ * question may be moot.
+ *
+ * For now, we leave all of these as plain RPC calls, but we may want
+ * to revisit this if the is_logged_in() call turns into a bottleneck.
+ */
+
 static hal_error_t login(const hal_client_handle_t client,
                          const hal_user_t user,
                          const char * const pin, const size_t pin_len)
@@ -62,6 +76,17 @@ static hal_error_t login(const hal_client_handle_t client,
 }
 
 static hal_error_t logout(const hal_client_handle_t client)
+{
+  return HAL_ERROR_IMPOSSIBLE;
+}
+
+static hal_error_t logout_all(void)
+{
+  return HAL_ERROR_IMPOSSIBLE;
+}
+
+static hal_error_t is_logged_in(const hal_client_handle_t client,
+                                const hal_user_t user)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }
@@ -270,7 +295,7 @@ static hal_error_t pkey_mixed_verify(const hal_session_handle_t session,
  */
 
 const hal_rpc_misc_dispatch_t hal_rpc_remote_misc_dispatch = {
-  set_pin, login, logout, get_random
+  set_pin, login, logout, logout_all, is_logged_in, get_random
 };
 
 const hal_rpc_hash_dispatch_t hal_rpc_remote_hash_dispatch = {

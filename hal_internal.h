@@ -95,6 +95,11 @@ typedef struct {
 
   hal_error_t (*logout)(const hal_client_handle_t client);
 
+  hal_error_t (*logout_all)(void);
+
+  hal_error_t (*is_logged_in)(const hal_client_handle_t client,
+                              const hal_user_t user);
+
   hal_error_t (*get_random)(void *buffer, const size_t length);
 
 } hal_rpc_misc_dispatch_t;

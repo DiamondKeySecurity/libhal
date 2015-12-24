@@ -148,6 +148,19 @@ hal_error_t hal_rpc_logout(const hal_client_handle_t client)
   return misc_dispatch->logout(client);
 }
 
+hal_error_t hal_rpc_logout_all(void)
+{
+  return misc_dispatch->logout_all();
+}
+
+hal_error_t hal_rpc_is_logged_in(const hal_client_handle_t client,
+                                 const hal_user_t user)
+{
+  if (user != HAL_USER_NORMAL && user != HAL_USER_SO && user != HAL_USER_WHEEL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+  return misc_dispatch->is_logged_in(client, user);
+}
+
 hal_error_t hal_rpc_hash_get_digest_length(const hal_digest_algorithm_t alg, size_t *length)
 {
   if (length == NULL)

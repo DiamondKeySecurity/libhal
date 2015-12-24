@@ -64,10 +64,6 @@ static hal_error_t get_random(void *buffer, const size_t length)
  *
  * More interesting question is whether we should ever allow the WHEEL
  * PIN to be changed a second time without toasting the keystore.
- *
- * We also need a function which the rest of the library can use to
- * check current login status for a particular hal_client_t.  Don't
- * know yet whether we need anything else.
  */
 
 #warning PIN code not yet fully implemented
@@ -180,11 +176,24 @@ static hal_error_t login(const hal_client_handle_t client,
 
   client_slot_t *slot = find_handle(client);
 
-  if (slot != NULL && (slot = alloc_slot()) == NULL)
+  if (slot == NULL && (slot = alloc_slot()) == NULL)
     return HAL_ERROR_NO_CLIENT_SLOTS_AVAILABLE;
 
   slot->handle = client;
   slot->logged_in = user;
+
+  return HAL_OK;
+}
+
+static hal_error_t is_logged_in(const hal_client_handle_t client,
+                                const hal_user_t user)
+{
+  assert(user == HAL_USER_NORMAL || user == HAL_USER_SO || user == HAL_USER_WHEEL);
+
+  client_slot_t *slot = find_handle(client);
+
+  if (slot == NULL || slot->logged_in != user)
+    return HAL_ERROR_FORBIDDEN;
 
   return HAL_OK;
 }
@@ -199,8 +208,18 @@ static hal_error_t logout(const hal_client_handle_t client)
   return HAL_OK;
 }
 
+static hal_error_t logout_all(void)
+{
+#if HAL_STATIC_CLIENT_STATE_BLOCKS > 0
+  for (int i = 0; i < sizeof(client_handle)/sizeof(*client_handle); i++)
+    client_handle[i].logged_in = HAL_USER_NONE;
+#endif
+
+  return HAL_OK;
+}
+
 const hal_rpc_misc_dispatch_t hal_rpc_remote_misc_dispatch = {
-  set_pin, login, logout, get_random
+  set_pin, login, logout, logout_all, is_logged_in, get_random
 };
 
 /*

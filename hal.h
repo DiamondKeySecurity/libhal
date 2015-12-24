@@ -124,6 +124,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_NO_KEY_SLOTS_AVAILABLE,    "No key slots available")                       \
   DEFINE_HAL_ERROR(HAL_ERROR_PIN_INCORRECT,             "PIN incorrect")                                \
   DEFINE_HAL_ERROR(HAL_ERROR_NO_CLIENT_SLOTS_AVAILABLE, "No client slots available")                    \
+  DEFINE_HAL_ERROR(HAL_ERROR_FORBIDDEN,                 "Forbidden")                                    \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -553,6 +554,11 @@ extern hal_error_t hal_rpc_login(const hal_client_handle_t client,
                                  const char * const pin, const size_t pin_len);
 
 extern hal_error_t hal_rpc_logout(const hal_client_handle_t client);
+
+extern hal_error_t hal_rpc_logout_all(void);
+
+extern hal_error_t hal_rpc_is_logged_in(const hal_client_handle_t client,
+                                        const hal_user_t user);
 
 /*
  * Get random bytes.
