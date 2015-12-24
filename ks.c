@@ -240,7 +240,7 @@ hal_error_t hal_ks_delete(const hal_key_type_t type,
   return hal_ks_del_keydb(*hint);
 }
 
-hal_error_t hal_ks_list(hal_rpc_pkey_key_info_t *result,
+hal_error_t hal_ks_list(hal_pkey_info_t *result,
                         unsigned *result_len,
                         const unsigned result_max)
 {

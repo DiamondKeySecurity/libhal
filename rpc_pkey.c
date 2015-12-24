@@ -42,7 +42,7 @@
 typedef struct {
   hal_client_handle_t client_handle;
   hal_session_handle_t session_handle;
-  hal_rpc_pkey_handle_t pkey_handle;
+  hal_pkey_handle_t pkey_handle;
   hal_key_type_t type;
   hal_curve_name_t curve;
   hal_key_flags_t flags;
@@ -102,7 +102,7 @@ static inline pkey_slot_t *alloc_slot(void)
  * the right glop.  Returns slot pointer on success, NULL otherwise.
  */
 
-static inline pkey_slot_t *find_handle(const hal_rpc_pkey_handle_t handle)
+static inline pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
 {
 #if HAL_STATIC_PKEY_STATE_BLOCKS > 0
   const int i = (int) (handle.handle & 0xFFFF);
@@ -119,7 +119,7 @@ static inline pkey_slot_t *find_handle(const hal_rpc_pkey_handle_t handle)
  * basic) ASN.1 encoding, which we perform inline.
  */
 
-static hal_error_t pkcs1_construct_digestinfo(const hal_rpc_hash_handle_t handle,
+static hal_error_t pkcs1_construct_digestinfo(const hal_hash_handle_t handle,
                                               uint8_t *digest_info, size_t *digest_info_len, const size_t digest_info_max)
 {
   assert(digest_info != NULL && digest_info_len != NULL);
@@ -205,7 +205,7 @@ static hal_error_t pkcs1_5_pad(const uint8_t * const data, const size_t data_len
 
 static hal_error_t load(const hal_client_handle_t client,
                         const hal_session_handle_t session,
-                        hal_rpc_pkey_handle_t *pkey,
+                        hal_pkey_handle_t *pkey,
                         const hal_key_type_t type,
                         const hal_curve_name_t curve,
                         const uint8_t * const name, const size_t name_len,
@@ -241,7 +241,7 @@ static hal_error_t load(const hal_client_handle_t client,
 
 static hal_error_t find(const hal_client_handle_t client,
                         const hal_session_handle_t session,
-                        hal_rpc_pkey_handle_t *pkey,
+                        hal_pkey_handle_t *pkey,
                         const hal_key_type_t type,
                         const uint8_t * const name, const size_t name_len)
 {
@@ -272,7 +272,7 @@ static hal_error_t find(const hal_client_handle_t client,
 
 static hal_error_t generate_rsa(const hal_client_handle_t client,
                                 const hal_session_handle_t session,
-                                hal_rpc_pkey_handle_t *pkey,
+                                hal_pkey_handle_t *pkey,
                                 const uint8_t * const name, const size_t name_len,
                                 const unsigned key_length,
                                 const uint8_t * const public_exponent, const size_t public_exponent_len,
@@ -325,7 +325,7 @@ static hal_error_t generate_rsa(const hal_client_handle_t client,
 
 static hal_error_t generate_ec(const hal_client_handle_t client,
                                const hal_session_handle_t session,
-                               hal_rpc_pkey_handle_t *pkey,
+                               hal_pkey_handle_t *pkey,
                                const uint8_t * const name, const size_t name_len,
                                const hal_curve_name_t curve,
                                const hal_key_flags_t flags)
@@ -373,7 +373,7 @@ static hal_error_t generate_ec(const hal_client_handle_t client,
  * Discard key handle, leaving key intact.
  */
 
-static hal_error_t close(const hal_rpc_pkey_handle_t pkey)
+static hal_error_t close(const hal_pkey_handle_t pkey)
 {
   pkey_slot_t *slot;
 
@@ -389,7 +389,7 @@ static hal_error_t close(const hal_rpc_pkey_handle_t pkey)
  * Delete a key from the store, given its key handle.
  */
 
-static hal_error_t delete(const hal_rpc_pkey_handle_t pkey)
+static hal_error_t delete(const hal_pkey_handle_t pkey)
 {
   pkey_slot_t *slot = find_handle(pkey);
 
@@ -408,7 +408,7 @@ static hal_error_t delete(const hal_rpc_pkey_handle_t pkey)
  * Get type of key associated with handle.
  */
 
-static hal_error_t get_key_type(const hal_rpc_pkey_handle_t pkey,
+static hal_error_t get_key_type(const hal_pkey_handle_t pkey,
                                 hal_key_type_t *type)
 {
   if (type == NULL)
@@ -428,7 +428,7 @@ static hal_error_t get_key_type(const hal_rpc_pkey_handle_t pkey,
  * Get flags of key associated with handle.
  */
 
-static hal_error_t get_key_flags(const hal_rpc_pkey_handle_t pkey,
+static hal_error_t get_key_flags(const hal_pkey_handle_t pkey,
                                  hal_key_flags_t *flags)
 {
   if (flags == NULL)
@@ -448,7 +448,7 @@ static hal_error_t get_key_flags(const hal_rpc_pkey_handle_t pkey,
  * Get length of public key associated with handle.
  */
 
-static size_t get_public_key_len(const hal_rpc_pkey_handle_t pkey)
+static size_t get_public_key_len(const hal_pkey_handle_t pkey)
 {
   pkey_slot_t *slot = find_handle(pkey);
 
@@ -497,7 +497,7 @@ static size_t get_public_key_len(const hal_rpc_pkey_handle_t pkey)
  * Get public key associated with handle.
  */
 
-static hal_error_t get_public_key(const hal_rpc_pkey_handle_t pkey,
+static hal_error_t get_public_key(const hal_pkey_handle_t pkey,
                                   uint8_t *der, size_t *der_len, const size_t der_max)
 {
   pkey_slot_t *slot = find_handle(pkey);
@@ -557,7 +557,7 @@ static hal_error_t get_public_key(const hal_rpc_pkey_handle_t pkey,
 
 static hal_error_t sign_rsa(uint8_t *keybuf, const size_t keybuf_len,
                             const uint8_t * const der, const size_t der_len,
-                            const hal_rpc_hash_handle_t hash,
+                            const hal_hash_handle_t hash,
                             const uint8_t * input, size_t input_len,
                             uint8_t * signature, size_t *signature_len, const size_t signature_max)
 {
@@ -565,7 +565,7 @@ static hal_error_t sign_rsa(uint8_t *keybuf, const size_t keybuf_len,
   hal_error_t err;
 
   assert(signature != NULL && signature_len != NULL);
-  assert((hash.handle == hal_rpc_hash_handle_none.handle) != (input == NULL || input_len == 0));
+  assert((hash.handle == hal_hash_handle_none.handle) != (input == NULL || input_len == 0));
 
   if ((err = hal_rsa_private_key_from_der(&key, keybuf, keybuf_len, der, der_len)) != HAL_OK ||
       (err = hal_rsa_key_get_modulus(key, NULL, signature_len, 0))         != HAL_OK)
@@ -589,7 +589,7 @@ static hal_error_t sign_rsa(uint8_t *keybuf, const size_t keybuf_len,
 
 static hal_error_t sign_ecdsa(uint8_t *keybuf, const size_t keybuf_len,
                               const uint8_t * const der, const size_t der_len,
-                              const hal_rpc_hash_handle_t hash,
+                              const hal_hash_handle_t hash,
                               const uint8_t * input, size_t input_len,
                               uint8_t * signature, size_t *signature_len, const size_t signature_max)
 {
@@ -597,7 +597,7 @@ static hal_error_t sign_ecdsa(uint8_t *keybuf, const size_t keybuf_len,
   hal_error_t err;
 
   assert(signature != NULL && signature_len != NULL);
-  assert((hash.handle == hal_rpc_hash_handle_none.handle) != (input == NULL || input_len == 0));
+  assert((hash.handle == hal_hash_handle_none.handle) != (input == NULL || input_len == 0));
 
   if ((err = hal_ecdsa_private_key_from_der(&key, keybuf, keybuf_len, der, der_len)) != HAL_OK)
     return err;
@@ -625,8 +625,8 @@ static hal_error_t sign_ecdsa(uint8_t *keybuf, const size_t keybuf_len,
 }
 
 static hal_error_t sign(const hal_session_handle_t session,
-                        const hal_rpc_pkey_handle_t pkey,
-                        const hal_rpc_hash_handle_t hash,
+                        const hal_pkey_handle_t pkey,
+                        const hal_hash_handle_t hash,
                         const uint8_t * const input,  const size_t input_len,
                         uint8_t * signature, size_t *signature_len, const size_t signature_max)
 {
@@ -637,7 +637,7 @@ static hal_error_t sign(const hal_session_handle_t session,
 
   hal_error_t (*signer)(uint8_t *keybuf, const size_t keybuf_len,
                         const uint8_t * const der, const size_t der_len,
-                        const hal_rpc_hash_handle_t hash,
+                        const hal_hash_handle_t hash,
                         const uint8_t * const input,  const size_t input_len,
                         uint8_t * signature, size_t *signature_len, const size_t signature_max);
 
@@ -677,7 +677,7 @@ static hal_error_t sign(const hal_session_handle_t session,
 
 static hal_error_t verify_rsa(uint8_t *keybuf, const size_t keybuf_len,
                               const uint8_t * const der, const size_t der_len,
-                              const hal_rpc_hash_handle_t hash,
+                              const hal_hash_handle_t hash,
                               const uint8_t * input, size_t input_len,
                               const uint8_t * const signature, const size_t signature_len)
 {
@@ -686,7 +686,7 @@ static hal_error_t verify_rsa(uint8_t *keybuf, const size_t keybuf_len,
   hal_error_t err;
 
   assert(signature != NULL && signature_len > 0);
-  assert((hash.handle == hal_rpc_hash_handle_none.handle) != (input == NULL || input_len == 0));
+  assert((hash.handle == hal_hash_handle_none.handle) != (input == NULL || input_len == 0));
 
   if ((err = hal_rsa_private_key_from_der(&key, keybuf, keybuf_len, der, der_len)) != HAL_OK)
     return err;
@@ -713,7 +713,7 @@ static hal_error_t verify_rsa(uint8_t *keybuf, const size_t keybuf_len,
 
 static hal_error_t verify_ecdsa(uint8_t *keybuf, const size_t keybuf_len,
                                 const uint8_t * const der, const size_t der_len,
-                                const hal_rpc_hash_handle_t hash,
+                                const hal_hash_handle_t hash,
                                 const uint8_t * input, size_t input_len,
                                 const uint8_t * const signature, const size_t signature_len)
 {
@@ -722,7 +722,7 @@ static hal_error_t verify_ecdsa(uint8_t *keybuf, const size_t keybuf_len,
   hal_error_t err;
 
   assert(signature != NULL && signature_len > 0);
-  assert((hash.handle == hal_rpc_hash_handle_none.handle) != (input == NULL || input_len == 0));
+  assert((hash.handle == hal_hash_handle_none.handle) != (input == NULL || input_len == 0));
 
   if ((err = hal_ecdsa_private_key_from_der(&key, keybuf, keybuf_len, der, der_len)) != HAL_OK)
     return err;
@@ -745,8 +745,8 @@ static hal_error_t verify_ecdsa(uint8_t *keybuf, const size_t keybuf_len,
 }
 
 static hal_error_t verify(const hal_session_handle_t session,
-                          const hal_rpc_pkey_handle_t pkey,
-                          const hal_rpc_hash_handle_t hash,
+                          const hal_pkey_handle_t pkey,
+                          const hal_hash_handle_t hash,
                           const uint8_t * const input, const size_t input_len,
                           const uint8_t * const signature, const size_t signature_len)
 {
@@ -757,7 +757,7 @@ static hal_error_t verify(const hal_session_handle_t session,
 
   hal_error_t (*verifier)(uint8_t *keybuf, const size_t keybuf_len,
                           const uint8_t * const der, const size_t der_len,
-                          const hal_rpc_hash_handle_t hash,
+                          const hal_hash_handle_t hash,
                           const uint8_t * const input,  const size_t input_len,
                           const uint8_t * const signature, const size_t signature_len);
 
@@ -795,7 +795,7 @@ static hal_error_t verify(const hal_session_handle_t session,
  * List keys in the key store.
  */
 
-static hal_error_t list(hal_rpc_pkey_key_info_t *result,
+static hal_error_t list(hal_pkey_info_t *result,
                         unsigned *result_len,
                         const unsigned result_max)
 {

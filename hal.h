@@ -123,6 +123,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_KEY_NAME_IN_USE,           "Key name in use")                              \
   DEFINE_HAL_ERROR(HAL_ERROR_NO_KEY_SLOTS_AVAILABLE,    "No key slots available")                       \
   DEFINE_HAL_ERROR(HAL_ERROR_PIN_INCORRECT,             "PIN incorrect")                                \
+  DEFINE_HAL_ERROR(HAL_ERROR_NO_CLIENT_SLOTS_AVAILABLE, "No client slots available")                    \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -543,7 +544,8 @@ typedef struct { uint32_t handle; } hal_session_handle_t;
 
 typedef enum { HAL_USER_NONE, HAL_USER_NORMAL, HAL_USER_SO, HAL_USER_WHEEL } hal_user_t;
 
-extern hal_error_t hal_rpc_set_pin(const hal_user_t user,
+extern hal_error_t hal_rpc_set_pin(const hal_client_handle_t client,
+                                   const hal_user_t user,
                                    const char * const newpin, const size_t newpin_len);
 
 extern hal_error_t hal_rpc_login(const hal_client_handle_t client,
@@ -562,16 +564,16 @@ extern hal_error_t hal_rpc_get_random(void *buffer, const size_t length);
  * Combined hash and HMAC functions: pass NULL key for plain hashing.
  */
 
-typedef struct { uint32_t handle; } hal_rpc_hash_handle_t;
+typedef struct { uint32_t handle; } hal_hash_handle_t;
 
-extern const hal_rpc_hash_handle_t hal_rpc_hash_handle_none;
+extern const hal_hash_handle_t hal_hash_handle_none;
 
 extern hal_error_t hal_rpc_hash_get_digest_length(const hal_digest_algorithm_t alg, size_t *length);
 
 extern hal_error_t hal_rpc_hash_get_digest_algorithm_id(const hal_digest_algorithm_t alg,
                                                         uint8_t *id, size_t *len, const size_t len_max);
 
-extern hal_error_t hal_rpc_hash_get_algorithm(const hal_rpc_hash_handle_t hash, hal_digest_algorithm_t *alg);
+extern hal_error_t hal_rpc_hash_get_algorithm(const hal_hash_handle_t hash, hal_digest_algorithm_t *alg);
 
 /*
  * Once started, a hash or HMAC operation is bound to a particular
@@ -580,21 +582,21 @@ extern hal_error_t hal_rpc_hash_get_algorithm(const hal_rpc_hash_handle_t hash, 
 
 extern hal_error_t hal_rpc_hash_initialize(const hal_client_handle_t client,
                                            const hal_session_handle_t session,
-                                           hal_rpc_hash_handle_t *hash,
+                                           hal_hash_handle_t *hash,
                                            const hal_digest_algorithm_t alg,
                                            const uint8_t * const key, const size_t key_length);
 
-extern hal_error_t hal_rpc_hash_update(const hal_rpc_hash_handle_t hash,
+extern hal_error_t hal_rpc_hash_update(const hal_hash_handle_t hash,
                                        const uint8_t * data, const size_t length);
 
-extern hal_error_t hal_rpc_hash_finalize(const hal_rpc_hash_handle_t hash,
+extern hal_error_t hal_rpc_hash_finalize(const hal_hash_handle_t hash,
                                          uint8_t *digest, const size_t length);
 
 /*
  * Public key functions.
  *
  * The _sign() and _verify() methods accept a hash OR an input string;
- * either "hash" should be hal_rpc_hash_handle_none or input should be NULL,
+ * either "hash" should be hal_hash_handle_none or input should be NULL,
  * but not both.
  *
  * Use of client and session handles here needs a bit more thought.
@@ -620,7 +622,7 @@ extern hal_error_t hal_rpc_hash_finalize(const hal_rpc_hash_handle_t hash,
 
 #define	HAL_RPC_PKEY_NAME_MAX 128
 
-typedef struct { uint32_t handle; } hal_rpc_pkey_handle_t;
+typedef struct { uint32_t handle; } hal_pkey_handle_t;
 
 typedef uint32_t hal_key_flags_t;
 
@@ -630,7 +632,7 @@ typedef uint32_t hal_key_flags_t;
 
 extern hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
                                      const hal_session_handle_t session,
-                                     hal_rpc_pkey_handle_t *pkey,
+                                     hal_pkey_handle_t *pkey,
                                      const hal_key_type_t type,
                                      const hal_curve_name_t curve,
                                      const uint8_t * const name, const size_t name_len,
@@ -639,13 +641,13 @@ extern hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
 
 extern hal_error_t hal_rpc_pkey_find(const hal_client_handle_t client,
                                      const hal_session_handle_t session,
-                                     hal_rpc_pkey_handle_t *pkey,
+                                     hal_pkey_handle_t *pkey,
                                      const hal_key_type_t type,
                                      const uint8_t * const name, const size_t name_len);
 
 extern hal_error_t hal_rpc_pkey_generate_rsa(const hal_client_handle_t client,
                                              const hal_session_handle_t session,
-                                             hal_rpc_pkey_handle_t *pkey,
+                                             hal_pkey_handle_t *pkey,
                                              const uint8_t * const name, const size_t name_len,
                                              const unsigned key_length,
                                              const uint8_t * const public_exponent, const size_t public_exponent_len,
@@ -653,35 +655,35 @@ extern hal_error_t hal_rpc_pkey_generate_rsa(const hal_client_handle_t client,
 
 extern hal_error_t hal_rpc_pkey_generate_ec(const hal_client_handle_t client,
                                             const hal_session_handle_t session,
-                                            hal_rpc_pkey_handle_t *pkey,
+                                            hal_pkey_handle_t *pkey,
                                             const uint8_t * const name, const size_t name_len,
                                             const hal_curve_name_t curve,
                                             const hal_key_flags_t flags);
 
-extern hal_error_t hal_rpc_pkey_close(const hal_rpc_pkey_handle_t pkey);
+extern hal_error_t hal_rpc_pkey_close(const hal_pkey_handle_t pkey);
 
-extern hal_error_t hal_rpc_pkey_delete(const hal_rpc_pkey_handle_t pkey);
+extern hal_error_t hal_rpc_pkey_delete(const hal_pkey_handle_t pkey);
 
-extern hal_error_t hal_rpc_pkey_get_key_type(const hal_rpc_pkey_handle_t pkey,
+extern hal_error_t hal_rpc_pkey_get_key_type(const hal_pkey_handle_t pkey,
                                              hal_key_type_t *type);
 
-extern hal_error_t hal_rpc_pkey_get_key_flags(const hal_rpc_pkey_handle_t pkey,
+extern hal_error_t hal_rpc_pkey_get_key_flags(const hal_pkey_handle_t pkey,
                                               hal_key_flags_t *flags);
 
-extern size_t hal_rpc_pkey_get_public_key_len(const hal_rpc_pkey_handle_t pkey);
+extern size_t hal_rpc_pkey_get_public_key_len(const hal_pkey_handle_t pkey);
 
-extern hal_error_t hal_rpc_pkey_get_public_key(const hal_rpc_pkey_handle_t pkey,
+extern hal_error_t hal_rpc_pkey_get_public_key(const hal_pkey_handle_t pkey,
                                                uint8_t *der, size_t *der_len, const size_t der_max);
 
 extern hal_error_t hal_rpc_pkey_sign(const hal_session_handle_t session,
-                                     const hal_rpc_pkey_handle_t pkey,
-                                     const hal_rpc_hash_handle_t hash,
+                                     const hal_pkey_handle_t pkey,
+                                     const hal_hash_handle_t hash,
                                      const uint8_t * const input,  const size_t input_len,
                                      uint8_t * signature, size_t *signature_len, const size_t signature_max);
 
 extern hal_error_t hal_rpc_pkey_verify(const hal_session_handle_t session,
-                                       const hal_rpc_pkey_handle_t pkey,
-                                       const hal_rpc_hash_handle_t hash,
+                                       const hal_pkey_handle_t pkey,
+                                       const hal_hash_handle_t hash,
                                        const uint8_t * const input, const size_t input_len,
                                        const uint8_t * const signature, const size_t signature_len);
 
@@ -692,9 +694,9 @@ typedef struct {
   char name[HAL_RPC_PKEY_NAME_MAX];
   size_t name_len;
   /* ... */
-} hal_rpc_pkey_key_info_t;
+} hal_pkey_info_t;
 
-extern hal_error_t hal_rpc_pkey_list(hal_rpc_pkey_key_info_t *result,
+extern hal_error_t hal_rpc_pkey_list(hal_pkey_info_t *result,
                                      unsigned *result_len,
                                      const unsigned result_max);
 

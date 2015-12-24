@@ -72,6 +72,11 @@ static hal_error_t get_random(void *buffer, const size_t length)
 
 #warning PIN code not yet fully implemented
 
+typedef struct {
+  hal_client_handle_t handle;
+  hal_user_t logged_in;
+} client_slot_t;
+
 #ifndef HAL_PIN_MINIMUM_ITERATIONS
 #define HAL_PIN_MINIMUM_ITERATIONS 10000
 #endif
@@ -80,13 +85,50 @@ static hal_error_t get_random(void *buffer, const size_t length)
 #define HAL_PIN_DEFAULT_ITERATIONS 20000
 #endif
 
-static hal_error_t set_pin(const hal_user_t user,
+#ifndef HAL_STATIC_CLIENT_STATE_BLOCKS
+#define HAL_STATIC_CLIENT_STATE_BLOCKS	10
+#endif
+
+#if HAL_STATIC_CLIENT_STATE_BLOCKS > 0
+static client_slot_t client_handle[HAL_STATIC_CLIENT_STATE_BLOCKS];
+#endif
+
+/*
+ * Client handles are supplied by the application, we don't get to
+ * pick them, we just store them and associate a login state with
+ * them.  HAL_USER_NONE indicates an empty slot in the table.
+ */
+
+static inline client_slot_t *alloc_slot(void)
+{
+#if HAL_STATIC_CLIENT_STATE_BLOCKS > 0
+  for (int i = 0; i < sizeof(client_handle)/sizeof(*client_handle); i++)
+    if (client_handle[i].logged_in == HAL_USER_NONE)
+      return &client_handle[i];
+#endif
+
+  return NULL;
+}
+
+static inline client_slot_t *find_handle(const hal_client_handle_t handle)
+{
+#if HAL_STATIC_CLIENT_STATE_BLOCKS > 0
+  for (int i = 0; i < sizeof(client_handle)/sizeof(*client_handle); i++)
+    if (client_handle[i].logged_in != HAL_USER_NONE && client_handle[i].handle.handle == handle.handle)
+      return &client_handle[i];
+#endif
+
+  return NULL;
+}
+
+static hal_error_t set_pin(const hal_client_handle_t client,
+                           const hal_user_t user,
                            const char * const newpin, const size_t newpin_len)
 {
   assert(newpin != NULL && newpin_len != 0);
 
 #warning Need access control to decide who is allowed to set this PIN
-#warning Need length checks on supplied PIN
+#warning Need length checks (here or in caller) on supplied PIN
 
   const hal_ks_pin_t *pp;
   hal_error_t err;
@@ -136,15 +178,25 @@ static hal_error_t login(const hal_client_handle_t client,
   if (diff != 0)
     return HAL_ERROR_PIN_INCORRECT;
 
-#warning Do something with client table here
+  client_slot_t *slot = find_handle(client);
+
+  if (slot != NULL && (slot = alloc_slot()) == NULL)
+    return HAL_ERROR_NO_CLIENT_SLOTS_AVAILABLE;
+
+  slot->handle = client;
+  slot->logged_in = user;
 
   return HAL_OK;
 }
 
 static hal_error_t logout(const hal_client_handle_t client)
 {
-#warning And do something else with client table here
-  return HAL_ERROR_IMPOSSIBLE;
+  client_slot_t *slot = find_handle(client);
+
+  if (slot != NULL)
+    slot->logged_in = HAL_USER_NONE;
+
+  return HAL_OK;
 }
 
 const hal_rpc_misc_dispatch_t hal_rpc_remote_misc_dispatch = {

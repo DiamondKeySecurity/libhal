@@ -49,7 +49,7 @@
 typedef struct {
   hal_client_handle_t client_handle;
   hal_session_handle_t session_handle;
-  hal_rpc_hash_handle_t hash_handle;
+  hal_hash_handle_t hash_handle;
   union {
     hal_hash_state_t *hash;
     hal_hmac_state_t *hmac;
@@ -121,7 +121,7 @@ static inline handle_slot_t *alloc_handle(const int is_hmac)
  * the right glop.  Returns slot pointer on success, NULL otherwise.
  */
 
-static inline handle_slot_t *find_handle(const hal_rpc_hash_handle_t handle)
+static inline handle_slot_t *find_handle(const hal_hash_handle_t handle)
 {
 #if HAL_STATIC_HASH_STATE_BLOCKS > 0 || HAL_STATIC_HMAC_STATE_BLOCKS > 0
   const int i = (int) (handle.handle & 0xFFFF);
@@ -211,7 +211,7 @@ static hal_error_t get_digest_algorithm_id(const hal_digest_algorithm_t alg,
   return HAL_OK;
 }
 
-static hal_error_t get_algorithm(const hal_rpc_hash_handle_t handle, hal_digest_algorithm_t *alg)
+static hal_error_t get_algorithm(const hal_hash_handle_t handle, hal_digest_algorithm_t *alg)
 {
   handle_slot_t *slot = find_handle(handle);
   const hal_hash_descriptor_t *descriptor = slot_to_descriptor(slot);
@@ -228,7 +228,7 @@ static hal_error_t get_algorithm(const hal_rpc_hash_handle_t handle, hal_digest_
 
 static hal_error_t initialize(const hal_client_handle_t client,
                               const hal_session_handle_t session,
-                              hal_rpc_hash_handle_t *hash,
+                              hal_hash_handle_t *hash,
                               const hal_digest_algorithm_t alg,
                               const uint8_t * const key, const size_t key_len)
 {
@@ -253,7 +253,7 @@ static hal_error_t initialize(const hal_client_handle_t client,
     return hal_hmac_initialize(NULL, descriptor, &slot->state.hmac, NULL, 0, key, key_len);
 }
 
-static hal_error_t update(const hal_rpc_hash_handle_t handle,
+static hal_error_t update(const hal_hash_handle_t handle,
                           const uint8_t * data, const size_t length)
 {
   handle_slot_t *slot = find_handle(handle);
@@ -267,7 +267,7 @@ static hal_error_t update(const hal_rpc_hash_handle_t handle,
     return hal_hmac_update(slot->state.hmac, data, length);
 }
 
-static hal_error_t finalize(const hal_rpc_hash_handle_t handle,
+static hal_error_t finalize(const hal_hash_handle_t handle,
                             uint8_t *digest, const size_t length)
 {
   handle_slot_t *slot = find_handle(handle);
