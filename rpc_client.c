@@ -47,20 +47,20 @@ static hal_error_t get_random(void *buffer, const size_t length)
   return HAL_ERROR_IMPOSSIBLE;
 }
 
-static hal_error_t set_pin(const hal_rpc_user_t which,
+static hal_error_t set_pin(const hal_user_t user,
                            const char * const newpin, const size_t newpin_len)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }
 
-static hal_error_t login(const hal_rpc_client_handle_t client,
-                         const hal_rpc_user_t user,
+static hal_error_t login(const hal_client_handle_t client,
+                         const hal_user_t user,
                          const char * const pin, const size_t pin_len)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }
 
-static hal_error_t logout(const hal_rpc_client_handle_t client)
+static hal_error_t logout(const hal_client_handle_t client)
 {
   return HAL_ERROR_IMPOSSIBLE;
 }
@@ -81,8 +81,8 @@ static hal_error_t hash_get_algorithm(const hal_rpc_hash_handle_t hash, hal_dige
   return HAL_ERROR_IMPOSSIBLE;
 }
 
-static hal_error_t hash_initialize(const hal_rpc_client_handle_t client,
-                                   const hal_rpc_session_handle_t session,
+static hal_error_t hash_initialize(const hal_client_handle_t client,
+                                   const hal_session_handle_t session,
                                    hal_rpc_hash_handle_t *hash,
                                    const hal_digest_algorithm_t alg,
                                    const uint8_t * const key, const size_t key_len)
@@ -102,8 +102,8 @@ static hal_error_t hash_finalize(const hal_rpc_hash_handle_t hash,
   return HAL_ERROR_IMPOSSIBLE;
 }
 
-static hal_error_t pkey_load(const hal_rpc_client_handle_t client,
-                             const hal_rpc_session_handle_t session,
+static hal_error_t pkey_load(const hal_client_handle_t client,
+                             const hal_session_handle_t session,
                              hal_rpc_pkey_handle_t *pkey,
                              const hal_key_type_t type,
                              const hal_curve_name_t curve,
@@ -114,8 +114,8 @@ static hal_error_t pkey_load(const hal_rpc_client_handle_t client,
   return HAL_ERROR_IMPOSSIBLE;
 }
 
-static hal_error_t pkey_find(const hal_rpc_client_handle_t client,
-                             const hal_rpc_session_handle_t session,
+static hal_error_t pkey_find(const hal_client_handle_t client,
+                             const hal_session_handle_t session,
                              hal_rpc_pkey_handle_t *pkey,
                              const hal_key_type_t type,
                              const uint8_t * const name, const size_t name_len)
@@ -123,8 +123,8 @@ static hal_error_t pkey_find(const hal_rpc_client_handle_t client,
   return HAL_ERROR_IMPOSSIBLE;
 }
 
-static hal_error_t pkey_generate_rsa(const hal_rpc_client_handle_t client,
-                                     const hal_rpc_session_handle_t session,
+static hal_error_t pkey_generate_rsa(const hal_client_handle_t client,
+                                     const hal_session_handle_t session,
                                      hal_rpc_pkey_handle_t *pkey,
                                      const uint8_t * const name, const size_t name_len,
                                      const unsigned key_len,
@@ -134,8 +134,8 @@ static hal_error_t pkey_generate_rsa(const hal_rpc_client_handle_t client,
   return HAL_ERROR_IMPOSSIBLE;
 }
 
-static hal_error_t pkey_generate_ec(const hal_rpc_client_handle_t client,
-                                    const hal_rpc_session_handle_t session,
+static hal_error_t pkey_generate_ec(const hal_client_handle_t client,
+                                    const hal_session_handle_t session,
                                     hal_rpc_pkey_handle_t *pkey,
                                     const uint8_t * const name, const size_t name_len,
                                     const hal_curve_name_t curve,
@@ -177,7 +177,7 @@ static hal_error_t pkey_get_public_key(const hal_rpc_pkey_handle_t pkey,
   return HAL_ERROR_IMPOSSIBLE;
 }
 
-static hal_error_t pkey_remote_sign(const hal_rpc_session_handle_t session,
+static hal_error_t pkey_remote_sign(const hal_session_handle_t session,
                                     const hal_rpc_pkey_handle_t pkey,
                                     const hal_rpc_hash_handle_t hash,
                                     const uint8_t * const input,  const size_t input_len,
@@ -186,7 +186,7 @@ static hal_error_t pkey_remote_sign(const hal_rpc_session_handle_t session,
   return HAL_ERROR_IMPOSSIBLE;
 }
 
-static hal_error_t pkey_remote_verify(const hal_rpc_session_handle_t session,
+static hal_error_t pkey_remote_verify(const hal_session_handle_t session,
                                       const hal_rpc_pkey_handle_t pkey,
                                       const hal_rpc_hash_handle_t hash,
                                       const uint8_t * const input, const size_t input_len,
@@ -210,7 +210,7 @@ static hal_error_t pkey_list(hal_rpc_pkey_key_info_t *result,
  * pull the digest from the hash context and send that to the HSM.
  */
 
-static hal_error_t pkey_mixed_sign(const hal_rpc_session_handle_t session,
+static hal_error_t pkey_mixed_sign(const hal_session_handle_t session,
                                    const hal_rpc_pkey_handle_t pkey,
                                    const hal_rpc_hash_handle_t hash,
                                    const uint8_t * const input,  const size_t input_len,
@@ -237,7 +237,7 @@ static hal_error_t pkey_mixed_sign(const hal_rpc_session_handle_t session,
                           signature, signature_len, signature_max);
 }
 
-static hal_error_t pkey_mixed_verify(const hal_rpc_session_handle_t session,
+static hal_error_t pkey_mixed_verify(const hal_session_handle_t session,
                                      const hal_rpc_pkey_handle_t pkey,
                                      const hal_rpc_hash_handle_t hash,
                                      const uint8_t * const input, const size_t input_len,

@@ -37,21 +37,29 @@
 #define _HAL_INTERNAL_H_
 
 #include "hal.h"
+#include "verilog_constants.h"
+
+/*
+ * Longest hash block and digest we support at the moment.
+ */
+
+#define HAL_MAX_HASH_BLOCK_LENGTH       SHA512_BLOCK_LEN
+#define HAL_MAX_HASH_DIGEST_LENGTH      SHA512_DIGEST_LEN
 
 /*
  * Everything in this file is part of the internal API, that is,
  * subject to change without notice.  Nothing outside of libhal itself
- * should be looking at this file.  Access from outside of libhal
- * should use the public hal_rpc_*() API.
- *
- * In particular, the breakdown of which functions go into which
- * dispatch vectors is based entirely on pesky details like making
- * sure that the right functions get linked in the right cases, and
- * should not be construed as making any particular sense in any
- * larger context.
+ * should be looking at this file.
  */
 
 /*
+ * Dispatch structures for RPC implementation.
+ *
+ * The breakdown of which functions go into which dispatch vectors is
+ * based entirely on pesky details like making sure that the right
+ * functions get linked in the right cases, and should not be
+ * construed as making any particular sense in any larger context.
+ *
  * In theory eventually we might want a fully general mechanism to
  * allow us to dispatch arbitrary groups of functions either locally
  * or remotely on a per-user basis.  In practice, we probably want to
@@ -77,14 +85,14 @@
 
 typedef struct {
 
-  hal_error_t (*set_pin)(const hal_rpc_user_t which,
+  hal_error_t (*set_pin)(const hal_user_t user,
                          const char * const newpin, const size_t newpin_len);
 
-  hal_error_t (*login)(const hal_rpc_client_handle_t client,
-                       const hal_rpc_user_t user,
+  hal_error_t (*login)(const hal_client_handle_t client,
+                       const hal_user_t user,
                        const char * const newpin, const size_t newpin_len);
 
-  hal_error_t (*logout)(const hal_rpc_client_handle_t client);
+  hal_error_t (*logout)(const hal_client_handle_t client);
 
   hal_error_t (*get_random)(void *buffer, const size_t length);
 
@@ -100,8 +108,8 @@ typedef struct {
 
   hal_error_t (*get_algorithm)(const hal_rpc_hash_handle_t hash, hal_digest_algorithm_t *alg);
 
-  hal_error_t (*initialize)(const hal_rpc_client_handle_t client,
-                            const hal_rpc_session_handle_t session,
+  hal_error_t (*initialize)(const hal_client_handle_t client,
+                            const hal_session_handle_t session,
                             hal_rpc_hash_handle_t *hash,
                             const hal_digest_algorithm_t alg,
                             const uint8_t * const key, const size_t key_length);
@@ -116,8 +124,8 @@ typedef struct {
 
 typedef struct {
 
-  hal_error_t  (*load)(const hal_rpc_client_handle_t client,
-                       const hal_rpc_session_handle_t session,
+  hal_error_t  (*load)(const hal_client_handle_t client,
+                       const hal_session_handle_t session,
                        hal_rpc_pkey_handle_t *pkey,
                        const hal_key_type_t type,
                        const hal_curve_name_t curve,
@@ -125,22 +133,22 @@ typedef struct {
                        const uint8_t * const der, const size_t der_len,
                        const hal_key_flags_t flags);
 
-  hal_error_t  (*find)(const hal_rpc_client_handle_t client,
-                       const hal_rpc_session_handle_t session,
+  hal_error_t  (*find)(const hal_client_handle_t client,
+                       const hal_session_handle_t session,
                        hal_rpc_pkey_handle_t *pkey,
                        const hal_key_type_t type,
                        const uint8_t * const name, const size_t name_len);
 
-  hal_error_t  (*generate_rsa)(const hal_rpc_client_handle_t client,
-                               const hal_rpc_session_handle_t session,
+  hal_error_t  (*generate_rsa)(const hal_client_handle_t client,
+                               const hal_session_handle_t session,
                                hal_rpc_pkey_handle_t *pkey,
                                const uint8_t * const name, const size_t name_len,
                                const unsigned key_length,
                                const uint8_t * const public_exponent, const size_t public_exponent_len,
                                const hal_key_flags_t flags);
 
-  hal_error_t  (*generate_ec)(const hal_rpc_client_handle_t client,
-                              const hal_rpc_session_handle_t session,
+  hal_error_t  (*generate_ec)(const hal_client_handle_t client,
+                              const hal_session_handle_t session,
                               hal_rpc_pkey_handle_t *pkey,
                               const uint8_t * const name, const size_t name_len,
                               const hal_curve_name_t curve,
@@ -161,13 +169,13 @@ typedef struct {
   hal_error_t  (*get_public_key)(const hal_rpc_pkey_handle_t pkey,
                                  uint8_t *der, size_t *der_len, const size_t der_max);
 
-  hal_error_t  (*sign)(const hal_rpc_session_handle_t session,
+  hal_error_t  (*sign)(const hal_session_handle_t session,
                        const hal_rpc_pkey_handle_t pkey,
                        const hal_rpc_hash_handle_t hash,
                        const uint8_t * const input,  const size_t input_len,
                        uint8_t * signature, size_t *signature_len, const size_t signature_max);
 
-  hal_error_t  (*verify)(const hal_rpc_session_handle_t session,
+  hal_error_t  (*verify)(const hal_session_handle_t session,
                          const hal_rpc_pkey_handle_t pkey,
                          const hal_rpc_hash_handle_t hash,
                          const uint8_t * const input, const size_t input_len,
@@ -205,6 +213,11 @@ extern const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch, hal_rpc_remote
  *
  * Plus we need a bit of AES-keywrap overhead, since we're storing the
  * wrapped form (see hal_aes_keywrap_cyphertext_length()).
+ *
+ * We also need to store PINs somewhere, so they go into the keystore
+ * data structure even though they're not keys.  Like keys, they're
+ * stored in a relatively safe form (PBKDF2), so while we would prefer
+ * to keep them private, they don't require tamper-protected RAM.
  */
 
 #define	HAL_KS_WRAPPED_KEYSIZE  ((4655 + 15) & ~7)
@@ -224,10 +237,26 @@ typedef struct {
   uint8_t in_use;
 } hal_ks_key_t;
 
+#ifndef HAL_PIN_SALT_LENGTH
+#define HAL_PIN_SALT_LENGTH 16
+#endif
+
 typedef struct {
+  uint32_t iterations;
+  uint8_t pin[HAL_MAX_HASH_DIGEST_LENGTH];
+  uint8_t salt[HAL_PIN_SALT_LENGTH];
+} hal_ks_pin_t;
+
+typedef struct {
+
 #if HAL_STATIC_PKEY_STATE_BLOCKS > 0
   hal_ks_key_t keys[HAL_STATIC_PKEY_STATE_BLOCKS];
 #endif
+
+  hal_ks_pin_t wheel_pin;
+  hal_ks_pin_t so_pin;
+  hal_ks_pin_t user_pin;
+
 } hal_ks_keydb_t;
 
 /*
@@ -284,6 +313,12 @@ extern hal_error_t hal_ks_delete(const hal_key_type_t type,
 extern hal_error_t hal_ks_list(hal_rpc_pkey_key_info_t *result,
                                unsigned *result_len,
                                const unsigned result_max);
+
+extern hal_error_t hal_ks_get_pin(const hal_user_t user,
+                                  const hal_ks_pin_t **pin);
+
+extern hal_error_t hal_ks_set_pin(const hal_user_t user,
+                                  const hal_ks_pin_t * const pin);
 
 #endif /* _HAL_INTERNAL_H_ */
 

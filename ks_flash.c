@@ -48,7 +48,7 @@ const hal_ks_keydb_t *hal_ks_get_keydb(void)
 hal_error_t hal_ks_set_keydb(const hal_ks_key_t * const key,
                              const int loc)
 {
-  if (key == NULL || loc < 0 || loc >= sizeof(db.keys)/sizeof(*db.keys) || key->in_use)
+  if (key == NULL || loc < 0 || loc >= sizeof(db->keys)/sizeof(*db->keys) || key->in_use)
     return HAL_ERROR_BAD_ARGUMENTS;
 
 #error Not sure what goes here yet either
@@ -57,12 +57,33 @@ hal_error_t hal_ks_set_keydb(const hal_ks_key_t * const key,
 
 hal_error_t hal_ks_del_keydb(const int loc)
 {
-  if (loc < 0 || loc >= sizeof(db.keys)/sizeof(*db.keys))
+  if (loc < 0 || loc >= sizeof(db->keys)/sizeof(*db->keys))
     return HAL_ERROR_BAD_ARGUMENTS;
 
 #error Or what goes here
 
 }
+
+hal_error_t hal_ks_set_pin(const hal_user_t user,
+                           const hal_ks_pin_t * const pin)
+{
+  if (pin == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  hal_ks_pin_t *p = NULL;
+
+  switch (user) {
+  case HAL_USER_WHEEL:  p = &db->wheel_pin;  break;
+  case HAL_USER_SO:	p = &db->so_pin;     break;
+  case HAL_USER_NORMAL:	p = &db->user_pin;   break;
+  default:		return HAL_ERROR_BAD_ARGUMENTS;
+  }
+
+#error Or what goes here
+
+  return HAL_OK;
+}
+
 
 /*
  * Local variables:

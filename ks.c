@@ -273,6 +273,27 @@ hal_error_t hal_ks_list(hal_rpc_pkey_key_info_t *result,
   return HAL_OK;
 }
 
+hal_error_t hal_ks_get_pin(const hal_user_t user,
+                           const hal_ks_pin_t **pin)
+{
+  if (pin == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  const hal_ks_keydb_t * const db = hal_ks_get_keydb();
+
+  if (db == NULL)
+    return HAL_ERROR_KEYSTORE_ACCESS;
+
+  switch (user) {
+  case HAL_USER_WHEEL:  *pin = &db->wheel_pin;  break;
+  case HAL_USER_SO:	*pin = &db->so_pin;     break;
+  case HAL_USER_NORMAL:	*pin = &db->user_pin;   break;
+  default:		return HAL_ERROR_BAD_ARGUMENTS;
+  }
+
+  return HAL_OK;
+}
+
 /*
  * Local variables:
  * indent-tabs-mode: nil

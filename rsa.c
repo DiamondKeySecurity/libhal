@@ -73,7 +73,7 @@
 #include <assert.h>
 
 #include "hal.h"
-#include "verilog_constants.h"
+#include "hal_internal.h"
 #include <tfm.h>
 #include "asn1_internal.h"
 

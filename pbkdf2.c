@@ -39,7 +39,7 @@
 #include <stdint.h>
 
 #include "hal.h"
-#include "verilog_constants.h"
+#include "hal_internal.h"
 
 /*
  * Utility to encapsulate the HMAC operations.  May need refactoring

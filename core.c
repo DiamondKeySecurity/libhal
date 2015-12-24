@@ -39,7 +39,7 @@
 #include <string.h>
 
 #include "hal.h"
-#include "verilog_constants.h"
+#include "hal_internal.h"
 
 /*
  * Each Cryptech core has a set of 4-byte registers, which are accessed

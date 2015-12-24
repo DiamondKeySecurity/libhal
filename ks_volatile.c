@@ -36,36 +36,68 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <string.h>
+
 #include "hal.h"
 #include "hal_internal.h"
 
-static hal_ks_keydb_t db;
+/*
+ * Splitting the different keystore backends out into separate files
+ * seemed like a good idea at the time, but the code is getting
+ * somewhat repetitive.  Might want to re-merge and conditionalize in
+ * some other way.  Deferred until we sort out ks_flash.c.
+ */
+
+/*
+ * Use a one-element array here so that references can be pointer-based
+ * as in the other implementations, to ease re-merge at some later date.
+ */
+
+static hal_ks_keydb_t db[1];
 
 const hal_ks_keydb_t *hal_ks_get_keydb(void)
 {
-  return &db;
+  return db;
 }
 
 hal_error_t hal_ks_set_keydb(const hal_ks_key_t * const key,
                              const int loc)
 {
-  if (key == NULL || loc < 0 || loc >= sizeof(db.keys)/sizeof(*db.keys) || key->in_use)
+  if (key == NULL || loc < 0 || loc >= sizeof(db->keys)/sizeof(*db->keys) || key->in_use)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  db.keys[loc] = *key;
-  db.keys[loc].in_use = 1;
+  db->keys[loc] = *key;
+  db->keys[loc].in_use = 1;
   return HAL_OK;
 }
 
 hal_error_t hal_ks_del_keydb(const int loc)
 {
-  if (loc < 0 || loc >= sizeof(db.keys)/sizeof(*db.keys))
+  if (loc < 0 || loc >= sizeof(db->keys)/sizeof(*db->keys))
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  memset(&db.keys[loc], 0, sizeof(db.keys[loc]));
+  memset(&db->keys[loc], 0, sizeof(db->keys[loc]));
   return HAL_OK;
 }
 
+hal_error_t hal_ks_set_pin(const hal_user_t user,
+                           const hal_ks_pin_t * const pin)
+{
+  if (pin == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  hal_ks_pin_t *p = NULL;
+
+  switch (user) {
+  case HAL_USER_WHEEL:  p = &db->wheel_pin;  break;
+  case HAL_USER_SO:	p = &db->so_pin;     break;
+  case HAL_USER_NORMAL:	p = &db->user_pin;   break;
+  default:		return HAL_ERROR_BAD_ARGUMENTS;
+  }
+
+  *p = *pin;
+  return HAL_OK;
+}
 
 /*
  * Local variables:

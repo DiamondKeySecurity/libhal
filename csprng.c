@@ -37,7 +37,7 @@
 #include <stdint.h>
 
 #include "hal.h"
-#include "verilog_constants.h"
+#include "hal_internal.h"
 
 #ifndef WAIT_FOR_CSPRNG_VALID
 #define WAIT_FOR_CSPRNG_VALID   1

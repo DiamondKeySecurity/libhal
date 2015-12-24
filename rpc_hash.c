@@ -47,8 +47,8 @@
  */
 
 typedef struct {
-  hal_rpc_client_handle_t client_handle;
-  hal_rpc_session_handle_t session_handle;
+  hal_client_handle_t client_handle;
+  hal_session_handle_t session_handle;
   hal_rpc_hash_handle_t hash_handle;
   union {
     hal_hash_state_t *hash;
@@ -226,8 +226,8 @@ static hal_error_t get_algorithm(const hal_rpc_hash_handle_t handle, hal_digest_
   return HAL_OK;
 }
 
-static hal_error_t initialize(const hal_rpc_client_handle_t client,
-                              const hal_rpc_session_handle_t session,
+static hal_error_t initialize(const hal_client_handle_t client,
+                              const hal_session_handle_t session,
                               hal_rpc_hash_handle_t *hash,
                               const hal_digest_algorithm_t alg,
                               const uint8_t * const key, const size_t key_len)

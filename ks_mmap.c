@@ -116,6 +116,25 @@ hal_error_t hal_ks_del_keydb(const int loc)
   return HAL_OK;
 }
 
+hal_error_t hal_ks_set_pin(const hal_user_t user,
+                           const hal_ks_pin_t * const pin)
+{
+  if (pin == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  hal_ks_pin_t *p = NULL;
+
+  switch (user) {
+  case HAL_USER_WHEEL:  p = &db->wheel_pin;  break;
+  case HAL_USER_SO:	p = &db->so_pin;     break;
+  case HAL_USER_NORMAL:	p = &db->user_pin;   break;
+  default:		return HAL_ERROR_BAD_ARGUMENTS;
+  }
+
+  *p = *pin;
+  return HAL_OK;
+}
+
 /*
  * Local variables:
  * indent-tabs-mode: nil

@@ -1,6 +1,6 @@
 /*
- * hashes.c
- * --------
+ * hash.c
+ * ------
  * HAL interface to Cryptech hash cores.
  *
  * Authors: Joachim Strömbergson, Paul Selkirk, Rob Austein
@@ -41,7 +41,7 @@
 #include <stdint.h>
 
 #include "hal.h"
-#include "verilog_constants.h"
+#include "hal_internal.h"
 
 /*
  * HMAC magic numbers.

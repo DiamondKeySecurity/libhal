@@ -40,8 +40,8 @@
 #include "hal_internal.h"
 
 typedef struct {
-  hal_rpc_client_handle_t client_handle;
-  hal_rpc_session_handle_t session_handle;
+  hal_client_handle_t client_handle;
+  hal_session_handle_t session_handle;
   hal_rpc_pkey_handle_t pkey_handle;
   hal_key_type_t type;
   hal_curve_name_t curve;
@@ -203,8 +203,8 @@ static hal_error_t pkcs1_5_pad(const uint8_t * const data, const size_t data_len
  * Receive key from application, store it with supplied name, return a key handle.
  */
 
-static hal_error_t load(const hal_rpc_client_handle_t client,
-                        const hal_rpc_session_handle_t session,
+static hal_error_t load(const hal_client_handle_t client,
+                        const hal_session_handle_t session,
                         hal_rpc_pkey_handle_t *pkey,
                         const hal_key_type_t type,
                         const hal_curve_name_t curve,
@@ -239,8 +239,8 @@ static hal_error_t load(const hal_rpc_client_handle_t client,
  * Look up a key given its name, return a key handle.
  */
 
-static hal_error_t find(const hal_rpc_client_handle_t client,
-                        const hal_rpc_session_handle_t session,
+static hal_error_t find(const hal_client_handle_t client,
+                        const hal_session_handle_t session,
                         hal_rpc_pkey_handle_t *pkey,
                         const hal_key_type_t type,
                         const uint8_t * const name, const size_t name_len)
@@ -270,8 +270,8 @@ static hal_error_t find(const hal_rpc_client_handle_t client,
  * Generate a new RSA key with supplied name, return a key handle.
  */
 
-static hal_error_t generate_rsa(const hal_rpc_client_handle_t client,
-                                const hal_rpc_session_handle_t session,
+static hal_error_t generate_rsa(const hal_client_handle_t client,
+                                const hal_session_handle_t session,
                                 hal_rpc_pkey_handle_t *pkey,
                                 const uint8_t * const name, const size_t name_len,
                                 const unsigned key_length,
@@ -323,8 +323,8 @@ static hal_error_t generate_rsa(const hal_rpc_client_handle_t client,
  * At the moment, EC key == ECDSA key, but this is subject to change.
  */
 
-static hal_error_t generate_ec(const hal_rpc_client_handle_t client,
-                               const hal_rpc_session_handle_t session,
+static hal_error_t generate_ec(const hal_client_handle_t client,
+                               const hal_session_handle_t session,
                                hal_rpc_pkey_handle_t *pkey,
                                const uint8_t * const name, const size_t name_len,
                                const hal_curve_name_t curve,
@@ -624,7 +624,7 @@ static hal_error_t sign_ecdsa(uint8_t *keybuf, const size_t keybuf_len,
   return HAL_OK;
 }
 
-static hal_error_t sign(const hal_rpc_session_handle_t session,
+static hal_error_t sign(const hal_session_handle_t session,
                         const hal_rpc_pkey_handle_t pkey,
                         const hal_rpc_hash_handle_t hash,
                         const uint8_t * const input,  const size_t input_len,
@@ -744,7 +744,7 @@ static hal_error_t verify_ecdsa(uint8_t *keybuf, const size_t keybuf_len,
   return HAL_OK;
 }
 
-static hal_error_t verify(const hal_rpc_session_handle_t session,
+static hal_error_t verify(const hal_session_handle_t session,
                           const hal_rpc_pkey_handle_t pkey,
                           const hal_rpc_hash_handle_t hash,
                           const uint8_t * const input, const size_t input_len,

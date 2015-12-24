@@ -125,24 +125,24 @@ hal_error_t hal_rpc_get_random(void *buffer, const size_t length)
 
 #warning Perhaps we should be enforcing a minimum PIN length here
 
-hal_error_t hal_rpc_set_pin(const hal_rpc_user_t which,
+hal_error_t hal_rpc_set_pin(const hal_user_t user,
 			    const char * const newpin, const size_t newpin_len)
 {
-  if (newpin == NULL || newpin_len == 0 || (which != HAL_RPC_USER_NORMAL && which != HAL_RPC_USER_SO))
+  if (newpin == NULL || newpin_len == 0 || (user != HAL_USER_NORMAL && user != HAL_USER_SO && user != HAL_USER_WHEEL))
     return HAL_ERROR_BAD_ARGUMENTS;
-  return misc_dispatch->set_pin(which, newpin, newpin_len);
+  return misc_dispatch->set_pin(user, newpin, newpin_len);
 }
 
-hal_error_t hal_rpc_login(const hal_rpc_client_handle_t client,
-			  const hal_rpc_user_t user,
+hal_error_t hal_rpc_login(const hal_client_handle_t client,
+			  const hal_user_t user,
 			  const char * const pin, const size_t pin_len)
 {
-  if (pin == NULL || pin_len == 0 || (user != HAL_RPC_USER_NORMAL && user != HAL_RPC_USER_SO))
+  if (pin == NULL || pin_len == 0 || (user != HAL_USER_NORMAL && user != HAL_USER_SO && user != HAL_USER_WHEEL))
     return HAL_ERROR_BAD_ARGUMENTS;
   return misc_dispatch->login(client, user, pin, pin_len);
 }
 
-hal_error_t hal_rpc_logout(const hal_rpc_client_handle_t client)
+hal_error_t hal_rpc_logout(const hal_client_handle_t client)
 {
   return misc_dispatch->logout(client);
 }
@@ -167,8 +167,8 @@ hal_error_t hal_rpc_hash_get_algorithm(const hal_rpc_hash_handle_t hash, hal_dig
   return hash_dispatch->get_algorithm(hash, alg);
 }
 
-hal_error_t hal_rpc_hash_initialize(const hal_rpc_client_handle_t client,
-				    const hal_rpc_session_handle_t session,
+hal_error_t hal_rpc_hash_initialize(const hal_client_handle_t client,
+				    const hal_session_handle_t session,
 				    hal_rpc_hash_handle_t *hash,
 				    const hal_digest_algorithm_t alg,
 				    const uint8_t * const key, const size_t key_len)
@@ -196,8 +196,8 @@ hal_error_t hal_rpc_hash_finalize(const hal_rpc_hash_handle_t hash,
   return hash_dispatch->finalize(hash, digest, length);
 }
 
-hal_error_t hal_rpc_pkey_load(const hal_rpc_client_handle_t client,
-			      const hal_rpc_session_handle_t session,
+hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
+			      const hal_session_handle_t session,
 			      hal_rpc_pkey_handle_t *pkey,
 			      const hal_key_type_t type,
 			      const hal_curve_name_t curve,
@@ -213,8 +213,8 @@ hal_error_t hal_rpc_pkey_load(const hal_rpc_client_handle_t client,
   return pkey_dispatch->load(client, session, pkey, type, curve, name, name_len, der, der_len, flags);
 }
 
-hal_error_t hal_rpc_pkey_find(const hal_rpc_client_handle_t client,
-			      const hal_rpc_session_handle_t session,
+hal_error_t hal_rpc_pkey_find(const hal_client_handle_t client,
+			      const hal_session_handle_t session,
 			      hal_rpc_pkey_handle_t *pkey,
 			      const hal_key_type_t type,
 			      const uint8_t * const name, const size_t name_len)
@@ -224,8 +224,8 @@ hal_error_t hal_rpc_pkey_find(const hal_rpc_client_handle_t client,
   return pkey_dispatch->find(client, session, pkey, type, name, name_len);
 }
 
-hal_error_t hal_rpc_pkey_generate_rsa(const hal_rpc_client_handle_t client,
-				      const hal_rpc_session_handle_t session,
+hal_error_t hal_rpc_pkey_generate_rsa(const hal_client_handle_t client,
+				      const hal_session_handle_t session,
 				      hal_rpc_pkey_handle_t *pkey,
 				      const uint8_t * const name, const size_t name_len,
 				      const unsigned key_len,
@@ -238,8 +238,8 @@ hal_error_t hal_rpc_pkey_generate_rsa(const hal_rpc_client_handle_t client,
   return pkey_dispatch->generate_rsa(client, session, pkey, name, name_len, key_len, exp, exp_len, flags);
 }
 
-hal_error_t hal_rpc_pkey_generate_ec(const hal_rpc_client_handle_t client,
-				     const hal_rpc_session_handle_t session,
+hal_error_t hal_rpc_pkey_generate_ec(const hal_client_handle_t client,
+				     const hal_session_handle_t session,
 				     hal_rpc_pkey_handle_t *pkey,
 				     const uint8_t * const name, const size_t name_len,
 				     const hal_curve_name_t curve,
@@ -290,7 +290,7 @@ hal_error_t hal_rpc_pkey_get_public_key(const hal_rpc_pkey_handle_t pkey,
   return pkey_dispatch->get_public_key(pkey, der, der_len, der_max);
 }
 
-hal_error_t hal_rpc_pkey_sign(const hal_rpc_session_handle_t session,
+hal_error_t hal_rpc_pkey_sign(const hal_session_handle_t session,
 			      const hal_rpc_pkey_handle_t pkey,
 			      const hal_rpc_hash_handle_t hash,
 			      const uint8_t * const input,  const size_t input_len,
@@ -302,7 +302,7 @@ hal_error_t hal_rpc_pkey_sign(const hal_rpc_session_handle_t session,
   return pkey_dispatch->sign(session, pkey, hash, input,  input_len, signature, signature_len, signature_max);
 }
 
-hal_error_t hal_rpc_pkey_verify(const hal_rpc_session_handle_t session,
+hal_error_t hal_rpc_pkey_verify(const hal_session_handle_t session,
 				const hal_rpc_pkey_handle_t pkey,
 				const hal_rpc_hash_handle_t hash,
 				const uint8_t * const input, const size_t input_len,
