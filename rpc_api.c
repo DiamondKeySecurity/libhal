@@ -4,7 +4,7 @@
  * Remote procedure call public API implementation.
  *
  * Authors: Rob Austein
- * Copyright (c) 2015, NORDUnet A/S All rights reserved.
+ * Copyright (c) 2015-2016, NORDUnet A/S All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -35,32 +35,6 @@
 
 #include "hal.h"
 #include "hal_internal.h"
-
-#ifndef HAL_RPC_IS_CLIENT
-#warning HAL_RPC_IS_CLIENT not set, assuming we're building for the HSM
-#define HAL_RPC_IS_CLIENT 0
-#endif
-
-/*
- * Maybe we'll let the client configure this at runtime, later.  For
- * now, wire in the obvious defaults: hashing is done locally,
- * everything else is done via RPC.  For the server everything is
- * always done locally.
- */
-
-#if HAL_RPC_IS_CLIENT
-
-static const hal_rpc_misc_dispatch_t * const misc_dispatch = &hal_rpc_remote_misc_dispatch;
-static const hal_rpc_hash_dispatch_t * const hash_dispatch = &hal_rpc_remote_hash_dispatch;
-static const hal_rpc_pkey_dispatch_t * const pkey_dispatch = &hal_rpc_mixed_pkey_dispatch;
-
-#else
-
-static const hal_rpc_misc_dispatch_t * const misc_dispatch = &hal_rpc_local_misc_dispatch;
-static const hal_rpc_hash_dispatch_t * const hash_dispatch = &hal_rpc_local_hash_dispatch;
-static const hal_rpc_pkey_dispatch_t * const pkey_dispatch = &hal_rpc_local_pkey_dispatch;
-
-#endif
 
 const hal_hash_handle_t hal_hash_handle_none = {0};
 
@@ -120,7 +94,7 @@ hal_error_t hal_rpc_get_random(void *buffer, const size_t length)
     return HAL_ERROR_BAD_ARGUMENTS;
   if (length == 0)
     return HAL_OK;
-  return misc_dispatch->get_random(buffer, length);
+  return hal_rpc_misc_dispatch->get_random(buffer, length);
 }
 
 #warning Perhaps we should be enforcing a minimum PIN length here
@@ -131,7 +105,7 @@ hal_error_t hal_rpc_set_pin(const hal_client_handle_t client,
 {
   if (newpin == NULL || newpin_len == 0 || (user != HAL_USER_NORMAL && user != HAL_USER_SO && user != HAL_USER_WHEEL))
     return HAL_ERROR_BAD_ARGUMENTS;
-  return misc_dispatch->set_pin(client, user, newpin, newpin_len);
+  return hal_rpc_misc_dispatch->set_pin(client, user, newpin, newpin_len);
 }
 
 hal_error_t hal_rpc_login(const hal_client_handle_t client,
@@ -140,17 +114,17 @@ hal_error_t hal_rpc_login(const hal_client_handle_t client,
 {
   if (pin == NULL || pin_len == 0 || (user != HAL_USER_NORMAL && user != HAL_USER_SO && user != HAL_USER_WHEEL))
     return HAL_ERROR_BAD_ARGUMENTS;
-  return misc_dispatch->login(client, user, pin, pin_len);
+  return hal_rpc_misc_dispatch->login(client, user, pin, pin_len);
 }
 
 hal_error_t hal_rpc_logout(const hal_client_handle_t client)
 {
-  return misc_dispatch->logout(client);
+  return hal_rpc_misc_dispatch->logout(client);
 }
 
 hal_error_t hal_rpc_logout_all(void)
 {
-  return misc_dispatch->logout_all();
+  return hal_rpc_misc_dispatch->logout_all();
 }
 
 hal_error_t hal_rpc_is_logged_in(const hal_client_handle_t client,
@@ -158,27 +132,27 @@ hal_error_t hal_rpc_is_logged_in(const hal_client_handle_t client,
 {
   if (user != HAL_USER_NORMAL && user != HAL_USER_SO && user != HAL_USER_WHEEL)
     return HAL_ERROR_BAD_ARGUMENTS;
-  return misc_dispatch->is_logged_in(client, user);
+  return hal_rpc_misc_dispatch->is_logged_in(client, user);
 }
 
 hal_error_t hal_rpc_hash_get_digest_length(const hal_digest_algorithm_t alg, size_t *length)
 {
   if (length == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
-  return hash_dispatch->get_digest_length(alg, length);
+  return hal_rpc_hash_dispatch->get_digest_length(alg, length);
 }
 
 hal_error_t hal_rpc_hash_get_digest_algorithm_id(const hal_digest_algorithm_t alg,
 						 uint8_t *id, size_t *len, const size_t len_max)
 {
-  return hash_dispatch->get_digest_algorithm_id(alg, id, len, len_max);
+  return hal_rpc_hash_dispatch->get_digest_algorithm_id(alg, id, len, len_max);
 }
 
 hal_error_t hal_rpc_hash_get_algorithm(const hal_hash_handle_t hash, hal_digest_algorithm_t *alg)
 {
   if (hash.handle == hal_hash_handle_none.handle || alg == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
-  return hash_dispatch->get_algorithm(hash, alg);
+  return hal_rpc_hash_dispatch->get_algorithm(hash, alg);
 }
 
 hal_error_t hal_rpc_hash_initialize(const hal_client_handle_t client,
@@ -189,7 +163,7 @@ hal_error_t hal_rpc_hash_initialize(const hal_client_handle_t client,
 {
   if (hash == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
-  return hash_dispatch->initialize(client, session, hash, alg, key, key_len);
+  return hal_rpc_hash_dispatch->initialize(client, session, hash, alg, key, key_len);
 }
 
 hal_error_t hal_rpc_hash_update(const hal_hash_handle_t hash,
@@ -199,7 +173,7 @@ hal_error_t hal_rpc_hash_update(const hal_hash_handle_t hash,
     return HAL_ERROR_BAD_ARGUMENTS;
   if (length == 0)
     return HAL_OK;
-  return hash_dispatch->update(hash, data, length);
+  return hal_rpc_hash_dispatch->update(hash, data, length);
 }
 
 hal_error_t hal_rpc_hash_finalize(const hal_hash_handle_t hash,
@@ -207,7 +181,7 @@ hal_error_t hal_rpc_hash_finalize(const hal_hash_handle_t hash,
 {
   if (hash.handle == hal_hash_handle_none.handle || digest == NULL || length == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
-  return hash_dispatch->finalize(hash, digest, length);
+  return hal_rpc_hash_dispatch->finalize(hash, digest, length);
 }
 
 hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
@@ -224,7 +198,7 @@ hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
       der == NULL || der_len == 0 ||
       !check_pkey_type_curve_flags(type, curve, flags))
     return HAL_ERROR_BAD_ARGUMENTS;
-  return pkey_dispatch->load(client, session, pkey, type, curve, name, name_len, der, der_len, flags);
+  return hal_rpc_pkey_dispatch->load(client, session, pkey, type, curve, name, name_len, der, der_len, flags);
 }
 
 hal_error_t hal_rpc_pkey_find(const hal_client_handle_t client,
@@ -235,7 +209,7 @@ hal_error_t hal_rpc_pkey_find(const hal_client_handle_t client,
 {
   if (pkey == NULL || name == NULL || name_len == 0 || !check_pkey_type(type))
     return HAL_ERROR_BAD_ARGUMENTS;
-  return pkey_dispatch->find(client, session, pkey, type, name, name_len);
+  return hal_rpc_pkey_dispatch->find(client, session, pkey, type, name, name_len);
 }
 
 hal_error_t hal_rpc_pkey_generate_rsa(const hal_client_handle_t client,
@@ -249,7 +223,7 @@ hal_error_t hal_rpc_pkey_generate_rsa(const hal_client_handle_t client,
   if (pkey == NULL || name == NULL || name_len == 0 || key_len == 0 || (key_len & 7) != 0 ||
       exp == NULL || exp_len == 0 || !check_pkey_flags(flags))
     return HAL_ERROR_BAD_ARGUMENTS;
-  return pkey_dispatch->generate_rsa(client, session, pkey, name, name_len, key_len, exp, exp_len, flags);
+  return hal_rpc_pkey_dispatch->generate_rsa(client, session, pkey, name, name_len, key_len, exp, exp_len, flags);
 }
 
 hal_error_t hal_rpc_pkey_generate_ec(const hal_client_handle_t client,
@@ -262,17 +236,17 @@ hal_error_t hal_rpc_pkey_generate_ec(const hal_client_handle_t client,
   if (pkey == NULL || name == NULL || name_len == 0 ||
       !check_pkey_type_curve_flags(HAL_KEY_TYPE_EC_PRIVATE, curve, flags))
     return HAL_ERROR_BAD_ARGUMENTS;
-  return pkey_dispatch->generate_ec(client, session, pkey, name, name_len, curve, flags);
+  return hal_rpc_pkey_dispatch->generate_ec(client, session, pkey, name, name_len, curve, flags);
 }
 
 hal_error_t hal_rpc_pkey_close(const hal_pkey_handle_t pkey)
 {
-  return pkey_dispatch->close(pkey);
+  return hal_rpc_pkey_dispatch->close(pkey);
 }
 
 hal_error_t hal_rpc_pkey_delete(const hal_pkey_handle_t pkey)
 {
-  return pkey_dispatch->delete(pkey);
+  return hal_rpc_pkey_dispatch->delete(pkey);
 }
 
 hal_error_t hal_rpc_pkey_get_key_type(const hal_pkey_handle_t pkey,
@@ -280,7 +254,7 @@ hal_error_t hal_rpc_pkey_get_key_type(const hal_pkey_handle_t pkey,
 {
   if (type == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
-  return pkey_dispatch->get_key_type(pkey, type);
+  return hal_rpc_pkey_dispatch->get_key_type(pkey, type);
 }
 
 hal_error_t hal_rpc_pkey_get_key_flags(const hal_pkey_handle_t pkey,
@@ -288,12 +262,12 @@ hal_error_t hal_rpc_pkey_get_key_flags(const hal_pkey_handle_t pkey,
 {
   if (flags == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
-  return pkey_dispatch->get_key_flags(pkey, flags);
+  return hal_rpc_pkey_dispatch->get_key_flags(pkey, flags);
 }
 
 size_t hal_rpc_pkey_get_public_key_len(const hal_pkey_handle_t pkey)
 {
-  return pkey_dispatch->get_public_key_len(pkey);
+  return hal_rpc_pkey_dispatch->get_public_key_len(pkey);
 }
 
 hal_error_t hal_rpc_pkey_get_public_key(const hal_pkey_handle_t pkey,
@@ -301,7 +275,7 @@ hal_error_t hal_rpc_pkey_get_public_key(const hal_pkey_handle_t pkey,
 {
   if (der == NULL || der_len == NULL || der_max == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
-  return pkey_dispatch->get_public_key(pkey, der, der_len, der_max);
+  return hal_rpc_pkey_dispatch->get_public_key(pkey, der, der_len, der_max);
 }
 
 hal_error_t hal_rpc_pkey_sign(const hal_session_handle_t session,
@@ -313,7 +287,7 @@ hal_error_t hal_rpc_pkey_sign(const hal_session_handle_t session,
   if (signature == NULL || signature_len == NULL || signature_max == 0 ||
       (hash.handle == hal_hash_handle_none.handle) == (input == NULL || input_len == 0))
     return HAL_ERROR_BAD_ARGUMENTS;
-  return pkey_dispatch->sign(session, pkey, hash, input,  input_len, signature, signature_len, signature_max);
+  return hal_rpc_pkey_dispatch->sign(session, pkey, hash, input,  input_len, signature, signature_len, signature_max);
 }
 
 hal_error_t hal_rpc_pkey_verify(const hal_session_handle_t session,
@@ -325,7 +299,7 @@ hal_error_t hal_rpc_pkey_verify(const hal_session_handle_t session,
   if (signature == NULL || signature_len == 0 ||
       (hash.handle == hal_hash_handle_none.handle) == (input == NULL || input_len == 0))
     return HAL_ERROR_BAD_ARGUMENTS;
-  return pkey_dispatch->verify(session, pkey, hash, input, input_len, signature, signature_len);
+  return hal_rpc_pkey_dispatch->verify(session, pkey, hash, input, input_len, signature, signature_len);
 }
 
 hal_error_t hal_rpc_pkey_list(hal_pkey_info_t *result,
@@ -334,7 +308,7 @@ hal_error_t hal_rpc_pkey_list(hal_pkey_info_t *result,
 {
   if (result == NULL || result_len == NULL || result_max == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
-  return pkey_dispatch->list(result, result_len, result_max);
+  return hal_rpc_pkey_dispatch->list(result, result_len, result_max);
 }
 
 /*

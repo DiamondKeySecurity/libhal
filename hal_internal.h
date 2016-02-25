@@ -194,9 +194,9 @@ typedef struct {
 } hal_rpc_pkey_dispatch_t;
 
 
-extern const hal_rpc_misc_dispatch_t hal_rpc_local_misc_dispatch, hal_rpc_remote_misc_dispatch;
-extern const hal_rpc_hash_dispatch_t hal_rpc_local_hash_dispatch, hal_rpc_remote_hash_dispatch;
-extern const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch, hal_rpc_remote_pkey_dispatch, hal_rpc_mixed_pkey_dispatch;
+extern const hal_rpc_misc_dispatch_t hal_rpc_local_misc_dispatch, hal_rpc_remote_misc_dispatch, *hal_rpc_misc_dispatch;
+extern const hal_rpc_hash_dispatch_t hal_rpc_local_hash_dispatch, hal_rpc_remote_hash_dispatch, *hal_rpc_hash_dispatch;
+extern const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch, hal_rpc_remote_pkey_dispatch, hal_rpc_mixed_pkey_dispatch, *hal_rpc_pkey_dispatch;
 
 /*
  * Keystore API.
@@ -325,6 +325,95 @@ extern hal_error_t hal_ks_get_pin(const hal_user_t user,
 
 extern hal_error_t hal_ks_set_pin(const hal_user_t user,
                                   const hal_ks_pin_t * const pin);
+
+/*
+ * RPC serialization/deserialization routines, using XDR (RFC 4506) encoding.
+ */
+
+hal_error_t rpc_encode_int(uint8_t ** const outbuf,
+                           const uint8_t * const limit,
+                           const uint32_t value);
+
+hal_error_t rpc_decode_int(uint8_t ** const inbuf,
+                           const uint8_t * const limit,
+                           uint32_t * const value);
+
+hal_error_t rpc_encode_buffer(uint8_t ** const outbuf,
+                              const uint8_t * const limit,
+                              const uint8_t * const value,
+                              const uint32_t len);
+
+hal_error_t rpc_decode_buffer_in_place(uint8_t ** const inbuf,
+                                       const uint8_t * const limit,
+                                       uint8_t ** const vptr,
+                                       uint32_t * const len);
+
+hal_error_t rpc_decode_buffer(uint8_t ** const inbuf,
+                              const uint8_t * const limit,
+                              uint8_t * const value,
+                              uint32_t * const len);
+
+/* XXX move to hal.h? */
+typedef enum {
+    RPC_LOCAL,
+    RPC_REMOTE,
+    RPC_MIXED,
+} rpc_locality_t;
+
+/*
+ * RPC lowest-level send and receive routines. These are blocking, and
+ * transport-specific (sockets, USB).
+ */
+
+hal_error_t rpc_send(const uint8_t * const buf, const size_t len);
+hal_error_t rpc_recv(uint8_t * const buf, size_t * const len);
+
+hal_error_t rpc_client_init(rpc_locality_t locality);
+hal_error_t rpc_client_close(void);
+hal_error_t rpc_client_transport_init(void);
+hal_error_t rpc_client_transport_close(void);
+
+hal_error_t rpc_sendto(const uint8_t * const buf, const size_t len, void *opaque);
+hal_error_t rpc_recvfrom(uint8_t * const buf, size_t * const len, void **opaque);
+
+hal_error_t rpc_server_init(void);
+hal_error_t rpc_server_close(void);
+hal_error_t rpc_server_transport_init(void);
+hal_error_t rpc_server_transport_close(void);
+void rpc_server_main(void);
+
+/*
+ * RPC function numbers
+ */
+
+typedef enum {
+    RPC_FUNC_GET_RANDOM,
+    RPC_FUNC_SET_PIN,
+    RPC_FUNC_LOGIN,
+    RPC_FUNC_LOGOUT,
+    RPC_FUNC_LOGOUT_ALL,
+    RPC_FUNC_IS_LOGGED_IN,
+    RPC_FUNC_HASH_GET_DIGEST_LEN,
+    RPC_FUNC_HASH_GET_DIGEST_ALGORITHM_ID,
+    RPC_FUNC_HASH_GET_ALGORITHM,
+    RPC_FUNC_HASH_INITIALIZE,
+    RPC_FUNC_HASH_UPDATE,
+    RPC_FUNC_HASH_FINALIZE,
+    RPC_FUNC_PKEY_LOAD,
+    RPC_FUNC_PKEY_FIND,
+    RPC_FUNC_PKEY_GENERATE_RSA,
+    RPC_FUNC_PKEY_GENERATE_EC,
+    RPC_FUNC_PKEY_CLOSE,
+    RPC_FUNC_PKEY_DELETE,
+    RPC_FUNC_PKEY_GET_KEY_TYPE,
+    RPC_FUNC_PKEY_GET_KEY_FLAGS,
+    RPC_FUNC_PKEY_GET_PUBLIC_KEY_LEN,
+    RPC_FUNC_PKEY_GET_PUBLIC_KEY,
+    RPC_FUNC_PKEY_REMOTE_SIGN,
+    RPC_FUNC_PKEY_REMOTE_VERIFY,
+    RPC_FUNC_PKEY_LIST,
+} rpc_func_num_t;
+
 
 #endif /* _HAL_INTERNAL_H_ */
 

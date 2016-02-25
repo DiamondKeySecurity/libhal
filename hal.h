@@ -125,6 +125,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_PIN_INCORRECT,             "PIN incorrect")                                \
   DEFINE_HAL_ERROR(HAL_ERROR_NO_CLIENT_SLOTS_AVAILABLE, "No client slots available")                    \
   DEFINE_HAL_ERROR(HAL_ERROR_FORBIDDEN,                 "Forbidden")                                    \
+  DEFINE_HAL_ERROR(HAL_ERROR_RPC_TRANSPORT,             "RPC transport error")                          \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */

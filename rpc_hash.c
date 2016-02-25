@@ -4,7 +4,7 @@
  * Remote procedure call server-side hash implementation.
  *
  * Authors: Rob Austein
- * Copyright (c) 2015, NORDUnet A/S All rights reserved.
+ * Copyright (c) 2015-2016, NORDUnet A/S All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -143,6 +143,12 @@ static inline handle_slot_t *find_handle(const hal_hash_handle_t handle)
   return NULL;
 }
 
+static inline free_handle(handle_slot_t *slot)
+{
+    /* state is a union, so this this works for hash and hmac */
+    slot->state.hash = NULL;
+}
+
 /*
  * Translate an algorithm number to a descriptor.
  */
@@ -234,6 +240,7 @@ static hal_error_t initialize(const hal_client_handle_t client,
 {
   const hal_hash_descriptor_t *descriptor;
   handle_slot_t *slot;
+  hal_error_t err;
 
   if (hash == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -241,16 +248,20 @@ static hal_error_t initialize(const hal_client_handle_t client,
   if ((descriptor = alg_to_descriptor(alg)) == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if ((slot = alloc_handle(key != NULL)) == NULL)
+  if ((slot = alloc_handle(key_len != 0)) == NULL)
     return HAL_ERROR_ALLOCATION_FAILURE;
 
   slot->client_handle  = client;
   slot->session_handle = session;
+  *hash = slot->hash_handle;
 
-  if (key == NULL)
-    return hal_hash_initialize(NULL, descriptor, &slot->state.hash, NULL, 0);
+  if (key_len == 0)
+    err = hal_hash_initialize(NULL, descriptor, &slot->state.hash, NULL, 0);
   else
-    return hal_hmac_initialize(NULL, descriptor, &slot->state.hmac, NULL, 0, key, key_len);
+    err = hal_hmac_initialize(NULL, descriptor, &slot->state.hmac, NULL, 0, key, key_len);
+  if (err != HAL_OK)
+    free_handle(slot);
+  return err;
 }
 
 static hal_error_t update(const hal_hash_handle_t handle,
@@ -286,6 +297,7 @@ static hal_error_t finalize(const hal_hash_handle_t handle,
     hal_hmac_cleanup(&slot->state.hmac);
   }
 
+  free_handle(slot);
   return err;
 }
 

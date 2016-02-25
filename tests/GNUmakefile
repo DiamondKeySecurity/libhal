@@ -30,6 +30,7 @@
 INC	= ../hal.h
 LIB	= ../libhal.a
 BIN	= test-aes-key-wrap test-hash test-pbkdf2 test-ecdsa test-bus test-trng test-rsa
+BIN	+= test-rpc_hash test-rpc_server
 
 CFLAGS	= -g3 -Wall -fPIC -std=c99 -I..
 

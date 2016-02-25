@@ -46,18 +46,13 @@ IO_OBJ_I2C 	= hal_io_i2c.o
 # Default I/O bus is EIM, override this to use I2C instead
 IO_OBJ		= ${IO_OBJ_EIM}
 
-RPC_OBJ_COMMON	= rpc_api.o rpc_hash.o
-RPC_OBJ_CLIENT	= ${RPC_OBJ_COMMON} rpc_client.o
-RPC_OBJ_SERVER	= ${RPC_OBJ_COMMON} rpc_misc.o rpc_pkey.o
+RPC_OBJ_COMMON	= rpc_api.o rpc_hash.o rpc_misc.o rpc_pkey.o rpc_xdr.o
+RPC_OBJ_CLIENT	= rpc_client.o rpc_client_loopback.o
+RPC_OBJ_SERVER	= rpc_server.o rpc_server_loopback.o
 
-# Default should be to build the RPC server code, but we haven't
-# written even the skeleton of that yet.  We'll probably end up
-# needing a makefile conditional to handle all this properly
-RPC_OBJ		= ${RPC_OBJ_SERVER}
-
-# XXX temporary
-$(warning TEMPORARY KLUDGE TO TEST rpc_client)
-RPC_OBJ		+= ${RPC_OBJ_CLIENT}
+# Default should be to build the RPC server code. We'll probably end up
+# needing a makefile conditional to handle all this properly.
+RPC_OBJ		= ${RPC_OBJ_COMMON} ${RPC_OBJ_CLIENT} ${RPC_OBJ_SERVER}
 
 KS_OBJ_COMMON	= ks.o
 KS_OBJ_MMAP	= ${KS_OBJ_COMMON} ks_mmap.o
