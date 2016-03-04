@@ -85,6 +85,24 @@ hal_error_t hal_ks_set_pin(const hal_user_t user,
 }
 
 
+hal_error_t hal_ks_get_kek(uint8_t *kek,
+                           size_t *kek_len,
+                           const size_t kek_max)
+{
+  if (kek == NULL || kek_len == NULL || kek_max < bitsToBytes(128))
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  const size_t len = ((kek_max < bitsToBytes(192)) ? bitsToBytes(128) :
+                      (kek_max < bitsToBytes(256)) ? bitsToBytes(192) :
+                      bitsToBytes(256));
+
+#error Or what goes here
+
+  return HAL_OK;
+}
+
+
+
 /*
  * Local variables:
  * indent-tabs-mode: nil

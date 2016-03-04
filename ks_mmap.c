@@ -51,7 +51,15 @@
 #define MAP_FILE 0
 #endif
 
+/*
+ * Storing the KEK in with the keys it's protecting is a bad idea, but we have no better
+ * place to put it (real protection requires dedicated hardware, which we don't have here).
+ */
+
+#define KEKBUF_LEN (bitsToBytes(256))
+
 static hal_ks_keydb_t *db;
+static uint8_t *kekbuf;
 
 const hal_ks_keydb_t *hal_ks_get_keydb(void)
 {
@@ -62,7 +70,7 @@ const hal_ks_keydb_t *hal_ks_get_keydb(void)
   const char * const home = getenv("HOME");
   const char * const base = HAL_KS_MMAP_FILE;
   const long pagemask = sysconf(_SC_PAGESIZE) - 1;
-  const size_t len = (sizeof(hal_ks_keydb_t) + pagemask) & ~pagemask;
+  const size_t len = (sizeof(hal_ks_keydb_t) + KEKBUF_LEN + pagemask) & ~pagemask;
 
   char fn_[strlen(base) + (home == NULL ? 0 : strlen(home)) + 2];
   const char *fn = fn_;
@@ -87,8 +95,8 @@ const hal_ks_keydb_t *hal_ks_get_keydb(void)
     fd = open(fn, O_RDWR | O_CREAT, 0600);
   }
 
-  if (fd >= 0)
-    db = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_FILE | MAP_SHARED, fd, 0);
+  if (fd >= 0 && (db = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_FILE | MAP_SHARED, fd, 0)) != NULL)
+    kekbuf = (uint8_t *) (db + 1);
 
   (void) close(fd);
 
@@ -132,6 +140,34 @@ hal_error_t hal_ks_set_pin(const hal_user_t user,
   }
 
   *p = *pin;
+  return HAL_OK;
+}
+
+hal_error_t hal_ks_get_kek(uint8_t *kek,
+                           size_t *kek_len,
+                           const size_t kek_max)
+{
+  if (kek == NULL || kek_len == NULL || kek_max < bitsToBytes(128))
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (kekbuf == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  hal_error_t err;
+
+  const size_t len = ((kek_max < bitsToBytes(192)) ? bitsToBytes(128) :
+                      (kek_max < bitsToBytes(256)) ? bitsToBytes(192) :
+                      bitsToBytes(256));
+
+  uint8_t t = 0;
+
+  for (int i = 0; i < KEKBUF_LEN; i++)
+    t |= kekbuf[i];
+
+  if (t == 0 && (err = hal_rpc_get_random(kekbuf, sizeof(KEKBUF_LEN))) != HAL_OK)
+    return err;
+
+  memcpy(kek, kekbuf, len);
   return HAL_OK;
 }
 

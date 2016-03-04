@@ -55,6 +55,17 @@
 
 static hal_ks_keydb_t db[1];
 
+/*
+ * There's no good place to store the master key (KEK) in this volatile memory implementation.
+ * We might be able to add a bit of protection doing things like using locked physical memory,
+ * as gpg does, or obfuscating the KEK a bit to make it harder to pull out of a crash dump,
+ * but, really, there's not a lot we can do against a determined opponant in this case.
+ *
+ * For now, we just go through the motions.
+ */
+
+static uint8_t kekbuf[bitsToBytes(256)];
+
 const hal_ks_keydb_t *hal_ks_get_keydb(void)
 {
   return db;
@@ -96,6 +107,31 @@ hal_error_t hal_ks_set_pin(const hal_user_t user,
   }
 
   *p = *pin;
+  return HAL_OK;
+}
+
+hal_error_t hal_ks_get_kek(uint8_t *kek,
+                           size_t *kek_len,
+                           const size_t kek_max)
+{
+  if (kek == NULL || kek_len == NULL || kek_max < bitsToBytes(128))
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  hal_error_t err;
+
+  const size_t len = ((kek_max < bitsToBytes(192)) ? bitsToBytes(128) :
+                      (kek_max < bitsToBytes(256)) ? bitsToBytes(192) :
+                      bitsToBytes(256));
+
+  uint8_t t = 0;
+
+  for (int i = 0; i < sizeof(kekbuf); i++)
+    t |= kekbuf[i];
+
+  if (t == 0 && (err = hal_rpc_get_random(kekbuf, sizeof(kekbuf))) != HAL_OK)
+    return err;
+
+  memcpy(kek, kekbuf, len);
   return HAL_OK;
 }
 
