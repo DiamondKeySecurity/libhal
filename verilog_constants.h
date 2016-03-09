@@ -8,7 +8,7 @@
  * hand-edited.
  *
  * Authors: Joachim Strombergson, Paul Selkirk, Rob Austein
- * Copyright (c) 2015, NORDUnet A/S All rights reserved.
+ * Copyright (c) 2015-2016, NORDUnet A/S All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -81,6 +81,7 @@
 #define MODE_SHA_512_256        (1 << 2)
 #define MODE_SHA_384            (2 << 2)
 #define MODE_SHA_512            (3 << 2)
+#define	MODE_SHA_MASK   	(3 << 2)
 
 /*
  * RNG cores.
