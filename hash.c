@@ -87,6 +87,7 @@ struct hal_hash_driver {
   hal_addr_t digest_addr;               /* Where to read digest */
   uint8_t ctrl_mode;                    /* Digest mode, for cores that have modes */
   sw_hash_core_t sw_core;               /* Software implementation, when enabled */
+  size_t sw_word_size;                  /* Word size for software implementation */
 };
 
 /*
@@ -128,27 +129,27 @@ struct hal_hmac_state {
  */
 
 static const hal_hash_driver_t sha1_driver = {
-  SHA1_LENGTH_LEN, SHA1_ADDR_BLOCK, SHA1_ADDR_DIGEST, 0, sw_hash_core_sha1
+  SHA1_LENGTH_LEN, SHA1_ADDR_BLOCK, SHA1_ADDR_DIGEST, 0, sw_hash_core_sha1, sizeof(uint32_t)
 };
 
 static const hal_hash_driver_t sha256_driver = {
-  SHA256_LENGTH_LEN, SHA256_ADDR_BLOCK, SHA256_ADDR_DIGEST, 0, sw_hash_core_sha256
+  SHA256_LENGTH_LEN, SHA256_ADDR_BLOCK, SHA256_ADDR_DIGEST, 0, sw_hash_core_sha256, sizeof(uint32_t)
 };
 
 static const hal_hash_driver_t sha512_224_driver = {
-  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_512_224, sw_hash_core_sha512
+  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_512_224, sw_hash_core_sha512, sizeof(uint64_t)
 };
 
 static const hal_hash_driver_t sha512_256_driver = {
-  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_512_256, sw_hash_core_sha512
+  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_512_256, sw_hash_core_sha512, sizeof(uint64_t)
 };
 
 static const hal_hash_driver_t sha384_driver = {
-  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_384, sw_hash_core_sha512
+  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_384, sw_hash_core_sha512, sizeof(uint64_t)
 };
 
 static const hal_hash_driver_t sha512_driver = {
-  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_512, sw_hash_core_sha512
+  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_512, sw_hash_core_sha512, sizeof(uint64_t)
 };
 
 /*
@@ -296,6 +297,38 @@ static inline hal_hmac_state_t *alloc_static_hmac_state(void)
 #endif  
 
   return NULL;
+}
+
+/*
+ * Internal utility to do a sort of byte-swapping memcpy() (sigh).
+ * This is only used by the software hash cores, but it's simpler to define it unconditionally.
+ */
+
+static inline void swytebop(void *out_, const void * const in_, const size_t n, const size_t w)
+{
+  const uint8_t  order[] = { 0x01, 0x02, 0x03, 0x04 };
+
+  const uint8_t * const in = in_;
+  uint8_t *out = out_;
+
+  /* w must be a power of two */
+  assert(in != out && in != NULL && out != NULL && w && !(w & (w - 1)));
+  
+  switch (* (uint32_t *) order) {
+
+  case 0x01020304:
+    memcpy(out, in, n);
+    return;
+
+  case 0x04030201:
+    for (int i = 0; i < n; i += w)
+      for (int j = 0; j < w && i + j < n; j++)
+        out[i + j] = in[i + w - j - 1];
+    return;
+
+  default:
+    assert((* (uint32_t *) order) == 0x01020304 || (* (uint32_t *) order) == 0x04030201);
+  }
 }
 
 /*
@@ -614,7 +647,7 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
 
   /* All data pushed to core, now we just need to read back the result */
   if (HAL_ENABLE_SOFTWARE_HASH_CORES && (state->flags & STATE_FLAG_SOFTWARE_CORE) != 0)
-    memcpy(digest_buffer, state->core_state, state->descriptor->digest_length);
+    swytebop(digest_buffer, state->core_state, state->descriptor->digest_length, state->driver->sw_word_size);
   else if ((err = hash_read_digest(state->core, state->driver, digest_buffer, state->descriptor->digest_length)) != HAL_OK)
     return err;
 
@@ -898,36 +931,6 @@ static inline int sha1_pos(int i, int j) { assert(i >= 0 && j >= 0 && j < 5); re
 static inline int sha2_pos(int i, int j) { assert(i >= 0 && j >= 0 && j < 8); return (8 + j - (i % 8)) % 8; }
 
 /*
- * Byte-swapping version of memcpy() (sigh).
- */
-
-static inline void swytebop(void *out_, const void * const in_, const size_t n, const size_t w)
-{
-  const uint8_t  order[] = { 0x01, 0x02, 0x03, 0x04 };
-
-  const uint8_t * const in = in_;
-  uint8_t *out = out_;
-
-  assert(in != out && in != NULL && out != NULL && w % 4 == 0 && n % w == 0);
-  
-  switch (* (uint32_t *) order) {
-
-  case 0x01020304:
-    memcpy(out, in, n);
-    return;
-
-  case 0x04030201:
-    for (int i = 0; i < n; i += w)
-      for (int j = 0; j < w; j++)
-        out[i + j] = in[i + w - j - 1];
-    return;
-
-  default:
-    assert((* (uint32_t *) order) == 0x01020304 || (* (uint32_t *) order) == 0x04030201);
-  }
-}
-
-/*
  * Software implementation of SHA-1 block algorithm.
  */
 
@@ -938,14 +941,12 @@ static hal_error_t sw_hash_core_sha1(hal_hash_state_t *state)
   if (state == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  uint32_t H[5], S[5], W[80];
+  uint32_t *H = (uint32_t *) state->core_state, S[5], W[80];
 
   if (state->block_count == 0)
     memcpy(H, iv, sizeof(iv));
-  else
-    swytebop(H, state->core_state, sizeof(H), sizeof(*H));
 
-  memcpy(S, H, sizeof(H));
+  memcpy(S, H, sizeof(S));
 
   swytebop(W, state->block, 16 * sizeof(*W), sizeof(*W));
 
@@ -977,8 +978,6 @@ static hal_error_t sw_hash_core_sha1(hal_hash_state_t *state)
   for (int i = 0; i < 5; i++)
     H[i] += S[i];
 
-  swytebop(state->core_state, H, sizeof(H), sizeof(*H));
-
   return HAL_OK;
 }
 
@@ -995,14 +994,12 @@ static hal_error_t sw_hash_core_sha256(hal_hash_state_t *state)
   if (state == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  uint32_t H[8], S[8], W[64];
+  uint32_t *H = (uint32_t *) state->core_state, S[8], W[64];
 
   if (state->block_count == 0)
     memcpy(H, iv, sizeof(iv));
-  else
-    swytebop(H, state->core_state, sizeof(H), sizeof(*H));
 
-  memcpy(S, H, sizeof(H));
+  memcpy(S, H, sizeof(S));
 
   swytebop(W, state->block, 16 * sizeof(*W), sizeof(*W));
 
@@ -1022,8 +1019,6 @@ static hal_error_t sw_hash_core_sha256(hal_hash_state_t *state)
 
   for (int i = 0; i < 8; i++)
     H[i] += S[i];
-
-  swytebop(state->core_state, H, sizeof(H), sizeof(*H));
 
   return HAL_OK;
 }
@@ -1051,9 +1046,9 @@ static hal_error_t sw_hash_core_sha512(hal_hash_state_t *state)
   if (state == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  uint64_t H[8], S[8], W[80];
+  uint64_t *H = (uint64_t *) state->core_state, S[8], W[80];
 
-  if (state->block_count == 0)
+  if (state->block_count == 0) {
     switch (state->driver->ctrl_mode & MODE_SHA_MASK) {
     case MODE_SHA_512_224:      memcpy(H, sha512_224_iv, sizeof(sha512_224_iv)); break;
     case MODE_SHA_512_256:      memcpy(H, sha512_256_iv, sizeof(sha512_256_iv)); break;
@@ -1061,10 +1056,9 @@ static hal_error_t sw_hash_core_sha512(hal_hash_state_t *state)
     case MODE_SHA_512:          memcpy(H, sha512_iv,     sizeof(sha512_iv));     break;
     default:                    return HAL_ERROR_IMPOSSIBLE;
     }
-  else
-    swytebop(H, state->core_state, sizeof(H), sizeof(*H));
+  }
 
-  memcpy(S, H, sizeof(H));
+  memcpy(S, H, sizeof(S));
 
   swytebop(W, state->block, 16 * sizeof(*W), sizeof(*W));
 
@@ -1084,8 +1078,6 @@ static hal_error_t sw_hash_core_sha512(hal_hash_state_t *state)
 
   for (int i = 0; i < 8; i++)
     H[i] += S[i];
-
-  swytebop(state->core_state, H, sizeof(H), sizeof(*H));
 
   return HAL_OK;
 }
