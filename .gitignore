@@ -12,6 +12,7 @@ tests/test-ecdsa-*.der
 tests/test-hash
 tests/test-pbkdf2
 tests/test-rpc_hash
+tests/test-rpc_pkey
 tests/test-rpc_server
 tests/test-rsa
 tests/test-rsa-*.der
