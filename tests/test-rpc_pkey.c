@@ -170,7 +170,7 @@ static int test_ecdsa_testvec(const ecdsa_tc_t * const tc)
 
   assert(len == sizeof(private_der));
 
-  if ((err = hal_rpc_pkey_load(client, session, &private_key, HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_NONE,
+  if ((err = hal_rpc_pkey_load(client, session, &private_key, HAL_KEY_TYPE_EC_PRIVATE, tc->curve,
                                private_label, sizeof(private_label), private_der, sizeof(private_der),
                                HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)) != HAL_OK)
     return printf("Could not load private key into RPC: %s\n", hal_error_string(err)), 0;
@@ -180,7 +180,7 @@ static int test_ecdsa_testvec(const ecdsa_tc_t * const tc)
 
   assert(len == sizeof(public_der));
 
-  if ((err = hal_rpc_pkey_load(client, session, &public_key, HAL_KEY_TYPE_EC_PUBLIC, HAL_CURVE_NONE,
+  if ((err = hal_rpc_pkey_load(client, session, &public_key, HAL_KEY_TYPE_EC_PUBLIC, tc->curve,
                                public_label, sizeof(public_label), public_der, sizeof(public_der),
                                HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)) != HAL_OK)
     return printf("Could not load public key into RPC: %s\n", hal_error_string(err)), 0;
