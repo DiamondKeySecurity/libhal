@@ -669,13 +669,13 @@ static hal_error_t sign(const hal_session_handle_t session,
 }
 
 /*
- * Verify something using private key associated with handle.
+ * Verify something using public key associated with handle.
  *
  * RSA has enough quirks that it's simplest to split this out into
  * algorithm-specific functions.
  */
 
-static hal_error_t verify_rsa(uint8_t *keybuf, const size_t keybuf_len,
+static hal_error_t verify_rsa(uint8_t *keybuf, const size_t keybuf_len, const hal_key_type_t type,
                               const uint8_t * const der, const size_t der_len,
                               const hal_hash_handle_t hash,
                               const uint8_t * input, size_t input_len,
@@ -688,7 +688,18 @@ static hal_error_t verify_rsa(uint8_t *keybuf, const size_t keybuf_len,
   assert(signature != NULL && signature_len > 0);
   assert((hash.handle == hal_hash_handle_none.handle) != (input == NULL || input_len == 0));
 
-  if ((err = hal_rsa_private_key_from_der(&key, keybuf, keybuf_len, der, der_len)) != HAL_OK)
+  switch (type) {
+  case HAL_KEY_TYPE_RSA_PRIVATE:
+    err = hal_rsa_private_key_from_der(&key, keybuf, keybuf_len, der, der_len);
+    break;
+  case HAL_KEY_TYPE_RSA_PUBLIC:
+    err = hal_rsa_public_key_from_der(&key, keybuf, keybuf_len, der, der_len);
+    break;
+  default:
+    err = HAL_ERROR_IMPOSSIBLE;
+  }
+
+  if (err != HAL_OK)
     return err;
 
   if (input == NULL) {
@@ -711,7 +722,7 @@ static hal_error_t verify_rsa(uint8_t *keybuf, const size_t keybuf_len,
   return HAL_OK;
 }
 
-static hal_error_t verify_ecdsa(uint8_t *keybuf, const size_t keybuf_len,
+static hal_error_t verify_ecdsa(uint8_t *keybuf, const size_t keybuf_len, const hal_key_type_t type,
                                 const uint8_t * const der, const size_t der_len,
                                 const hal_hash_handle_t hash,
                                 const uint8_t * input, size_t input_len,
@@ -724,7 +735,18 @@ static hal_error_t verify_ecdsa(uint8_t *keybuf, const size_t keybuf_len,
   assert(signature != NULL && signature_len > 0);
   assert((hash.handle == hal_hash_handle_none.handle) != (input == NULL || input_len == 0));
 
-  if ((err = hal_ecdsa_private_key_from_der(&key, keybuf, keybuf_len, der, der_len)) != HAL_OK)
+  switch (type) {
+  case HAL_KEY_TYPE_EC_PRIVATE:
+    err = hal_ecdsa_private_key_from_der(&key, keybuf, keybuf_len, der, der_len);
+    break;
+  case HAL_KEY_TYPE_EC_PUBLIC:
+    err = hal_ecdsa_public_key_from_der(&key, keybuf, keybuf_len, der, der_len);
+    break;
+  default:
+    err = HAL_ERROR_IMPOSSIBLE;
+  }
+
+  if (err != HAL_OK)
     return err;
 
   if (input == NULL) {
@@ -755,7 +777,7 @@ static hal_error_t verify(const hal_session_handle_t session,
   if (slot == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
 
-  hal_error_t (*verifier)(uint8_t *keybuf, const size_t keybuf_len,
+  hal_error_t (*verifier)(uint8_t *keybuf, const size_t keybuf_len, const hal_key_type_t type,
                           const uint8_t * const der, const size_t der_len,
                           const hal_hash_handle_t hash,
                           const uint8_t * const input,  const size_t input_len,
@@ -782,7 +804,7 @@ static hal_error_t verify(const hal_session_handle_t session,
   err = hal_ks_fetch(slot->type, slot->name, slot->name_len, NULL, NULL, der, &der_len, sizeof(der), &slot->ks_hint);
 
   if (err == HAL_OK)
-    err = verifier(keybuf, sizeof(keybuf), der, der_len, hash, input, input_len, signature, signature_len);
+    err = verifier(keybuf, sizeof(keybuf), slot->type, der, der_len, hash, input, input_len, signature, signature_len);
 
   memset(keybuf, 0, sizeof(keybuf));
   memset(der,    0, sizeof(der));

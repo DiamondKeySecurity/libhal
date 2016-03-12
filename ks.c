@@ -93,6 +93,7 @@ hal_error_t hal_ks_store(const hal_key_type_t type,
 
   hal_ks_key_t k;
   memset(&k, 0, sizeof(k));
+  k.der_len = sizeof(k.der);
 
   uint8_t kek[KEK_LENGTH];
   size_t kek_len;

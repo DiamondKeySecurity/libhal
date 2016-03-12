@@ -74,7 +74,7 @@ static int test_rsa_testvec(const rsa_tc_t * const tc)
                                       tc->dQ.val, tc->dQ.len)) != HAL_OK)
     return printf("Could not load RSA private key from test vector: %s\n", hal_error_string(err)), 0;
 
-  const uint8_t private_label[] = "private key", public_label[] = "private key";
+  const uint8_t private_label[] = "RSA private key", public_label[] = "RSA public key";
 
   uint8_t private_der[hal_rsa_private_key_to_der_len(tc_key)];
   uint8_t public_der[hal_rsa_public_key_to_der_len(tc_key)];
@@ -99,17 +99,25 @@ static int test_rsa_testvec(const rsa_tc_t * const tc)
                                HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)) != HAL_OK)
     return printf("Could not load public key into RPC: %s\n", hal_error_string(err)), 0;
 
-  uint8_t m_buf[tc->m.len], s_buf[tc->s.len];
+  uint8_t sig[tc->s.len];
 
-  if ((err = hal_rpc_pkey_sign(session, private_key, hal_hash_handle_none, tc->m.val, tc->m.len,
-                               s_buf, &len, sizeof(s_buf))) != HAL_OK)
+  /*
+   * Raw RSA test cases include PKCS #1.5 padding, we need to drill down to the DigestInfo.
+   */
+  assert(tc->m.len > 4 && tc->m.val[0] == 0x00 && tc->m.val[1] == 0x01 && tc->m.val[2] == 0xff);
+  const uint8_t *digestinfo = memchr(tc->m.val + 2, 0x00, tc->m.len - 2);
+  assert(digestinfo != NULL);
+  const size_t digestinfo_len = tc->m.val + tc->m.len - ++digestinfo;
+
+  if ((err = hal_rpc_pkey_sign(session, private_key, hal_hash_handle_none,
+                               digestinfo, digestinfo_len, sig, &len, sizeof(sig))) != HAL_OK)
     return printf("Could not sign: %s\n", hal_error_string(err)), 0;
 
-  if (tc->s.len != len || memcmp(s_buf, tc->s.val, tc->s.len) != 0)
+  if (tc->s.len != len || memcmp(sig, tc->s.val, tc->s.len) != 0)
     return printf("MISMATCH\n"), 0;
 
-  if ((err = hal_rpc_pkey_verify(session, public_key, hal_hash_handle_none, tc->s.val, tc->s.len,
-                                 m_buf, sizeof(m_buf))) != HAL_OK)
+  if ((err = hal_rpc_pkey_verify(session, public_key, hal_hash_handle_none,
+                                 digestinfo, digestinfo_len, tc->s.val, tc->s.len)) != HAL_OK)
     return printf("Could not verify: %s\n", hal_error_string(err)), 0;
 
   if ((err = hal_rpc_pkey_delete(private_key)) != HAL_OK)

@@ -168,6 +168,7 @@ hal_error_t hal_ks_get_kek(uint8_t *kek,
     return err;
 
   memcpy(kek, kekbuf, len);
+  *kek_len = len;
   return HAL_OK;
 }
 
