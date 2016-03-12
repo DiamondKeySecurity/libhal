@@ -70,7 +70,7 @@ KS_OBJ_FLASH	= ${KS_OBJ_COMMON} ks_flash.o
 KS_OBJ		= ${KS_OBJ_MMAP}
 
 TFMDIR		:= $(abspath ../thirdparty/libtfm)
-CFLAGS		+= -g3 -Wall -fPIC -std=c99 -I${TFMDIR} -DHAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM=1
+CFLAGS		+= -g3 -Wall -fPIC -std=c99 -I${TFMDIR}
 LDFLAGS		:= -g3 -L${TFMDIR} -ltfm
 
 CFLAGS		+= -DHAL_STATIC_HASH_STATE_BLOCKS=${STATIC_HASH_STATE_BLOCKS}
