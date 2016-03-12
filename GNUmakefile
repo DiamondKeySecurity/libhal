@@ -39,7 +39,7 @@ IO_OBJ_I2C 	= hal_io_i2c.o
 IO_OBJ		= ${IO_OBJ_EIM}
 
 TFMDIR		:= $(abspath ../thirdparty/libtfm)
-CFLAGS		+= -g3 -Wall -fPIC -std=c99 -I${TFMDIR} -DHAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM=1
+CFLAGS		+= -g3 -Wall -fPIC -std=c99 -I${TFMDIR}
 LDFLAGS		:= -g3 -L${TFMDIR} -ltfm
 
 all: ${LIB}

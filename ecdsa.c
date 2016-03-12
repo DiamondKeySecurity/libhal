@@ -722,7 +722,7 @@ static inline hal_error_t get_random(void *buffer, const size_t length)
 
 static inline hal_error_t get_random(void *buffer, const size_t length)
 {
-  return hal_get_random(buffer, length);
+  return hal_get_random(NULL, buffer, length);
 }
 
 #endif /* HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM */
