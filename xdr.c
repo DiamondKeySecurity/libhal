@@ -1,6 +1,6 @@
 /*
- * rpc_xdr.c
- * ---------
+ * xdr.c
+ * -----
  * Serialization/deserialization routines, using XDR (RFC 4506) encoding.
  *
  * Copyright (c) 2016, NORDUnet A/S All rights reserved.
@@ -34,41 +34,59 @@
 
 #include <stdio.h>
 #include <stdint.h>
-#include <string.h>		/* memcpy */
-#include <strings.h>		/* bzero */
-#include <arpa/inet.h>		/* htonl/ntohl */
+#include <string.h>             /* memcpy, memset */
+
+#ifndef STM32F4XX
+#include <arpa/inet.h>          /* htonl/ntohl */
+#else
+/* htonl is not available in arm-none-eabi headers or libc */
+#ifdef __ARMEL__                /* little endian */
+static inline uint32_t htonl(uint32_t w)
+{
+  return
+    ((w & 0x000000ff) << 24) +
+    ((w & 0x0000ff00) << 8) +
+    ((w & 0x00ff0000) >> 8) +
+    ((w & 0xff000000) >> 24);
+}
+#else
+#define htonl(x) (x)
+#endif
+#define ntohl htonl
+#endif
 
 #include "hal.h"
+#include "xdr_internal.h"
 
 /* encode/decode_int. This covers int, unsigned int, enum, and bool types,
  * which are all encoded as 32-bit big-endian fields. Signed integers are
  * defined to use two's complement, but that's universal these days, yes?
  */
 
-hal_error_t rpc_encode_int(uint8_t ** const outbuf, const uint8_t * const limit, const uint32_t value)
+hal_error_t hal_xdr_encode_int(uint8_t ** const outbuf, const uint8_t * const limit, const uint32_t value)
 {
     /* arg checks */
     if (outbuf == NULL || *outbuf == NULL || limit == NULL)
-	return HAL_ERROR_BAD_ARGUMENTS;
+        return HAL_ERROR_BAD_ARGUMENTS;
 
     /* buffer overflow check */
     if (limit - *outbuf < sizeof(value))
-	return HAL_ERROR_IO_BAD_COUNT;
+        return HAL_ERROR_IO_BAD_COUNT;
 
     **(uint32_t **)outbuf = htonl(value);
     *outbuf += sizeof(value);
     return HAL_OK;
 }
 
-hal_error_t rpc_decode_int(uint8_t **inbuf, const uint8_t * const limit, uint32_t *value)
+hal_error_t hal_xdr_decode_int(uint8_t **inbuf, const uint8_t * const limit, uint32_t *value)
 {
     /* arg checks */
     if (inbuf == NULL || *inbuf == NULL || limit == NULL || value == NULL)
-	return HAL_ERROR_BAD_ARGUMENTS;
+        return HAL_ERROR_BAD_ARGUMENTS;
 
     /* buffer overflow check */
     if (limit - *inbuf < sizeof(*value))
-	return HAL_ERROR_IO_BAD_COUNT;
+        return HAL_ERROR_IO_BAD_COUNT;
 
     *value = ntohl(**(uint32_t **)inbuf);
     *inbuf += sizeof(*value);
@@ -80,22 +98,22 @@ hal_error_t rpc_decode_int(uint8_t **inbuf, const uint8_t * const limit, uint32_
  * to a multiple of 4 bytes as necessary.
  */
 
-hal_error_t rpc_encode_buffer(uint8_t **outbuf, const uint8_t * const limit, const uint8_t *value, const uint32_t len)
+hal_error_t hal_xdr_encode_buffer(uint8_t **outbuf, const uint8_t * const limit, const uint8_t *value, const uint32_t len)
 {
     hal_error_t ret;
 
     /* arg checks */
     if (outbuf == NULL || *outbuf == NULL || limit == NULL || 
-	(value == NULL && len != 0))
-	return HAL_ERROR_BAD_ARGUMENTS;
+        (value == NULL && len != 0))
+        return HAL_ERROR_BAD_ARGUMENTS;
 
     /* buffer overflow check */
     if ((limit - *outbuf) < (((len + 3) & ~3) + sizeof(len)))
-	return HAL_ERROR_IO_BAD_COUNT;
+        return HAL_ERROR_IO_BAD_COUNT;
 
     /* encode length */
-    if ((ret = rpc_encode_int(outbuf, limit, len)) != HAL_OK)
-	return ret;
+    if ((ret = hal_xdr_encode_int(outbuf, limit, len)) != HAL_OK)
+        return ret;
 
     /* write the string or opaque data */
     memcpy(*outbuf, value, len);
@@ -103,9 +121,9 @@ hal_error_t rpc_encode_buffer(uint8_t **outbuf, const uint8_t * const limit, con
 
     /* pad if necessary */
     if (len & 3) {
-	size_t n = 4 - (len & 3);
-	bzero(*outbuf, n);
-	*outbuf += n;
+        size_t n = 4 - (len & 3);
+        memset(*outbuf, 0, n);
+        *outbuf += n;
     }
 
     return HAL_OK;
@@ -114,7 +132,7 @@ hal_error_t rpc_encode_buffer(uint8_t **outbuf, const uint8_t * const limit, con
 /* This version returns a pointer to the data in the input buffer.
  * It is used in the rpc server.
  */
-hal_error_t rpc_decode_buffer_in_place(uint8_t **inbuf, const uint8_t * const limit, uint8_t ** const value, uint32_t * const len)
+hal_error_t hal_xdr_decode_buffer_in_place(uint8_t **inbuf, const uint8_t * const limit, uint8_t ** const value, uint32_t * const len)
 {
     hal_error_t ret;
     uint32_t xdr_len;
@@ -122,11 +140,11 @@ hal_error_t rpc_decode_buffer_in_place(uint8_t **inbuf, const uint8_t * const li
 
     /* arg checks */
     if (inbuf == NULL || *inbuf == NULL || limit == NULL || value == NULL || len == NULL)
-	return HAL_ERROR_BAD_ARGUMENTS;
+        return HAL_ERROR_BAD_ARGUMENTS;
 
     /* decode the length */
-    if ((ret = rpc_decode_int(inbuf, limit, &xdr_len)) != HAL_OK)
-	return ret;
+    if ((ret = hal_xdr_decode_int(inbuf, limit, &xdr_len)) != HAL_OK)
+        return ret;
 
     /* input and output buffer overflow checks vs decoded length */
 
@@ -134,18 +152,18 @@ hal_error_t rpc_decode_buffer_in_place(uint8_t **inbuf, const uint8_t * const li
      * we're probably out of sync, but nothing we can do now
      */
     if (limit - *inbuf < xdr_len) {
-	/* undo read of length */
-	*inbuf = orig_inbuf;
-	return HAL_ERROR_IO_BAD_COUNT;
+        /* undo read of length */
+        *inbuf = orig_inbuf;
+        return HAL_ERROR_IO_BAD_COUNT;
     }
 
     /* user buffer is too small, update *len
      */
     if (*len < xdr_len) {
-	*len = xdr_len;
-	/* undo read of length */
-	*inbuf = orig_inbuf;
-	return HAL_ERROR_IO_BAD_COUNT;
+        *len = xdr_len;
+        /* undo read of length */
+        *inbuf = orig_inbuf;
+        return HAL_ERROR_IO_BAD_COUNT;
     }
 
     /* return a pointer to the string or opaque data */
@@ -161,15 +179,17 @@ hal_error_t rpc_decode_buffer_in_place(uint8_t **inbuf, const uint8_t * const li
 /* This version copies the data to the user-supplied buffer.
  * It is used in the rpc client.
  */
-hal_error_t rpc_decode_buffer(uint8_t **inbuf, const uint8_t * const limit, uint8_t * const value, uint32_t * const len)
+hal_error_t hal_xdr_decode_buffer(uint8_t **inbuf, const uint8_t * const limit, uint8_t * const value, uint32_t * const len)
 {
     hal_error_t ret;
     uint8_t *vptr;
 
-    if ((ret = rpc_decode_buffer_in_place(inbuf, limit, &vptr, len)) == HAL_OK)
-	memcpy(value, vptr, *len);
+    if ((ret = hal_xdr_decode_buffer_in_place(inbuf, limit, &vptr, len)) == HAL_OK)
+        memcpy(value, vptr, *len);
     return ret;
 }
+
+/* ---------------------------------------------------------------- */
 
 #ifdef TEST
 void hexdump(uint8_t *buf, uint32_t len)
@@ -177,13 +197,13 @@ void hexdump(uint8_t *buf, uint32_t len)
     int i;
 
     for (i = 0; i < len; ++i) {
-	uint8_t c = buf[i];
-	printf("%02x ", c);
-	if ((i & 0x07) == 0x07)
-	    printf("\n");
+        uint8_t c = buf[i];
+        printf("%02x ", c);
+        if ((i & 0x07) == 0x07)
+            printf("\n");
     }
     if ((len & 0x07) != 0)
-	printf("\n");
+        printf("\n");
 }
 
 int main(int argc, char *argv[])
@@ -196,48 +216,48 @@ int main(int argc, char *argv[])
     uint8_t alphabet[] = "abcdefghijklmnopqrstuvwxyz";
     uint8_t readbuf[64] = {0};
 
-    printf("rpc_encode_int: work to failure\n");
+    printf("hal_xdr_encode_int: work to failure\n");
     for (i = 1; i < 100; ++i) {
-	if ((ret = rpc_encode_int(&bufptr, limit, i)) != HAL_OK) {
-	    printf("%d: %s\n", i, hal_error_string(ret));
-	    break;
-	}
+        if ((ret = hal_xdr_encode_int(&bufptr, limit, i)) != HAL_OK) {
+            printf("%d: %s\n", i, hal_error_string(ret));
+            break;
+        }
     }
     hexdump(buf, ((uint8_t *)bufptr - buf));
 
-    printf("\nrpc_decode_int:\n");
+    printf("\nhal_xdr_decode_int:\n");
     readptr = buf;
     while (readptr < bufptr) {
-	if ((ret = rpc_decode_int(&readptr, limit, &i)) != HAL_OK) {
-	    printf("%s\n", hal_error_string(ret));
-	    break;
-	}
-	printf("%u ", i);
+        if ((ret = hal_xdr_decode_int(&readptr, limit, &i)) != HAL_OK) {
+            printf("%s\n", hal_error_string(ret));
+            break;
+        }
+        printf("%u ", i);
     }
     printf("\n");
 
-    printf("\nrpc_encode_buffer: work to failure\n");
-    bzero(buf, sizeof(buf));
+    printf("\nhal_xdr_encode_buffer: work to failure\n");
+    memset(buf, 0, sizeof(buf));
     bufptr = buf;
      for (i = 1; i < 10; ++i) {
-	if ((ret = rpc_encode_buffer(&bufptr, limit, alphabet, i)) != HAL_OK) {
-	    printf("%d: %s\n", i, hal_error_string(ret));
-	    break;
-	}
+        if ((ret = hal_xdr_encode_buffer(&bufptr, limit, alphabet, i)) != HAL_OK) {
+            printf("%d: %s\n", i, hal_error_string(ret));
+            break;
+        }
     }
     hexdump(buf, ((uint8_t *)bufptr - buf));
 
-    printf("\nrpc_decode_buffer:\n");
+    printf("\nhal_xdr_decode_buffer:\n");
     readptr = buf;
     i = sizeof(readbuf);
     while (readptr < bufptr) {
-	if ((ret = rpc_decode_buffer(&readptr, limit, readbuf, &i)) != HAL_OK) {
-	    printf("%s\n", hal_error_string(ret));
-	    break;
-	}
-	printf("%u: ", i); for (int j = 0; j < i; ++j) putchar(readbuf[j]); putchar('\n');
-	i = sizeof(readbuf);
-	bzero(readbuf, sizeof(readbuf));
+        if ((ret = hal_xdr_decode_buffer(&readptr, limit, readbuf, &i)) != HAL_OK) {
+            printf("%s\n", hal_error_string(ret));
+            break;
+        }
+        printf("%u: ", i); for (int j = 0; j < i; ++j) putchar(readbuf[j]); putchar('\n');
+        i = sizeof(readbuf);
+        memset(readbuf, 0, sizeof(readbuf));
     }
 
     return 0;

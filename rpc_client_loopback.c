@@ -43,7 +43,7 @@
 
 static int sock = -1;
 
-hal_error_t rpc_client_transport_init(void)
+hal_error_t hal_rpc_client_transport_init(void)
 {
     struct sockaddr_in sin;
 
@@ -58,7 +58,7 @@ hal_error_t rpc_client_transport_init(void)
     return HAL_OK;
 }
 
-hal_error_t rpc_client_transport_close(void)
+hal_error_t hal_rpc_client_transport_close(void)
 {
     int ret = close(sock);
     sock = -1;
@@ -67,14 +67,14 @@ hal_error_t rpc_client_transport_close(void)
     return HAL_OK;
 }
 
-hal_error_t rpc_send(const uint8_t * const buf, const size_t len)
+hal_error_t hal_rpc_send(const uint8_t * const buf, const size_t len)
 {
     if (send(sock, buf, len, 0) == -1)
         return perror("send"), HAL_ERROR_RPC_TRANSPORT;
     return HAL_OK;
 }
 
-hal_error_t rpc_recv(uint8_t * const buf, size_t * const len)
+hal_error_t hal_rpc_recv(uint8_t * const buf, size_t * const len)
 {
     int ret;
     

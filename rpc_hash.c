@@ -143,8 +143,9 @@ static inline handle_slot_t *find_handle(const hal_hash_handle_t handle)
   return NULL;
 }
 
-static inline free_handle(handle_slot_t *slot)
+static inline void free_handle(handle_slot_t *slot)
 {
+  if (slot != NULL)
     /* state is a union, so this this works for hash and hmac */
     slot->state.hash = NULL;
 }

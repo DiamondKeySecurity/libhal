@@ -88,6 +88,11 @@ static inline int check_pkey_type_curve_flags(const hal_key_type_t type,
 }
 
 
+hal_error_t hal_rpc_get_version(uint32_t *version)
+{
+  return hal_rpc_misc_dispatch->get_version(version);
+}
+
 hal_error_t hal_rpc_get_random(void *buffer, const size_t length)
 {
   if (buffer == NULL)

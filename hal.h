@@ -562,6 +562,12 @@ extern hal_error_t hal_rpc_is_logged_in(const hal_client_handle_t client,
                                         const hal_user_t user);
 
 /*
+ * Get the version number of the remote RPC server.
+ */
+
+extern hal_error_t hal_rpc_get_version(uint32_t *version);
+
+/*
  * Get random bytes.
  */
 
@@ -598,6 +604,12 @@ extern hal_error_t hal_rpc_hash_update(const hal_hash_handle_t hash,
 
 extern hal_error_t hal_rpc_hash_finalize(const hal_hash_handle_t hash,
                                          uint8_t *digest, const size_t length);
+
+extern hal_error_t hal_rpc_client_init(void);
+extern hal_error_t hal_rpc_client_close(void);
+extern hal_error_t hal_rpc_server_init(void);
+extern hal_error_t hal_rpc_server_close(void);
+extern void hal_rpc_server_main(void);
 
 /*
  * Public key functions.

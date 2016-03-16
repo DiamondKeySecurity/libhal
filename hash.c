@@ -3,7 +3,7 @@
  * ------
  * HAL interface to Cryptech hash cores.
  *
- * Authors: Joachim StrÃ¶mbergson, Paul Selkirk, Rob Austein
+ * Authors: Joachim Strömbergson, Paul Selkirk, Rob Austein
  * Copyright (c) 2014-2016, NORDUnet A/S
  * All rights reserved.
  *

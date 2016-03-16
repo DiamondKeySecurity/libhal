@@ -29,8 +29,22 @@
 
 INC	= ../hal.h
 LIB	= ../libhal.a
-BIN	= test-aes-key-wrap test-hash test-pbkdf2 test-ecdsa test-bus test-trng test-rsa
-BIN	+= test-rpc_hash test-rpc_server
+BIN	:= test-aes-key-wrap test-hash test-pbkdf2 test-ecdsa test-bus test-trng test-rsa
+ifndef RPC_SERVER
+  ifdef RPC_CLIENT
+    ifneq (${RPC_CLIENT},local)
+      # If we're only building a remote RPC client lib, don't include
+      # tests that access the FPGA cores.
+      BIN :=
+    endif
+  endif
+endif
+ifdef RPC_CLIENT
+  BIN	+= test-rpc_hash
+endif
+ifdef RPC_SERVER
+  BIN	+= test-rpc_server
+endif
 
 CFLAGS	= -g3 -Wall -fPIC -std=c99 -I..
 

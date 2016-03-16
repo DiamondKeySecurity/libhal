@@ -102,6 +102,8 @@ typedef struct {
 
   hal_error_t (*get_random)(void *buffer, const size_t length);
 
+  hal_error_t (*get_version)(uint32_t *version);
+
 } hal_rpc_misc_dispatch_t;
 
 
@@ -327,66 +329,29 @@ extern hal_error_t hal_ks_set_pin(const hal_user_t user,
                                   const hal_ks_pin_t * const pin);
 
 /*
- * RPC serialization/deserialization routines, using XDR (RFC 4506) encoding.
- */
-
-hal_error_t rpc_encode_int(uint8_t ** const outbuf,
-                           const uint8_t * const limit,
-                           const uint32_t value);
-
-hal_error_t rpc_decode_int(uint8_t ** const inbuf,
-                           const uint8_t * const limit,
-                           uint32_t * const value);
-
-hal_error_t rpc_encode_buffer(uint8_t ** const outbuf,
-                              const uint8_t * const limit,
-                              const uint8_t * const value,
-                              const uint32_t len);
-
-hal_error_t rpc_decode_buffer_in_place(uint8_t ** const inbuf,
-                                       const uint8_t * const limit,
-                                       uint8_t ** const vptr,
-                                       uint32_t * const len);
-
-hal_error_t rpc_decode_buffer(uint8_t ** const inbuf,
-                              const uint8_t * const limit,
-                              uint8_t * const value,
-                              uint32_t * const len);
-
-/* XXX move to hal.h? */
-typedef enum {
-    RPC_LOCAL,
-    RPC_REMOTE,
-    RPC_MIXED,
-} rpc_locality_t;
-
-/*
  * RPC lowest-level send and receive routines. These are blocking, and
  * transport-specific (sockets, USB).
  */
 
-hal_error_t rpc_send(const uint8_t * const buf, const size_t len);
-hal_error_t rpc_recv(uint8_t * const buf, size_t * const len);
+extern hal_error_t hal_rpc_send(const uint8_t * const buf, const size_t len);
+extern hal_error_t hal_rpc_recv(uint8_t * const buf, size_t * const len);
 
-hal_error_t rpc_client_init(rpc_locality_t locality);
-hal_error_t rpc_client_close(void);
-hal_error_t rpc_client_transport_init(void);
-hal_error_t rpc_client_transport_close(void);
+extern hal_error_t hal_rpc_sendto(const uint8_t * const buf, const size_t len, void *opaque);
+extern hal_error_t hal_rpc_recvfrom(uint8_t * const buf, size_t * const len, void **opaque);
 
-hal_error_t rpc_sendto(const uint8_t * const buf, const size_t len, void *opaque);
-hal_error_t rpc_recvfrom(uint8_t * const buf, size_t * const len, void **opaque);
+extern hal_error_t hal_rpc_client_transport_init(void);
+extern hal_error_t hal_rpc_client_transport_close(void);
 
-hal_error_t rpc_server_init(void);
-hal_error_t rpc_server_close(void);
-hal_error_t rpc_server_transport_init(void);
-hal_error_t rpc_server_transport_close(void);
-void rpc_server_main(void);
+extern hal_error_t hal_rpc_server_transport_init(void);
+extern hal_error_t hal_rpc_server_transport_close(void);
+
 
 /*
  * RPC function numbers
  */
 
 typedef enum {
+    RPC_FUNC_GET_VERSION = 0,
     RPC_FUNC_GET_RANDOM,
     RPC_FUNC_SET_PIN,
     RPC_FUNC_LOGIN,
@@ -414,6 +379,14 @@ typedef enum {
     RPC_FUNC_PKEY_LIST,
 } rpc_func_num_t;
 
+#define RPC_VERSION 0x00010000		/* 0.1.0.0 */
+
+/* RPC client locality. These have to be defines rather than an enum,
+ * because they're handled by the preprocessor.
+ */
+#define RPC_CLIENT_LOCAL	0
+#define RPC_CLIENT_REMOTE	1
+#define RPC_CLIENT_MIXED	2
 
 #endif /* _HAL_INTERNAL_H_ */
 

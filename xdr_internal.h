@@ -1,7 +1,7 @@
 /*
- * rpc_server_loopback.c
- * ---------------------
- * Remote procedure call transport over loopback socket.
+ * xdr_internal.h
+ * --------------
+ * Serialization/deserialization routines, using XDR (RFC 4506) encoding.
  *
  * Copyright (c) 2016, NORDUnet A/S All rights reserved.
  *
@@ -32,58 +32,35 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <unistd.h>	/* close */
+#ifndef _XDR_INTERNAL_H
+#define _XDR_INTERNAL_H
 
-#include "hal.h"
-#include "hal_internal.h"
+ /*
+ * RPC serialization/deserialization routines, using XDR (RFC 4506) encoding.
+ */
 
-static int fd;
+hal_error_t hal_xdr_encode_int(uint8_t ** const outbuf,
+                               const uint8_t * const limit,
+                               const uint32_t value);
 
-hal_error_t hal_rpc_server_transport_init(void)
-{
-    struct sockaddr_in sin;
+hal_error_t hal_xdr_decode_int(uint8_t ** const inbuf,
+                               const uint8_t * const limit,
+                               uint32_t * const value);
 
-    fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd == -1)
-	return perror("socket"), HAL_ERROR_RPC_TRANSPORT;
-    sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    sin.sin_port = 17425;
-    if (bind(fd, (const struct sockaddr *)&sin, sizeof(sin)) != 0)
-	return perror("bind"), HAL_ERROR_RPC_TRANSPORT;
-    return HAL_OK;
-}
+hal_error_t hal_xdr_encode_buffer(uint8_t ** const outbuf,
+                                  const uint8_t * const limit,
+                                  const uint8_t * const value,
+                                  const uint32_t len);
 
-hal_error_t hal_rpc_server_transport_close(void)
-{
-    if (close(fd) != 0)
-	return perror("close"), HAL_ERROR_RPC_TRANSPORT;
-    return HAL_OK;
-}
+hal_error_t hal_xdr_decode_buffer_in_place(uint8_t ** const inbuf,
+                                           const uint8_t * const limit,
+                                           uint8_t ** const vptr,
+                                           uint32_t * const len);
 
-hal_error_t hal_rpc_sendto(const uint8_t * const buf, const size_t len, void *opaque)
-{
-    struct sockaddr_in *sin = (struct sockaddr_in *)opaque;
-    int ret;
+hal_error_t hal_xdr_decode_buffer(uint8_t ** const inbuf,
+                                  const uint8_t * const limit,
+                                  uint8_t * const value,
+                                  uint32_t * const len);
 
-    if ((ret = sendto(fd, buf, len, 0, (struct sockaddr *)sin, sizeof(*sin))) == -1)
-	return perror("sendto"), HAL_ERROR_RPC_TRANSPORT;
-    return HAL_OK;
-}
 
-hal_error_t hal_rpc_recvfrom(uint8_t * const buf, size_t * const len, void **opaque)
-{
-    static struct sockaddr_in sin;
-    socklen_t sin_len = sizeof(sin);
-    int ret;
-    
-    if ((ret = recvfrom(fd, buf, *len, 0, (struct sockaddr *)&sin, &sin_len)) == -1)
-	return HAL_ERROR_RPC_TRANSPORT;
-    *opaque = (void *)&sin;
-    *len = ret;
-    return HAL_OK;
-}
+#endif /* _XDR_INTERNAL_H*/

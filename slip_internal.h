@@ -1,7 +1,7 @@
 /*
- * rpc_server_loopback.c
- * ---------------------
- * Remote procedure call transport over loopback socket.
+ * slip_internal.h
+ * ---------------
+ * Send/recv data over a serial connection with SLIP framing
  *
  * Copyright (c) 2016, NORDUnet A/S All rights reserved.
  *
@@ -32,58 +32,20 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <unistd.h>	/* close */
+#ifndef _HAL_SLIP_INTERNAL_H
+#define _HAL_SLIP_INTERNAL_H
 
-#include "hal.h"
 #include "hal_internal.h"
 
-static int fd;
+/* Defined in slip.c - send/recv a block of data with SLIP framing.
+ */
+extern int hal_slip_send(const uint8_t * const p, const size_t len);
+extern int hal_slip_recv(uint8_t * const p, const size_t len);
 
-hal_error_t hal_rpc_server_transport_init(void)
-{
-    struct sockaddr_in sin;
+/* Defined in rpc_[client|server]_serial.c - send/recv one byte over a
+ * serial connection.
+ */
+extern int hal_slip_send_char(const uint8_t c);
+extern int hal_slip_recv_char(uint8_t * const c);
 
-    fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd == -1)
-	return perror("socket"), HAL_ERROR_RPC_TRANSPORT;
-    sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    sin.sin_port = 17425;
-    if (bind(fd, (const struct sockaddr *)&sin, sizeof(sin)) != 0)
-	return perror("bind"), HAL_ERROR_RPC_TRANSPORT;
-    return HAL_OK;
-}
-
-hal_error_t hal_rpc_server_transport_close(void)
-{
-    if (close(fd) != 0)
-	return perror("close"), HAL_ERROR_RPC_TRANSPORT;
-    return HAL_OK;
-}
-
-hal_error_t hal_rpc_sendto(const uint8_t * const buf, const size_t len, void *opaque)
-{
-    struct sockaddr_in *sin = (struct sockaddr_in *)opaque;
-    int ret;
-
-    if ((ret = sendto(fd, buf, len, 0, (struct sockaddr *)sin, sizeof(*sin))) == -1)
-	return perror("sendto"), HAL_ERROR_RPC_TRANSPORT;
-    return HAL_OK;
-}
-
-hal_error_t hal_rpc_recvfrom(uint8_t * const buf, size_t * const len, void **opaque)
-{
-    static struct sockaddr_in sin;
-    socklen_t sin_len = sizeof(sin);
-    int ret;
-    
-    if ((ret = recvfrom(fd, buf, *len, 0, (struct sockaddr *)&sin, &sin_len)) == -1)
-	return HAL_ERROR_RPC_TRANSPORT;
-    *opaque = (void *)&sin;
-    *len = ret;
-    return HAL_OK;
-}
+#endif /* _HAL_SLIP_INTERNAL_H */

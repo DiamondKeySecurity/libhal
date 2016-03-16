@@ -38,6 +38,12 @@
 #include "hal.h"
 #include "hal_internal.h"
 
+static hal_error_t get_version(uint32_t *version)
+{
+  *version = RPC_VERSION;
+  return HAL_OK;
+}
+
 static hal_error_t get_random(void *buffer, const size_t length)
 {
   assert(buffer != NULL && length > 0);
@@ -219,7 +225,7 @@ static hal_error_t logout_all(void)
 }
 
 const hal_rpc_misc_dispatch_t hal_rpc_local_misc_dispatch = {
-  set_pin, login, logout, logout_all, is_logged_in, get_random
+  set_pin, login, logout, logout_all, is_logged_in, get_random, get_version
 };
 
 /*

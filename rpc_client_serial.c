@@ -1,7 +1,7 @@
 /*
- * rpc_server_loopback.c
- * ---------------------
- * Remote procedure call transport over loopback socket.
+ * rpc_client_serial.c
+ * -------------------
+ * Remote procedure call transport over serial line with SLIP framing.
  *
  * Copyright (c) 2016, NORDUnet A/S All rights reserved.
  *
@@ -36,54 +36,81 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <unistd.h>	/* close */
+#include <termios.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include "hal.h"
 #include "hal_internal.h"
+#include "slip_internal.h"
 
-static int fd;
+#define DEVICE "/dev/ttyUSB0"
+#define SPEED B115200
 
-hal_error_t hal_rpc_server_transport_init(void)
+static int fd = -1;
+
+hal_error_t hal_rpc_client_transport_init(void)
 {
-    struct sockaddr_in sin;
-
-    fd = socket(AF_INET, SOCK_DGRAM, 0);
+    struct termios tty;
+    
+    fd = open(DEVICE, O_RDWR | O_NOCTTY | O_SYNC);
     if (fd == -1)
-	return perror("socket"), HAL_ERROR_RPC_TRANSPORT;
-    sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    sin.sin_port = 17425;
-    if (bind(fd, (const struct sockaddr *)&sin, sizeof(sin)) != 0)
-	return perror("bind"), HAL_ERROR_RPC_TRANSPORT;
+	return perror("open"), HAL_ERROR_RPC_TRANSPORT;
+
+    if (tcgetattr (fd, &tty) != 0)
+	return perror("tcgetattr"), HAL_ERROR_RPC_TRANSPORT;
+
+    cfsetospeed (&tty, SPEED);
+    cfsetispeed (&tty, SPEED);
+
+    tty.c_cflag &= ~CSIZE;
+    tty.c_cflag |= (CS8 | CLOCAL | CREAD);
+
+    tty.c_iflag = 0;
+    tty.c_oflag = 0;
+    tty.c_lflag = 0;
+
+    tty.c_cc[VMIN] = 1;
+    tty.c_cc[VTIME] = 0;
+
+    if (tcsetattr (fd, TCSANOW, &tty) != 0)
+	return perror("tcsetattr"), HAL_ERROR_RPC_TRANSPORT;
+
     return HAL_OK;
 }
 
-hal_error_t hal_rpc_server_transport_close(void)
+hal_error_t hal_rpc_client_transport_close(void)
 {
-    if (close(fd) != 0)
-	return perror("close"), HAL_ERROR_RPC_TRANSPORT;
+    int ret = close(fd);
+    fd = -1;
+    if (ret != 0)
+        return perror("close"), HAL_ERROR_RPC_TRANSPORT;
     return HAL_OK;
 }
 
-hal_error_t hal_rpc_sendto(const uint8_t * const buf, const size_t len, void *opaque)
+hal_error_t hal_rpc_send(const uint8_t * const buf, const size_t len)
 {
-    struct sockaddr_in *sin = (struct sockaddr_in *)opaque;
-    int ret;
-
-    if ((ret = sendto(fd, buf, len, 0, (struct sockaddr *)sin, sizeof(*sin))) == -1)
-	return perror("sendto"), HAL_ERROR_RPC_TRANSPORT;
+    if (hal_slip_send(buf, len) == -1)
+        return HAL_ERROR_RPC_TRANSPORT;
     return HAL_OK;
 }
 
-hal_error_t hal_rpc_recvfrom(uint8_t * const buf, size_t * const len, void **opaque)
+hal_error_t hal_rpc_recv(uint8_t * const buf, size_t * const len)
 {
-    static struct sockaddr_in sin;
-    socklen_t sin_len = sizeof(sin);
     int ret;
     
-    if ((ret = recvfrom(fd, buf, *len, 0, (struct sockaddr *)&sin, &sin_len)) == -1)
-	return HAL_ERROR_RPC_TRANSPORT;
-    *opaque = (void *)&sin;
+    if ((ret = hal_slip_recv(buf, *len)) == -1)
+        return HAL_ERROR_RPC_TRANSPORT;
     *len = ret;
     return HAL_OK;
+}
+
+int hal_slip_send_char(const uint8_t c)
+{
+    return write(fd, &c, 1);
+}
+
+int hal_slip_recv_char(uint8_t * const c)
+{
+    return read(fd, c, 1);
 }

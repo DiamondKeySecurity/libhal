@@ -636,10 +636,9 @@ static int _test_hmac(const hal_digest_algorithm_t alg,
 
 int main (int argc, char *argv[])
 {
-//  rpc_client_init(RPC_LOCAL);
-  rpc_client_init(RPC_REMOTE);
-
   int ok = 1;
+
+  ok &= hal_rpc_client_init();
 
   ok &= test_hash(hal_digest_algorithm_sha1,   nist_512_single, sha1_single_digest, "SHA-1 single block");
   ok &= test_hash(hal_digest_algorithm_sha1,   nist_512_double, sha1_double_digest, "SHA-1 double block");
@@ -687,6 +686,8 @@ int main (int argc, char *argv[])
   ok &= test_hmac(hal_digest_algorithm_sha512, hmac_sha2_tc_4_key, hmac_sha2_tc_4_data, hmac_sha2_tc_4_result_sha512, "HMAC-SHA-512 test case 4");
   ok &= test_hmac(hal_digest_algorithm_sha512, hmac_sha2_tc_6_key, hmac_sha2_tc_6_data, hmac_sha2_tc_6_result_sha512, "HMAC-SHA-512 test case 6");
   ok &= test_hmac(hal_digest_algorithm_sha512, hmac_sha2_tc_7_key, hmac_sha2_tc_7_data, hmac_sha2_tc_7_result_sha512, "HMAC-SHA-512 test case 7");
+
+  ok &= hal_rpc_client_close();
 
   return !ok;
 }
