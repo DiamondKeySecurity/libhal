@@ -536,6 +536,11 @@ static int _test_hash(const hal_digest_algorithm_t alg,
 {
   uint8_t digest[512];
   hal_error_t err;
+  static hal_digest_algorithm_t last_alg = -1;
+  static hal_error_t last_err = -1;
+
+  if (last_alg == alg && last_err == HAL_ERROR_CORE_NOT_FOUND)
+      return 1;
 
   assert(data != NULL && result != NULL && label != NULL);
   assert(result_len <= sizeof(digest));
@@ -546,7 +551,10 @@ static int _test_hash(const hal_digest_algorithm_t alg,
   hal_session_handle_t session = {0};
   hal_hash_handle_t hash;
 
-  if ((err = hal_rpc_hash_initialize(client, session, &hash, alg, NULL, 0)) != HAL_OK) {
+  err = hal_rpc_hash_initialize(client, session, &hash, alg, NULL, 0);
+  last_alg = alg;
+  last_err = err;
+  if (err != HAL_OK) {
     printf("Failed while initializing hash: %s\n", hal_error_string(err));
     return 0;
   }
@@ -575,7 +583,8 @@ static int _test_hash(const hal_digest_algorithm_t alg,
   }
 
   printf("OK\n");
-    return 1;
+  last_err = err;
+  return 1;
 }
 
 static int _test_hmac(const hal_digest_algorithm_t alg,
@@ -586,6 +595,11 @@ static int _test_hmac(const hal_digest_algorithm_t alg,
 {
   uint8_t digest[512];
   hal_error_t err;
+  static hal_digest_algorithm_t last_alg = -1;
+  static hal_error_t last_err = -1;
+
+  if (last_alg == alg && last_err == HAL_ERROR_CORE_NOT_FOUND)
+      return 1;
 
   assert(data != NULL && result != NULL && label != NULL);
   assert(result_len <= sizeof(digest));
@@ -596,7 +610,10 @@ static int _test_hmac(const hal_digest_algorithm_t alg,
   hal_session_handle_t session = {0};
   hal_hash_handle_t hash;
 
-  if ((err = hal_rpc_hash_initialize(client, session, &hash, alg, key, key_len)) != HAL_OK) {
+  err = hal_rpc_hash_initialize(client, session, &hash, alg, key, key_len);
+  last_alg = alg;
+  last_err = err;
+  if (err != HAL_OK) {
     printf("Failed while initializing HMAC: %s\n", hal_error_string(err));
     return 0;
   }
