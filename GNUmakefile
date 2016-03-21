@@ -59,6 +59,14 @@ else ifeq (${IO_BUS},fmc)
   IO_OBJ = hal_io_fmc.o
 endif
 
+# If we're building for STM32, position-independent code leads to some
+# hard-to-debug function pointer errors. OTOH, if we're building for Linux
+# (even on the Novena), we want to make it possible to build a shared library.
+
+ifneq (${IO_BUS},fmc)
+  CFLAGS += -fPIC
+endif
+
 # RPC_CLIENT = local | remote | mixed
 #   local: Build for Novena or dev-bridge, access FPGA cores directly.
 #   remote: Build for other host, communicate with RPC server.
@@ -148,7 +156,7 @@ else ifeq (${KS},flash)
 endif
 
 TFMDIR		:= $(abspath ../thirdparty/libtfm)
-CFLAGS		+= -g3 -Wall -fPIC -std=c99 -I${TFMDIR} -DHAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM=1
+CFLAGS		+= -g3 -Wall -std=c99 -I${TFMDIR} -DHAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM=1
 LDFLAGS		:= -g3 -L${TFMDIR} -ltfm
 
 CFLAGS		+= -DHAL_STATIC_HASH_STATE_BLOCKS=${STATIC_HASH_STATE_BLOCKS}
