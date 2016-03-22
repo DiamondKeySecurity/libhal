@@ -40,7 +40,7 @@ ifndef RPC_SERVER
   endif
 endif
 ifdef RPC_CLIENT
-  BIN	+= test-rpc_hash test-rpc_get_version
+  BIN	+= test-rpc_hash test-rpc_pkey test-rpc_get_version
 endif
 ifdef RPC_SERVER
   BIN	+= test-rpc_server

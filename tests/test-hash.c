@@ -534,9 +534,6 @@ static int _test_hash(const hal_core_t *core,
                       const uint8_t * const result, const size_t result_len,
                       const char * const label)
 {
-  if (core == NULL)
-    return 1;
-
   uint8_t statebuf[512], digest[512];
   hal_hash_state_t *state = NULL;
   hal_error_t err;
@@ -586,9 +583,6 @@ static int _test_hmac(const hal_core_t *core,
                       const uint8_t * const result, const size_t result_len,
                       const char * const label)
 {
-  if (core == NULL)
-    return 1;
-
   uint8_t statebuf[1024], digest[512];
   hal_hmac_state_t *state = NULL;
   hal_error_t err;

@@ -161,7 +161,8 @@ hal_error_t hal_asn1_encode_spki(const uint8_t * const alg_oid,   const size_t a
                                  const uint8_t * const pubkey,    const size_t pubkey_len,
                                  uint8_t *der, size_t *der_len, const size_t der_max)
 {
-  if (alg_oid == NULL || alg_oid_len == 0 || pubkey == NULL || pubkey_len == 0 || (curve_oid == NULL && curve_oid_len != 0))
+  if (alg_oid == NULL || alg_oid_len == 0 || pubkey_len == 0 ||
+      (der != NULL && pubkey == NULL) || (curve_oid == NULL && curve_oid_len != 0))
     return HAL_ERROR_BAD_ARGUMENTS;
 
   const uint8_t curve_oid_tag = curve_oid == NULL ? ASN1_NULL : ASN1_OBJECT_IDENTIFIER;

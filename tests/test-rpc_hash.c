@@ -40,6 +40,8 @@
 #include <assert.h>
 
 #include <hal.h>
+
+#warning This is wrong, nothing outside libhal itself should include hal_internal.h
 #include <hal_internal.h>
 
 /* Usual NIST sample messages. */

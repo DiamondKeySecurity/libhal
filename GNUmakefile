@@ -156,7 +156,7 @@ else ifeq (${KS},flash)
 endif
 
 TFMDIR		:= $(abspath ../thirdparty/libtfm)
-CFLAGS		+= -g3 -Wall -std=c99 -I${TFMDIR} -DHAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM=1
+CFLAGS		+= -g3 -Wall -std=c99 -I${TFMDIR}
 LDFLAGS		:= -g3 -L${TFMDIR} -ltfm
 
 CFLAGS		+= -DHAL_STATIC_HASH_STATE_BLOCKS=${STATIC_HASH_STATE_BLOCKS}
