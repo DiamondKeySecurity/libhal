@@ -50,8 +50,6 @@ static hal_error_t get_version(uint8_t **iptr, const uint8_t * const ilimit,
     uint32_t version;
     hal_error_t ret;
 
-    check(hal_xdr_encode_int(optr, olimit, RPC_VERSION));
-
     /* call the local function */
     ret = hal_rpc_local_misc_dispatch.get_version(&version);
     if (ret == HAL_OK)
@@ -605,7 +603,8 @@ void hal_rpc_server_main(void)
     
     while (!interrupt) {
         ilen = sizeof(inbuf);
-        if (hal_rpc_recvfrom(inbuf, &ilen, &opaque) == HAL_OK) {
+        ret = hal_rpc_recvfrom(inbuf, &ilen, &opaque);
+        if (ret == HAL_OK) {
             iptr = inbuf;
             ilimit = inbuf + ilen;
             optr = outbuf + 4;  /* reserve 4 bytes for return code */

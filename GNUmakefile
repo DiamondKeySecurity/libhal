@@ -78,7 +78,7 @@ endif
 #   loopback: communicate over loopback socket on Novena
 #   serial: communicate over USB in serial pass-through mode
 
-RPC_CORE_OBJ = rpc_api.o rpc_hash.o rpc_misc.o rpc_pkey.o
+RPC_CORE_OBJ = rpc_hash.o rpc_misc.o rpc_pkey.o
 
 ifdef RPC_SERVER
   RPC_SERVER_OBJ = rpc_server.o ${RPC_CORE_OBJ}
@@ -86,7 +86,7 @@ ifdef RPC_SERVER
 endif
 
 ifdef RPC_CLIENT
-  RPC_CLIENT_OBJ = rpc_client.o
+  RPC_CLIENT_OBJ = rpc_client.o rpc_api.o
   ifeq (${RPC_CLIENT},local)
     RPC_CLIENT_OBJ += ${RPC_CORE_OBJ}
   else

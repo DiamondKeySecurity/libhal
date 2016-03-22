@@ -157,15 +157,6 @@ hal_error_t hal_xdr_decode_buffer_in_place(uint8_t **inbuf, const uint8_t * cons
         return HAL_ERROR_IO_BAD_COUNT;
     }
 
-    /* user buffer is too small, update *len
-     */
-    if (*len < xdr_len) {
-        *len = xdr_len;
-        /* undo read of length */
-        *inbuf = orig_inbuf;
-        return HAL_ERROR_IO_BAD_COUNT;
-    }
-
     /* return a pointer to the string or opaque data */
     *value = *inbuf;
     *len = xdr_len;
@@ -183,9 +174,20 @@ hal_error_t hal_xdr_decode_buffer(uint8_t **inbuf, const uint8_t * const limit, 
 {
     hal_error_t ret;
     uint8_t *vptr;
+    uint8_t *orig_inbuf = *inbuf;
+    uint32_t xdr_len;
 
-    if ((ret = hal_xdr_decode_buffer_in_place(inbuf, limit, &vptr, len)) == HAL_OK)
+    if ((ret = hal_xdr_decode_buffer_in_place(inbuf, limit, &vptr, &xdr_len)) == HAL_OK) {
+	if (*len < xdr_len) {
+	    /* user buffer is too small, update *len */
+	    *len = xdr_len;
+	    /* undo read of length */
+	    *inbuf = orig_inbuf;
+	    return HAL_ERROR_IO_BAD_COUNT;
+	}
+
         memcpy(value, vptr, *len);
+    }
     return ret;
 }
 
