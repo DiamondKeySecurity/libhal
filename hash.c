@@ -48,6 +48,10 @@
  * for use when the Verilog cores aren't available.
  */
 
+#if RPC_CLIENT == RPC_CLIENT_MIXED
+#define HAL_ENABLE_SOFTWARE_HASH_CORES 1
+#endif
+
 #ifndef HAL_ENABLE_SOFTWARE_HASH_CORES
 #define HAL_ENABLE_SOFTWARE_HASH_CORES 0
 #endif
@@ -355,7 +359,11 @@ static inline hal_error_t check_core(const hal_core_t **core,
 {
   assert(descriptor != NULL && descriptor->driver != NULL);
 
+#if RPC_CLIENT == RPC_CLIENT_MIXED
+  hal_error_t err = HAL_ERROR_CORE_NOT_FOUND;
+#else
   hal_error_t err = hal_core_check_name(core, descriptor->core_name);
+#endif
 
 #if HAL_ENABLE_SOFTWARE_HASH_CORES
 
@@ -430,6 +438,8 @@ void hal_hash_cleanup(hal_hash_state_t **state_)
   *state_ = NULL;
 }
 
+#if RPC_CLIENT != RPC_CLIENT_MIXED
+
 /*
  * Read hash result from core.  At least for now, this also serves to
  * read current hash state from core.
@@ -469,6 +479,8 @@ static hal_error_t hash_write_digest(const hal_core_t *core,
   return hal_io_write(core, driver->digest_addr, digest, digest_length);
 }
 
+#endif
+
 /*
  * Send one block to a core.
  */
@@ -487,6 +499,9 @@ static hal_error_t hash_write_block(hal_hash_state_t * const state)
   if (debug)
     fprintf(stderr, "[ %s ]\n", state->block_count == 0 ? "init" : "next");
 
+#if RPC_CLIENT == RPC_CLIENT_MIXED
+  return state->driver->sw_core(state);
+#else
   if (HAL_ENABLE_SOFTWARE_HASH_CORES && (state->flags & STATE_FLAG_SOFTWARE_CORE) != 0)
     return state->driver->sw_core(state);
 
@@ -516,6 +531,7 @@ static hal_error_t hash_write_block(hal_hash_state_t * const state)
     return err;
 
   return hal_io_wait_valid(state->core);
+#endif
 }
 
 /*
@@ -648,7 +664,9 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
   /* All data pushed to core, now we just need to read back the result */
   if (HAL_ENABLE_SOFTWARE_HASH_CORES && (state->flags & STATE_FLAG_SOFTWARE_CORE) != 0)
     swytebop(digest_buffer, state->core_state, state->descriptor->digest_length, state->driver->sw_word_size);
+#if RPC_CLIENT != RPC_CLIENT_MIXED
   else if ((err = hash_read_digest(state->core, state->driver, digest_buffer, state->descriptor->digest_length)) != HAL_OK)
+#endif
     return err;
 
   return HAL_OK;
