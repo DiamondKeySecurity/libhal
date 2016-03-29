@@ -67,7 +67,7 @@ static hal_error_t get_random(uint8_t **iptr, const uint8_t * const ilimit,
     check(hal_xdr_decode_int(iptr, ilimit, &length));
     /* sanity check length */
     if (length == 0 || length > olimit - *optr - 4)
-        return HAL_ERROR_IO_BAD_COUNT;  /* need a better error */
+        return HAL_ERROR_RPC_PACKET_OVERFLOW;
 
     /* call the local function */
     /* get the data directly into the output buffer */
@@ -185,7 +185,7 @@ static hal_error_t hash_get_digest_algorithm_id(uint8_t **iptr, const uint8_t * 
     check(hal_xdr_decode_int(iptr, ilimit, &len_max));
     /* sanity check len_max */
     if (len_max > olimit - *optr - 4)
-        return HAL_ERROR_IO_BAD_COUNT;  /* need a better error */
+        return HAL_ERROR_RPC_PACKET_OVERFLOW;
 
     /* call the local function */
     /* get the data directly into the output buffer */
@@ -269,7 +269,7 @@ static hal_error_t hash_finalize(uint8_t **iptr, const uint8_t * const ilimit,
     check(hal_xdr_decode_int(iptr, ilimit, &length));
     /* sanity check length */
     if (length == 0 || length > olimit - *optr - 4)
-        return HAL_ERROR_IO_BAD_COUNT;  /* need a better error */
+        return HAL_ERROR_RPC_PACKET_OVERFLOW;
 
     /* call the local function */
     /* get the data directly into the output buffer */
@@ -473,7 +473,7 @@ static hal_error_t pkey_get_public_key(uint8_t **iptr, const uint8_t * const ili
     check(hal_xdr_decode_int(iptr, ilimit, &len_max));
     /* sanity check len_max */
     if (len_max > olimit - *optr - 4)
-        return HAL_ERROR_IO_BAD_COUNT;  /* need a better error */
+        return HAL_ERROR_RPC_PACKET_OVERFLOW;
 
     /* call the local function */
     /* get the data directly into the output buffer */
@@ -511,7 +511,7 @@ static hal_error_t pkey_remote_sign(uint8_t **iptr, const uint8_t * const ilimit
     check(hal_xdr_decode_int(iptr, ilimit, &sig_max));
     /* sanity check sig_max */
     if (sig_max > olimit - *optr - 4)
-        return HAL_ERROR_IO_BAD_COUNT;  /* need a better error */
+        return HAL_ERROR_RPC_PACKET_OVERFLOW;
 
     /* call the local function */
     /* get the data directly into the output buffer */
@@ -589,12 +589,13 @@ static hal_error_t pkey_list(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-#define MAX_PKT_SIZE 1024
+#define MAX_PKT_SIZE 4096
 #define interrupt 0
+
+static uint8_t inbuf[MAX_PKT_SIZE], outbuf[MAX_PKT_SIZE];
 
 void hal_rpc_server_main(void)
 {
-    uint8_t inbuf[MAX_PKT_SIZE], outbuf[MAX_PKT_SIZE];
     uint8_t *iptr, *ilimit, *optr, *olimit;
     size_t ilen, olen;
     uint32_t rpc_func_num;
@@ -690,7 +691,7 @@ void hal_rpc_server_main(void)
                 ret = pkey_list(&iptr, ilimit, &optr, olimit);
                 break;
             default:
-                ret = HAL_ERROR_BAD_ARGUMENTS;  /* need a better error */
+                ret = HAL_ERROR_RPC_BAD_FUNCTION;
                 break;
             }
             /* encode the return code at the beginning of the payload */

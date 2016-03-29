@@ -125,7 +125,10 @@
   DEFINE_HAL_ERROR(HAL_ERROR_PIN_INCORRECT,             "PIN incorrect")                                \
   DEFINE_HAL_ERROR(HAL_ERROR_NO_CLIENT_SLOTS_AVAILABLE, "No client slots available")                    \
   DEFINE_HAL_ERROR(HAL_ERROR_FORBIDDEN,                 "Forbidden")                                    \
+  DEFINE_HAL_ERROR(HAL_ERROR_XDR_BUFFER_OVERFLOW,       "XDR buffer overflow")                          \
   DEFINE_HAL_ERROR(HAL_ERROR_RPC_TRANSPORT,             "RPC transport error")                          \
+  DEFINE_HAL_ERROR(HAL_ERROR_RPC_PACKET_OVERFLOW,       "RPC packet overflow")                          \
+  DEFINE_HAL_ERROR(HAL_ERROR_RPC_BAD_FUNCTION,          "Bad RPC function number")                      \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -605,12 +608,6 @@ extern hal_error_t hal_rpc_hash_update(const hal_hash_handle_t hash,
 extern hal_error_t hal_rpc_hash_finalize(const hal_hash_handle_t hash,
                                          uint8_t *digest, const size_t length);
 
-extern hal_error_t hal_rpc_client_init(void);
-extern hal_error_t hal_rpc_client_close(void);
-extern hal_error_t hal_rpc_server_init(void);
-extern hal_error_t hal_rpc_server_close(void);
-extern void hal_rpc_server_main(void);
-
 /*
  * Public key functions.
  *
@@ -718,6 +715,12 @@ typedef struct {
 extern hal_error_t hal_rpc_pkey_list(hal_pkey_info_t *result,
                                      unsigned *result_len,
                                      const unsigned result_max);
+
+extern hal_error_t hal_rpc_client_init(void);
+extern hal_error_t hal_rpc_client_close(void);
+extern hal_error_t hal_rpc_server_init(void);
+extern hal_error_t hal_rpc_server_close(void);
+extern void hal_rpc_server_main(void);
 
 #endif /* _HAL_H_ */
 
