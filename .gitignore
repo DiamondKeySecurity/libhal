@@ -18,5 +18,6 @@ tests/test-rsa
 tests/test-rsa-*.der
 tests/test-trng
 tests/test-rpc_get_version
+tests/test-rpc_get_random
 utils/cores
 utils/eim_peek_poke
