@@ -83,6 +83,10 @@
 #define HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM 0
 #endif
 
+#ifdef RPC_CLIENT
+#define hal_get_random(core, buffer, length) hal_rpc_get_random(buffer, length)
+#endif
+
 /*
  * Whether we want debug output.
  */
