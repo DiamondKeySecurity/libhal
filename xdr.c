@@ -71,7 +71,7 @@ hal_error_t hal_xdr_encode_int(uint8_t ** const outbuf, const uint8_t * const li
 
     /* buffer overflow check */
     if (limit - *outbuf < sizeof(value))
-        return HAL_ERROR_IO_BAD_COUNT;
+        return HAL_ERROR_XDR_BUFFER_OVERFLOW;
 
     **(uint32_t **)outbuf = htonl(value);
     *outbuf += sizeof(value);
@@ -86,7 +86,7 @@ hal_error_t hal_xdr_decode_int(uint8_t **inbuf, const uint8_t * const limit, uin
 
     /* buffer overflow check */
     if (limit - *inbuf < sizeof(*value))
-        return HAL_ERROR_IO_BAD_COUNT;
+        return HAL_ERROR_XDR_BUFFER_OVERFLOW;
 
     *value = ntohl(**(uint32_t **)inbuf);
     *inbuf += sizeof(*value);
@@ -109,7 +109,7 @@ hal_error_t hal_xdr_encode_buffer(uint8_t **outbuf, const uint8_t * const limit,
 
     /* buffer overflow check */
     if ((limit - *outbuf) < (((len + 3) & ~3) + sizeof(len)))
-        return HAL_ERROR_IO_BAD_COUNT;
+        return HAL_ERROR_XDR_BUFFER_OVERFLOW;
 
     /* encode length */
     if ((ret = hal_xdr_encode_int(outbuf, limit, len)) != HAL_OK)
@@ -154,7 +154,7 @@ hal_error_t hal_xdr_decode_buffer_in_place(uint8_t **inbuf, const uint8_t * cons
     if (limit - *inbuf < xdr_len) {
         /* undo read of length */
         *inbuf = orig_inbuf;
-        return HAL_ERROR_IO_BAD_COUNT;
+        return HAL_ERROR_XDR_BUFFER_OVERFLOW;
     }
 
     /* return a pointer to the string or opaque data */
@@ -178,12 +178,11 @@ hal_error_t hal_xdr_decode_buffer(uint8_t **inbuf, const uint8_t * const limit, 
     uint32_t xdr_len;
 
     if ((ret = hal_xdr_decode_buffer_in_place(inbuf, limit, &vptr, &xdr_len)) == HAL_OK) {
+	*len = xdr_len;
 	if (*len < xdr_len) {
-	    /* user buffer is too small, update *len */
-	    *len = xdr_len;
-	    /* undo read of length */
+	    /* user buffer is too small, undo read of length */
 	    *inbuf = orig_inbuf;
-	    return HAL_ERROR_IO_BAD_COUNT;
+	    return HAL_ERROR_XDR_BUFFER_OVERFLOW;
 	}
 
         memcpy(value, vptr, *len);
@@ -194,16 +193,10 @@ hal_error_t hal_xdr_decode_buffer(uint8_t **inbuf, const uint8_t * const limit, 
 /* ---------------------------------------------------------------- */
 
 #ifdef TEST
-void hexdump(uint8_t *buf, uint32_t len)
+static void hexdump(uint8_t *buf, uint32_t len)
 {
-    int i;
-
-    for (i = 0; i < len; ++i) {
-        uint8_t c = buf[i];
-        printf("%02x ", c);
-        if ((i & 0x07) == 0x07)
-            printf("\n");
-    }
+    for (uint32_t i = 0; i < len; ++i)
+        printf("%02x%c", buf[i], ((i & 0x07) == 0x07) ? '\n' : ' ');
     if ((len & 0x07) != 0)
         printf("\n");
 }
