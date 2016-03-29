@@ -41,9 +41,6 @@
 
 #include <hal.h>
 
-#warning This is wrong, nothing outside libhal itself should include hal_internal.h
-#include <hal_internal.h>
-
 #include "test-rsa.h"
 #include "test-ecdsa.h"
 
@@ -321,10 +318,9 @@ static int test_ecdsa_generate(const ecdsa_tc_t * const tc)
 
 int main (int argc, char *argv[])
 {
-  rpc_client_init(RPC_LOCAL);
-  // rpc_client_init(RPC_REMOTE);
-
   int ok = 1;
+
+  hal_rpc_client_init();
 
   for (int i = 0; i < (sizeof(rsa_tc)/sizeof(*rsa_tc)); i++)
     ok &= test_rsa_testvec(&rsa_tc[i]);
