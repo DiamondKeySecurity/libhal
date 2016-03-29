@@ -37,9 +37,8 @@ STATIC_PKEY_STATE_BLOCKS = 6
 INC		= hal.h hal_internal.h
 LIB		= libhal.a
 
-OBJ		= errorstrings.o ${CORE_OBJ} ${IO_OBJ} ${RPC_OBJ} ${KS_OBJ}
-CORE_OBJ	:= core.o csprng.o hash.o aes_keywrap.o pbkdf2.o \
-		   modexp.o rsa.o ecdsa.o asn1.o
+OBJ		= errorstrings.o rsa.o ecdsa.o asn1.o ${CORE_OBJ} ${IO_OBJ} ${RPC_OBJ} ${KS_OBJ}
+CORE_OBJ	:= core.o csprng.o hash.o aes_keywrap.o pbkdf2.o modexp.o
 
 USAGE = "usage: make [IO_BUS=eim|i2c|fmc] [RPC_CLIENT=local|remote|mixed] [RPC_SERVER=yes] [KS=mmap|volatile|flash]"
 
@@ -81,7 +80,7 @@ endif
 RPC_CORE_OBJ = rpc_hash.o rpc_misc.o rpc_pkey.o
 
 ifdef RPC_SERVER
-  RPC_SERVER_OBJ = rpc_server.o ${RPC_CORE_OBJ}
+  RPC_SERVER_OBJ = rpc_server.o rpc_api.o ${RPC_CORE_OBJ}
   RPC_TRANSPORT ?= serial
 endif
 
@@ -90,9 +89,10 @@ ifdef RPC_CLIENT
   ifeq (${RPC_CLIENT},local)
     RPC_CLIENT_OBJ += ${RPC_CORE_OBJ}
   else
+    CFLAGS += -DHAL_RSA_USE_MODEXP=0
     RPC_TRANSPORT ?= serial
     ifeq (${RPC_CLIENT},mixed)
-      CFLAGS += -DHAL_ENABLE_SOFTWARE_HASH_CORES
+      RPC_CLIENT_OBJ += rpc_hash.o hash.o
     endif
     ifndef RPC_SERVER
       # If we're only building a remote RPC client lib, don't include
@@ -136,6 +136,9 @@ else ifeq (${RPC_CLIENT},remote)
 else ifeq (${RPC_CLIENT},mixed)
   RPC_CLIENT_FLAG = 2
 endif
+ifdef RPC_CLIENT_FLAG
+CFLAGS		+= -DRPC_CLIENT=${RPC_CLIENT_FLAG}
+endif
 
 # The mmap and flash keystore implementations are both server code.
 #
@@ -162,13 +165,24 @@ LDFLAGS		:= -g3 -L${TFMDIR} -ltfm
 CFLAGS		+= -DHAL_STATIC_HASH_STATE_BLOCKS=${STATIC_HASH_STATE_BLOCKS}
 CFLAGS		+= -DHAL_STATIC_HMAC_STATE_BLOCKS=${STATIC_HMAC_STATE_BLOCKS}
 CFLAGS		+= -DHAL_STATIC_PKEY_STATE_BLOCKS=${STATIC_PKEY_STATE_BLOCKS}
-CFLAGS		+= -DRPC_CLIENT=${RPC_CLIENT_FLAG}
 
 all: ${LIB}
 	cd tests; ${MAKE} CFLAGS='${CFLAGS} -I..' LDFLAGS='${LDFLAGS}' $@
 ifneq (${CORE_OBJ},)
 	cd utils; ${MAKE} CFLAGS='${CFLAGS} -I..' LDFLAGS='${LDFLAGS}' $@
 endif
+
+client:
+	${MAKE} RPC_CLIENT=remote
+
+mixed:
+	${MAKE} RPC_CLIENT=mixed
+
+server:
+	${MAKE} RPC_SERVER=yes
+
+loopback:
+	${MAKE} RPC_CLIENT=remote RPC_SERVER=yes RPC_TRANSPORT=loopback
 
 ${OBJ}: ${INC}
 
@@ -185,7 +199,7 @@ test: all
 	cd tests; ${MAKE} -k $@
 
 clean:
-	rm -f ${OBJ} ${LIB}
+	rm -f *.o ${LIB}
 	cd tests; ${MAKE} $@
 	cd utils; ${MAKE} $@
 
