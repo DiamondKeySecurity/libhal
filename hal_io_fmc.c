@@ -37,8 +37,8 @@
 #include <stdint.h>
 
 #include "stm-fmc.h"
-#include "libhal/hal.h"
-#include "libhal/verilog_constants.h"
+#include "hal.h"
+#include "hal_internal.h"
 
 static int debug = 0;
 static int inited = 0;
