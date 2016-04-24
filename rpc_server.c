@@ -589,6 +589,105 @@ static hal_error_t pkey_list(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
+void hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen, uint8_t * const obuf, size_t * const olen)
+{
+    uint8_t * iptr = ibuf;
+    uint8_t * ilimit = ibuf + ilen;
+    uint8_t * optr = obuf + 4;		/* reserve 4 bytes for return code */
+    uint8_t * olimit = obuf + *olen;
+    uint32_t rpc_func_num;
+    hal_error_t ret;
+
+    hal_xdr_decode_int(&iptr, ilimit, &rpc_func_num);
+    switch (rpc_func_num) {
+    case RPC_FUNC_GET_VERSION:
+        ret = get_version(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_GET_RANDOM:
+        ret = get_random(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_SET_PIN:
+        ret = set_pin(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_LOGIN:
+        ret = login(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_LOGOUT:
+        ret = logout(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_LOGOUT_ALL:
+        ret = logout_all(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_IS_LOGGED_IN:
+        ret = is_logged_in(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_HASH_GET_DIGEST_LEN:
+        ret = hash_get_digest_len(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_HASH_GET_DIGEST_ALGORITHM_ID:
+        ret = hash_get_digest_algorithm_id(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_HASH_GET_ALGORITHM:
+        ret = hash_get_algorithm(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_HASH_INITIALIZE:
+        ret = hash_initialize(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_HASH_UPDATE:
+        ret = hash_update(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_HASH_FINALIZE:
+        ret = hash_finalize(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_PKEY_LOAD:
+        ret = pkey_load(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_PKEY_FIND:
+        ret = pkey_find(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_PKEY_GENERATE_RSA:
+        ret = pkey_generate_rsa(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_PKEY_GENERATE_EC:
+        ret = pkey_generate_ec(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_PKEY_CLOSE:
+        ret = pkey_close(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_PKEY_DELETE:
+        ret = pkey_delete(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_PKEY_GET_KEY_TYPE:
+        ret = pkey_get_key_type(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_PKEY_GET_KEY_FLAGS:
+        ret = pkey_get_key_flags(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_PKEY_GET_PUBLIC_KEY_LEN:
+        ret = pkey_get_public_key_len(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_PKEY_GET_PUBLIC_KEY:
+        ret = pkey_get_public_key(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_PKEY_REMOTE_SIGN:
+        ret = pkey_remote_sign(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_PKEY_REMOTE_VERIFY:
+        ret = pkey_remote_verify(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_PKEY_LIST:
+        ret = pkey_list(&iptr, ilimit, &optr, olimit);
+        break;
+    default:
+        ret = HAL_ERROR_RPC_BAD_FUNCTION;
+        break;
+    }
+    /* encode the return code at the beginning of the payload */
+    *olen = optr - obuf;
+    optr = obuf;
+    hal_xdr_encode_int(&optr, olimit, ret);
+}
+
 #define MAX_PKT_SIZE 4096
 #define interrupt 0
 
@@ -596,9 +695,7 @@ static uint8_t inbuf[MAX_PKT_SIZE], outbuf[MAX_PKT_SIZE];
 
 void hal_rpc_server_main(void)
 {
-    uint8_t *iptr, *ilimit, *optr, *olimit;
     size_t ilen, olen;
-    uint32_t rpc_func_num;
     void *opaque;
     hal_error_t ret;
     
@@ -606,98 +703,8 @@ void hal_rpc_server_main(void)
         ilen = sizeof(inbuf);
         ret = hal_rpc_recvfrom(inbuf, &ilen, &opaque);
         if (ret == HAL_OK) {
-            iptr = inbuf;
-            ilimit = inbuf + ilen;
-            optr = outbuf + 4;  /* reserve 4 bytes for return code */
-            olimit = outbuf + sizeof(outbuf);
-            hal_xdr_decode_int(&iptr, ilimit, &rpc_func_num);
-            switch (rpc_func_num) {
-            case RPC_FUNC_GET_VERSION:
-                ret = get_version(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_GET_RANDOM:
-                ret = get_random(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_SET_PIN:
-                ret = set_pin(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_LOGIN:
-                ret = login(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_LOGOUT:
-                ret = logout(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_LOGOUT_ALL:
-                ret = logout_all(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_IS_LOGGED_IN:
-                ret = is_logged_in(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_HASH_GET_DIGEST_LEN:
-                ret = hash_get_digest_len(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_HASH_GET_DIGEST_ALGORITHM_ID:
-                ret = hash_get_digest_algorithm_id(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_HASH_GET_ALGORITHM:
-                ret = hash_get_algorithm(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_HASH_INITIALIZE:
-                ret = hash_initialize(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_HASH_UPDATE:
-                ret = hash_update(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_HASH_FINALIZE:
-                ret = hash_finalize(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_PKEY_LOAD:
-                ret = pkey_load(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_PKEY_FIND:
-                ret = pkey_find(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_PKEY_GENERATE_RSA:
-                ret = pkey_generate_rsa(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_PKEY_GENERATE_EC:
-                ret = pkey_generate_ec(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_PKEY_CLOSE:
-                ret = pkey_close(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_PKEY_DELETE:
-                ret = pkey_delete(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_PKEY_GET_KEY_TYPE:
-                ret = pkey_get_key_type(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_PKEY_GET_KEY_FLAGS:
-                ret = pkey_get_key_flags(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_PKEY_GET_PUBLIC_KEY_LEN:
-                ret = pkey_get_public_key_len(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_PKEY_GET_PUBLIC_KEY:
-                ret = pkey_get_public_key(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_PKEY_REMOTE_SIGN:
-                ret = pkey_remote_sign(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_PKEY_REMOTE_VERIFY:
-                ret = pkey_remote_verify(&iptr, ilimit, &optr, olimit);
-                break;
-            case RPC_FUNC_PKEY_LIST:
-                ret = pkey_list(&iptr, ilimit, &optr, olimit);
-                break;
-            default:
-                ret = HAL_ERROR_RPC_BAD_FUNCTION;
-                break;
-            }
-            /* encode the return code at the beginning of the payload */
-            olen = optr - outbuf;
-            optr = outbuf;
-            hal_xdr_encode_int(&optr, olimit, ret);
+            olen = sizeof(outbuf);
+            hal_rpc_server_dispatch(inbuf, ilen, outbuf, &olen);
             hal_rpc_sendto(outbuf, olen, opaque);
         }
     }
