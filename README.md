@@ -80,18 +80,19 @@ The current point addition and point doubling algorithms come from the
 [EFD][].  At least at the moment, we're only interested in ECDSA with
 the NIST prime curves, so we use algorithms optimized for a=-3.
 
-The point multiplication algorithm is a Montgomery Ladder, which is
-not the fastest possible algorithm, but is relatively easy to confirm
-by inspection as constant-time.  Point multiplication could probably
-be made faster by using a non-adjacent form (NAF) representation for
-the scalar, but the author doesn't yet understand that well enough to
+The point multiplication algorithm is a straightforward square and add
+loop, which is not the fastest possible algorithm, but is relatively
+easy to confirm by inspection as being constant-time within the limits
+imposed by the NIST curves.  Point multiplication could probably be
+made faster by using a non-adjacent form (NAF) representation for the
+scalar, but the author doesn't yet understand that well enough to
 implement it as a constant-time algorithm.  In theory, changing to a
 NAF representation could be done without any change to the public API.
 
 Points stored in keys and curve parameters are in affine format, but
-all point arithmetic is performed in Jacobian projective coordinates,
-with the coordinates in Montgomery form; final mapping back to affine
-coordinates also handles the final Montgomery reduction.
+point arithmetic is performed in Jacobian projective coordinates, with
+the coordinates themselves in Montgomery form; final mapping back to
+affine coordinates also handles the final Montgomery reduction.
 
 ## API ##
 
