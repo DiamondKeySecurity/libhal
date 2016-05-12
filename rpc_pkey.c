@@ -565,7 +565,7 @@ static hal_error_t sign_rsa(uint8_t *keybuf, const size_t keybuf_len,
   hal_error_t err;
 
   assert(signature != NULL && signature_len != NULL);
-  assert((hash.handle == hal_hash_handle_none.handle) != (input == NULL || input_len == 0));
+  assert((hash.handle == HAL_HANDLE_NONE) != (input == NULL || input_len == 0));
 
   if ((err = hal_rsa_private_key_from_der(&key, keybuf, keybuf_len, der, der_len)) != HAL_OK ||
       (err = hal_rsa_key_get_modulus(key, NULL, signature_len, 0))         != HAL_OK)
@@ -597,7 +597,7 @@ static hal_error_t sign_ecdsa(uint8_t *keybuf, const size_t keybuf_len,
   hal_error_t err;
 
   assert(signature != NULL && signature_len != NULL);
-  assert((hash.handle == hal_hash_handle_none.handle) != (input == NULL || input_len == 0));
+  assert((hash.handle == HAL_HANDLE_NONE) != (input == NULL || input_len == 0));
 
   if ((err = hal_ecdsa_private_key_from_der(&key, keybuf, keybuf_len, der, der_len)) != HAL_OK)
     return err;
@@ -686,7 +686,7 @@ static hal_error_t verify_rsa(uint8_t *keybuf, const size_t keybuf_len, const ha
   hal_error_t err;
 
   assert(signature != NULL && signature_len > 0);
-  assert((hash.handle == hal_hash_handle_none.handle) != (input == NULL || input_len == 0));
+  assert((hash.handle == HAL_HANDLE_NONE) != (input == NULL || input_len == 0));
 
   switch (type) {
   case HAL_KEY_TYPE_RSA_PRIVATE:
@@ -733,7 +733,7 @@ static hal_error_t verify_ecdsa(uint8_t *keybuf, const size_t keybuf_len, const 
   hal_error_t err;
 
   assert(signature != NULL && signature_len > 0);
-  assert((hash.handle == hal_hash_handle_none.handle) != (input == NULL || input_len == 0));
+  assert((hash.handle == HAL_HANDLE_NONE) != (input == NULL || input_len == 0));
 
   switch (type) {
   case HAL_KEY_TYPE_EC_PRIVATE:

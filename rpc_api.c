@@ -36,7 +36,7 @@
 #include "hal.h"
 #include "hal_internal.h"
 
-const hal_hash_handle_t hal_hash_handle_none = {0};
+const hal_hash_handle_t hal_hash_handle_none = {HAL_HANDLE_NONE};
 
 static inline int check_pkey_type(const hal_key_type_t type)
 {
@@ -155,7 +155,7 @@ hal_error_t hal_rpc_hash_get_digest_algorithm_id(const hal_digest_algorithm_t al
 
 hal_error_t hal_rpc_hash_get_algorithm(const hal_hash_handle_t hash, hal_digest_algorithm_t *alg)
 {
-  if (hash.handle == hal_hash_handle_none.handle || alg == NULL)
+  if (hash.handle == HAL_HANDLE_NONE || alg == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
   return hal_rpc_hash_dispatch->get_algorithm(hash, alg);
 }
@@ -174,7 +174,7 @@ hal_error_t hal_rpc_hash_initialize(const hal_client_handle_t client,
 hal_error_t hal_rpc_hash_update(const hal_hash_handle_t hash,
 				const uint8_t * data, const size_t length)
 {
-  if (hash.handle == hal_hash_handle_none.handle || data == NULL)
+  if (hash.handle == HAL_HANDLE_NONE || data == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
   if (length == 0)
     return HAL_OK;
@@ -184,7 +184,7 @@ hal_error_t hal_rpc_hash_update(const hal_hash_handle_t hash,
 hal_error_t hal_rpc_hash_finalize(const hal_hash_handle_t hash,
 				  uint8_t *digest, const size_t length)
 {
-  if (hash.handle == hal_hash_handle_none.handle || digest == NULL || length == 0)
+  if (hash.handle == HAL_HANDLE_NONE || digest == NULL || length == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
   return hal_rpc_hash_dispatch->finalize(hash, digest, length);
 }
@@ -290,7 +290,7 @@ hal_error_t hal_rpc_pkey_sign(const hal_session_handle_t session,
 			      uint8_t * signature, size_t *signature_len, const size_t signature_max)
 {
   if (signature == NULL || signature_len == NULL || signature_max == 0 ||
-      (hash.handle == hal_hash_handle_none.handle) == (input == NULL || input_len == 0))
+      (hash.handle == HAL_HANDLE_NONE) == (input == NULL || input_len == 0))
     return HAL_ERROR_BAD_ARGUMENTS;
   return hal_rpc_pkey_dispatch->sign(session, pkey, hash, input,  input_len, signature, signature_len, signature_max);
 }
@@ -302,7 +302,7 @@ hal_error_t hal_rpc_pkey_verify(const hal_session_handle_t session,
 				const uint8_t * const signature, const size_t signature_len)
 {
   if (signature == NULL || signature_len == 0 ||
-      (hash.handle == hal_hash_handle_none.handle) == (input == NULL || input_len == 0))
+      (hash.handle == HAL_HANDLE_NONE) == (input == NULL || input_len == 0))
     return HAL_ERROR_BAD_ARGUMENTS;
   return hal_rpc_pkey_dispatch->verify(session, pkey, hash, input, input_len, signature, signature_len);
 }

@@ -4,7 +4,7 @@
  * Memory map, access functions, and HAL for Cryptech cores.
  *
  * Authors: Joachim Strombergson, Paul Selkirk, Rob Austein
- * Copyright (c) 2015, NORDUnet A/S All rights reserved.
+ * Copyright (c) 2015-2016, NORDUnet A/S All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -227,6 +227,7 @@ typedef struct hal_hash_driver hal_hash_driver_t;
  */
 
 typedef enum {
+  hal_digest_algorithm_none,
   hal_digest_algorithm_sha1,
   hal_digest_algorithm_sha256,
   hal_digest_algorithm_sha512_224,
@@ -543,6 +544,8 @@ extern hal_error_t hal_ecdsa_verify(const hal_core_t *core,
  * client handles are created by the client (host) side of the RPC
  * mechanism, not the server (HSM) side.
  */
+
+#define	HAL_HANDLE_NONE	(0)
 
 typedef struct { uint32_t handle; } hal_client_handle_t;
 typedef struct { uint32_t handle; } hal_session_handle_t;
