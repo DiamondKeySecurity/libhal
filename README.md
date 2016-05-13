@@ -80,7 +80,7 @@ The current point addition and point doubling algorithms come from the
 [EFD][].  At least at the moment, we're only interested in ECDSA with
 the NIST prime curves, so we use algorithms optimized for a=-3.
 
-The point multiplication algorithm is a straightforward square and add
+The point multiplication algorithm is a straightforward double-and-add
 loop, which is not the fastest possible algorithm, but is relatively
 easy to confirm by inspection as being constant-time within the limits
 imposed by the NIST curves.  Point multiplication could probably be
