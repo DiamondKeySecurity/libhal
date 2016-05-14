@@ -129,7 +129,7 @@ for curve in curves:
       print "static const uint8_t %s[] = { /* %d bytes */" % (name, len(value))
       print wrapper.fill(", ".join("0x%02x" % ord(v) for v in value))
       print "};"
-    
+
 print
 print "typedef struct {"
 print "  hal_curve_name_t curve;"

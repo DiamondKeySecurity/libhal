@@ -77,7 +77,7 @@ hal_error_t hal_rpc_send(const uint8_t * const buf, const size_t len)
 hal_error_t hal_rpc_recv(uint8_t * const buf, size_t * const len)
 {
     int ret;
-    
+
     if ((ret = recv(sock, buf, *len, 0)) == -1)
         return HAL_ERROR_RPC_TRANSPORT;
     *len = ret;

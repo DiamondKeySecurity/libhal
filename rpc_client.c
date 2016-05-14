@@ -763,7 +763,7 @@ static hal_error_t pkey_mixed_sign(const hal_session_handle_t session,
   if ((err = hal_rpc_hash_finalize(hash, digest, digest_len)) != HAL_OK)
     return err;
 
-  return mixed_handle_dispatch(pkey)->sign(session, pkey, hal_hash_handle_none, digest, digest_len, 
+  return mixed_handle_dispatch(pkey)->sign(session, pkey, hal_hash_handle_none, digest, digest_len,
                                            signature, signature_len, signature_max);
 }
 
@@ -774,7 +774,7 @@ static hal_error_t pkey_mixed_verify(const hal_session_handle_t session,
                                      const uint8_t * const signature, const size_t signature_len)
 {
   if (input != NULL)
-    return mixed_handle_dispatch(pkey)->verify(session, pkey, hash, input, input_len, 
+    return mixed_handle_dispatch(pkey)->verify(session, pkey, hash, input, input_len,
                                                signature, signature_len);
 
   hal_digest_algorithm_t alg;
@@ -790,7 +790,7 @@ static hal_error_t pkey_mixed_verify(const hal_session_handle_t session,
   if ((err = hal_rpc_hash_finalize(hash, digest, digest_len)) != HAL_OK)
     return err;
 
-  return mixed_handle_dispatch(pkey)->verify(session, pkey, hal_hash_handle_none, 
+  return mixed_handle_dispatch(pkey)->verify(session, pkey, hal_hash_handle_none,
                                              digest, digest_len, signature, signature_len);
 }
 

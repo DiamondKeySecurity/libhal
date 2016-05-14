@@ -61,7 +61,7 @@ static int _string_match(const char *s1, ...)
 
   return s2 != NULL;
 }
-  
+
 static int parse_value(const char *s, uint32_t *value)
 {
   if (s == NULL || value == NULL)

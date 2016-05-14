@@ -55,13 +55,13 @@ hal_error_t hal_rpc_sendto(const uint8_t * const buf, const size_t len, void *op
 {
     if (hal_slip_send(buf, len) == -1)
         return HAL_ERROR_RPC_TRANSPORT;
-    return HAL_OK; 
+    return HAL_OK;
 }
 
 hal_error_t hal_rpc_recvfrom(uint8_t * const buf, size_t * const len, void **opaque)
 {
     int ret;
-    
+
     if ((ret = hal_slip_recv(buf, *len)) == -1)
         return HAL_ERROR_RPC_TRANSPORT;
     *len = ret;

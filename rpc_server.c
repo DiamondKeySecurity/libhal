@@ -554,7 +554,7 @@ static hal_error_t hal_xdr_encode_pkey_info(uint8_t **optr, const uint8_t * cons
 {
     uint8_t *optr_orig = *optr;
     hal_error_t ret;
-    
+
     if ((ret = hal_xdr_encode_int(optr, olimit, info->type)) != HAL_OK ||
         (ret = hal_xdr_encode_int(optr, olimit, info->curve)) != HAL_OK ||
         (ret = hal_xdr_encode_int(optr, olimit, info->flags)) != HAL_OK ||
@@ -703,7 +703,7 @@ void hal_rpc_server_main(void)
     size_t ilen, olen;
     void *opaque;
     hal_error_t ret;
-    
+
     while (!interrupt) {
         ilen = sizeof(inbuf);
         ret = hal_rpc_recvfrom(inbuf, &ilen, &opaque);

@@ -55,11 +55,11 @@ int main(int argc, char *argv[])
         len = atoi(argv[1]);
     if (len <= 0)       /* no arg, or bad arg */
         len = DEFAULT_LEN;
-    
+
     uint8_t rnd[len];
 
 #define check(op) { hal_error_t err; if ((err = (op)) != HAL_OK) { printf("%s: %s\n", #op, hal_error_string(err)); return 1; } }
-    
+
     check(hal_rpc_client_init());
     check(hal_rpc_get_random(rnd, sizeof(rnd)));
 

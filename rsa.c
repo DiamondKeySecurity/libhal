@@ -848,7 +848,7 @@ hal_error_t hal_rsa_public_key_from_der(hal_rsa_key_t **key_,
   if (null != NULL || null_len != 0 || alg_oid == NULL ||
       alg_oid_len != sizeof(oid_rsaEncryption) || memcmp(alg_oid, oid_rsaEncryption, alg_oid_len) != 0)
     return HAL_ERROR_ASN1_PARSE_FAILED;
-  
+
   size_t len, hlen, vlen;
 
   if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, pubkey, pubkey_len, &hlen, &vlen)) != HAL_OK)

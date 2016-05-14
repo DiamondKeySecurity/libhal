@@ -409,7 +409,7 @@ static hal_error_t delete(const hal_pkey_handle_t pkey)
   hal_error_t err = hal_ks_delete(slot->type, slot->name, slot->name_len, &slot->ks_hint);
 
   if (err == HAL_OK || err == HAL_ERROR_KEY_NOT_FOUND)
-    memset(slot, 0, sizeof(*slot));    
+    memset(slot, 0, sizeof(*slot));
 
   return err;
 }

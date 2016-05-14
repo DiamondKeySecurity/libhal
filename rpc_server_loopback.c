@@ -80,7 +80,7 @@ hal_error_t hal_rpc_recvfrom(uint8_t * const buf, size_t * const len, void **opa
     static struct sockaddr_in sin;
     socklen_t sin_len = sizeof(sin);
     int ret;
-    
+
     if ((ret = recvfrom(fd, buf, *len, 0, (struct sockaddr *)&sin, &sin_len)) == -1)
 	return HAL_ERROR_RPC_TRANSPORT;
     *opaque = (void *)&sin;

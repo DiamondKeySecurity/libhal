@@ -85,7 +85,7 @@ const hal_ks_keydb_t *hal_ks_get_keydb(void)
     fn = base;
   else
     strcat(strcat(strcpy(fn_, home), "/"), base);
-    
+
   if ((fd = open(fn, O_RDWR | O_CREAT | O_EXCL, 0600)) >= 0) {
     uint8_t zeros[len];
     memset(zeros, 0, sizeof(zeros));

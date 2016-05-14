@@ -89,7 +89,7 @@ hal_error_t hal_ks_store(const hal_key_type_t type,
   }
 
   if (*hint < 0)
-    return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;    
+    return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
 
   hal_ks_key_t k;
   memset(&k, 0, sizeof(k));
@@ -105,7 +105,7 @@ hal_error_t hal_ks_store(const hal_key_type_t type,
 
   if (err != HAL_OK)
     return err;
-  
+
   assert(name_len <= sizeof(k.name));
   memcpy(k.name, name, name_len);
   k.name_len = name_len;
@@ -152,7 +152,7 @@ hal_error_t hal_ks_exists(const hal_key_type_t type,
 {
   if (name == NULL || name_len == 0 || !acceptable_key_type(type))
     return HAL_ERROR_BAD_ARGUMENTS;
-  
+
   const hal_ks_keydb_t * const db = hal_ks_get_keydb();
 
   if (db == NULL)
@@ -173,10 +173,10 @@ hal_error_t hal_ks_fetch(const hal_key_type_t type,
 {
   if (name == NULL || name_len == 0 || !acceptable_key_type(type))
     return HAL_ERROR_BAD_ARGUMENTS;
-  
+
   const hal_ks_keydb_t * const db = hal_ks_get_keydb();
   int hint_ = -1;
-  
+
   if (db == NULL)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
@@ -225,10 +225,10 @@ hal_error_t hal_ks_delete(const hal_key_type_t type,
 {
   if (name == NULL || name_len == 0 || !acceptable_key_type(type))
     return HAL_ERROR_BAD_ARGUMENTS;
-  
+
   const hal_ks_keydb_t * const db = hal_ks_get_keydb();
   int hint_ = -1;
-  
+
   if (db == NULL)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
@@ -249,7 +249,7 @@ hal_error_t hal_ks_list(hal_pkey_info_t *result,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   const hal_ks_keydb_t * const db = hal_ks_get_keydb();
-  
+
   if (db == NULL)
     return HAL_ERROR_KEYSTORE_ACCESS;
 

@@ -284,7 +284,7 @@ static inline hal_hash_state_t *alloc_static_hash_state(void)
     if ((static_hash_state[i].flags & STATE_FLAG_STATE_ALLOCATED) == 0)
       return &static_hash_state[i];
 
-#endif  
+#endif
 
   return NULL;
 }
@@ -298,7 +298,7 @@ static inline hal_hmac_state_t *alloc_static_hmac_state(void)
     if ((static_hmac_state[i].hash_state.flags & STATE_FLAG_STATE_ALLOCATED) == 0)
       return &static_hmac_state[i];
 
-#endif  
+#endif
 
   return NULL;
 }
@@ -317,7 +317,7 @@ static inline void swytebop(void *out_, const void * const in_, const size_t n, 
 
   /* w must be a power of two */
   assert(in != out && in != NULL && out != NULL && w && !(w & (w - 1)));
-  
+
   switch (* (uint32_t *) order) {
 
   case 0x01020304:
@@ -411,7 +411,7 @@ hal_error_t hal_hash_initialize(const hal_core_t *core,
   state->driver = driver;
   state->core = core;
   state->flags = flags;
-    
+
   if (state_buffer == NULL)
     state->flags |= STATE_FLAG_STATE_ALLOCATED;
 
@@ -969,7 +969,7 @@ static hal_error_t sw_hash_core_sha1(hal_hash_state_t *state)
   swytebop(W, state->block, 16 * sizeof(*W), sizeof(*W));
 
   for (int i = 16; i < 80; i++)
-    W[i] = rot_l_32(W[i - 3] ^ W[i - 8] ^ W[i - 14] ^ W[i - 16], 1); 
+    W[i] = rot_l_32(W[i - 3] ^ W[i - 8] ^ W[i - 14] ^ W[i - 16], 1);
 
   for (int i = 0; i < 80; i++) {
     const int a = sha1_pos(i, 0), b = sha1_pos(i, 1), c = sha1_pos(i, 2), d = sha1_pos(i, 3), e = sha1_pos(i, 4);

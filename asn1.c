@@ -339,7 +339,7 @@ hal_error_t hal_asn1_decode_spki(const uint8_t **alg_oid,   size_t *alg_oid_len,
 
   *curve_oid = NULL;
   *curve_oid_len = 0;
-    
+
   if (d < algid_end) {
     switch (*d) {
 

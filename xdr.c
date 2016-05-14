@@ -103,7 +103,7 @@ hal_error_t hal_xdr_encode_buffer(uint8_t **outbuf, const uint8_t * const limit,
     hal_error_t ret;
 
     /* arg checks */
-    if (outbuf == NULL || *outbuf == NULL || limit == NULL || 
+    if (outbuf == NULL || *outbuf == NULL || limit == NULL ||
         (value == NULL && len != 0))
         return HAL_ERROR_BAD_ARGUMENTS;
 
