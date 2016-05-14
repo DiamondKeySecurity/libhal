@@ -338,14 +338,14 @@ static hal_error_t hash_finalize(const hal_hash_handle_t hash,
   return rpc_ret;
 }
 
-static hal_error_t pkey_load(const hal_client_handle_t client,
-                             const hal_session_handle_t session,
-                             hal_pkey_handle_t *pkey,
-                             const hal_key_type_t type,
-                             const hal_curve_name_t curve,
-                             const uint8_t * const name, const size_t name_len,
-                             const uint8_t * const der, const size_t der_len,
-                             const hal_key_flags_t flags)
+static hal_error_t pkey_remote_load(const hal_client_handle_t client,
+                                    const hal_session_handle_t session,
+                                    hal_pkey_handle_t *pkey,
+                                    const hal_key_type_t type,
+                                    const hal_curve_name_t curve,
+                                    const uint8_t * const name, const size_t name_len,
+                                    const uint8_t * const der, const size_t der_len,
+                                    const hal_key_flags_t flags)
 {
   uint8_t outbuf[nargs(8) + pad(name_len) + pad(der_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
@@ -371,13 +371,14 @@ static hal_error_t pkey_load(const hal_client_handle_t client,
   return rpc_ret;
 }
 
-static hal_error_t pkey_find(const hal_client_handle_t client,
-                             const hal_session_handle_t session,
-                             hal_pkey_handle_t *pkey,
-                             const hal_key_type_t type,
-                             const uint8_t * const name, const size_t name_len)
+static hal_error_t pkey_remote_find(const hal_client_handle_t client,
+                                    const hal_session_handle_t session,
+                                    hal_pkey_handle_t *pkey,
+                                    const hal_key_type_t type,
+                                    const uint8_t * const name, const size_t name_len,
+                                    const hal_key_flags_t flags)
 {
-  uint8_t outbuf[nargs(5) + pad(name_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t outbuf[nargs(6) + pad(name_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
@@ -387,6 +388,7 @@ static hal_error_t pkey_find(const hal_client_handle_t client,
   check(hal_xdr_encode_int(&optr, olimit, session.handle));
   check(hal_xdr_encode_int(&optr, olimit, type));
   check(hal_xdr_encode_buffer(&optr, olimit, name, name_len));
+  check(hal_xdr_encode_int(&optr, olimit, flags));
   check(hal_rpc_send(outbuf, optr - outbuf));
 
   check(hal_rpc_recv(inbuf, &ilen));
@@ -398,13 +400,13 @@ static hal_error_t pkey_find(const hal_client_handle_t client,
   return rpc_ret;
 }
 
-static hal_error_t pkey_generate_rsa(const hal_client_handle_t client,
-                                     const hal_session_handle_t session,
-                                     hal_pkey_handle_t *pkey,
-                                     const uint8_t * const name, const size_t name_len,
-                                     const unsigned key_len,
-                                     const uint8_t * const exp, const size_t exp_len,
-                                     const hal_key_flags_t flags)
+static hal_error_t pkey_remote_generate_rsa(const hal_client_handle_t client,
+                                            const hal_session_handle_t session,
+                                            hal_pkey_handle_t *pkey,
+                                            const uint8_t * const name, const size_t name_len,
+                                            const unsigned key_len,
+                                            const uint8_t * const exp, const size_t exp_len,
+                                            const hal_key_flags_t flags)
 {
   uint8_t outbuf[nargs(7) + pad(name_len) + pad(exp_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
@@ -429,12 +431,12 @@ static hal_error_t pkey_generate_rsa(const hal_client_handle_t client,
   return rpc_ret;
 }
 
-static hal_error_t pkey_generate_ec(const hal_client_handle_t client,
-                                    const hal_session_handle_t session,
-                                    hal_pkey_handle_t *pkey,
-                                    const uint8_t * const name, const size_t name_len,
-                                    const hal_curve_name_t curve,
-                                    const hal_key_flags_t flags)
+static hal_error_t pkey_remote_generate_ec(const hal_client_handle_t client,
+                                           const hal_session_handle_t session,
+                                           hal_pkey_handle_t *pkey,
+                                           const uint8_t * const name, const size_t name_len,
+                                           const hal_curve_name_t curve,
+                                           const hal_key_flags_t flags)
 {
   uint8_t outbuf[nargs(6) + pad(name_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
@@ -458,7 +460,7 @@ static hal_error_t pkey_generate_ec(const hal_client_handle_t client,
   return rpc_ret;
 }
 
-static hal_error_t pkey_close(const hal_pkey_handle_t pkey)
+static hal_error_t pkey_remote_close(const hal_pkey_handle_t pkey)
 {
   uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(1)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
@@ -475,7 +477,7 @@ static hal_error_t pkey_close(const hal_pkey_handle_t pkey)
   return rpc_ret;
 }
 
-static hal_error_t pkey_delete(const hal_pkey_handle_t pkey)
+static hal_error_t pkey_remote_delete(const hal_pkey_handle_t pkey)
 {
   uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(1)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
@@ -492,8 +494,8 @@ static hal_error_t pkey_delete(const hal_pkey_handle_t pkey)
   return rpc_ret;
 }
 
-static hal_error_t pkey_get_key_type(const hal_pkey_handle_t pkey,
-                                     hal_key_type_t *type)
+static hal_error_t pkey_remote_get_key_type(const hal_pkey_handle_t pkey,
+                                            hal_key_type_t *type)
 {
   uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
@@ -515,8 +517,8 @@ static hal_error_t pkey_get_key_type(const hal_pkey_handle_t pkey,
   return rpc_ret;
 }
 
-static hal_error_t pkey_get_key_flags(const hal_pkey_handle_t pkey,
-                                      hal_key_flags_t *flags)
+static hal_error_t pkey_remote_get_key_flags(const hal_pkey_handle_t pkey,
+                                             hal_key_flags_t *flags)
 {
   uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
@@ -538,7 +540,7 @@ static hal_error_t pkey_get_key_flags(const hal_pkey_handle_t pkey,
   return rpc_ret;
 }
 
-static size_t pkey_get_public_key_len(const hal_pkey_handle_t pkey)
+static size_t pkey_remote_get_public_key_len(const hal_pkey_handle_t pkey)
 {
   uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
@@ -561,8 +563,8 @@ static size_t pkey_get_public_key_len(const hal_pkey_handle_t pkey)
     return 0;
 }
 
-static hal_error_t pkey_get_public_key(const hal_pkey_handle_t pkey,
-                                       uint8_t *der, size_t *der_len, const size_t der_max)
+static hal_error_t pkey_remote_get_public_key(const hal_pkey_handle_t pkey,
+                                              uint8_t *der, size_t *der_len, const size_t der_max)
 {
   uint8_t outbuf[nargs(3)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(2) + pad(der_max)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
@@ -651,11 +653,12 @@ static hal_error_t hal_xdr_decode_pkey_info(uint8_t **iptr, const uint8_t * cons
   return HAL_OK;
 }
 
-static hal_error_t pkey_list(hal_pkey_info_t *result,
-                             unsigned *result_len,
-                             const unsigned result_max)
+static hal_error_t pkey_remote_list(hal_pkey_info_t *result,
+                                    unsigned *result_len,
+                                    const unsigned result_max,
+                                    hal_key_flags_t flags)
 {
-  uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t outbuf[nargs(3)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(2) + pad(result_max * sizeof(hal_pkey_info_t))], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   uint32_t len;
@@ -663,6 +666,7 @@ static hal_error_t pkey_list(hal_pkey_info_t *result,
 
   check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_LIST));
   check(hal_xdr_encode_int(&optr, olimit, result_max));
+  check(hal_xdr_encode_int(&optr, olimit, flags));
   check(hal_rpc_send(outbuf, optr - outbuf));
 
   check(hal_rpc_recv(inbuf, &ilen));
@@ -696,9 +700,17 @@ static hal_error_t pkey_mixed_sign(const hal_session_handle_t session,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * signature, size_t *signature_len, const size_t signature_max)
 {
+  hal_error_t  (* const sign)(const hal_session_handle_t session,
+                              const hal_pkey_handle_t pkey,
+                              const hal_hash_handle_t hash,
+                              const uint8_t * const input,  const size_t input_len,
+                              uint8_t * signature, size_t *signature_len, const size_t signature_max)
+    = ((pkey.handle & HAL_PKEY_HANDLE_PROXIMATE_FLAG) == 0
+       ? hal_rpc_remote_pkey_dispatch.sign
+       : hal_rpc_local_pkey_dispatch.sign);
+
   if (input != NULL)
-    return pkey_remote_sign(session, pkey, hash, input, input_len,
-                            signature, signature_len, signature_max);
+    return sign(session, pkey, hash, input, input_len, signature, signature_len, signature_max);
 
   hal_digest_algorithm_t alg;
   size_t digest_len;
@@ -713,8 +725,7 @@ static hal_error_t pkey_mixed_sign(const hal_session_handle_t session,
   if ((err = hal_rpc_hash_finalize(hash, digest, digest_len)) != HAL_OK)
     return err;
 
-  return pkey_remote_sign(session, pkey, hal_hash_handle_none, digest, digest_len,
-                          signature, signature_len, signature_max);
+  return sign(session, pkey, hal_hash_handle_none, digest, digest_len, signature, signature_len, signature_max);
 }
 
 static hal_error_t pkey_mixed_verify(const hal_session_handle_t session,
@@ -723,9 +734,17 @@ static hal_error_t pkey_mixed_verify(const hal_session_handle_t session,
                                      const uint8_t * const input, const size_t input_len,
                                      const uint8_t * const signature, const size_t signature_len)
 {
+  hal_error_t  (* const verify)(const hal_session_handle_t session,
+                                const hal_pkey_handle_t pkey,
+                                const hal_hash_handle_t hash,
+                                const uint8_t * const input, const size_t input_len,
+                                const uint8_t * const signature, const size_t signature_len)
+    = ((pkey.handle & HAL_PKEY_HANDLE_PROXIMATE_FLAG) == 0
+       ? hal_rpc_remote_pkey_dispatch.verify
+       : hal_rpc_local_pkey_dispatch.verify);
+
   if (input != NULL)
-    return pkey_remote_verify(session, pkey, hash, input, input_len,
-                              signature, signature_len);
+    return verify(session, pkey, hash, input, input_len, signature, signature_len);
 
   hal_digest_algorithm_t alg;
   size_t digest_len;
@@ -740,8 +759,124 @@ static hal_error_t pkey_mixed_verify(const hal_session_handle_t session,
   if ((err = hal_rpc_hash_finalize(hash, digest, digest_len)) != HAL_OK)
     return err;
 
-  return pkey_remote_verify(session, pkey, hal_hash_handle_none, digest, digest_len,
-                            signature, signature_len);
+  return verify(session, pkey, hal_hash_handle_none, digest, digest_len, signature, signature_len);
+}
+
+static hal_error_t pkey_mixed_load(const hal_client_handle_t client,
+				   const hal_session_handle_t session,
+				   hal_pkey_handle_t *pkey,
+				   const hal_key_type_t type,
+				   const hal_curve_name_t curve,
+				   const uint8_t * const name, const size_t name_len,
+				   const uint8_t * const der, const size_t der_len,
+				   const hal_key_flags_t flags)
+{
+  return ((flags & HAL_KEY_FLAG_PROXIMATE) == 0
+	  ? hal_rpc_remote_pkey_dispatch.load
+	  : hal_rpc_local_pkey_dispatch.load
+	  )(client, session, pkey, type, curve, name, name_len, der, der_len, flags);
+}
+
+static hal_error_t pkey_mixed_find(const hal_client_handle_t client,
+				   const hal_session_handle_t session,
+				   hal_pkey_handle_t *pkey,
+				   const hal_key_type_t type,
+				   const uint8_t * const name, const size_t name_len,
+				   const hal_key_flags_t flags)
+{
+  return ((flags & HAL_KEY_FLAG_PROXIMATE) == 0
+	  ? hal_rpc_remote_pkey_dispatch.find
+	  : hal_rpc_local_pkey_dispatch.find
+	  )(client, session, pkey, type, name, name_len, flags);
+}
+
+static hal_error_t pkey_mixed_generate_rsa(const hal_client_handle_t client,
+					   const hal_session_handle_t session,
+					   hal_pkey_handle_t *pkey,
+					   const uint8_t * const name, const size_t name_len,
+					   const unsigned key_length,
+					   const uint8_t * const public_exponent, const size_t public_exponent_len,
+					   const hal_key_flags_t flags)
+{
+  return ((flags & HAL_KEY_FLAG_PROXIMATE) == 0
+	  ? hal_rpc_remote_pkey_dispatch.generate_rsa
+	  : hal_rpc_local_pkey_dispatch.generate_rsa
+	  )(client, session, pkey, name, name_len, key_length, public_exponent, public_exponent_len, flags);
+}
+
+static hal_error_t pkey_mixed_generate_ec(const hal_client_handle_t client,
+					  const hal_session_handle_t session,
+					  hal_pkey_handle_t *pkey,
+					  const uint8_t * const name, const size_t name_len,
+					  const hal_curve_name_t curve,
+					  const hal_key_flags_t flags)
+{
+  return ((flags & HAL_KEY_FLAG_PROXIMATE) == 0
+	  ? hal_rpc_remote_pkey_dispatch.generate_ec
+	  : hal_rpc_local_pkey_dispatch.generate_ec
+	  )(client, session, pkey, name, name_len, curve, flags);
+}
+
+static hal_error_t pkey_mixed_close(const hal_pkey_handle_t pkey)
+{
+  return ((pkey.handle & HAL_PKEY_HANDLE_PROXIMATE_FLAG) == 0
+	  ? hal_rpc_remote_pkey_dispatch.close
+	  : hal_rpc_local_pkey_dispatch.close
+	  )(pkey);
+}
+
+static hal_error_t pkey_mixed_delete(const hal_pkey_handle_t pkey)
+{
+  return ((pkey.handle & HAL_PKEY_HANDLE_PROXIMATE_FLAG) == 0
+	  ? hal_rpc_remote_pkey_dispatch.delete
+	  : hal_rpc_local_pkey_dispatch.delete
+	  )(pkey);
+}
+
+static hal_error_t pkey_mixed_get_key_type(const hal_pkey_handle_t pkey,
+					   hal_key_type_t *key_type)
+{
+  return ((pkey.handle & HAL_PKEY_HANDLE_PROXIMATE_FLAG) == 0
+	  ? hal_rpc_remote_pkey_dispatch.get_key_type
+	  : hal_rpc_local_pkey_dispatch.get_key_type
+	  )(pkey, key_type);
+}
+
+static hal_error_t pkey_mixed_get_key_flags(const hal_pkey_handle_t pkey,
+					    hal_key_flags_t *flags)
+{
+  return ((pkey.handle & HAL_PKEY_HANDLE_PROXIMATE_FLAG) == 0
+	  ? hal_rpc_remote_pkey_dispatch.get_key_flags
+	  : hal_rpc_local_pkey_dispatch.get_key_flags
+	  )(pkey, flags);
+}
+
+static size_t pkey_mixed_get_public_key_len(const hal_pkey_handle_t pkey)
+{
+  return ((pkey.handle & HAL_PKEY_HANDLE_PROXIMATE_FLAG) == 0
+	  ? hal_rpc_remote_pkey_dispatch.get_public_key_len
+	  : hal_rpc_local_pkey_dispatch.get_public_key_len
+	  )(pkey);
+}
+
+static hal_error_t pkey_mixed_get_public_key(const hal_pkey_handle_t pkey,
+					     uint8_t *der, size_t *der_len, const size_t der_max)
+{
+  return ((pkey.handle & HAL_PKEY_HANDLE_PROXIMATE_FLAG) == 0
+	  ? hal_rpc_remote_pkey_dispatch.get_public_key
+	  : hal_rpc_local_pkey_dispatch.get_public_key
+	  )(pkey, der, der_len, der_max);
+}
+
+static hal_error_t pkey_mixed_list(hal_pkey_info_t *result,
+				   unsigned *result_len,
+				   const unsigned result_max,
+                                   hal_key_flags_t flags)
+{
+  return ((flags & HAL_KEY_FLAG_PROXIMATE) == 0
+	  ? hal_rpc_remote_pkey_dispatch.list
+	  : hal_rpc_local_pkey_dispatch.list
+	  )(result, result_len, result_max, flags);
 }
 
 /*
@@ -749,26 +884,54 @@ static hal_error_t pkey_mixed_verify(const hal_session_handle_t session,
  */
 
 const hal_rpc_misc_dispatch_t hal_rpc_remote_misc_dispatch = {
-  set_pin, login, logout, logout_all, is_logged_in, get_random, get_version
+  set_pin,
+  login,
+  logout,
+  logout_all,
+  is_logged_in,
+  get_random,
+  get_version
 };
 
 const hal_rpc_hash_dispatch_t hal_rpc_remote_hash_dispatch = {
-  hash_get_digest_len, hash_get_digest_algorithm_id, hash_get_algorithm,
-  hash_initialize, hash_update, hash_finalize
+  hash_get_digest_len,
+  hash_get_digest_algorithm_id,
+  hash_get_algorithm,
+  hash_initialize,
+  hash_update,
+  hash_finalize
 };
 
 const hal_rpc_pkey_dispatch_t hal_rpc_remote_pkey_dispatch = {
-  pkey_load, pkey_find, pkey_generate_rsa, pkey_generate_ec, pkey_close, pkey_delete,
-  pkey_get_key_type, pkey_get_key_flags, pkey_get_public_key_len, pkey_get_public_key,
-  pkey_remote_sign, pkey_remote_verify,
-  pkey_list
+  pkey_remote_load,
+  pkey_remote_find,
+  pkey_remote_generate_rsa,
+  pkey_remote_generate_ec,
+  pkey_remote_close,
+  pkey_remote_delete,
+  pkey_remote_get_key_type,
+  pkey_remote_get_key_flags,
+  pkey_remote_get_public_key_len,
+  pkey_remote_get_public_key,
+  pkey_remote_sign,
+  pkey_remote_verify,
+  pkey_remote_list
 };
 
 const hal_rpc_pkey_dispatch_t hal_rpc_mixed_pkey_dispatch = {
-  pkey_load, pkey_find, pkey_generate_rsa, pkey_generate_ec, pkey_close, pkey_delete,
-  pkey_get_key_type, pkey_get_key_flags, pkey_get_public_key_len, pkey_get_public_key,
-  pkey_mixed_sign, pkey_mixed_verify,
-  pkey_list
+  pkey_mixed_load,
+  pkey_mixed_find,
+  pkey_mixed_generate_rsa,
+  pkey_mixed_generate_ec,
+  pkey_mixed_close,
+  pkey_mixed_delete,
+  pkey_mixed_get_key_type,
+  pkey_mixed_get_key_flags,
+  pkey_mixed_get_public_key_len,
+  pkey_mixed_get_public_key,
+  pkey_mixed_sign,
+  pkey_mixed_verify,
+  pkey_mixed_list
 };
 
 #endif /* RPC_CLIENT != RPC_CLIENT_LOCAL */

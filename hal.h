@@ -648,6 +648,7 @@ typedef uint32_t hal_key_flags_t;
 #define	HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE	(1 << 0)
 #define	HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT      (1 << 1)
 #define	HAL_KEY_FLAG_USAGE_DATAENCIPHERMENT	(1 << 2)
+#define	HAL_KEY_FLAG_PROXIMATE                  (1 << 3)
 
 extern hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
                                      const hal_session_handle_t session,
@@ -662,7 +663,8 @@ extern hal_error_t hal_rpc_pkey_find(const hal_client_handle_t client,
                                      const hal_session_handle_t session,
                                      hal_pkey_handle_t *pkey,
                                      const hal_key_type_t type,
-                                     const uint8_t * const name, const size_t name_len);
+                                     const uint8_t * const name, const size_t name_len,
+                                     const hal_key_flags_t flags);
 
 extern hal_error_t hal_rpc_pkey_generate_rsa(const hal_client_handle_t client,
                                              const hal_session_handle_t session,
@@ -717,7 +719,8 @@ typedef struct {
 
 extern hal_error_t hal_rpc_pkey_list(hal_pkey_info_t *result,
                                      unsigned *result_len,
-                                     const unsigned result_max);
+                                     const unsigned result_max,
+                                     hal_key_flags_t flags);
 
 extern hal_error_t hal_rpc_client_init(void);
 extern hal_error_t hal_rpc_client_close(void);

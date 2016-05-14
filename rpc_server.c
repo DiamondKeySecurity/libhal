@@ -320,15 +320,17 @@ static hal_error_t pkey_find(uint8_t **iptr, const uint8_t * const ilimit,
     uint32_t type;
     uint8_t *name;
     uint32_t name_len;
+    hal_key_flags_t flags;
     hal_error_t ret;
 
     check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &session.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &type));
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &name, &name_len));
+    check(hal_xdr_decode_int(iptr, ilimit, &flags));
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.find(client, session, &pkey, type, name, name_len);
+    ret = hal_rpc_local_pkey_dispatch.find(client, session, &pkey, type, name, name_len, flags);
     if (ret == HAL_OK)
         check(hal_xdr_encode_int(optr, olimit, pkey.handle));
     return ret;
@@ -567,15 +569,17 @@ static hal_error_t pkey_list(uint8_t **iptr, const uint8_t * const ilimit,
 {
     uint8_t *optr_orig = *optr;
     uint32_t result_max;
+    hal_key_flags_t flags;
     hal_error_t ret;
 
     check(hal_xdr_decode_int(iptr, ilimit, &result_max));
+    check(hal_xdr_decode_int(iptr, ilimit, &flags));
 
     hal_pkey_info_t result[result_max];
     unsigned result_len;
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.list(result, &result_len, result_max);
+    ret = hal_rpc_local_pkey_dispatch.list(result, &result_len, result_max, flags);
     if (ret == HAL_OK) {
         int i;
         check(hal_xdr_encode_int(optr, olimit, result_len));

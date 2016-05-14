@@ -40,17 +40,17 @@
 #include "verilog_constants.h"
 
 /*
+ * Everything in this file is part of the internal API, that is,
+ * subject to change without notice.  Nothing outside of libhal itself
+ * should be looking at this file.
+ */
+
+/*
  * Longest hash block and digest we support at the moment.
  */
 
 #define HAL_MAX_HASH_BLOCK_LENGTH       SHA512_BLOCK_LEN
 #define HAL_MAX_HASH_DIGEST_LENGTH      SHA512_DIGEST_LEN
-
-/*
- * Everything in this file is part of the internal API, that is,
- * subject to change without notice.  Nothing outside of libhal itself
- * should be looking at this file.
- */
 
 /*
  * Dispatch structures for RPC implementation.
@@ -81,6 +81,17 @@
  *   taking a hash context instead of a literal hash value, in which
  *   case we have to extract the hash value from the context and
  *   supply it to the pkey RPC client code as a literal value.
+ *
+ * ...Except that for PKCS #11 we also have to handle the case of
+ * "session keys", ie, keys which are not stored on the HSM.
+ * Apparently people really do use these, mostly for public keys, in
+ * order to conserve expensive memory on the HSM.  So this is another
+ * feature of mixed mode: keys with HAL_KEY_FLAG_PROXIMATE set live on
+ * the host, not in the HSM, and the mixed-mode pkey handlers deal
+ * with the routing.  In the other two modes we ignore the flag and
+ * send everything where we were going to send it anyway.  Restricting
+ * the fancy key handling to mixed mode lets us drop this complexity
+ * out entirely for applications which have no use for it.
  */
 
 typedef struct {
@@ -145,7 +156,8 @@ typedef struct {
                        const hal_session_handle_t session,
                        hal_pkey_handle_t *pkey,
                        const hal_key_type_t type,
-                       const uint8_t * const name, const size_t name_len);
+                       const uint8_t * const name, const size_t name_len,
+                       const hal_key_flags_t flags);
 
   hal_error_t  (*generate_rsa)(const hal_client_handle_t client,
                                const hal_session_handle_t session,
@@ -191,7 +203,8 @@ typedef struct {
 
   hal_error_t  (*list)(hal_pkey_info_t *result,
                        unsigned *result_len,
-                       const unsigned result_max);
+                       const unsigned result_max,
+                       hal_key_flags_t flags);
 
 } hal_rpc_pkey_dispatch_t;
 
@@ -199,6 +212,12 @@ typedef struct {
 extern const hal_rpc_misc_dispatch_t hal_rpc_local_misc_dispatch, hal_rpc_remote_misc_dispatch, *hal_rpc_misc_dispatch;
 extern const hal_rpc_hash_dispatch_t hal_rpc_local_hash_dispatch, hal_rpc_remote_hash_dispatch, *hal_rpc_hash_dispatch;
 extern const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch, hal_rpc_remote_pkey_dispatch, hal_rpc_mixed_pkey_dispatch, *hal_rpc_pkey_dispatch;
+
+/*
+ * See code in rpc_pkey.c for how this flag fits into the pkey handle.
+ */
+
+#define	HAL_PKEY_HANDLE_PROXIMATE_FLAG	(1 << 31)
 
 /*
  * Keystore API.

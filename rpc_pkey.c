@@ -76,6 +76,10 @@ static pkey_slot_t pkey_handle[HAL_STATIC_PKEY_STATE_BLOCKS];
  * handle consisting of the index into the table and a counter whose
  * sole purpose is to keep the same handle from reoccurring anytime
  * soon, to help identify use-after-free bugs in calling code.
+ *
+ * The high order bit of the pkey handle is left free for
+ * HAL_PKEY_HANDLE_PROXIMATE_FLAG, which is used by the mixed-mode
+ * handlers to route calls to the appropriate destination.
  */
 
 static inline pkey_slot_t *alloc_slot(void)
@@ -83,7 +87,9 @@ static inline pkey_slot_t *alloc_slot(void)
 #if HAL_STATIC_PKEY_STATE_BLOCKS > 0
   static uint16_t next_glop = 0;
   uint32_t glop = ++next_glop << 16;
-  next_glop %= 0xFFFF;
+  next_glop %= 0x7FFF;
+
+  assert((glop & HAL_PKEY_HANDLE_PROXIMATE_FLAG) == 0);
 
   for (int i = 0; i < sizeof(pkey_handle)/sizeof(*pkey_handle); i++) {
     if (pkey_handle[i].name_len > 0)
@@ -243,7 +249,8 @@ static hal_error_t find(const hal_client_handle_t client,
                         const hal_session_handle_t session,
                         hal_pkey_handle_t *pkey,
                         const hal_key_type_t type,
-                        const uint8_t * const name, const size_t name_len)
+                        const uint8_t * const name, const size_t name_len,
+                        const hal_key_flags_t flags)
 {
   pkey_slot_t *slot;
   hal_error_t err;
@@ -819,15 +826,26 @@ static hal_error_t verify(const hal_session_handle_t session,
 
 static hal_error_t list(hal_pkey_info_t *result,
                         unsigned *result_len,
-                        const unsigned result_max)
+                        const unsigned result_max,
+                        hal_key_flags_t flags)
 {
   return hal_ks_list(result, result_len, result_max);
 }
 
 const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch = {
-  load, find, generate_rsa, generate_ec, close, delete,
-  get_key_type, get_key_flags, get_public_key_len, get_public_key,
-  sign, verify, list
+  load,
+  find,
+  generate_rsa,
+  generate_ec,
+  close,
+  delete,
+  get_key_type,
+  get_key_flags,
+  get_public_key_len,
+  get_public_key,
+  sign,
+  verify,
+  list
 };
 
 /*

@@ -210,11 +210,12 @@ hal_error_t hal_rpc_pkey_find(const hal_client_handle_t client,
 			      const hal_session_handle_t session,
 			      hal_pkey_handle_t *pkey,
 			      const hal_key_type_t type,
-			      const uint8_t * const name, const size_t name_len)
+			      const uint8_t * const name, const size_t name_len,
+                              const hal_key_flags_t flags)
 {
   if (pkey == NULL || name == NULL || name_len == 0 || !check_pkey_type(type))
     return HAL_ERROR_BAD_ARGUMENTS;
-  return hal_rpc_pkey_dispatch->find(client, session, pkey, type, name, name_len);
+  return hal_rpc_pkey_dispatch->find(client, session, pkey, type, name, name_len, flags);
 }
 
 hal_error_t hal_rpc_pkey_generate_rsa(const hal_client_handle_t client,
@@ -309,11 +310,12 @@ hal_error_t hal_rpc_pkey_verify(const hal_session_handle_t session,
 
 hal_error_t hal_rpc_pkey_list(hal_pkey_info_t *result,
 			      unsigned *result_len,
-			      const unsigned result_max)
+			      const unsigned result_max,
+                              hal_key_flags_t flags)
 {
   if (result == NULL || result_len == NULL || result_max == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
-  return hal_rpc_pkey_dispatch->list(result, result_len, result_max);
+  return hal_rpc_pkey_dispatch->list(result, result_len, result_max, flags);
 }
 
 /*
