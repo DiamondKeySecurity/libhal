@@ -54,7 +54,8 @@
 static hal_error_t get_version(uint32_t *version)
 {
   uint8_t outbuf[nargs(1)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -73,7 +74,8 @@ static hal_error_t get_version(uint32_t *version)
 static hal_error_t get_random(void *buffer, const size_t length)
 {
   uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2) + pad(length)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2) + pad(length)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   uint32_t rcvlen = length;
   hal_error_t rpc_ret;
@@ -97,7 +99,8 @@ static hal_error_t set_pin(const hal_client_handle_t client,
                            const char * const pin, const size_t pin_len)
 {
   uint8_t outbuf[nargs(4) + pad(pin_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(1)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(1)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -132,7 +135,8 @@ static hal_error_t login(const hal_client_handle_t client,
                          const char * const pin, const size_t pin_len)
 {
   uint8_t outbuf[nargs(4) + pad(pin_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(1)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(1)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -151,7 +155,8 @@ static hal_error_t login(const hal_client_handle_t client,
 static hal_error_t logout(const hal_client_handle_t client)
 {
   uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(1)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(1)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -168,7 +173,8 @@ static hal_error_t logout(const hal_client_handle_t client)
 static hal_error_t logout_all(void)
 {
   uint8_t outbuf[nargs(1)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(1)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(1)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -185,7 +191,8 @@ static hal_error_t is_logged_in(const hal_client_handle_t client,
                                 const hal_user_t user)
 {
   uint8_t outbuf[nargs(3)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(1)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(1)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -203,7 +210,8 @@ static hal_error_t is_logged_in(const hal_client_handle_t client,
 static hal_error_t hash_get_digest_len(const hal_digest_algorithm_t alg, size_t *length)
 {
   uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   uint32_t len32;
   hal_error_t rpc_ret;
@@ -226,7 +234,8 @@ static hal_error_t hash_get_digest_algorithm_id(const hal_digest_algorithm_t alg
                                                 uint8_t *id, size_t *len, const size_t len_max)
 {
   uint8_t outbuf[nargs(3)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2) + pad(len_max)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2) + pad(len_max)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   uint32_t len32 = len_max;
   hal_error_t rpc_ret;
@@ -249,7 +258,8 @@ static hal_error_t hash_get_digest_algorithm_id(const hal_digest_algorithm_t alg
 static hal_error_t hash_get_algorithm(const hal_hash_handle_t hash, hal_digest_algorithm_t *alg)
 {
   uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   uint32_t alg32;
   hal_error_t rpc_ret;
@@ -275,7 +285,8 @@ static hal_error_t hash_initialize(const hal_client_handle_t client,
                                    const uint8_t * const key, const size_t key_len)
 {
   uint8_t outbuf[nargs(5) + pad(key_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -299,7 +310,8 @@ static hal_error_t hash_update(const hal_hash_handle_t hash,
                                const uint8_t * data, const size_t length)
 {
   uint8_t outbuf[nargs(3) + pad(length)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(1)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(1)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -318,7 +330,8 @@ static hal_error_t hash_finalize(const hal_hash_handle_t hash,
                                  uint8_t *digest, const size_t length)
 {
   uint8_t outbuf[nargs(3)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2) + pad(length)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2) + pad(length)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   uint32_t digest_len = length;
   hal_error_t rpc_ret;
@@ -348,7 +361,8 @@ static hal_error_t pkey_remote_load(const hal_client_handle_t client,
                                     const hal_key_flags_t flags)
 {
   uint8_t outbuf[nargs(8) + pad(name_len) + pad(der_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -379,7 +393,8 @@ static hal_error_t pkey_remote_find(const hal_client_handle_t client,
                                     const hal_key_flags_t flags)
 {
   uint8_t outbuf[nargs(6) + pad(name_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -409,7 +424,8 @@ static hal_error_t pkey_remote_generate_rsa(const hal_client_handle_t client,
                                             const hal_key_flags_t flags)
 {
   uint8_t outbuf[nargs(7) + pad(name_len) + pad(exp_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -439,7 +455,8 @@ static hal_error_t pkey_remote_generate_ec(const hal_client_handle_t client,
                                            const hal_key_flags_t flags)
 {
   uint8_t outbuf[nargs(6) + pad(name_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -463,7 +480,8 @@ static hal_error_t pkey_remote_generate_ec(const hal_client_handle_t client,
 static hal_error_t pkey_remote_close(const hal_pkey_handle_t pkey)
 {
   uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(1)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(1)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -480,7 +498,8 @@ static hal_error_t pkey_remote_close(const hal_pkey_handle_t pkey)
 static hal_error_t pkey_remote_delete(const hal_pkey_handle_t pkey)
 {
   uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(1)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(1)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -498,7 +517,8 @@ static hal_error_t pkey_remote_get_key_type(const hal_pkey_handle_t pkey,
                                             hal_key_type_t *type)
 {
   uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   uint32_t type32;
   hal_error_t rpc_ret;
@@ -521,7 +541,8 @@ static hal_error_t pkey_remote_get_key_flags(const hal_pkey_handle_t pkey,
                                              hal_key_flags_t *flags)
 {
   uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   uint32_t flags32;
   hal_error_t rpc_ret;
@@ -543,7 +564,8 @@ static hal_error_t pkey_remote_get_key_flags(const hal_pkey_handle_t pkey,
 static size_t pkey_remote_get_public_key_len(const hal_pkey_handle_t pkey)
 {
   uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   uint32_t len32;
   hal_error_t rpc_ret;
@@ -567,7 +589,8 @@ static hal_error_t pkey_remote_get_public_key(const hal_pkey_handle_t pkey,
                                               uint8_t *der, size_t *der_len, const size_t der_max)
 {
   uint8_t outbuf[nargs(3)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2) + pad(der_max)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2) + pad(der_max)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   uint32_t dlen32 = der_max;
   hal_error_t rpc_ret;
@@ -594,7 +617,8 @@ static hal_error_t pkey_remote_sign(const hal_session_handle_t session,
                                     uint8_t * signature, size_t *signature_len, const size_t signature_max)
 {
   uint8_t outbuf[nargs(6) + pad(input_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2) + pad(signature_max)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2) + pad(signature_max)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   uint32_t slen32 = signature_max;
   hal_error_t rpc_ret;
@@ -624,7 +648,8 @@ static hal_error_t pkey_remote_verify(const hal_session_handle_t session,
                                       const uint8_t * const signature, const size_t signature_len)
 {
   uint8_t outbuf[nargs(6) + pad(input_len) + pad(signature_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(1)], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(1)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -642,7 +667,7 @@ static hal_error_t pkey_remote_verify(const hal_session_handle_t session,
   return rpc_ret;
 }
 
-static hal_error_t hal_xdr_decode_pkey_info(uint8_t **iptr, const uint8_t * const ilimit, hal_pkey_info_t *info)
+static hal_error_t hal_xdr_decode_pkey_info(const uint8_t **iptr, const uint8_t * const ilimit, hal_pkey_info_t *info)
 {
   uint32_t i32;
 
@@ -659,7 +684,8 @@ static hal_error_t pkey_remote_list(hal_pkey_info_t *result,
                                     hal_key_flags_t flags)
 {
   uint8_t outbuf[nargs(3)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(2) + pad(result_max * sizeof(hal_pkey_info_t))], *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint8_t inbuf[nargs(2) + pad(result_max * sizeof(hal_pkey_info_t))];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   size_t ilen = sizeof(inbuf);
   uint32_t len;
   hal_error_t ret, rpc_ret;

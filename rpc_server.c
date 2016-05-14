@@ -44,7 +44,7 @@
 
 #define pad(n) (((n) + 3) & ~3)
 
-static hal_error_t get_version(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t get_version(const uint8_t **iptr, const uint8_t * const ilimit,
                                uint8_t **optr, const uint8_t * const olimit)
 {
     uint32_t version;
@@ -58,7 +58,7 @@ static hal_error_t get_version(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t get_random(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t get_random(const uint8_t **iptr, const uint8_t * const ilimit,
                               uint8_t **optr, const uint8_t * const olimit)
 {
     uint32_t length;
@@ -82,12 +82,12 @@ static hal_error_t get_random(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t set_pin(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t set_pin(const uint8_t **iptr, const uint8_t * const ilimit,
                            uint8_t **optr, const uint8_t * const olimit)
 {
     hal_client_handle_t client;
     uint32_t user;
-    uint8_t *pin;
+    const uint8_t *pin;
     uint32_t pin_len;
     hal_error_t ret;
 
@@ -100,12 +100,12 @@ static hal_error_t set_pin(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t login(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t login(const uint8_t **iptr, const uint8_t * const ilimit,
                          uint8_t **optr, const uint8_t * const olimit)
 {
     hal_client_handle_t client;
     uint32_t user;
-    uint8_t *pin;
+    const uint8_t *pin;
     uint32_t pin_len;
     hal_error_t ret;
 
@@ -118,7 +118,7 @@ static hal_error_t login(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t logout(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t logout(const uint8_t **iptr, const uint8_t * const ilimit,
                           uint8_t **optr, const uint8_t * const olimit)
 {
     hal_client_handle_t client;
@@ -131,7 +131,7 @@ static hal_error_t logout(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t logout_all(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t logout_all(const uint8_t **iptr, const uint8_t * const ilimit,
                               uint8_t **optr, const uint8_t * const olimit)
 {
     hal_error_t ret;
@@ -141,7 +141,7 @@ static hal_error_t logout_all(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t is_logged_in(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t is_logged_in(const uint8_t **iptr, const uint8_t * const ilimit,
                                 uint8_t **optr, const uint8_t * const olimit)
 {
     hal_client_handle_t client;
@@ -156,7 +156,7 @@ static hal_error_t is_logged_in(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t hash_get_digest_len(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t hash_get_digest_len(const uint8_t **iptr, const uint8_t * const ilimit,
                                        uint8_t **optr, const uint8_t * const olimit)
 {
     uint32_t alg;
@@ -172,7 +172,7 @@ static hal_error_t hash_get_digest_len(uint8_t **iptr, const uint8_t * const ili
     return ret;
 }
 
-static hal_error_t hash_get_digest_algorithm_id(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t hash_get_digest_algorithm_id(const uint8_t **iptr, const uint8_t * const ilimit,
                                                 uint8_t **optr, const uint8_t * const olimit)
 {
     uint32_t alg;
@@ -203,7 +203,7 @@ static hal_error_t hash_get_digest_algorithm_id(uint8_t **iptr, const uint8_t * 
     return ret;
 }
 
-static hal_error_t hash_get_algorithm(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t hash_get_algorithm(const uint8_t **iptr, const uint8_t * const ilimit,
                                       uint8_t **optr, const uint8_t * const olimit)
 {
     hal_hash_handle_t hash;
@@ -219,14 +219,14 @@ static hal_error_t hash_get_algorithm(uint8_t **iptr, const uint8_t * const ilim
     return ret;
 }
 
-static hal_error_t hash_initialize(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t hash_initialize(const uint8_t **iptr, const uint8_t * const ilimit,
                                    uint8_t **optr, const uint8_t * const olimit)
 {
     hal_client_handle_t client;
     hal_session_handle_t session;
     hal_hash_handle_t hash;
     uint32_t alg;
-    uint8_t *key;
+    const uint8_t *key;
     uint32_t key_len;
     hal_error_t ret;
 
@@ -242,11 +242,11 @@ static hal_error_t hash_initialize(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t hash_update(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t hash_update(const uint8_t **iptr, const uint8_t * const ilimit,
                                uint8_t **optr, const uint8_t * const olimit)
 {
     hal_hash_handle_t hash;
-    uint8_t *data;
+    const uint8_t *data;
     uint32_t length;
     hal_error_t ret;
 
@@ -258,7 +258,7 @@ static hal_error_t hash_update(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t hash_finalize(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t hash_finalize(const uint8_t **iptr, const uint8_t * const ilimit,
                                  uint8_t **optr, const uint8_t * const olimit)
 {
     hal_hash_handle_t hash;
@@ -283,7 +283,7 @@ static hal_error_t hash_finalize(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t pkey_load(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t pkey_load(const uint8_t **iptr, const uint8_t * const ilimit,
                              uint8_t **optr, const uint8_t * const olimit)
 {
     hal_client_handle_t client;
@@ -291,7 +291,7 @@ static hal_error_t pkey_load(uint8_t **iptr, const uint8_t * const ilimit,
     hal_pkey_handle_t pkey;
     uint32_t type;
     uint32_t curve;
-    uint8_t *name, *der;
+    const uint8_t *name, *der;
     uint32_t name_len, der_len;
     hal_key_flags_t flags;
     hal_error_t ret;
@@ -311,14 +311,14 @@ static hal_error_t pkey_load(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t pkey_find(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t pkey_find(const uint8_t **iptr, const uint8_t * const ilimit,
                              uint8_t **optr, const uint8_t * const olimit)
 {
     hal_client_handle_t client;
     hal_session_handle_t session;
     hal_pkey_handle_t pkey;
     uint32_t type;
-    uint8_t *name;
+    const uint8_t *name;
     uint32_t name_len;
     hal_key_flags_t flags;
     hal_error_t ret;
@@ -336,16 +336,16 @@ static hal_error_t pkey_find(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t pkey_generate_rsa(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t pkey_generate_rsa(const uint8_t **iptr, const uint8_t * const ilimit,
                                      uint8_t **optr, const uint8_t * const olimit)
 {
     hal_client_handle_t client;
     hal_session_handle_t session;
     hal_pkey_handle_t pkey;
-    uint8_t *name;
+    const uint8_t *name;
     uint32_t name_len;
     uint32_t key_len;
-    uint8_t *exp;
+    const uint8_t *exp;
     uint32_t exp_len;
     hal_key_flags_t flags;
     hal_error_t ret;
@@ -364,13 +364,13 @@ static hal_error_t pkey_generate_rsa(uint8_t **iptr, const uint8_t * const ilimi
     return ret;
 }
 
-static hal_error_t pkey_generate_ec(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t pkey_generate_ec(const uint8_t **iptr, const uint8_t * const ilimit,
                                     uint8_t **optr, const uint8_t * const olimit)
 {
     hal_client_handle_t client;
     hal_session_handle_t session;
     hal_pkey_handle_t pkey;
-    uint8_t *name;
+    const uint8_t *name;
     uint32_t name_len;
     uint32_t curve;
     hal_key_flags_t flags;
@@ -389,7 +389,7 @@ static hal_error_t pkey_generate_ec(uint8_t **iptr, const uint8_t * const ilimit
     return ret;
 }
 
-static hal_error_t pkey_close(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t pkey_close(const uint8_t **iptr, const uint8_t * const ilimit,
                               uint8_t **optr, const uint8_t * const olimit)
 {
     hal_pkey_handle_t pkey;
@@ -402,7 +402,7 @@ static hal_error_t pkey_close(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t pkey_delete(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t pkey_delete(const uint8_t **iptr, const uint8_t * const ilimit,
                                uint8_t **optr, const uint8_t * const olimit)
 {
     hal_pkey_handle_t pkey;
@@ -415,7 +415,7 @@ static hal_error_t pkey_delete(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t pkey_get_key_type(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t pkey_get_key_type(const uint8_t **iptr, const uint8_t * const ilimit,
                                      uint8_t **optr, const uint8_t * const olimit)
 {
     hal_pkey_handle_t pkey;
@@ -431,7 +431,7 @@ static hal_error_t pkey_get_key_type(uint8_t **iptr, const uint8_t * const ilimi
     return ret;
 }
 
-static hal_error_t pkey_get_key_flags(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t pkey_get_key_flags(const uint8_t **iptr, const uint8_t * const ilimit,
                                       uint8_t **optr, const uint8_t * const olimit)
 {
     hal_pkey_handle_t pkey;
@@ -447,7 +447,7 @@ static hal_error_t pkey_get_key_flags(uint8_t **iptr, const uint8_t * const ilim
     return ret;
 }
 
-static hal_error_t pkey_get_public_key_len(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t pkey_get_public_key_len(const uint8_t **iptr, const uint8_t * const ilimit,
                                            uint8_t **optr, const uint8_t * const olimit)
 {
     hal_pkey_handle_t pkey;
@@ -462,7 +462,7 @@ static hal_error_t pkey_get_public_key_len(uint8_t **iptr, const uint8_t * const
     return HAL_OK;
 }
 
-static hal_error_t pkey_get_public_key(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t pkey_get_public_key(const uint8_t **iptr, const uint8_t * const ilimit,
                                        uint8_t **optr, const uint8_t * const olimit)
 {
     hal_pkey_handle_t pkey;
@@ -493,13 +493,13 @@ static hal_error_t pkey_get_public_key(uint8_t **iptr, const uint8_t * const ili
     return ret;
 }
 
-static hal_error_t pkey_remote_sign(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t pkey_remote_sign(const uint8_t **iptr, const uint8_t * const ilimit,
                                     uint8_t **optr, const uint8_t * const olimit)
 {
     hal_session_handle_t session;
     hal_pkey_handle_t pkey;
     hal_hash_handle_t hash;
-    uint8_t *input;
+    const uint8_t *input;
     uint32_t input_len;
     uint32_t sig_max;
     size_t sig_len;
@@ -527,15 +527,15 @@ static hal_error_t pkey_remote_sign(uint8_t **iptr, const uint8_t * const ilimit
     return ret;
 }
 
-static hal_error_t pkey_remote_verify(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t pkey_remote_verify(const uint8_t **iptr, const uint8_t * const ilimit,
                                       uint8_t **optr, const uint8_t * const olimit)
 {
     hal_session_handle_t session;
     hal_pkey_handle_t pkey;
     hal_hash_handle_t hash;
-    uint8_t *input;
+    const uint8_t *input;
     uint32_t input_len;
-    uint8_t *sig;
+    const uint8_t *sig;
     uint32_t sig_len;
     hal_error_t ret;
 
@@ -564,7 +564,7 @@ static hal_error_t hal_xdr_encode_pkey_info(uint8_t **optr, const uint8_t * cons
 }
 
 
-static hal_error_t pkey_list(uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t pkey_list(const uint8_t **iptr, const uint8_t * const ilimit,
                              uint8_t **optr, const uint8_t * const olimit)
 {
     uint8_t *optr_orig = *optr;
@@ -593,10 +593,11 @@ static hal_error_t pkey_list(uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-void hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen, uint8_t * const obuf, size_t * const olen)
+void hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
+                             uint8_t * const obuf, size_t * const olen)
 {
-    uint8_t * iptr = ibuf;
-    uint8_t * ilimit = ibuf + ilen;
+    const uint8_t * iptr = ibuf;
+    const uint8_t * ilimit = ibuf + ilen;
     uint8_t * optr = obuf + 4;		/* reserve 4 bytes for return code */
     uint8_t * olimit = obuf + *olen;
     uint32_t rpc_func_num;

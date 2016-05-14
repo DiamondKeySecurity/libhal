@@ -78,7 +78,7 @@ hal_error_t hal_xdr_encode_int(uint8_t ** const outbuf, const uint8_t * const li
     return HAL_OK;
 }
 
-hal_error_t hal_xdr_decode_int(uint8_t **inbuf, const uint8_t * const limit, uint32_t *value)
+hal_error_t hal_xdr_decode_int(const uint8_t ** const inbuf, const uint8_t * const limit, uint32_t *value)
 {
     /* arg checks */
     if (inbuf == NULL || *inbuf == NULL || limit == NULL || value == NULL)
@@ -132,11 +132,11 @@ hal_error_t hal_xdr_encode_buffer(uint8_t **outbuf, const uint8_t * const limit,
 /* This version returns a pointer to the data in the input buffer.
  * It is used in the rpc server.
  */
-hal_error_t hal_xdr_decode_buffer_in_place(uint8_t **inbuf, const uint8_t * const limit, uint8_t ** const value, uint32_t * const len)
+hal_error_t hal_xdr_decode_buffer_in_place(const uint8_t **inbuf, const uint8_t * const limit, const uint8_t ** const value, uint32_t * const len)
 {
     hal_error_t ret;
     uint32_t xdr_len;
-    uint8_t *orig_inbuf = *inbuf;
+    const uint8_t *orig_inbuf = *inbuf;
 
     /* arg checks */
     if (inbuf == NULL || *inbuf == NULL || limit == NULL || value == NULL || len == NULL)
@@ -170,11 +170,11 @@ hal_error_t hal_xdr_decode_buffer_in_place(uint8_t **inbuf, const uint8_t * cons
 /* This version copies the data to the user-supplied buffer.
  * It is used in the rpc client.
  */
-hal_error_t hal_xdr_decode_buffer(uint8_t **inbuf, const uint8_t * const limit, uint8_t * const value, uint32_t * const len)
+hal_error_t hal_xdr_decode_buffer(const uint8_t **inbuf, const uint8_t * const limit, uint8_t * const value, uint32_t * const len)
 {
     hal_error_t ret;
-    uint8_t *vptr;
-    uint8_t *orig_inbuf = *inbuf;
+    const uint8_t *vptr;
+    const uint8_t *orig_inbuf = *inbuf;
     uint32_t xdr_len;
 
     if ((ret = hal_xdr_decode_buffer_in_place(inbuf, limit, &vptr, &xdr_len)) == HAL_OK) {

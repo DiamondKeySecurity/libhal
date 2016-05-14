@@ -43,7 +43,7 @@ hal_error_t hal_xdr_encode_int(uint8_t ** const outbuf,
                                const uint8_t * const limit,
                                const uint32_t value);
 
-hal_error_t hal_xdr_decode_int(uint8_t ** const inbuf,
+hal_error_t hal_xdr_decode_int(const uint8_t ** const inbuf,
                                const uint8_t * const limit,
                                uint32_t * const value);
 
@@ -52,12 +52,12 @@ hal_error_t hal_xdr_encode_buffer(uint8_t ** const outbuf,
                                   const uint8_t * const value,
                                   const uint32_t len);
 
-hal_error_t hal_xdr_decode_buffer_in_place(uint8_t ** const inbuf,
+hal_error_t hal_xdr_decode_buffer_in_place(const uint8_t ** const inbuf,
                                            const uint8_t * const limit,
-                                           uint8_t ** const vptr,
+                                           const uint8_t ** const vptr,
                                            uint32_t * const len);
 
-hal_error_t hal_xdr_decode_buffer(uint8_t ** const inbuf,
+hal_error_t hal_xdr_decode_buffer(const uint8_t ** const inbuf,
                                   const uint8_t * const limit,
                                   uint8_t * const value,
                                   uint32_t * const len);
