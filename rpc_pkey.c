@@ -82,7 +82,7 @@ static pkey_slot_t pkey_handle[HAL_STATIC_PKEY_STATE_BLOCKS];
  * handlers to route calls to the appropriate destination.
  */
 
-static inline pkey_slot_t *alloc_slot(void)
+static inline pkey_slot_t *alloc_slot(const hal_key_flags_t flags)
 {
 #if HAL_STATIC_PKEY_STATE_BLOCKS > 0
   static uint16_t next_glop = 0;
@@ -90,6 +90,9 @@ static inline pkey_slot_t *alloc_slot(void)
   next_glop %= 0x7FFF;
 
   assert((glop & HAL_PKEY_HANDLE_PROXIMATE_FLAG) == 0);
+
+  if ((flags & HAL_KEY_FLAG_PROXIMATE) != 0)
+    glop |= HAL_PKEY_HANDLE_PROXIMATE_FLAG;
 
   for (int i = 0; i < sizeof(pkey_handle)/sizeof(*pkey_handle); i++) {
     if (pkey_handle[i].name_len > 0)
@@ -223,7 +226,7 @@ static hal_error_t load(const hal_client_handle_t client,
 
   assert(sizeof(slot->name) >= name_len && pkey != NULL);
 
-  if ((slot = alloc_slot()) == NULL)
+  if ((slot = alloc_slot(flags)) == NULL)
     return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
 
   if ((err = hal_ks_store(type, curve, flags, name, name_len, der, der_len, &slot->ks_hint)) != HAL_OK)
@@ -257,7 +260,7 @@ static hal_error_t find(const hal_client_handle_t client,
 
   assert(sizeof(slot->name) >= name_len && pkey != NULL);
 
-  if ((slot = alloc_slot()) == NULL)
+  if ((slot = alloc_slot(flags)) == NULL)
     return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
 
   if ((err = hal_ks_fetch(type, name, name_len, &slot->curve, &slot->flags, NULL, NULL, 0, &slot->ks_hint)) != HAL_OK)
@@ -290,7 +293,7 @@ static hal_error_t generate_rsa(const hal_client_handle_t client,
 
   assert(sizeof(slot->name) >= name_len && pkey != NULL && (key_length & 7) == 0);
 
-  if ((slot = alloc_slot()) == NULL)
+  if ((slot = alloc_slot(flags)) == NULL)
     return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
 
   uint8_t keybuf[hal_rsa_key_t_size];
@@ -342,7 +345,7 @@ static hal_error_t generate_ec(const hal_client_handle_t client,
 
   assert(sizeof(slot->name) >= name_len && pkey != NULL);
 
-  if ((slot = alloc_slot()) == NULL)
+  if ((slot = alloc_slot(flags)) == NULL)
     return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
 
   uint8_t keybuf[hal_ecdsa_key_t_size];
