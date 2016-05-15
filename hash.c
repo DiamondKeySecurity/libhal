@@ -487,9 +487,6 @@ static hal_error_t hash_write_digest(const hal_core_t *core,
 
 static hal_error_t hash_write_block(hal_hash_state_t * const state)
 {
-  uint8_t ctrl_cmd[4];
-  hal_error_t err;
-
   assert(state != NULL && state->descriptor != NULL && state->driver != NULL);
   assert(state->descriptor->block_length % 4 == 0);
 
@@ -502,6 +499,9 @@ static hal_error_t hash_write_block(hal_hash_state_t * const state)
 #if RPC_CLIENT == RPC_CLIENT_MIXED
   return state->driver->sw_core(state);
 #else
+  uint8_t ctrl_cmd[4];
+  hal_error_t err;
+
   if (HAL_ENABLE_SOFTWARE_HASH_CORES && (state->flags & STATE_FLAG_SOFTWARE_CORE) != 0)
     return state->driver->sw_core(state);
 
