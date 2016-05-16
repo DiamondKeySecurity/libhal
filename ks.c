@@ -61,11 +61,11 @@ hal_error_t hal_ks_store(const hal_key_type_t type,
                          const uint8_t * const der,  const size_t der_len,
                          int *hint)
 {
-  if (name == NULL || name_len == 0 || der == NULL || der_len == 0 || !acceptable_key_type(type))
+  if (name == NULL || der == NULL || der_len == 0 || !acceptable_key_type(type))
     return HAL_ERROR_BAD_ARGUMENTS;
 
   if (name_len > HAL_RPC_PKEY_NAME_MAX)
-    return HAL_ERROR_RESULT_TOO_LONG;
+    return HAL_ERROR_KEY_NAME_TOO_LONG;
 
   const hal_ks_keydb_t * const db = hal_ks_get_keydb();
   hal_error_t err;
@@ -124,7 +124,7 @@ static int find(const hal_ks_keydb_t * const db,
                 const uint8_t * const name, const size_t name_len,
                 int *hint)
 {
-  assert(db != NULL && name != NULL && name_len > 0 && acceptable_key_type(type));
+  assert(db != NULL && name != NULL && acceptable_key_type(type));
 
   if (hint != NULL && *hint >= 0 && *hint < sizeof(db->keys)/sizeof(*db->keys) &&
       db->keys[*hint].in_use &&
@@ -150,7 +150,7 @@ hal_error_t hal_ks_exists(const hal_key_type_t type,
                           const uint8_t * const name, const size_t name_len,
                           int *hint)
 {
-  if (name == NULL || name_len == 0 || !acceptable_key_type(type))
+  if (name == NULL || !acceptable_key_type(type))
     return HAL_ERROR_BAD_ARGUMENTS;
 
   const hal_ks_keydb_t * const db = hal_ks_get_keydb();
@@ -171,7 +171,7 @@ hal_error_t hal_ks_fetch(const hal_key_type_t type,
                          uint8_t *der, size_t *der_len, const size_t der_max,
                          int *hint)
 {
-  if (name == NULL || name_len == 0 || !acceptable_key_type(type))
+  if (name == NULL || !acceptable_key_type(type))
     return HAL_ERROR_BAD_ARGUMENTS;
 
   const hal_ks_keydb_t * const db = hal_ks_get_keydb();
@@ -223,7 +223,7 @@ hal_error_t hal_ks_delete(const hal_key_type_t type,
                           const uint8_t * const name, const size_t name_len,
                           int *hint)
 {
-  if (name == NULL || name_len == 0 || !acceptable_key_type(type))
+  if (name == NULL || !acceptable_key_type(type))
     return HAL_ERROR_BAD_ARGUMENTS;
 
   const hal_ks_keydb_t * const db = hal_ks_get_keydb();
@@ -239,6 +239,41 @@ hal_error_t hal_ks_delete(const hal_key_type_t type,
     return HAL_ERROR_KEY_NOT_FOUND;
 
   return hal_ks_del_keydb(*hint);
+}
+
+hal_error_t hal_ks_rename(const hal_key_type_t type,
+                          const uint8_t * const old_name, const size_t old_name_len,
+                          const uint8_t * const new_name, const size_t new_name_len,
+                          int *hint)
+{
+  if (old_name == NULL || new_name == NULL || !acceptable_key_type(type))
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (new_name_len > HAL_RPC_PKEY_NAME_MAX)
+    return HAL_ERROR_KEY_NAME_TOO_LONG;
+
+  const hal_ks_keydb_t * const db = hal_ks_get_keydb();
+  int hint_ = -1;
+
+  if (db == NULL)
+    return HAL_ERROR_KEYSTORE_ACCESS;
+
+  if (find(db, type, new_name, new_name_len, NULL))
+    return HAL_ERROR_KEY_NAME_IN_USE;
+
+  if (hint == NULL)
+    hint = &hint_;
+
+  if (!find(db, type, old_name, old_name_len, hint))
+    return HAL_ERROR_KEY_NOT_FOUND;
+
+  hal_ks_key_t k = db->keys[*hint];
+
+  assert(new_name_len <= sizeof(k.name));
+  memcpy(k.name, new_name, new_name_len);
+  k.name_len = new_name_len;
+
+  return hal_ks_set_keydb(&k, *hint);
 }
 
 hal_error_t hal_ks_list(hal_pkey_info_t *result,

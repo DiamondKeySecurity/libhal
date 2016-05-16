@@ -178,6 +178,9 @@ typedef struct {
 
   hal_error_t  (*delete)(const hal_pkey_handle_t pkey);
 
+  hal_error_t  (*rename)(const hal_pkey_handle_t pkey,
+                         const uint8_t * const name, const size_t name_len);
+
   hal_error_t  (*get_key_type)(const hal_pkey_handle_t pkey,
                                hal_key_type_t *key_type);
 
@@ -337,6 +340,11 @@ extern hal_error_t hal_ks_delete(const hal_key_type_t type,
                                  const uint8_t * const name, const size_t name_len,
                                  int *hint);
 
+extern hal_error_t hal_ks_rename(const hal_key_type_t type,
+                                 const uint8_t * const old_name, const size_t old_name_len,
+                                 const uint8_t * const new_name, const size_t new_name_len,
+                                 int *hint);
+
 extern hal_error_t hal_ks_list(hal_pkey_info_t *result,
                                unsigned *result_len,
                                const unsigned result_max);
@@ -396,6 +404,7 @@ typedef enum {
     RPC_FUNC_PKEY_REMOTE_SIGN,
     RPC_FUNC_PKEY_REMOTE_VERIFY,
     RPC_FUNC_PKEY_LIST,
+    RPC_FUNC_PKEY_RENAME,
 } rpc_func_num_t;
 
 #define RPC_VERSION 0x00010000		/* 0.1.0.0 */

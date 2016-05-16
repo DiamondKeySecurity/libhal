@@ -415,6 +415,22 @@ static hal_error_t pkey_delete(const uint8_t **iptr, const uint8_t * const ilimi
     return ret;
 }
 
+static hal_error_t pkey_rename(const uint8_t **iptr, const uint8_t * const ilimit,
+                               uint8_t **optr, const uint8_t * const olimit)
+{
+    hal_pkey_handle_t pkey;
+    const uint8_t *name;
+    uint32_t name_len;
+    hal_error_t ret;
+
+    check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
+    check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &name, &name_len));
+
+    /* call the local function */
+    ret = hal_rpc_local_pkey_dispatch.rename(pkey, name, name_len);
+    return ret;
+}
+
 static hal_error_t pkey_get_key_type(const uint8_t **iptr, const uint8_t * const ilimit,
                                      uint8_t **optr, const uint8_t * const olimit)
 {
@@ -682,6 +698,9 @@ void hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
         break;
     case RPC_FUNC_PKEY_LIST:
         ret = pkey_list(&iptr, ilimit, &optr, olimit);
+        break;
+    case RPC_FUNC_PKEY_RENAME:
+        ret = pkey_rename(&iptr, ilimit, &optr, olimit);
         break;
     default:
         ret = HAL_ERROR_RPC_BAD_FUNCTION;

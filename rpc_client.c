@@ -513,6 +513,27 @@ static hal_error_t pkey_remote_delete(const hal_pkey_handle_t pkey)
   return rpc_ret;
 }
 
+static hal_error_t pkey_remote_rename(const hal_pkey_handle_t pkey,
+                                      const uint8_t * const name, const size_t name_len)
+{
+  uint8_t outbuf[nargs(3) + pad(name_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t inbuf[nargs(1)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  size_t ilen = sizeof(inbuf);
+  hal_error_t rpc_ret;
+
+  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_DELETE));
+  check(hal_xdr_encode_int(&optr, olimit, pkey.handle));
+  check(hal_xdr_encode_buffer(&optr, olimit, name, name_len));
+  check(hal_rpc_send(outbuf, optr - outbuf));
+
+  check(hal_rpc_recv(inbuf, &ilen));
+  assert(ilen <= sizeof(inbuf));
+  check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
+  return rpc_ret;
+}
+
+
 static hal_error_t pkey_remote_get_key_type(const hal_pkey_handle_t pkey,
                                             hal_key_type_t *type)
 {
@@ -851,6 +872,12 @@ static hal_error_t pkey_mixed_delete(const hal_pkey_handle_t pkey)
   return mixed_handle_dispatch(pkey)->delete(pkey);
 }
 
+static hal_error_t pkey_mixed_rename(const hal_pkey_handle_t pkey,
+                                     const uint8_t * const name, const size_t name_len)
+{
+  return mixed_handle_dispatch(pkey)->rename(pkey, name, name_len);
+}
+
 static hal_error_t pkey_mixed_get_key_type(const hal_pkey_handle_t pkey,
 					   hal_key_type_t *key_type)
 {
@@ -912,6 +939,7 @@ const hal_rpc_pkey_dispatch_t hal_rpc_remote_pkey_dispatch = {
   pkey_remote_generate_ec,
   pkey_remote_close,
   pkey_remote_delete,
+  pkey_remote_rename,
   pkey_remote_get_key_type,
   pkey_remote_get_key_flags,
   pkey_remote_get_public_key_len,
@@ -928,6 +956,7 @@ const hal_rpc_pkey_dispatch_t hal_rpc_mixed_pkey_dispatch = {
   pkey_mixed_generate_ec,
   pkey_mixed_close,
   pkey_mixed_delete,
+  pkey_mixed_rename,
   pkey_mixed_get_key_type,
   pkey_mixed_get_key_flags,
   pkey_mixed_get_public_key_len,

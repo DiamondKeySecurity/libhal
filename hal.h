@@ -129,6 +129,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_RPC_TRANSPORT,             "RPC transport error")                          \
   DEFINE_HAL_ERROR(HAL_ERROR_RPC_PACKET_OVERFLOW,       "RPC packet overflow")                          \
   DEFINE_HAL_ERROR(HAL_ERROR_RPC_BAD_FUNCTION,          "Bad RPC function number")                      \
+  DEFINE_HAL_ERROR(HAL_ERROR_KEY_NAME_TOO_LONG,         "Key name too long")                            \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -350,7 +351,7 @@ extern hal_error_t hal_modexp(const hal_core_t *core,
  */
 
 typedef enum {
-  HAL_KEY_TYPE_NONE,
+  HAL_KEY_TYPE_NONE = 0,
   HAL_KEY_TYPE_RSA_PRIVATE,
   HAL_KEY_TYPE_RSA_PUBLIC,
   HAL_KEY_TYPE_EC_PRIVATE,
@@ -684,6 +685,9 @@ extern hal_error_t hal_rpc_pkey_generate_ec(const hal_client_handle_t client,
 extern hal_error_t hal_rpc_pkey_close(const hal_pkey_handle_t pkey);
 
 extern hal_error_t hal_rpc_pkey_delete(const hal_pkey_handle_t pkey);
+
+extern hal_error_t hal_rpc_pkey_rename(const hal_pkey_handle_t pkey,
+                                       const uint8_t * const name, const size_t name_len);
 
 extern hal_error_t hal_rpc_pkey_get_key_type(const hal_pkey_handle_t pkey,
                                              hal_key_type_t *type);
