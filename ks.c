@@ -113,7 +113,7 @@ hal_error_t hal_ks_store(const hal_key_type_t type,
   k.curve = curve;
   k.flags = flags;
 
-  if ((err = hal_ks_set_keydb(&k, *hint)) != HAL_OK)
+  if ((err = hal_ks_set_keydb(&k, *hint, 0)) != HAL_OK)
     return err;
 
   return HAL_OK;
@@ -273,7 +273,7 @@ hal_error_t hal_ks_rename(const hal_key_type_t type,
   memcpy(k.name, new_name, new_name_len);
   k.name_len = new_name_len;
 
-  return hal_ks_set_keydb(&k, *hint);
+  return hal_ks_set_keydb(&k, *hint, 1);
 }
 
 hal_error_t hal_ks_list(hal_pkey_info_t *result,

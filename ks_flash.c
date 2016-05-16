@@ -46,9 +46,10 @@ const hal_ks_keydb_t *hal_ks_get_keydb(void)
 }
 
 hal_error_t hal_ks_set_keydb(const hal_ks_key_t * const key,
-                             const int loc)
+                             const int loc,
+                             const int updating)
 {
-  if (key == NULL || loc < 0 || loc >= sizeof(db->keys)/sizeof(*db->keys) || key->in_use)
+  if (key == NULL || loc < 0 || loc >= sizeof(db->keys)/sizeof(*db->keys) || (!key->in_use != !updating))
     return HAL_ERROR_BAD_ARGUMENTS;
 
 #error Not sure what goes here yet either

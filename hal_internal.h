@@ -298,7 +298,8 @@ typedef struct {
 extern const hal_ks_keydb_t *hal_ks_get_keydb(void);
 
 extern hal_error_t hal_ks_set_keydb(const hal_ks_key_t * const key,
-                                    const int loc);
+                                    const int loc,
+                                    const int updating);
 
 extern hal_error_t hal_ks_del_keydb(const int loc);
 
