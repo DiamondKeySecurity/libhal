@@ -643,7 +643,7 @@ static hal_error_t pkey_local_sign_ecdsa(uint8_t *keybuf, const size_t keybuf_le
         (err = hal_rpc_hash_get_digest_length(alg, &input_len)) != HAL_OK)
       return err;
 
-    if (input_len < signature_max)
+    if (input_len > signature_max)
       return HAL_ERROR_RESULT_TOO_LONG;
 
     if ((err = hal_rpc_hash_finalize(hash, signature, input_len)) != HAL_OK)
