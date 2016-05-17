@@ -715,7 +715,7 @@ static hal_error_t pkey_local_verify_rsa(uint8_t *keybuf, const size_t keybuf_le
                                          const uint8_t * input, size_t input_len,
                                          const uint8_t * const signature, const size_t signature_len)
 {
-  uint8_t expected[signature_len], received[signature_len];
+  uint8_t expected[signature_len], received[(signature_len + 3) & ~3];
   hal_rsa_key_t *key = NULL;
   hal_error_t err;
 
@@ -748,7 +748,7 @@ static hal_error_t pkey_local_verify_rsa(uint8_t *keybuf, const size_t keybuf_le
 
   unsigned diff = 0;
   for (int i = 0; i < signature_len; i++)
-    diff |= expected[i] ^ received[i];
+    diff |= expected[i] ^ received[i + sizeof(received) - sizeof(expected)];
 
   if (diff != 0)
     return HAL_ERROR_INVALID_SIGNATURE;
