@@ -303,7 +303,7 @@ hal_error_t hal_ks_list(hal_pkey_info_t *result,
     result[*result_len].flags = db->keys[i].flags;
     result[*result_len].name_len = db->keys[i].name_len;
     memcpy(result[*result_len].name, db->keys[i].name, db->keys[i].name_len);
-    ++result_len;
+    ++ *result_len;
   }
 
   return HAL_OK;
