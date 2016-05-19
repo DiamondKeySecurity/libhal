@@ -522,7 +522,7 @@ static hal_error_t pkey_remote_rename(const hal_pkey_handle_t pkey,
   size_t ilen = sizeof(inbuf);
   hal_error_t rpc_ret;
 
-  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_DELETE));
+  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_RENAME));
   check(hal_xdr_encode_int(&optr, olimit, pkey.handle));
   check(hal_xdr_encode_buffer(&optr, olimit, name, name_len));
   check(hal_rpc_send(outbuf, optr - outbuf));
