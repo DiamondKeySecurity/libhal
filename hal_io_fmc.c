@@ -75,11 +75,11 @@ void hal_io_set_debug(int onoff)
   debug = onoff;
 }
 
-static void dump(char *label, const uint8_t *buf, size_t len)
+static void dump(char *label, hal_addr_t offset, const uint8_t *buf, size_t len)
 {
   if (debug) {
     size_t i;
-    printf("%s [", label);
+    printf("%s %04x [", label, (unsigned int)offset);
     for (i = 0; i < len; ++i)
       printf(" %02x", buf[i]);
     printf(" ]\n");
@@ -99,7 +99,7 @@ hal_error_t hal_io_write(const hal_core_t *core, hal_addr_t offset, const uint8_
   if ((err = init()) != HAL_OK)
     return err;
 
-  dump("write ", buf, len);
+  dump("write ", offset + hal_core_base(core), buf, len);
 
   offset = fmc_offset(offset + hal_core_base(core));
   for (; len > 0; offset += 4, buf += 4, len -= 4) {
@@ -115,6 +115,7 @@ hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf,
 {
   uint8_t *rbuf = buf;
   int rlen = len;
+  hal_addr_t orig_offset = offset;
   hal_error_t err;
 
   if (core == NULL)
@@ -133,7 +134,7 @@ hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf,
     *(uint32_t *)rbuf = ntohl(val);
   }
 
-  dump("read  ", buf, len);
+  dump("read  ", orig_offset + hal_core_base(core), buf, len);
 
   return HAL_OK;
 }
