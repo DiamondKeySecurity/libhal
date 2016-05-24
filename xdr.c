@@ -36,26 +36,8 @@
 #include <stdint.h>
 #include <string.h>             /* memcpy, memset */
 
-#ifndef STM32F4XX
-#include <arpa/inet.h>          /* htonl/ntohl */
-#else
-/* htonl is not available in arm-none-eabi headers or libc */
-#ifdef __ARMEL__                /* little endian */
-static inline uint32_t htonl(uint32_t w)
-{
-  return
-    ((w & 0x000000ff) << 24) +
-    ((w & 0x0000ff00) << 8) +
-    ((w & 0x00ff0000) >> 8) +
-    ((w & 0xff000000) >> 24);
-}
-#else
-#define htonl(x) (x)
-#endif
-#define ntohl htonl
-#endif
-
 #include "hal.h"
+#include "hal_internal.h"
 #include "xdr_internal.h"
 
 /* encode/decode_int. This covers int, unsigned int, enum, and bool types,

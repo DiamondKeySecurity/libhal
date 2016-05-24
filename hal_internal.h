@@ -46,6 +46,27 @@
  */
 
 /*
+ * htonl is not available in arm-none-eabi headers or libc.
+ */
+#ifndef STM32F4XX
+#include <arpa/inet.h>
+#else
+#ifdef __ARMEL__                /* little endian */
+inline uint32_t htonl(uint32_t w)
+{
+    return
+        ((w & 0x000000ff) << 24) +
+        ((w & 0x0000ff00) << 8) +
+        ((w & 0x00ff0000) >> 8) +
+        ((w & 0xff000000) >> 24);
+}
+#else                           /* big endian */
+#define htonl(x) (x)
+#endif
+#define ntohl htonl
+#endif
+
+/*
  * Longest hash block and digest we support at the moment.
  */
 

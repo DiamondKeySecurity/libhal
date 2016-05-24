@@ -47,21 +47,6 @@ static int inited = 0;
 #define FMC_IO_TIMEOUT  100000000
 #endif
 
-/* not available in arm-none-eabi libc */
-#ifdef __ARMEL__    // Little endian
-static inline uint32_t htonl(uint32_t w)
-{
-  return
-    ((w & 0x000000ff) << 24) +
-    ((w & 0x0000ff00) << 8) +
-    ((w & 0x00ff0000) >> 8) +
-    ((w & 0xff000000) >> 24);
-}
-#else               // Big endian
-#define htonl(x) (x)
-#endif
-#define ntohl htonl
-
 static hal_error_t init(void)
 {
   if (!inited) {

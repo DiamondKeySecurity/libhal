@@ -35,7 +35,6 @@
 
 #include <stdio.h>
 #include <stdint.h>
-#include <arpa/inet.h>		/* htonl/ntohl */
 
 #include "novena-eim.h"
 #include "hal.h"
