@@ -38,7 +38,7 @@ INC		= hal.h hal_internal.h
 LIB		= libhal.a
 
 OBJ		= errorstrings.o rsa.o ecdsa.o asn1.o ${CORE_OBJ} ${IO_OBJ} ${RPC_OBJ} ${KS_OBJ}
-CORE_OBJ	:= core.o csprng.o hash.o aes_keywrap.o pbkdf2.o modexp.o
+CORE_OBJ	:= core.o csprng.o hash.o aes_keywrap.o pbkdf2.o modexp.o mkmif.o
 
 USAGE = "usage: make [IO_BUS=eim|i2c|fmc] [RPC_CLIENT=local|remote|mixed] [RPC_SERVER=yes] [KS=mmap|volatile|flash]"
 

@@ -93,6 +93,9 @@
 #define MODEXPS6_NAME		"modexps6"
 #define MODEXPS6_VERSION	"0.10"
 
+#define MKMIF_NAME              "mkmif   "
+#define MKMIF_VERSION           "0.10"
+
 /*
  * C API error codes.  Defined in this form so we can keep the tokens
  * and error strings together.  See errorstrings.c.
@@ -344,6 +347,18 @@ extern hal_error_t hal_modexp(const hal_core_t *core,
                               const uint8_t * const exp, const size_t exp_len, /* Exponent */
                               const uint8_t * const mod, const size_t mod_len, /* Modulus */
                               uint8_t * result, const size_t result_len);
+
+/*
+ * Master Key Memory Interface
+ */
+
+extern hal_error_t hal_mkmif_init(const hal_core_t *core);
+extern hal_error_t hal_mkmif_set_clockspeed(const hal_core_t *core, const uint32_t divisor);
+extern hal_error_t hal_mkmif_get_clockspeed(const hal_core_t *core, uint32_t *divisor);
+extern hal_error_t hal_mkmif_write(const hal_core_t *core, uint32_t addr, const uint8_t *buf, size_t len);
+extern hal_error_t hal_mkmif_write_word(const hal_core_t *core, uint32_t addr, const uint32_t data);
+extern hal_error_t hal_mkmif_read(const hal_core_t *core, uint32_t addr, uint8_t *buf, size_t len);
+extern hal_error_t hal_mkmif_read_word(const hal_core_t *core, uint32_t addr, uint32_t *data);
 
 
 /*

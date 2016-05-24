@@ -219,6 +219,21 @@
 #define MODEXPS6_ADDR_EXPONENT          (MODEXPS6_ADDR_OPERANDS + 2 * MODEXPS6_OPERAND_WORDS)
 #define MODEXPS6_ADDR_RESULT            (MODEXPS6_ADDR_OPERANDS + 3 * MODEXPS6_OPERAND_WORDS)
 
+/*
+ * Utility cores.
+ */
+
+/*
+ * Master Key Memory Interface core.
+ */
+#define MKMIF_ADDR_CTRL         ADDR_CTRL
+#define MKMIF_CTRL_CMD_READ     (0x01)
+#define MKMIF_CTRL_CMD_WRITE    (0x02)
+#define MKMIF_CTRL_CMD_INIT     (0x04)
+#define MKMIF_ADDR_SCLK_DIV     (0x0a)
+#define MKMIF_ADDR_EMEM_ADDR    (0x10)
+#define MKMIF_ADDR_EMEM_DATA    (0x20)
+
 #endif /* _VERILOG_CONSTANTS_H_ */
 
 /*
