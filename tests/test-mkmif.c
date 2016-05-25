@@ -122,7 +122,7 @@ static hal_error_t write_read_test(const hal_core_t *core)
     }
 
     if (readback != data) {
-        printf("read %04x, expected %04x\n", (unsigned int)readback, (unsigned int)data);
+        printf("read %08x, expected %08x\n", (unsigned int)readback, (unsigned int)data);
         return HAL_ERROR_IO_UNEXPECTED;
     }
       
