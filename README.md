@@ -23,7 +23,7 @@ Current contents of the library:
 
 * An interface to the Cryptech hash cores, including HMAC.
 
-* An implementation of PBPDF2.
+* An implementation of PBKDF2.
 
 * An implementation of RSA using the Cryptech ModExp core.
 
