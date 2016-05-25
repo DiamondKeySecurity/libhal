@@ -37,6 +37,10 @@
 #include <stdint.h>
 
 #include "stm-fmc.h"
+
+/* stm32f4xx_hal_def.h and hal.h both define HAL_OK as an enum value */
+#define HAL_OK HAL_OKAY
+
 #include "hal.h"
 #include "hal_internal.h"
 
