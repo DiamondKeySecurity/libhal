@@ -72,7 +72,7 @@ salt = urandom(16)
 
 pin  = PBKDF2(password = args.pin,
               salt     = salt,
-              dkLen    = 32,
+              dkLen    = args.derived_key_length,
               count    = args.iterations,
               prf      = HMAC_SHA256)
 
