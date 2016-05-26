@@ -568,6 +568,9 @@ typedef struct { uint32_t handle; } hal_session_handle_t;
 
 typedef enum { HAL_USER_NONE, HAL_USER_NORMAL, HAL_USER_SO, HAL_USER_WHEEL } hal_user_t;
 
+extern const size_t hal_rpc_min_pin_length;
+extern const size_t hal_rpc_max_pin_length;
+
 extern hal_error_t hal_rpc_set_pin(const hal_client_handle_t client,
                                    const hal_user_t user,
                                    const char * const newpin, const size_t newpin_len);

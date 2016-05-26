@@ -38,6 +38,25 @@
 
 const hal_hash_handle_t hal_hash_handle_none = {HAL_HANDLE_NONE};
 
+/*
+ * PIN lengths.  These are somewhat arbitrary, and the current values
+ * are really placeholders until we figure out something better.
+ * Minimum length here is almost certainly too short for production
+ * use, we allow it because most test programs fail if we insist on a
+ * PIN long enough to have any real security.
+ */
+
+#ifndef HAL_PIN_MINIMUM_LENGTH
+#define HAL_PIN_MINIMUM_LENGTH          4
+#endif
+
+#ifndef HAL_PIN_MAXIMUM_LENGTH
+#define HAL_PIN_MAXIMUM_LENGTH          4096
+#endif
+
+const size_t hal_rpc_min_pin_length = HAL_PIN_MINIMUM_LENGTH;
+const size_t hal_rpc_max_pin_length = HAL_PIN_MAXIMUM_LENGTH;
+
 static inline int check_pkey_type(const hal_key_type_t type)
 {
   switch (type) {
@@ -103,13 +122,14 @@ hal_error_t hal_rpc_get_random(void *buffer, const size_t length)
   return hal_rpc_misc_dispatch->get_random(buffer, length);
 }
 
-#warning Perhaps we should be enforcing a minimum PIN length here
-
 hal_error_t hal_rpc_set_pin(const hal_client_handle_t client,
                             const hal_user_t user,
                             const char * const newpin, const size_t newpin_len)
 {
-  if (newpin == NULL || newpin_len == 0 || (user != HAL_USER_NORMAL && user != HAL_USER_SO && user != HAL_USER_WHEEL))
+  if (newpin == NULL ||
+      newpin_len < hal_rpc_min_pin_length ||
+      newpin_len > hal_rpc_max_pin_length ||
+      (user != HAL_USER_NORMAL && user != HAL_USER_SO && user != HAL_USER_WHEEL))
     return HAL_ERROR_BAD_ARGUMENTS;
   return hal_rpc_misc_dispatch->set_pin(client, user, newpin, newpin_len);
 }
@@ -118,7 +138,10 @@ hal_error_t hal_rpc_login(const hal_client_handle_t client,
                           const hal_user_t user,
                           const char * const pin, const size_t pin_len)
 {
-  if (pin == NULL || pin_len == 0 || (user != HAL_USER_NORMAL && user != HAL_USER_SO && user != HAL_USER_WHEEL))
+  if (pin == NULL ||
+      pin_len < hal_rpc_min_pin_length ||
+      pin_len > hal_rpc_max_pin_length ||
+      (user != HAL_USER_NORMAL && user != HAL_USER_SO && user != HAL_USER_WHEEL))
     return HAL_ERROR_BAD_ARGUMENTS;
   return hal_rpc_misc_dispatch->login(client, user, pin, pin_len);
 }

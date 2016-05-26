@@ -189,10 +189,14 @@ ${OBJ}: ${INC}
 ${LIB}: ${OBJ}
 	${AR} rcs $@ $^
 
-asn1.o rsa.o ecdsa.o:		asn1_internal.h
-ecdsa.o:			ecdsa_curves.h
-novena-eim.o hal_io_eim.o:	novena-eim.h
+asn1.o rsa.o ecdsa.o:				asn1_internal.h
+ecdsa.o:					ecdsa_curves.h
+novena-eim.o hal_io_eim.o:			novena-eim.h
 slip.o rpc_client_serial.o rpc_server_serial.o:	slip_internal.h
+ks.o:						last_gasp_pin_internal.h
+
+last_gasp_pin_internal.h:
+	./utils/last_gasp_default_pin >$@
 
 test: all
 	export RPC_CLIENT RPC_SERVER

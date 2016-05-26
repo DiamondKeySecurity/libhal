@@ -72,8 +72,6 @@ static hal_error_t get_random(void *buffer, const size_t length)
  * PIN to be changed a second time without toasting the keystore.
  */
 
-#warning PIN code not yet fully implemented
-
 typedef struct {
   hal_client_handle_t handle;
   hal_user_t logged_in;
@@ -123,37 +121,6 @@ static inline client_slot_t *find_handle(const hal_client_handle_t handle)
   return NULL;
 }
 
-static hal_error_t set_pin(const hal_client_handle_t client,
-                           const hal_user_t user,
-                           const char * const newpin, const size_t newpin_len)
-{
-  assert(newpin != NULL && newpin_len != 0);
-
-#warning Need access control to decide who is allowed to set this PIN
-#warning Need length checks (here or in caller) on supplied PIN
-
-  const hal_ks_pin_t *pp;
-  hal_error_t err;
-
-  if ((err = hal_ks_get_pin(user, &pp)) != HAL_OK)
-    return err;
-
-  hal_ks_pin_t p = *pp;
-
-  if (p.iterations == 0)
-    p.iterations = HAL_PIN_DEFAULT_ITERATIONS;
-
-  if ((err = hal_get_random(NULL, p.salt, sizeof(p.salt)))      != HAL_OK ||
-      (err = hal_pbkdf2(NULL, hal_hash_sha256,
-                        (const uint8_t *) newpin, newpin_len,
-                        p.salt, sizeof(p.salt),
-                        p.pin,  sizeof(p.pin), p.iterations))   != HAL_OK ||
-      (err = hal_ks_set_pin(user, &p))                          != HAL_OK)
-    return err;
-
-  return HAL_OK;
-}
-
 static hal_error_t login(const hal_client_handle_t client,
                          const hal_user_t user,
                          const char * const pin, const size_t pin_len)
@@ -168,9 +135,10 @@ static hal_error_t login(const hal_client_handle_t client,
     return err;
 
   uint8_t buf[sizeof(p->pin)];
+  const uint32_t iterations = p->iterations == 0 ? HAL_PIN_DEFAULT_ITERATIONS : p->iterations;
 
   if ((err = hal_pbkdf2(NULL, hal_hash_sha256, (const uint8_t *) pin, pin_len,
-                        p->salt, sizeof(p->salt), buf, sizeof(buf), p->iterations)) != HAL_OK)
+                        p->salt, sizeof(p->salt), buf, sizeof(buf), iterations)) != HAL_OK)
     return err;
 
   unsigned diff = 0;
@@ -220,6 +188,38 @@ static hal_error_t logout_all(void)
   for (int i = 0; i < sizeof(client_handle)/sizeof(*client_handle); i++)
     client_handle[i].logged_in = HAL_USER_NONE;
 #endif
+
+  return HAL_OK;
+}
+
+static hal_error_t set_pin(const hal_client_handle_t client,
+                           const hal_user_t user,
+                           const char * const newpin, const size_t newpin_len)
+{
+  assert(newpin != NULL && newpin_len >= hal_rpc_min_pin_length && newpin_len <= hal_rpc_max_pin_length);
+
+  if ((user != HAL_USER_NORMAL || is_logged_in(client, HAL_USER_SO) != HAL_OK) &&
+      is_logged_in(client, HAL_USER_WHEEL) != HAL_OK)
+    return HAL_ERROR_FORBIDDEN;
+
+  const hal_ks_pin_t *pp;
+  hal_error_t err;
+
+  if ((err = hal_ks_get_pin(user, &pp)) != HAL_OK)
+    return err;
+
+  hal_ks_pin_t p = *pp;
+
+  if (p.iterations == 0)
+    p.iterations = HAL_PIN_DEFAULT_ITERATIONS;
+
+  if ((err = hal_get_random(NULL, p.salt, sizeof(p.salt)))      != HAL_OK ||
+      (err = hal_pbkdf2(NULL, hal_hash_sha256,
+                        (const uint8_t *) newpin, newpin_len,
+                        p.salt, sizeof(p.salt),
+                        p.pin,  sizeof(p.pin), p.iterations))   != HAL_OK ||
+      (err = hal_ks_set_pin(user, &p))                          != HAL_OK)
+    return err;
 
   return HAL_OK;
 }

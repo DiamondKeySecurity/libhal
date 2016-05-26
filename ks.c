@@ -38,6 +38,7 @@
 
 #include "hal.h"
 #include "hal_internal.h"
+#include "last_gasp_pin_internal.h"
 
 #define KEK_LENGTH (bitsToBytes(256))
 
@@ -325,6 +326,28 @@ hal_error_t hal_ks_get_pin(const hal_user_t user,
   case HAL_USER_SO:	*pin = &db->so_pin;     break;
   case HAL_USER_NORMAL:	*pin = &db->user_pin;   break;
   default:		return HAL_ERROR_BAD_ARGUMENTS;
+  }
+
+  /*
+   * If we were looking for the WHEEL PIN and it appears to be
+   * completely unset, return the compiled-in last-gasp PIN.  This is
+   * not a great answer, but we need some kind of bootstrapping
+   * mechanism.  Feel free to suggest something better.
+   *
+   * We probably need some more general "have we been initialized?"
+   * state somewhere, and might want to refuse to do things like
+   * storing keys until we've been initialized and the appropriate
+   * PINs have been set.
+   */
+
+  if (user == HAL_USER_WHEEL && (*pin)->iterations == 0) {
+    uint8_t u = 0;
+    for (int i = 0; i < sizeof((*pin)->pin); i++)
+      u |= (*pin)->pin[i];
+    for (int i = 0; i < sizeof((*pin)->salt); i++)
+      u |= (*pin)->salt[i];
+    if (u == 0)
+      *pin = &hal_last_gasp_pin;
   }
 
   return HAL_OK;

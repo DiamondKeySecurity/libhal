@@ -123,6 +123,20 @@ static inline pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
   return NULL;
 }
 
+#warning Still need access control on pkey objects based on current login state
+/*
+ * This would be simple, except for PKCS #11 non-token objects (CKA_TOKEN = CK_FALSE).
+ * Need to check detailed PKCS #11 rules, but, from memory, we may be supposed to allow
+ * access to non-token objects even when not logged in.  Maybe.  Rules are complex.
+ *
+ * I think the libhal translation of this resolves around what we've
+ * been calling the PROXIMATE flags (which probably ought to be
+ * renamed to *_NONTOKEN_*, slightly less confusing name).  For token
+ * objects, we insist on being logged in properly; for non-token
+ * objects, we do whatever silly thing PKCS #11 wants us to do,
+ * probably defaulting to requiring login if PKCS #11 gives us a choice.
+ */
+
 /*
  * Construct a PKCS #1 DigestInfo object.  This requires some (very
  * basic) ASN.1 encoding, which we perform inline.
