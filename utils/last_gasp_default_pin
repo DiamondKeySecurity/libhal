@@ -59,7 +59,7 @@ parser.add_argument("-i", "--iterations",
 parser.add_argument("-d", "--derived-key-length",
                     type    = int,
                     default = 64,
-                    help    = "length of BPKDF2 output (must match libhal)")
+                    help    = "length of PBKDF2 output (must match libhal)")
 args = parser.parse_args()
 
 def HMAC_SHA256(pin, salt):
