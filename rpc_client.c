@@ -733,7 +733,7 @@ static hal_error_t pkey_remote_list(hal_pkey_info_t *result,
   return rpc_ret;
 }
 
-
+#if RPC_CLIENT == RPC_CLIENT_MIXED
 /*
  * "Mixed" mode pkey operations, where the public key operation itself
  * takes place on the HSM but the hashing takes place locally.  If
@@ -908,6 +908,7 @@ static hal_error_t pkey_mixed_list(hal_pkey_info_t *result,
 {
   return mixed_flags_dispatch(flags)->list(result, result_len, result_max, flags);
 }
+#endif /* RPC_CLIENT == RPC_CLIENT_MIXED */
 
 /*
  * Dispatch vectors.
@@ -949,6 +950,7 @@ const hal_rpc_pkey_dispatch_t hal_rpc_remote_pkey_dispatch = {
   pkey_remote_list
 };
 
+#if RPC_CLIENT == RPC_CLIENT_MIXED
 const hal_rpc_pkey_dispatch_t hal_rpc_mixed_pkey_dispatch = {
   pkey_mixed_load,
   pkey_mixed_find,
@@ -965,6 +967,7 @@ const hal_rpc_pkey_dispatch_t hal_rpc_mixed_pkey_dispatch = {
   pkey_mixed_verify,
   pkey_mixed_list
 };
+#endif /* RPC_CLIENT == RPC_CLIENT_MIXED */
 
 #endif /* RPC_CLIENT != RPC_CLIENT_LOCAL */
 
