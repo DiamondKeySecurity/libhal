@@ -79,7 +79,7 @@
 #define SHA1_VERSION            "0.50"
 
 #define SHA256_NAME             "sha2-256"
-#define SHA256_VERSION          "0.81"
+#define SHA256_VERSION          "1.80"
 
 #define SHA512_NAME             "sha2-512"
 #define SHA512_VERSION          "0.80"
@@ -233,6 +233,7 @@ typedef struct hal_hash_driver hal_hash_driver_t;
 typedef enum {
   hal_digest_algorithm_none,
   hal_digest_algorithm_sha1,
+  hal_digest_algorithm_sha224,
   hal_digest_algorithm_sha256,
   hal_digest_algorithm_sha512_224,
   hal_digest_algorithm_sha512_256,
@@ -266,6 +267,7 @@ typedef struct hal_hmac_state hal_hmac_state_t;
  */
 
 extern const hal_hash_descriptor_t hal_hash_sha1[1];
+extern const hal_hash_descriptor_t hal_hash_sha224[1];
 extern const hal_hash_descriptor_t hal_hash_sha256[1];
 extern const hal_hash_descriptor_t hal_hash_sha512_224[1];
 extern const hal_hash_descriptor_t hal_hash_sha512_256[1];

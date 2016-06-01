@@ -136,24 +136,28 @@ static const hal_hash_driver_t sha1_driver = {
   SHA1_LENGTH_LEN, SHA1_ADDR_BLOCK, SHA1_ADDR_DIGEST, 0, sw_hash_core_sha1, sizeof(uint32_t)
 };
 
+static const hal_hash_driver_t sha224_driver = {
+  SHA256_LENGTH_LEN, SHA256_ADDR_BLOCK, SHA256_ADDR_DIGEST, SHA256_MODE_SHA_224, sw_hash_core_sha256, sizeof(uint32_t)
+};
+
 static const hal_hash_driver_t sha256_driver = {
-  SHA256_LENGTH_LEN, SHA256_ADDR_BLOCK, SHA256_ADDR_DIGEST, 0, sw_hash_core_sha256, sizeof(uint32_t)
+  SHA256_LENGTH_LEN, SHA256_ADDR_BLOCK, SHA256_ADDR_DIGEST, SHA256_MODE_SHA_256, sw_hash_core_sha256, sizeof(uint32_t)
 };
 
 static const hal_hash_driver_t sha512_224_driver = {
-  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_512_224, sw_hash_core_sha512, sizeof(uint64_t)
+  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, SHA512_MODE_SHA_512_224, sw_hash_core_sha512, sizeof(uint64_t)
 };
 
 static const hal_hash_driver_t sha512_256_driver = {
-  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_512_256, sw_hash_core_sha512, sizeof(uint64_t)
+  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, SHA512_MODE_SHA_512_256, sw_hash_core_sha512, sizeof(uint64_t)
 };
 
 static const hal_hash_driver_t sha384_driver = {
-  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_384, sw_hash_core_sha512, sizeof(uint64_t)
+  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, SHA512_MODE_SHA_384, sw_hash_core_sha512, sizeof(uint64_t)
 };
 
 static const hal_hash_driver_t sha512_driver = {
-  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, MODE_SHA_512, sw_hash_core_sha512, sizeof(uint64_t)
+  SHA512_LENGTH_LEN, SHA512_ADDR_BLOCK, SHA512_ADDR_DIGEST, SHA512_MODE_SHA_512, sw_hash_core_sha512, sizeof(uint64_t)
 };
 
 /*
@@ -175,6 +179,7 @@ static const uint8_t
   dalgid_sha256[]     = { 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00 },
   dalgid_sha384[]     = { 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02, 0x05, 0x00 },
   dalgid_sha512[]     = { 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03, 0x05, 0x00 },
+  dalgid_sha224[]     = { 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x04, 0x05, 0x00 },
   dalgid_sha512_224[] = { 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x05, 0x05, 0x00 },
   dalgid_sha512_256[] = { 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x06, 0x05, 0x00 };
 
@@ -191,6 +196,14 @@ const hal_hash_descriptor_t hal_hash_sha1[1] = {{
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha1, sizeof(dalgid_sha1),
   &sha1_driver, SHA1_NAME, 0
+}};
+
+const hal_hash_descriptor_t hal_hash_sha224[1] = {{
+  hal_digest_algorithm_sha256,
+  SHA256_BLOCK_LEN, SHA224_DIGEST_LEN,
+  sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
+  dalgid_sha224, sizeof(dalgid_sha224),
+  &sha224_driver, SHA256_NAME, 1
 }};
 
 const hal_hash_descriptor_t hal_hash_sha256[1] = {{
@@ -1000,22 +1013,30 @@ static hal_error_t sw_hash_core_sha1(hal_hash_state_t *state)
 }
 
 /*
- * Software implementation of SHA-256 block algorithm; doesn't support truncated variants because
- * the Cryptech Verilog implementation doesn't.
+ * Software implementation of SHA-256 block algorithm, including support for same truncated variants
+ * that the Cryptech Verilog SHA-256 core supports.
  */
 
 static hal_error_t sw_hash_core_sha256(hal_hash_state_t *state)
 {
-  static const uint32_t iv[8] = {0x6A09E667UL, 0xBB67AE85UL, 0x3C6EF372UL, 0xA54FF53AUL,
-                                 0x510E527FUL, 0x9B05688CUL, 0x1F83D9ABUL, 0x5BE0CD19UL};
+  static const uint32_t sha224_iv[8] = {0xC1059ED8UL, 0x367CD507UL, 0x3070DD17UL, 0xF70E5939UL,
+                                        0xFFC00B31UL, 0x68581511UL, 0x64F98FA7UL, 0xBEFA4FA4UL};
+
+  static const uint32_t sha256_iv[8] = {0x6A09E667UL, 0xBB67AE85UL, 0x3C6EF372UL, 0xA54FF53AUL,
+                                        0x510E527FUL, 0x9B05688CUL, 0x1F83D9ABUL, 0x5BE0CD19UL};
 
   if (state == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   uint32_t *H = (uint32_t *) state->core_state, S[8], W[64];
 
-  if (state->block_count == 0)
-    memcpy(H, iv, sizeof(iv));
+  if (state->block_count == 0) {
+    switch (state->driver_ctrl_mode & SHA256_MODE_MASK) {
+    case SHA256_MODE_SHA_224:   memcpy(H, sha224_iv, sizeof(sha224_iv)); break;
+    case SHA256_MODE_SHA_256:   memcpy(H, sha256_iv, sizeof(sha256_iv)); break;
+    default:                    return HAL_ERROR_IMPOSSIBLE;
+    }
+  }
 
   memcpy(S, H, sizeof(S));
 
@@ -1067,12 +1088,12 @@ static hal_error_t sw_hash_core_sha512(hal_hash_state_t *state)
   uint64_t *H = (uint64_t *) state->core_state, S[8], W[80];
 
   if (state->block_count == 0) {
-    switch (state->driver->ctrl_mode & MODE_SHA_MASK) {
-    case MODE_SHA_512_224:      memcpy(H, sha512_224_iv, sizeof(sha512_224_iv)); break;
-    case MODE_SHA_512_256:      memcpy(H, sha512_256_iv, sizeof(sha512_256_iv)); break;
-    case MODE_SHA_384:          memcpy(H, sha384_iv,     sizeof(sha384_iv));     break;
-    case MODE_SHA_512:          memcpy(H, sha512_iv,     sizeof(sha512_iv));     break;
-    default:                    return HAL_ERROR_IMPOSSIBLE;
+    switch (state->driver->ctrl_mode & SHA512_MODE_MASK) {
+    case SHA512_MODE_SHA_512_224:       memcpy(H, sha512_224_iv, sizeof(sha512_224_iv)); break;
+    case SHA512_MODE_SHA_512_256:       memcpy(H, sha512_256_iv, sizeof(sha512_256_iv)); break;
+    case SHA512_MODE_SHA_384:           memcpy(H, sha384_iv,     sizeof(sha384_iv));     break;
+    case SHA512_MODE_SHA_512:           memcpy(H, sha512_iv,     sizeof(sha512_iv));     break;
+    default:                            return HAL_ERROR_IMPOSSIBLE;
     }
   }
 

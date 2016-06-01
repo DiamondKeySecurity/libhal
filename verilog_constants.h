@@ -67,7 +67,11 @@
 #define SHA256_ADDR_DIGEST      (0x20)
 #define SHA256_BLOCK_LEN        bitsToBytes(512)
 #define SHA256_LENGTH_LEN       bitsToBytes(64)
+#define SHA224_DIGEST_LEN       bitsToBytes(224)
 #define SHA256_DIGEST_LEN       bitsToBytes(256)
+#define SHA256_MODE_SHA_224     (0 << 2)
+#define SHA256_MODE_SHA_256     (1 << 2)
+#define SHA256_MODE_MASK        (1 << 2)
 
 #define SHA512_ADDR_BLOCK       (0x10)
 #define SHA512_ADDR_DIGEST      (0x40)
@@ -77,11 +81,11 @@
 #define SHA512_256_DIGEST_LEN   bitsToBytes(256)
 #define SHA384_DIGEST_LEN       bitsToBytes(384)
 #define SHA512_DIGEST_LEN       bitsToBytes(512)
-#define MODE_SHA_512_224        (0 << 2)
-#define MODE_SHA_512_256        (1 << 2)
-#define MODE_SHA_384            (2 << 2)
-#define MODE_SHA_512            (3 << 2)
-#define	MODE_SHA_MASK   	(3 << 2)
+#define SHA512_MODE_SHA_512_224 (0 << 2)
+#define SHA512_MODE_SHA_512_256 (1 << 2)
+#define SHA512_MODE_SHA_384     (2 << 2)
+#define SHA512_MODE_SHA_512     (3 << 2)
+#define SHA512_MODE_MASK        (3 << 2)
 
 /*
  * RNG cores.
