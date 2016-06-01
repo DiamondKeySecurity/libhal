@@ -334,6 +334,8 @@ int main (int argc, char *argv[])
   for (int i = 0; i < (sizeof(ecdsa_tc)/sizeof(*ecdsa_tc)); i++)
     ok &= test_ecdsa_generate(&ecdsa_tc[i]);
 
+  ok &= hal_rpc_client_close();
+
   return !ok;
 }
 

@@ -65,5 +65,6 @@ int main(int argc, char *argv[])
 
     hexdump(rnd, len);
 
+    check(hal_rpc_client_close());
     return 0;
 }

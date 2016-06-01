@@ -47,5 +47,6 @@ int main(int argc, char *argv[])
     check(hal_rpc_get_version(&version));
     printf("%08x\n", version);
 
+    check(hal_rpc_client_close());
     return 0;
 }

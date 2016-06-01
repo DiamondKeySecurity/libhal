@@ -6,5 +6,6 @@ int main (int argc, char *argv[])
 	return 1;
 
     hal_rpc_server_main();
+    hal_rpc_server_close();
     return 0;
 }
