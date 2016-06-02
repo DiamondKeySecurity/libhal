@@ -1,7 +1,7 @@
 /*
- * slip_internal.h
- * ---------------
- * Send/recv data over a serial connection with SLIP framing
+ * serial_internal.c
+ * -----------------
+ * Low-level serial transport functions.
  *
  * Copyright (c) 2016, NORDUnet A/S All rights reserved.
  *
@@ -32,28 +32,12 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _HAL_SLIP_INTERNAL_H
-#define _HAL_SLIP_INTERNAL_H
+#ifndef _HAL_SERIAL_INTERNAL_H
+#define _HAL_SERIAL_INTERNAL_H
 
-#include "hal_internal.h"
+hal_error_t hal_serial_init(const char * const device, const speed_t speed, int * const fdp);
+hal_error_t hal_serial_close(void);
+int hal_serial_send_char(const uint8_t c);
+int hal_serial_recv_char(uint8_t * const c);
 
-/* Defined in slip.c - send/recv serial data with SLIP framing.
- */
-extern hal_error_t hal_slip_send_char(const uint8_t c);
-extern hal_error_t hal_slip_send(const uint8_t * const buf, const size_t len);
-extern hal_error_t hal_slip_recv_char(uint8_t * const buf, size_t * const len, const size_t maxlen, int * const complete);
-extern hal_error_t hal_slip_recv(uint8_t * const buf, size_t * const len, const size_t maxlen);
-
-/* Defined in rpc_serial.c - send/recv one byte over a serial connection.
- */
-extern hal_error_t hal_serial_send_char(const uint8_t c);
-extern hal_error_t hal_serial_recv_char(uint8_t * const c);
-
-#ifndef STM32F4XX
-#include <termios.h>            /* speed_t */
-extern hal_error_t hal_serial_init(const char * const device, const speed_t speed);
-extern hal_error_t hal_serial_close(void);
-extern int hal_serial_get_fd(void);
-#endif
-
-#endif /* _HAL_SLIP_INTERNAL_H */
+#endif /* _HAL_SERIAL_INTERNAL_H */

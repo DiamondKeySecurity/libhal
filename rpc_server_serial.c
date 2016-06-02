@@ -36,11 +36,6 @@
 #include "hal_internal.h"
 #include "slip_internal.h"
 
-/* Don't include stm-uart.h to avoid conflicting definitions of HAL_OK.
- */
-extern int uart_send_char(uint8_t ch);
-extern int uart_recv_char(uint8_t *cp);
-
 hal_error_t hal_rpc_server_transport_init(void)
 {
     return HAL_OK;
@@ -53,27 +48,10 @@ hal_error_t hal_rpc_server_transport_close(void)
 
 hal_error_t hal_rpc_sendto(const uint8_t * const buf, const size_t len, void *opaque)
 {
-    if (hal_slip_send(buf, len) == -1)
-        return HAL_ERROR_RPC_TRANSPORT;
-    return HAL_OK;
+    return hal_slip_send(buf, len);
 }
 
 hal_error_t hal_rpc_recvfrom(uint8_t * const buf, size_t * const len, void **opaque)
 {
-    int ret;
-
-    if ((ret = hal_slip_recv(buf, *len)) == -1)
-        return HAL_ERROR_RPC_TRANSPORT;
-    *len = ret;
-    return HAL_OK;
-}
-
-int hal_slip_send_char(uint8_t c)
-{
-    return (uart_send_char(c) == 0) ? 0 : -1;
-}
-
-int hal_slip_recv_char(uint8_t *c)
-{
-    return (uart_recv_char(c) == 0) ? 0 : -1;
+    return hal_slip_recv(buf, len, *len);
 }

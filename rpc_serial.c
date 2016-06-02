@@ -1,6 +1,6 @@
 /*
- * rpc_client_serial.c
- * -------------------
+ * rpc_serial.c
+ * ------------
  * Remote procedure call transport over serial line with SLIP framing.
  *
  * Copyright (c) 2016, NORDUnet A/S All rights reserved.
@@ -44,25 +44,66 @@
 #include "hal_internal.h"
 #include "slip_internal.h"
 
-#define DEVICE "/dev/ttyUSB0"
-#define SPEED B115200
+static int fd = -1;
 
-hal_error_t hal_rpc_client_transport_init(void)
+hal_error_t hal_serial_init(const char * const device, const speed_t speed)
 {
-    return hal_serial_init(DEVICE, SPEED);
+    struct termios tty;
+    
+    fd = open(device, O_RDWR | O_NOCTTY | O_SYNC);
+    if (fd == -1) {
+        fprintf(stderr, "open %s: ", device);
+	return perror(""), HAL_ERROR_RPC_TRANSPORT;
+    }
+
+    if (tcgetattr (fd, &tty) != 0)
+	return perror("tcgetattr"), HAL_ERROR_RPC_TRANSPORT;
+
+    cfsetospeed (&tty, speed);
+    cfsetispeed (&tty, speed);
+
+    tty.c_cflag &= ~CSIZE;
+    tty.c_cflag |= (CS8 | CLOCAL | CREAD);
+
+    tty.c_iflag = 0;
+    tty.c_oflag = 0;
+    tty.c_lflag = 0;
+
+    tty.c_cc[VMIN] = 1;
+    tty.c_cc[VTIME] = 0;
+
+    if (tcsetattr (fd, TCSANOW, &tty) != 0)
+	return perror("tcsetattr"), HAL_ERROR_RPC_TRANSPORT;
+
+    return HAL_OK;
 }
 
-hal_error_t hal_rpc_client_transport_close(void)
+hal_error_t hal_serial_close(void)
 {
-    return hal_serial_close();
+    int ret = close(fd);
+    fd = -1;
+    if (ret != 0)
+        return perror("close"), HAL_ERROR_RPC_TRANSPORT;
+    return HAL_OK;
 }
 
-hal_error_t hal_rpc_send(const uint8_t * const buf, const size_t len)
+hal_error_t hal_serial_send_char(const uint8_t c)
 {
-    return hal_slip_send(buf, len);
+    if (write(fd, &c, 1) != 1)
+	return perror("write"), HAL_ERROR_RPC_TRANSPORT;
+    return HAL_OK;
 }
 
-hal_error_t hal_rpc_recv(uint8_t * const buf, size_t * const len)
+hal_error_t hal_serial_recv_char(uint8_t * const c)
 {
-    return hal_slip_recv(buf, *len);
+    if (read(fd, c, 1) != 1)
+	return perror("read"), HAL_ERROR_RPC_TRANSPORT;
+    return HAL_OK;
+}
+
+/* Access routine for the file descriptor, so daemon can poll on it.
+ */
+int hal_serial_get_fd(void)
+{
+    return fd;
 }
