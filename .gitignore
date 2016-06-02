@@ -5,6 +5,7 @@ TAGS
 autom4te.cache
 config.log
 config.status
+cryptech_rpcd
 tests/test-aes-key-wrap
 tests/test-bus
 tests/test-ecdsa

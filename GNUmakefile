@@ -51,7 +51,7 @@ PKEY2_OBJ = aes_keywrap.o modexp.o
 # IO_BUS = eim | i2c | fmc
 #   eim: EIM bus from Novena
 #   i2c: older I2C bus from Novena
-#   fmc: FMC bus from dev-bridge board
+#   fmc: FMC bus from dev-bridge and alpha boards
 
 IO_BUS ?= eim
 ifeq (${IO_BUS},eim)
@@ -95,26 +95,29 @@ endif
 #
 # RPC_SERVER = yes
 #
-# RPC_TRANSPORT = loopback | serial
+# RPC_TRANSPORT = loopback | serial | daemon
 #   loopback: communicate over loopback socket on Novena
 #   serial: communicate over USB in serial pass-through mode
+#   daemon: communicate over USB via a daemon, to arbitrate multiple clients
 
-RPC_TRANSPORT ?= serial
+RPC_TRANSPORT ?= daemon
 
 RPC_CLIENT_OBJ = rpc_api.o rpc_client.o xdr.o
 ifeq (${RPC_TRANSPORT},loopback)
   RPC_CLIENT_OBJ += rpc_client_loopback.o
 else ifeq (${RPC_TRANSPORT},serial)
   RPC_CLIENT_OBJ += rpc_client_serial.o slip.o
+else ifeq (${RPC_TRANSPORT},daemon)
+  RPC_CLIENT_OBJ += rpc_client_daemon.o
 endif
 
 RPC_DISPATCH_OBJ = rpc_hash.o rpc_misc.o rpc_pkey.o
 
-RPC_SERVER_OBJ = rpc_server.o xdr.o ${RPC_DISPATCH_OBJ}
+RPC_SERVER_OBJ = rpc_api.o rpc_server.o xdr.o ${RPC_DISPATCH_OBJ}
 ifeq (${RPC_TRANSPORT},loopback)
   RPC_SERVER_OBJ += rpc_server_loopback.o
 else ifeq (${RPC_TRANSPORT},serial)
-  RPC_SERVER_OBJ += rpc_server_serial.o rpc_serial.o slip.o
+  RPC_SERVER_OBJ += rpc_server_serial.o slip.o
 endif
 
 # Not building any of the RPC stuff, access FPGA cores directly.
@@ -185,6 +188,13 @@ server:
 
 loopback:
 	${MAKE} RPC_CLIENT=remote RPC_SERVER=yes RPC_TRANSPORT=loopback
+
+daemon: cryptech_rpcd
+#	${MAKE} RPC_CLIENT=mixed RPC_TRANSPORT=daemon
+	${MAKE} RPC_CLIENT=remote RPC_TRANSPORT=daemon
+
+cryptech_rpcd: daemon.o slip.o rpc_serial.o xdr.o
+	${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}
 
 ${OBJ}: ${INC}
 
