@@ -40,11 +40,12 @@ LIB		= libhal.a
 USAGE = "usage: make [IO_BUS=eim|i2c|fmc] [RPC_CLIENT=local|remote|mixed] [RPC_SERVER=yes] [KS=mmap|volatile|flash]"
 
 OBJ = errorstrings.o
-CORE_OBJ = core.o ${HASH_OBJ} ${MISC_OBJ} ${PKEY_OBJ} ${PKEY2_OBJ} ${KS_OBJ} ${IO_OBJ}
+CORE_OBJ = core.o ${HASH_OBJ} ${MISC_OBJ} ${PKEY_OBJ} ${PKEY2_OBJ} ${KS_OBJ} ${IO_OBJ} ${MKMIF_OBJ}
 HASH_OBJ = hash.o
 MISC_OBJ = csprng.o pbkdf2.o
 PKEY_OBJ = asn1.o ecdsa.o rsa.o
 PKEY2_OBJ = aes_keywrap.o modexp.o
+MKMIF_OBJ = mkmif.o
 
 # I/O bus to the FPGA
 #
