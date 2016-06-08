@@ -250,7 +250,7 @@ extern const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch, hal_rpc_remote
  * one for RSA keys, one for EC keys, because the RSA keys are so much
  * larger than the EC keys.  This led to unnecessarily complex and
  * duplicated code, so for now we treat all keys the same, and waste
- * the unneded space in the case of EC keys.
+ * the unneeded space in the case of EC keys.
  *
  * Sizes for ASN.1-encoded keys, this may not be exact due to ASN.1
  * INTEGER encoding rules but should be good enough for buffer sizing:
@@ -281,11 +281,12 @@ typedef struct {
   hal_key_type_t type;
   hal_curve_name_t curve;
   hal_key_flags_t flags;
+  uint32_t ks_internal;  /* keystorage driver specific */
+  uint8_t in_use;
   uint8_t name[HAL_RPC_PKEY_NAME_MAX];
   size_t name_len;
   uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
   size_t der_len;
-  uint8_t in_use;
 } hal_ks_key_t;
 
 #ifndef HAL_PIN_SALT_LENGTH
@@ -302,6 +303,8 @@ typedef struct {
 
 #if HAL_STATIC_PKEY_STATE_BLOCKS > 0
   hal_ks_key_t keys[HAL_STATIC_PKEY_STATE_BLOCKS];
+#else
+  #warning No keys in keydb
 #endif
 
   hal_ks_pin_t wheel_pin;
