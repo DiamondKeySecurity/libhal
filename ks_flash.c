@@ -64,10 +64,6 @@ extern int keystore_erase_sectors(uint32_t start, uint32_t stop);
  */
 
 static hal_ks_keydb_t db[1];
-volatile uint32_t num_keys = 0;
-
-/* Offsets where we found the entrys */
-
 
 #define FLASH_SECTOR_1_OFFSET	(0 * KEYSTORE_SECTOR_SIZE)
 #define FLASH_SECTOR_2_OFFSET	(1 * KEYSTORE_SECTOR_SIZE)
@@ -114,7 +110,6 @@ const hal_ks_keydb_t *hal_ks_get_keydb(void)
         offset = _get_key_offset(i, sizeof(*key));
         if (offset > KEYSTORE_SECTOR_SIZE) {
             memset(&db->keys[idx], 0, sizeof(*db->keys));
-            db->keys[idx].ks_internal = offset;
             idx++;
             continue;
         }
@@ -127,7 +122,6 @@ const hal_ks_keydb_t *hal_ks_get_keydb(void)
         if (key->in_use == 0xff) {
             /* unprogrammed data */
             memset(&db->keys[idx], 0, sizeof(*db->keys));
-            db->keys[idx].ks_internal = offset;
             idx++;
             continue;
         }
@@ -148,11 +142,10 @@ const hal_ks_keydb_t *hal_ks_get_keydb(void)
             to_read &= PAGE_SIZE_MASK;
 
             if (to_read) {
-                /* Partial last sector. We can only read full sectors so load it into page_buf. */
+                /* Partial last page. We can only read full pages so load it into page_buf. */
                 if (keystore_read_data(offset + sizeof(*key) - to_read, page_buf, sizeof(page_buf)) != 1) return NULL;
                 memcpy(dst, page_buf, to_read);
             }
-            key->ks_internal = offset;
         }
     }
 
@@ -187,20 +180,22 @@ hal_error_t _write_db_to_flash(const uint32_t sector_offset)
 {
     hal_error_t status;
     uint8_t page_buf[KEYSTORE_PAGE_SIZE];
-    uint32_t i, offset = sector_offset;
+    uint32_t i, offset;
 
     if (sizeof(db->wheel_pin) + sizeof(db->so_pin) + sizeof(db->user_pin) > sizeof(page_buf)) {
         return HAL_ERROR_BAD_ARGUMENTS;
     }
 
-    /* Write PINs into the second of the two reserved pages at the start of the sector. */
-    offset += KEYSTORE_PAGE_SIZE;
+    /* Put the three PINs into page_buf */
+    offset = 0;
     memcpy(page_buf + offset, &db->wheel_pin, sizeof(db->wheel_pin));
     offset += sizeof(db->wheel_pin);
     memcpy(page_buf + offset, &db->so_pin, sizeof(db->so_pin));
     offset += sizeof(db->so_pin);
     memcpy(page_buf + offset, &db->user_pin, sizeof(db->user_pin));
 
+    /* Write PINs into the second of the two reserved pages at the start of the sector. */
+    offset = sector_offset + KEYSTORE_PAGE_SIZE;
     if ((status = _write_data_to_flash(offset, page_buf, sizeof(page_buf))) != HAL_OK) {
         return status;
     }
@@ -250,6 +245,9 @@ hal_error_t hal_ks_set_keydb(const hal_ks_key_t * const key,
         return HAL_ERROR_KEYSTORE_ACCESS;
     }
     tmp_key = (hal_ks_key_t *) page_buf;
+
+    db->keys[loc] = *key;
+    db->keys[loc].in_use = 1;
 
     if (tmp_key->in_use == 0xff) {
         /* Key slot was unused in flash. Write the new key there. */

@@ -277,16 +277,19 @@ extern const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch, hal_rpc_remote
 #define HAL_STATIC_PKEY_STATE_BLOCKS 0
 #endif
 
+/* This struct is ordered such that all metadata appears before the
+ * big buffers, in order for all metadata to be loaded with a single
+ * page read from e.g. the ks_flash module.
+ */
 typedef struct {
   hal_key_type_t type;
   hal_curve_name_t curve;
   hal_key_flags_t flags;
-  uint32_t ks_internal;  /* keystorage driver specific */
   uint8_t in_use;
-  uint8_t name[HAL_RPC_PKEY_NAME_MAX];
   size_t name_len;
-  uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
   size_t der_len;
+  uint8_t name[HAL_RPC_PKEY_NAME_MAX];
+  uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
 } hal_ks_key_t;
 
 #ifndef HAL_PIN_SALT_LENGTH
