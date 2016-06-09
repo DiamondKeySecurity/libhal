@@ -33,28 +33,17 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define HAL_OK LIBHAL_OK
 #include "hal.h"
 #include "hal_internal.h"
+#undef HAL_OK
+
+#define HAL_OK CMIS_HAL_OK
+#include "stm-keystore.h"
+#undef HAL_OK
 
 #include <string.h>
 
-#define _SAVE_OUR_HAL_OK	HAL_OK
-#undef HAL_OK
-
-#warning Unmaintainable workaround for two different HAL_OKs used here
-/* Don't #include "stm-keystore.h" to avoid conflicting definitions of HAL_OK
- * as well as circular dependencies I guess.
- */
-#define N25Q128_PAGE_SIZE		0x100		// 256
-#define N25Q128_SECTOR_SIZE		0x10000		// 65536
-#define N25Q128_NUM_SECTORS		0x100		// 256
-#define KEYSTORE_PAGE_SIZE		   N25Q128_PAGE_SIZE
-#define KEYSTORE_SECTOR_SIZE		   N25Q128_SECTOR_SIZE
-#define KEYSTORE_NUM_SECTORS		   N25Q128_NUM_SECTORS
-extern int keystore_check_id(void);
-extern int keystore_read_data(uint32_t offset, uint8_t *buf, const uint32_t len);
-extern int keystore_write_data(uint32_t offset, const uint8_t *buf, const uint32_t len);
-extern int keystore_erase_sectors(uint32_t start, uint32_t stop);
 
 #define PAGE_SIZE_MASK			(KEYSTORE_PAGE_SIZE - 1)
 
@@ -170,7 +159,7 @@ hal_error_t _write_data_to_flash(const uint32_t offset, const uint8_t *data, con
         }
     }
 
-    return HAL_OK;
+    return LIBHAL_OK;
 }
 
 /*
@@ -196,7 +185,7 @@ hal_error_t _write_db_to_flash(const uint32_t sector_offset)
 
     /* Write PINs into the second of the two reserved pages at the start of the sector. */
     offset = sector_offset + KEYSTORE_PAGE_SIZE;
-    if ((status = _write_data_to_flash(offset, page_buf, sizeof(page_buf))) != HAL_OK) {
+    if ((status = _write_data_to_flash(offset, page_buf, sizeof(page_buf))) != LIBHAL_OK) {
         return status;
     }
 
@@ -208,12 +197,12 @@ hal_error_t _write_db_to_flash(const uint32_t sector_offset)
 
         offset += sector_offset;
 
-        if ((status =_write_data_to_flash(offset, (uint8_t *) &db->keys[i], sizeof(*db->keys))) != HAL_OK) {
+        if ((status =_write_data_to_flash(offset, (uint8_t *) &db->keys[i], sizeof(*db->keys))) != LIBHAL_OK) {
             return status;
         }
     }
 
-    return HAL_OK;
+    return LIBHAL_OK;
 }
 
 hal_error_t hal_ks_set_keydb(const hal_ks_key_t * const key,
@@ -251,7 +240,7 @@ hal_error_t hal_ks_set_keydb(const hal_ks_key_t * const key,
 
     if (tmp_key->in_use == 0xff) {
         /* Key slot was unused in flash. Write the new key there. */
-        if ((status = _write_data_to_flash(offset, (uint8_t *) key, sizeof(*db->keys))) != HAL_OK) {
+        if ((status = _write_data_to_flash(offset, (uint8_t *) key, sizeof(*db->keys))) != LIBHAL_OK) {
             return status;
         }
     } else {
@@ -260,12 +249,12 @@ hal_error_t hal_ks_set_keydb(const hal_ks_key_t * const key,
                                    active_sector_offset / KEYSTORE_SECTOR_SIZE) != 1) {
             return HAL_ERROR_KEYSTORE_ACCESS;
         }
-        if ((status =_write_db_to_flash(active_sector_offset)) != HAL_OK) {
+        if ((status =_write_db_to_flash(active_sector_offset)) != LIBHAL_OK) {
             return status;
         }
     }
 
-    return HAL_OK;
+    return LIBHAL_OK;
 }
 
 hal_error_t hal_ks_del_keydb(const int loc)
@@ -336,7 +325,7 @@ hal_error_t hal_ks_get_kek(uint8_t *kek,
   #warning Faking the Key Encryption Key
   memset(kek, 4, len);
 
-  return HAL_OK;
+  return LIBHAL_OK;
 }
 
 
