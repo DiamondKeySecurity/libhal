@@ -1031,7 +1031,7 @@ static hal_error_t sw_hash_core_sha256(hal_hash_state_t *state)
   uint32_t *H = (uint32_t *) state->core_state, S[8], W[64];
 
   if (state->block_count == 0) {
-    switch (state->driver_ctrl_mode & SHA256_MODE_MASK) {
+    switch (state->driver->ctrl_mode & SHA256_MODE_MASK) {
     case SHA256_MODE_SHA_224:   memcpy(H, sha224_iv, sizeof(sha224_iv)); break;
     case SHA256_MODE_SHA_256:   memcpy(H, sha256_iv, sizeof(sha256_iv)); break;
     default:                    return HAL_ERROR_IMPOSSIBLE;
