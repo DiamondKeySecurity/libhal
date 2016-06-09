@@ -64,14 +64,15 @@ uint32_t _active_sector_offset()
     return FLASH_SECTOR_1_OFFSET;
 }
 
-uint32_t _get_key_offset(uint32_t num, size_t elem_size)
+uint32_t _get_key_offset(uint32_t num)
 {
     /* Reserve first two pages for flash sector state, PINs and future additions.
      * The three PINs alone currently occupy 3 * (64 + 16 + 4) bytes (252).
      */
     uint32_t offset = KEYSTORE_PAGE_SIZE * 2;
-    uint32_t bytes_per_elem = KEYSTORE_PAGE_SIZE * ((elem_size / KEYSTORE_PAGE_SIZE) + 1);
-    offset += num * bytes_per_elem;
+    uint32_t key_size = sizeof(*db->keys);
+    uint32_t bytes_per_key = KEYSTORE_PAGE_SIZE * ((key_size / KEYSTORE_PAGE_SIZE) + 1);
+    offset += num * bytes_per_key;
     return offset;
 }
 
@@ -80,6 +81,8 @@ const hal_ks_keydb_t *hal_ks_get_keydb(void)
     uint32_t offset, i, idx = 0, active_sector_offset;
     hal_ks_key_t *key;
     uint8_t page_buf[KEYSTORE_PAGE_SIZE];
+
+    memset(db, 0, sizeof(*db));
 
     if (keystore_check_id() != 1) return NULL;
 
@@ -96,9 +99,8 @@ const hal_ks_keydb_t *hal_ks_get_keydb(void)
     memcpy(&db->user_pin, page_buf + offset, sizeof(db->user_pin));
 
     for (i = 0; i < sizeof(db->keys) / sizeof(*db->keys); i++) {
-        offset = _get_key_offset(i, sizeof(*key));
+        offset = _get_key_offset(i);
         if (offset > KEYSTORE_SECTOR_SIZE) {
-            memset(&db->keys[idx], 0, sizeof(*db->keys));
             idx++;
             continue;
         }
@@ -110,19 +112,17 @@ const hal_ks_keydb_t *hal_ks_get_keydb(void)
         key = (hal_ks_key_t *) page_buf;
         if (key->in_use == 0xff) {
             /* unprogrammed data */
-            memset(&db->keys[idx], 0, sizeof(*db->keys));
             idx++;
             continue;
         }
 
         if (key->in_use == 1) {
-            key = &db->keys[idx++];
-            uint8_t *dst = (uint8_t *) key;
-            uint32_t to_read = sizeof(*key);
+            uint8_t *dst = (uint8_t *) &db->keys[idx];
+            uint32_t to_read = sizeof(*db->keys);
 
-            /* Put first page into place */
+            /* We already have the first page in page_buf. Put it into place. */
             memcpy(dst, page_buf, sizeof(page_buf));
-            to_read -= KEYSTORE_PAGE_SIZE;
+            to_read -= sizeof(page_buf);
             dst += sizeof(page_buf);
 
             /* Read as many more full pages as possible */
@@ -132,10 +132,11 @@ const hal_ks_keydb_t *hal_ks_get_keydb(void)
 
             if (to_read) {
                 /* Partial last page. We can only read full pages so load it into page_buf. */
-                if (keystore_read_data(offset + sizeof(*key) - to_read, page_buf, sizeof(page_buf)) != 1) return NULL;
+                if (keystore_read_data(offset + sizeof(*db->keys) - to_read, page_buf, sizeof(page_buf)) != 1) return NULL;
                 memcpy(dst, page_buf, to_read);
             }
         }
+        idx++;
     }
 
     return db;
@@ -190,7 +191,7 @@ hal_error_t _write_db_to_flash(const uint32_t sector_offset)
     }
 
     for (i = 0; i < sizeof(db->keys) / sizeof(*db->keys); i++) {
-        offset = _get_key_offset(i, sizeof(*db->keys));
+        offset = _get_key_offset(i);
         if (offset > KEYSTORE_SECTOR_SIZE) {
             return HAL_ERROR_BAD_ARGUMENTS;
         }
@@ -217,7 +218,7 @@ hal_error_t hal_ks_set_keydb(const hal_ks_key_t * const key,
     if (key == NULL || loc < 0 || loc >= sizeof(db->keys)/sizeof(*db->keys) || (!key->in_use != !updating))
         return HAL_ERROR_BAD_ARGUMENTS;
 
-    offset = _get_key_offset(loc, sizeof(*key));
+    offset = _get_key_offset(loc);
     if (offset > KEYSTORE_SECTOR_SIZE) return HAL_ERROR_BAD_ARGUMENTS;
 
     active_sector_offset = _active_sector_offset();
@@ -264,7 +265,7 @@ hal_error_t hal_ks_del_keydb(const int loc)
   if (loc < 0 || loc >= sizeof(db->keys)/sizeof(*db->keys))
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  offset = _get_key_offset(loc, sizeof(*db->keys));
+  offset = _get_key_offset(loc);
   if (offset > KEYSTORE_SECTOR_SIZE) {
       return HAL_ERROR_BAD_ARGUMENTS;
   }
