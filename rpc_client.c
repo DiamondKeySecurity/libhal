@@ -971,15 +971,14 @@ const hal_rpc_pkey_dispatch_t hal_rpc_mixed_pkey_dispatch = {
 
 #endif /* RPC_CLIENT != RPC_CLIENT_LOCAL */
 
-#if RPC_CLIENT == RPC_CLIENT_LOCAL
-const hal_rpc_misc_dispatch_t * hal_rpc_misc_dispatch = &hal_rpc_local_misc_dispatch;
-const hal_rpc_hash_dispatch_t * hal_rpc_hash_dispatch = &hal_rpc_local_hash_dispatch;
-const hal_rpc_pkey_dispatch_t * hal_rpc_pkey_dispatch = &hal_rpc_local_pkey_dispatch;
-#elif RPC_CLIENT == RPC_CLIENT_REMOTE
+
+#if RPC_CLIENT == RPC_CLIENT_REMOTE
 const hal_rpc_misc_dispatch_t * hal_rpc_misc_dispatch = &hal_rpc_remote_misc_dispatch;
 const hal_rpc_hash_dispatch_t * hal_rpc_hash_dispatch = &hal_rpc_remote_hash_dispatch;
 const hal_rpc_pkey_dispatch_t * hal_rpc_pkey_dispatch = &hal_rpc_remote_pkey_dispatch;
-#elif RPC_CLIENT == RPC_CLIENT_MIXED
+#endif
+
+#if RPC_CLIENT == RPC_CLIENT_MIXED
 const hal_rpc_misc_dispatch_t * hal_rpc_misc_dispatch = &hal_rpc_remote_misc_dispatch;
 const hal_rpc_hash_dispatch_t * hal_rpc_hash_dispatch = &hal_rpc_local_hash_dispatch;
 const hal_rpc_pkey_dispatch_t * hal_rpc_pkey_dispatch = &hal_rpc_mixed_pkey_dispatch;
