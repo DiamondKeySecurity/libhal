@@ -164,7 +164,7 @@ CFLAGS		+= -DRPC_CLIENT=${RPC_CLIENT_FLAG}
 endif
 
 TFMDIR		:= $(abspath ../thirdparty/libtfm)
-CFLAGS		+= -g3 -Wall -std=c99 -I${TFMDIR}
+CFLAGS		+= -g3 -Wall -std=c99 -Wno-strict-aliasing -I${TFMDIR}
 LDFLAGS		:= -g3 -L${TFMDIR} -ltfm
 
 CFLAGS		+= -DHAL_STATIC_HASH_STATE_BLOCKS=${STATIC_HASH_STATE_BLOCKS}
