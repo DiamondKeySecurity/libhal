@@ -119,6 +119,10 @@ endif
 #   loopback: communicate over loopback socket on Novena
 #   serial: communicate over USB in serial pass-through mode
 #   daemon: communicate over USB via a daemon, to arbitrate multiple clients
+#
+# RPC client locality flags passed here via CFLAGS are tested as
+# integers in the C preprocessor, so the symbols we pass must be
+# defined as macros in the C code, not enum tokens.
 
 ifneq (${RPC_CLIENT},none)
   OBJ += rpc_api.o xdr.o
@@ -153,20 +157,16 @@ endif
 ifeq (${RPC_CLIENT},none)
   OBJ += ${CORE_OBJ}
 else ifeq (${RPC_CLIENT},local)
-  OBJ += ${CORE_OBJ} ${RPC_CLIENT_OBJS} ${RPC_DISPATCH_OBJS}
+  OBJ += ${CORE_OBJ} ${RPC_CLIENT_OBJ} ${RPC_DISPATCH_OBJ}
   CFLAGS += -DRPC_CLIENT=RPC_CLIENT_LOCAL
 else ifeq (${RPC_CLIENT},remote)
-  OBJ += ${RPC_CLIENT_OBJS}
+  OBJ += ${RPC_CLIENT_OBJ}
   CFLAGS += -DRPC_CLIENT=RPC_CLIENT_REMOTE -DHAL_RSA_USE_MODEXP=0
 else ifeq (${RPC_CLIENT},mixed)
-  OBJ += ${RPC_CLIENT_OBJS} ${RPC_DISPATCH_OBJS}
+  OBJ += ${RPC_CLIENT_OBJ} ${RPC_DISPATCH_OBJ}
   CFLAGS += -DRPC_CLIENT=RPC_CLIENT_MIXED -DHAL_RSA_USE_MODEXP=0
   KS = volatile
 endif
-
-# RPC client locality, for rpc_client.c.  Value passed here is tested
-# as an integer in the C preprocessor, so the symbols used here need
-# to be defined as macros in the C code, not enum tokens.
 
 TFMDIR		:= $(abspath ../thirdparty/libtfm)
 CFLAGS		+= -g3 -Wall -std=c99 -Wno-strict-aliasing -I${TFMDIR}
