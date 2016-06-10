@@ -37,24 +37,42 @@ STATIC_PKEY_STATE_BLOCKS = 6
 INC		= hal.h hal_internal.h
 LIB		= libhal.a
 
-USAGE = "usage: make [IO_BUS=eim|i2c|fmc] [RPC_CLIENT=local|remote|mixed] [RPC_SERVER=yes] [KS=mmap|volatile|flash]"
+# Error checking on known control options, some of which allow the user entirely too much rope.
 
-OBJ = errorstrings.o
-CORE_OBJ = core.o ${HASH_OBJ} ${MISC_OBJ} ${PKEY_OBJ} ${PKEY2_OBJ} ${KS_OBJ} ${IO_OBJ} ${MKMIF_OBJ}
-HASH_OBJ = hash.o
-MISC_OBJ = csprng.o pbkdf2.o
-PKEY_OBJ = asn1.o ecdsa.o rsa.o
-PKEY2_OBJ = aes_keywrap.o modexp.o
-MKMIF_OBJ = mkmif.o
+USAGE := "usage: make [IO_BUS=eim|i2c|fmc] [RPC_CLIENT=none|local|remote|mixed] [RPC_SERVER=no|yes] [KS=volatile|mmap|flash] [RPC_TRANSPORT=none|loopback|serial|daemon]"
+
+IO_BUS		?= eim
+KS		?= mmap
+RPC_CLIENT	?= none
+RPC_SERVER	?= $(if $(filter local,${RPC_CLIENT}),yes,no)
+RPC_TRANSPORT	?= daemon
+
+ifeq (,$(and \
+	$(filter	none eim i2c fmc		,${IO_BUS}),\
+	$(filter	none local remote mixed		,${RPC_CLIENT}),\
+	$(filter	no yes				,${RPC_SERVER}),\
+	$(filter	volatile mmap flash		,${KS}),\
+	$(filter	none loopback serial daemon	,${RPC_TRANSPORT})))
+  $(error ${USAGE})
+endif
+
+ifneq (${RPC_SERVER},$(if $(filter local,${RPC_CLIENT}),yes,no))
+  $(error RPC_SERVER=yes is probably only useful with RPC_CLIENT=local)
+endif
+
+WANT_RTL_CODE := $(if $(filter none local,${RPC_CLIENT}),yes,no)
+
+OBJ = errorstrings.o hash.o asn1.o ecdsa.o rsa.o ${KS_OBJ}
+CORE_OBJ = core.o csprng.o pbkdf2.o aes_keywrap.o modexp.o mkmif.o ${IO_OBJ}
 
 # I/O bus to the FPGA
 #
-# IO_BUS = eim | i2c | fmc
+# IO_BUS = none | eim | i2c | fmc
+#  none: no FPGA I/O bus
 #   eim: EIM bus from Novena
 #   i2c: older I2C bus from Novena
 #   fmc: FMC bus from dev-bridge and alpha boards
 
-IO_BUS ?= eim
 ifeq (${IO_BUS},eim)
   IO_OBJ = hal_io_eim.o novena-eim.o
 else ifeq (${IO_BUS},i2c)
@@ -80,7 +98,7 @@ endif
 # and we haven't yet written the flash code for the bridge board.
 
 KS_OBJ = ks.o
-KS ?= mmap
+
 ifeq (${KS},mmap)
   KS_OBJ += ks_mmap.o
 else ifeq (${KS},volatile)
@@ -89,79 +107,66 @@ else ifeq (${KS},flash)
   KS_OBJ += ks_flash.o
 endif
 
-# RPC_CLIENT = local | remote | mixed
+# RPC_CLIENT = none | local | remote | mixed
+#   none: Build without RPC client
 #   local: Build for Novena or dev-bridge, access FPGA cores directly.
 #   remote: Build for other host, communicate with RPC server.
 #   mixed: Do hashing locally in software, other functions remotely.
 #
-# RPC_SERVER = yes
+# RPC_SERVER = no | yes
 #
 # RPC_TRANSPORT = loopback | serial | daemon
 #   loopback: communicate over loopback socket on Novena
 #   serial: communicate over USB in serial pass-through mode
 #   daemon: communicate over USB via a daemon, to arbitrate multiple clients
 
-RPC_TRANSPORT ?= daemon
+ifneq (${RPC_CLIENT},none)
+  OBJ += rpc_api.o xdr.o
+endif
 
-RPC_CLIENT_OBJ = rpc_api.o rpc_client.o xdr.o
+ifeq (${RPC_TRANSPORT},serial)
+  OBJ += slip.o
+endif
+
+RPC_CLIENT_OBJ = rpc_client.o
 ifeq (${RPC_TRANSPORT},loopback)
   RPC_CLIENT_OBJ += rpc_client_loopback.o
 else ifeq (${RPC_TRANSPORT},serial)
-  RPC_CLIENT_OBJ += rpc_client_serial.o slip.o
+  RPC_CLIENT_OBJ += rpc_client_serial.o
 else ifeq (${RPC_TRANSPORT},daemon)
   RPC_CLIENT_OBJ += rpc_client_daemon.o
 endif
 
 RPC_DISPATCH_OBJ = rpc_hash.o rpc_misc.o rpc_pkey.o
 
-RPC_SERVER_OBJ = rpc_api.o rpc_server.o xdr.o ${RPC_DISPATCH_OBJ}
+RPC_SERVER_OBJ = rpc_server.o
 ifeq (${RPC_TRANSPORT},loopback)
   RPC_SERVER_OBJ += rpc_server_loopback.o
 else ifeq (${RPC_TRANSPORT},serial)
-  RPC_SERVER_OBJ += rpc_server_serial.o slip.o
+  RPC_SERVER_OBJ += rpc_server_serial.o
 endif
 
-# Not building any of the RPC stuff, access FPGA cores directly.
-ifndef RPC_CLIENT
-  ifndef RPC_SERVER
-    OBJ += ${CORE_OBJ}
-  endif
+ifeq (${RPC_SERVER},yes)
+  OBJ += ${RPC_SERVER_OBJ}
 endif
 
-# Building the RPC server.
-ifdef RPC_SERVER
-  OBJ += ${CORE_OBJ} ${RPC_SERVER_OBJ}
-endif
-
-# Building the RPC client, in all its variations.
-ifdef RPC_CLIENT
-  OBJ += ${RPC_CLIENT_OBJ}
-  ifeq (${RPC_CLIENT},local)
-    OBJ += ${CORE_OBJ} ${RPC_DISPATCH_OBJ}
-  else
-    CFLAGS += -DHAL_RSA_USE_MODEXP=0
-    OBJ +=  ${PKEY_OBJ}
-    ifeq (${RPC_CLIENT},mixed)
-      KS = volatile
-      OBJ += ${HASH_OBJ} ${PKEY2_OBJ} ${RPC_DISPATCH_OBJ} ${KS_OBJ}
-    endif
-  endif
-endif
-
-# RPC client locality, for rpc_client.c. This has to be kept in sync with
-# hal_internal.h. Yeah, it's ugly, but the C preprocessor can only
-# compare integers, not strings.
-
-ifeq (${RPC_CLIENT},local)
-  RPC_CLIENT_FLAG = 0
+ifeq (${RPC_CLIENT},none)
+  OBJ += ${CORE_OBJ}
+else ifeq (${RPC_CLIENT},local)
+  OBJ += ${CORE_OBJ} ${RPC_CLIENT_OBJS} ${RPC_DISPATCH_OBJS}
+  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_LOCAL
 else ifeq (${RPC_CLIENT},remote)
-  RPC_CLIENT_FLAG = 1
+  OBJ += ${RPC_CLIENT_OBJS}
+  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_REMOTE -DHAL_RSA_USE_MODEXP=0
 else ifeq (${RPC_CLIENT},mixed)
-  RPC_CLIENT_FLAG = 2
+  OBJ += ${RPC_CLIENT_OBJS} ${RPC_DISPATCH_OBJS}
+  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_MIXED -DHAL_RSA_USE_MODEXP=0
+  KS = volatile
 endif
-ifdef RPC_CLIENT_FLAG
-CFLAGS		+= -DRPC_CLIENT=${RPC_CLIENT_FLAG}
-endif
+
+# RPC client locality, for rpc_client.c.  Value passed here is tested
+# as an integer in the C preprocessor, so the symbols used here need
+# to be defined as macros in the C code, not enum tokens.
 
 TFMDIR		:= $(abspath ../thirdparty/libtfm)
 CFLAGS		+= -g3 -Wall -std=c99 -Wno-strict-aliasing -I${TFMDIR}
