@@ -39,20 +39,22 @@ LIB		= libhal.a
 
 # Error checking on known control options, some of which allow the user entirely too much rope.
 
-USAGE := "usage: make [IO_BUS=eim|i2c|fmc] [RPC_CLIENT=none|local|remote|mixed] [RPC_SERVER=no|yes] [KS=volatile|mmap|flash] [RPC_TRANSPORT=none|loopback|serial|daemon]"
+USAGE := "usage: ${MAKE} [IO_BUS=eim|i2c|fmc] [RPC_CLIENT=none|local|remote|mixed] [RPC_SERVER=no|yes] [KS=volatile|mmap|flash] [RPC_TRANSPORT=none|loopback|serial|daemon] [MODEXP_CORE=no|yes]"
 
 IO_BUS		?= eim
 KS		?= mmap
 RPC_CLIENT	?= none
 RPC_SERVER	?= $(if $(filter local,${RPC_CLIENT}),yes,no)
 RPC_TRANSPORT	?= daemon
+MODEXP_CORE	?= no
 
 ifeq (,$(and \
 	$(filter	none eim i2c fmc		,${IO_BUS}),\
 	$(filter	none local remote mixed		,${RPC_CLIENT}),\
 	$(filter	no yes				,${RPC_SERVER}),\
 	$(filter	volatile mmap flash		,${KS}),\
-	$(filter	none loopback serial daemon	,${RPC_TRANSPORT})))
+	$(filter	none loopback serial daemon	,${RPC_TRANSPORT}),\
+	$(filter	no yes				,${MODEXP_CORE})))
   $(error ${USAGE})
 endif
 
@@ -60,9 +62,25 @@ ifneq (${RPC_SERVER},$(if $(filter local,${RPC_CLIENT}),yes,no))
   $(error RPC_SERVER=yes is probably only useful with RPC_CLIENT=local)
 endif
 
-WANT_RTL_CODE := $(if $(filter none local,${RPC_CLIENT}),yes,no)
+# Whether the RSA code should use the ModExp | ModExpS6 | ModExpA7 core.
+
+ifeq (${MODEXP_CORE},yes)
+  RSA_USE_MODEXP_CORE := 1
+else
+  RSA_USE_MODEXP_CORE := 0
+endif
+
+# Object files to build, initialized with ones we always want.
+# There's a balance here between skipping files we don't strictly
+# need and reducing the number of unnecessary conditionals in this
+# makefile, so the working definition of "always want" is sometimes
+# just "building this is harmless even if we don't use it."
 
 OBJ = errorstrings.o hash.o asn1.o ecdsa.o rsa.o ${KS_OBJ}
+
+# Object files to build when we're on a platform with direct access
+# to our hardware (Verilog) cores.
+
 CORE_OBJ = core.o csprng.o pbkdf2.o aes_keywrap.o modexp.o mkmif.o ${IO_OBJ}
 
 # I/O bus to the FPGA
@@ -156,9 +174,10 @@ endif
 
 ifeq (${RPC_CLIENT},none)
   OBJ += ${CORE_OBJ}
+  CFLAGS += -DHAL_RSA_USE_MODEXP=${RSA_USE_MODEXP_CORE}
 else ifeq (${RPC_CLIENT},local)
   OBJ += ${CORE_OBJ} ${RPC_CLIENT_OBJ} ${RPC_DISPATCH_OBJ}
-  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_LOCAL
+  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_LOCAL -DHAL_RSA_USE_MODEXP=${RSA_USE_MODEXP_CORE}
 else ifeq (${RPC_CLIENT},remote)
   OBJ += ${RPC_CLIENT_OBJ}
   CFLAGS += -DRPC_CLIENT=RPC_CLIENT_REMOTE -DHAL_RSA_USE_MODEXP=0
@@ -232,3 +251,6 @@ tags: TAGS
 
 TAGS: *.[ch] tests/*.[ch] utils/*.[ch]
 	etags $^
+
+help usage:
+	@echo ${USAGE}
