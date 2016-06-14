@@ -197,7 +197,8 @@ static hal_error_t modexp(const hal_core_t *core,
 {
   hal_error_t err = HAL_OK;
 
-  if ((err = hal_core_check_name(&core, MODEXPS6_NAME)) != HAL_OK)
+  if (((err = hal_core_check_name(&core, MODEXPS6_NAME)) != HAL_OK) &&
+      ((err = hal_core_check_name(&core, MODEXPA7_NAME)) != HAL_OK))
     return err;
 
   assert(msg != NULL && exp != NULL && mod != NULL && res != NULL);

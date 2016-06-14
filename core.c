@@ -108,6 +108,7 @@ static int name_matches(const hal_core_t *const core, const char * const name)
 static const struct { const char *name; hal_addr_t extra; } gaps[] = {
   { "csprng",  11 * CORE_SIZE }, /* empty slots after csprng */
   { "modexps6", 3 * CORE_SIZE }, /* ModexpS6 uses four slots */
+  { "modexpa7", 3 * CORE_SIZE }, /* ModexpA7 uses four slots */
 };
 
 static hal_core_t *probe_cores(void)

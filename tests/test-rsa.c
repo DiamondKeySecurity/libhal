@@ -299,6 +299,8 @@ static int test_rsa(const hal_core_t *core, const rsa_tc_t * const tc)
 int main(int argc, char *argv[])
 {
   const hal_core_t *core = hal_core_find(MODEXPS6_NAME, NULL);
+  if (core == NULL)
+      core = hal_core_find(MODEXPA7_NAME, NULL);
   const hal_core_info_t *core_info = hal_core_info(core);
 
   if (core_info != NULL)
