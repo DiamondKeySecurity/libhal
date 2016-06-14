@@ -32,16 +32,24 @@ LIB	= ../libhal.a
 
 # Which tests to build depends on how the library was compiled.
 
-ifeq (${RPC_SERVER},yes)
-  BIN += test-rpc_server
-endif
+CORE_TESTS	= test-aes-key-wrap test-hash test-pbkdf2 test-ecdsa test-bus test-trng test-rsa test-mkmif
+SERVER_TESTS	= test-rpc_server
+CLIENT_TESTS	= test-rpc_hash test-rpc_pkey test-rpc_get_version test-rpc_get_random
 
-ifeq (${RPC_CLIENT},none)
-  BIN += test-aes-key-wrap test-hash test-pbkdf2 test-ecdsa test-bus test-trng test-rsa
-endif
+ALL_TESTS	= ${CORE_TESTS} ${SERVER_TESTS} ${CLIENT_TESTS}
 
-ifeq (${RPC_CLIENT},local)
-  BIN += test-rpc_hash test-rpc_pkey test-rpc_get_version test-rpc_get_random
+ifeq "${RPC_MODE}" "none"
+
+  BIN += ${CORE_TESTS}
+
+else ifeq "${RPC_MODE}" "server"
+
+  BIN += ${CORE_TESTS} ${SERVER_TESTS}
+
+else
+
+  BIN += ${CLIENT_TESTS}
+
 endif
 
 CFLAGS	= -g3 -Wall -fPIC -std=c99 -I..
@@ -51,8 +59,8 @@ all: ${BIN}
 test: all
 	for i in ${BIN}; do (set -x; ./$$i); done
 
-clean:
-	rm -f *.o ${BIN}
+clean distclean:
+	rm -f *.o ${ALL_TESTS}
 
 ${BIN}: %: %.o ${LIB}
 	${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}
