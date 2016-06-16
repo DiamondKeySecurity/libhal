@@ -90,8 +90,14 @@
 #define CHACHA_NAME             "chacha  "
 #define CHACHA_VERSION          "0.80"
 
-#define MODEXPS6_NAME		"modexps6"
-#define MODEXPS6_VERSION	"0.10"
+#define MODEXP_NAME             "modexp"
+#define MODEXP_VERSION          "0.10"
+
+#define MODEXPS6_NAME           "modexps6"
+#define MODEXPS6_VERSION        "0.10"
+
+#define MODEXPA7_NAME           "modexpa7"
+#define MODEXPA7_VERSION        "0.10"
 
 #define MKMIF_NAME              "mkmif   "
 #define MKMIF_VERSION           "0.10"

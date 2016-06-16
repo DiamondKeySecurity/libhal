@@ -241,7 +241,7 @@ extern const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch, hal_rpc_remote
  * See code in rpc_pkey.c for how this flag fits into the pkey handle.
  */
 
-#define	HAL_PKEY_HANDLE_PROXIMATE_FLAG	(1 << 31)
+#define HAL_PKEY_HANDLE_PROXIMATE_FLAG  (1 << 31)
 
 /*
  * Keystore API.
@@ -257,9 +257,9 @@ extern const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch, hal_rpc_remote
  *
  * 2048-bit RSA:        1194 bytes
  * 4096-bit RSA:        2351 bytes
- * 8192-bit RSA:	4655 bytes
- * EC P-256:		 121 bytes
- * EC P-384:		 167 bytes
+ * 8192-bit RSA:        4655 bytes
+ * EC P-256:             121 bytes
+ * EC P-384:             167 bytes
  * EC P-521:             223 bytes
  *
  * Plus we need a bit of AES-keywrap overhead, since we're storing the
@@ -271,7 +271,7 @@ extern const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch, hal_rpc_remote
  * to keep them private, they don't require tamper-protected RAM.
  */
 
-#define	HAL_KS_WRAPPED_KEYSIZE  ((4655 + 15) & ~7)
+#define HAL_KS_WRAPPED_KEYSIZE  ((4655 + 15) & ~7)
 
 #ifndef HAL_STATIC_PKEY_STATE_BLOCKS
 #define HAL_STATIC_PKEY_STATE_BLOCKS 0
@@ -435,14 +435,17 @@ typedef enum {
     RPC_FUNC_PKEY_RENAME,
 } rpc_func_num_t;
 
-#define RPC_VERSION 0x00010000		/* 0.1.0.0 */
+#define RPC_VERSION 0x00010000          /* 0.1.0.0 */
 
-/* RPC client locality. These have to be defines rather than an enum,
+/*
+ * RPC client locality. These have to be defines rather than an enum,
  * because they're handled by the preprocessor.
  */
-#define RPC_CLIENT_LOCAL	0
-#define RPC_CLIENT_REMOTE	1
-#define RPC_CLIENT_MIXED	2
+
+#define RPC_CLIENT_LOCAL        0
+#define RPC_CLIENT_REMOTE       1
+#define RPC_CLIENT_MIXED        2
+#define RPC_CLIENT_NONE         3
 
 #endif /* _HAL_INTERNAL_H_ */
 

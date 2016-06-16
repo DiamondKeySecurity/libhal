@@ -197,7 +197,8 @@ static hal_error_t modexp(const hal_core_t *core,
 {
   hal_error_t err = HAL_OK;
 
-  if ((err = hal_core_check_name(&core, MODEXPS6_NAME)) != HAL_OK)
+  if (((err = hal_core_check_name(&core, MODEXPS6_NAME)) != HAL_OK) &&
+      ((err = hal_core_check_name(&core, MODEXPA7_NAME)) != HAL_OK))
     return err;
 
   assert(msg != NULL && exp != NULL && mod != NULL && res != NULL);
@@ -697,7 +698,7 @@ hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
 {
   hal_error_t err = HAL_OK;
 
-  if (key == NULL || der_len == NULL || key->type != HAL_KEY_TYPE_RSA_PRIVATE)
+  if (key == NULL || key->type != HAL_KEY_TYPE_RSA_PRIVATE)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   fp_int version[1] = INIT_FP_INT;
@@ -706,9 +707,9 @@ hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
    * Calculate data length.
    */
 
-  size_t vlen = 0;
+  size_t hlen = 0, vlen = 0;
 
-#define _(x) { size_t i; if ((err = hal_asn1_encode_integer(x, NULL, &i, der_max - vlen)) != HAL_OK) return err; vlen += i; }
+#define _(x) { size_t n; if ((err = hal_asn1_encode_integer(x, NULL, &n, der_max - vlen)) != HAL_OK) return err; vlen += n; }
   RSAPrivateKey_fields;
 #undef _
 
@@ -716,11 +717,11 @@ hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
    * Encode header.
    */
 
-  if ((err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, der, der_len, der_max))  != HAL_OK)
+  if ((err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, der, &hlen, der_max))  != HAL_OK)
     return err;
 
-  const size_t hlen = *der_len;
-  *der_len += vlen;
+  if (der_len != NULL)
+    *der_len = hlen + vlen;
 
   if (der == NULL)
     return HAL_OK;
@@ -731,7 +732,7 @@ hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
 
   der += hlen;
 
-#define _(x) { size_t i; if ((err = hal_asn1_encode_integer(x, der, &i, vlen)) != HAL_OK) return err; der += i; vlen -= i; }
+#define _(x) { size_t n; if ((err = hal_asn1_encode_integer(x, der, &n, vlen)) != HAL_OK) return err; der += n; vlen -= n; }
   RSAPrivateKey_fields;
 #undef _
 

@@ -738,9 +738,11 @@ void hal_rpc_server_main(void)
  * Dispatch vectors.
  */
 
+#if RPC_CLIENT == RPC_CLIENT_LOCAL
 const hal_rpc_misc_dispatch_t *hal_rpc_misc_dispatch = &hal_rpc_local_misc_dispatch;
 const hal_rpc_hash_dispatch_t *hal_rpc_hash_dispatch = &hal_rpc_local_hash_dispatch;
 const hal_rpc_pkey_dispatch_t *hal_rpc_pkey_dispatch = &hal_rpc_local_pkey_dispatch;
+#endif
 
 hal_error_t hal_rpc_server_init(void)
 {

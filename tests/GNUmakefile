@@ -29,21 +29,27 @@
 
 INC	= ../hal.h
 LIB	= ../libhal.a
-BIN	:= test-aes-key-wrap test-hash test-pbkdf2 test-ecdsa test-bus test-trng test-rsa
-ifndef RPC_SERVER
-  ifdef RPC_CLIENT
-    ifneq (${RPC_CLIENT},local)
-      # If we're only building a remote RPC client lib, don't include
-      # tests that access the FPGA cores.
-      BIN :=
-    endif
-  endif
-endif
-ifdef RPC_CLIENT
-  BIN	+= test-rpc_hash test-rpc_pkey test-rpc_get_version test-rpc_get_random
-endif
-ifdef RPC_SERVER
-  BIN	+= test-rpc_server
+
+# Which tests to build depends on how the library was compiled.
+
+CORE_TESTS	= test-aes-key-wrap test-hash test-pbkdf2 test-ecdsa test-bus test-trng test-rsa test-mkmif
+SERVER_TESTS	= test-rpc_server
+CLIENT_TESTS	= test-rpc_hash test-rpc_pkey test-rpc_get_version test-rpc_get_random
+
+ALL_TESTS	= ${CORE_TESTS} ${SERVER_TESTS} ${CLIENT_TESTS}
+
+ifeq "${RPC_MODE}" "none"
+
+  BIN += ${CORE_TESTS}
+
+else ifeq "${RPC_MODE}" "server"
+
+  BIN += ${CORE_TESTS} ${SERVER_TESTS}
+
+else
+
+  BIN += ${CLIENT_TESTS}
+
 endif
 
 CFLAGS	= -g3 -Wall -fPIC -std=c99 -I..
@@ -53,8 +59,8 @@ all: ${BIN}
 test: all
 	for i in ${BIN}; do (set -x; ./$$i); done
 
-clean:
-	rm -f *.o ${BIN}
+clean distclean:
+	rm -f *.o ${ALL_TESTS}
 
 ${BIN}: %: %.o ${LIB}
 	${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}

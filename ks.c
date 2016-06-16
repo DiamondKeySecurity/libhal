@@ -42,12 +42,28 @@
 
 #define KEK_LENGTH (bitsToBytes(256))
 
+/*
+ * In "remote" and "mixed" RPC modes we're a software only RPC client
+ * without (direct) access to secure hardware, thus there is no real
+ * point in encrypting keys.  As precautions, we (a) warn about this
+ * when configured in one of these modes, and (b) refuse to store any
+ * sort of private keys.
+ */
+
+#define USE_KEK (RPC_CLIENT != RPC_CLIENT_REMOTE && RPC_CLIENT != RPC_CLIENT_MIXED)
+
+#if !USE_KEK
+#warning ks.c compiled without KEK support and will only accept public keys -- this is normal for the host-side build of libhsm
+#endif
+
 static inline int acceptable_key_type(const hal_key_type_t type)
 {
   switch (type) {
+#if USE_KEK
   case HAL_KEY_TYPE_RSA_PRIVATE:
-  case HAL_KEY_TYPE_RSA_PUBLIC:
   case HAL_KEY_TYPE_EC_PRIVATE:
+#endif
+  case HAL_KEY_TYPE_RSA_PUBLIC:
   case HAL_KEY_TYPE_EC_PUBLIC:
     return 1;
   default:
@@ -96,6 +112,8 @@ hal_error_t hal_ks_store(const hal_key_type_t type,
   memset(&k, 0, sizeof(k));
   k.der_len = sizeof(k.der);
 
+#if USE_KEK
+
   uint8_t kek[KEK_LENGTH];
   size_t kek_len;
 
@@ -106,6 +124,16 @@ hal_error_t hal_ks_store(const hal_key_type_t type,
 
   if (err != HAL_OK)
     return err;
+
+#else /* USE_KEK */
+
+  if (der_len > k.der_len)
+    return HAL_ERROR_RESULT_TOO_LONG;
+
+  k.der_len = der_len;
+  memcpy(k.der, der, der_len);
+
+#endif /* USE_KEK */
 
   assert(name_len <= sizeof(k.name));
   memcpy(k.name, name, name_len);
@@ -199,6 +227,9 @@ hal_error_t hal_ks_fetch(const hal_key_type_t type,
     *der_len = k->der_len;
 
   if (der != NULL) {
+
+#if USE_KEK
+
     uint8_t kek[KEK_LENGTH];
     size_t kek_len, der_len_;
     hal_error_t err;
@@ -215,6 +246,18 @@ hal_error_t hal_ks_fetch(const hal_key_type_t type,
 
     if (err != HAL_OK)
       return err;
+
+#else /* USE_KEK */
+
+    if (k->der_len > der_max)
+      return HAL_ERROR_RESULT_TOO_LONG;
+
+    if (der_len != NULL)
+      *der_len = k->der_len;
+
+    memcpy(der, k->der, k->der_len);
+
+#endif /* USE_KEK */
   }
 
   return HAL_OK;

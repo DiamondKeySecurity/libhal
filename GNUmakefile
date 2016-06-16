@@ -37,29 +37,61 @@ STATIC_PKEY_STATE_BLOCKS = 6
 INC		= hal.h hal_internal.h
 LIB		= libhal.a
 
-USAGE = "usage: make [IO_BUS=eim|i2c|fmc] [RPC_CLIENT=local|remote|mixed] [RPC_SERVER=yes] [KS=mmap|volatile|flash]"
+# Error checking on known control options, some of which allow the user entirely too much rope.
 
-OBJ = errorstrings.o
-CORE_OBJ = core.o ${HASH_OBJ} ${MISC_OBJ} ${PKEY_OBJ} ${PKEY2_OBJ} ${KS_OBJ} ${IO_OBJ} ${MKMIF_OBJ}
-HASH_OBJ = hash.o
-MISC_OBJ = csprng.o pbkdf2.o
-PKEY_OBJ = asn1.o ecdsa.o rsa.o
-PKEY2_OBJ = aes_keywrap.o modexp.o
-MKMIF_OBJ = mkmif.o
+USAGE := "usage: ${MAKE} [IO_BUS=eim|i2c|fmc] [RPC_MODE=none|server|client-simple|client-mixed] [KS=volatile|mmap|flash] [RPC_TRANSPORT=none|loopback|serial|daemon] [MODEXP_CORE=no|yes]"
+
+IO_BUS		?= eim
+KS		?= volatile
+RPC_MODE	?= none
+RPC_TRANSPORT	?= daemon
+MODEXP_CORE	?= no
+
+ifeq (,$(and \
+	$(filter	none eim i2c fmc			,${IO_BUS}),\
+	$(filter	none server client-simple client-mixed	,${RPC_MODE}),\
+	$(filter	volatile mmap flash			,${KS}),\
+	$(filter	none loopback serial daemon		,${RPC_TRANSPORT}),\
+	$(filter	no yes					,${MODEXP_CORE})))
+  $(error ${USAGE})
+endif
+
+$(info Building libhal with configuration IO_BUS=${IO_BUS} RPC_MODE=${RPC_MODE} KS=${KS} RPC_TRANSPORT=${RPC_TRANSPORT} MODEXP_CORE=${MODEXP_CORE})
+
+# Whether the RSA code should use the ModExp | ModExpS6 | ModExpA7 core.
+
+ifeq "${MODEXP_CORE}" "yes"
+  RSA_USE_MODEXP_CORE := 1
+else
+  RSA_USE_MODEXP_CORE := 0
+endif
+
+# Object files to build, initialized with ones we always want.
+# There's a balance here between skipping files we don't strictly
+# need and reducing the number of unnecessary conditionals in this
+# makefile, so the working definition of "always want" is sometimes
+# just "building this is harmless even if we don't use it."
+
+OBJ = errorstrings.o hash.o asn1.o ecdsa.o rsa.o ${KS_OBJ}
+
+# Object files to build when we're on a platform with direct access
+# to our hardware (Verilog) cores.
+
+CORE_OBJ = core.o csprng.o pbkdf2.o aes_keywrap.o modexp.o mkmif.o ${IO_OBJ}
 
 # I/O bus to the FPGA
 #
-# IO_BUS = eim | i2c | fmc
-#   eim: EIM bus from Novena
-#   i2c: older I2C bus from Novena
-#   fmc: FMC bus from dev-bridge and alpha boards
+# IO_BUS = none | eim | i2c | fmc
+#  none:	No FPGA I/O bus
+#   eim:	EIM bus from Novena
+#   i2c:	Older I2C bus from Novena
+#   fmc:	FMC bus from dev-bridge and alpha boards
 
-IO_BUS ?= eim
-ifeq (${IO_BUS},eim)
+ifeq "${IO_BUS}" "eim"
   IO_OBJ = hal_io_eim.o novena-eim.o
-else ifeq (${IO_BUS},i2c)
+else ifeq "${IO_BUS}" "i2c"
   IO_OBJ = hal_io_i2c.o
-else ifeq (${IO_BUS},fmc)
+else ifeq "${IO_BUS}" "fmc"
   IO_OBJ = hal_io_fmc.o
 endif
 
@@ -67,7 +99,7 @@ endif
 # hard-to-debug function pointer errors. OTOH, if we're building for Linux
 # (even on the Novena), we want to make it possible to build a shared library.
 
-ifneq (${IO_BUS},fmc)
+ifneq "${IO_BUS}" "fmc"
   CFLAGS += -fPIC
 endif
 
@@ -80,91 +112,75 @@ endif
 # and we haven't yet written the flash code for the bridge board.
 
 KS_OBJ = ks.o
-KS ?= mmap
-ifeq (${KS},mmap)
+
+ifeq "${KS}" "mmap"
   KS_OBJ += ks_mmap.o
-else ifeq (${KS},volatile)
+else ifeq "${KS}" "volatile"
   KS_OBJ += ks_volatile.o
-else ifeq (${KS},flash)
+else ifeq "${KS}" "flash"
   KS_OBJ += ks_flash.o
 endif
 
-# RPC_CLIENT = local | remote | mixed
-#   local: Build for Novena or dev-bridge, access FPGA cores directly.
-#   remote: Build for other host, communicate with RPC server.
-#   mixed: Do hashing locally in software, other functions remotely.
-#
-# RPC_SERVER = yes
+# RPC_MODE = none | server | client-simple | client-mixed
+#   none:		Build without RPC client, use cores directly.
+#   server:		Build for server side of RPC (HSM), use cores directly.
+#   client-simple:	Build for other host, communicate with cores via RPC server.
+#   client-mixed:	Like client-simple but do hashing locally in software and
+#			support a local keystore (for PKCS #11 public keys, etc)
 #
 # RPC_TRANSPORT = loopback | serial | daemon
-#   loopback: communicate over loopback socket on Novena
-#   serial: communicate over USB in serial pass-through mode
-#   daemon: communicate over USB via a daemon, to arbitrate multiple clients
+#   loopback:		Communicate over loopback socket on Novena
+#   serial:		Communicate over USB in serial pass-through mode
+#   daemon:		Communicate over USB via a daemon, to arbitrate multiple clients
+#
+# Note that RPC_MODE setting also controls the RPC_CLIENT setting passed to the C
+# preprocessor via CFLAGS.  Whatever we pass here must evaluate to an integer in
+# the C preprocessor: we can use symbolic names so long as they're defined as macros
+# in the C code, but we can't use things like C enum symbols.
 
-RPC_TRANSPORT ?= daemon
+ifneq "${RPC_MODE}" "none"
+  OBJ += rpc_api.o xdr.o
+endif
 
-RPC_CLIENT_OBJ = rpc_api.o rpc_client.o xdr.o
-ifeq (${RPC_TRANSPORT},loopback)
+ifeq "${RPC_TRANSPORT}" "serial"
+  OBJ += slip.o
+endif
+
+RPC_CLIENT_OBJ = rpc_client.o
+ifeq "${RPC_TRANSPORT}" "loopback"
   RPC_CLIENT_OBJ += rpc_client_loopback.o
-else ifeq (${RPC_TRANSPORT},serial)
-  RPC_CLIENT_OBJ += rpc_client_serial.o slip.o
-else ifeq (${RPC_TRANSPORT},daemon)
+else ifeq "${RPC_TRANSPORT}" "serial"
+  RPC_CLIENT_OBJ += rpc_client_serial.o
+else ifeq "${RPC_TRANSPORT}" "daemon"
   RPC_CLIENT_OBJ += rpc_client_daemon.o
 endif
 
 RPC_DISPATCH_OBJ = rpc_hash.o rpc_misc.o rpc_pkey.o
 
-RPC_SERVER_OBJ = rpc_api.o rpc_server.o xdr.o ${RPC_DISPATCH_OBJ}
-ifeq (${RPC_TRANSPORT},loopback)
+RPC_SERVER_OBJ = rpc_server.o
+ifeq "${RPC_TRANSPORT}" "loopback"
   RPC_SERVER_OBJ += rpc_server_loopback.o
-else ifeq (${RPC_TRANSPORT},serial)
-  RPC_SERVER_OBJ += rpc_server_serial.o slip.o
+else ifeq "${RPC_TRANSPORT}" "serial"
+  RPC_SERVER_OBJ += rpc_server_serial.o
 endif
 
-# Not building any of the RPC stuff, access FPGA cores directly.
-ifndef RPC_CLIENT
-  ifndef RPC_SERVER
-    OBJ += ${CORE_OBJ}
-  endif
-endif
-
-# Building the RPC server.
-ifdef RPC_SERVER
-  OBJ += ${CORE_OBJ} ${RPC_SERVER_OBJ}
-endif
-
-# Building the RPC client, in all its variations.
-ifdef RPC_CLIENT
+ifeq "${RPC_MODE}" "none"
+  OBJ += ${CORE_OBJ}
+  CFLAGS += -DHAL_RSA_USE_MODEXP=${RSA_USE_MODEXP_CORE}
+else ifeq "${RPC_MODE}" "server"
+  OBJ += ${CORE_OBJ} ${RPC_SERVER_OBJ} ${RPC_DISPATCH_OBJ}
+  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_LOCAL -DHAL_RSA_USE_MODEXP=${RSA_USE_MODEXP_CORE}
+else ifeq "${RPC_MODE}" "client-simple"
   OBJ += ${RPC_CLIENT_OBJ}
-  ifeq (${RPC_CLIENT},local)
-    OBJ += ${CORE_OBJ} ${RPC_DISPATCH_OBJ}
-  else
-    CFLAGS += -DHAL_RSA_USE_MODEXP=0
-    OBJ +=  ${PKEY_OBJ}
-    ifeq (${RPC_CLIENT},mixed)
-      KS = volatile
-      OBJ += ${HASH_OBJ} ${PKEY2_OBJ} ${RPC_DISPATCH_OBJ} ${KS_OBJ}
-    endif
-  endif
-endif
-
-# RPC client locality, for rpc_client.c. This has to be kept in sync with
-# hal_internal.h. Yeah, it's ugly, but the C preprocessor can only
-# compare integers, not strings.
-
-ifeq (${RPC_CLIENT},local)
-  RPC_CLIENT_FLAG = 0
-else ifeq (${RPC_CLIENT},remote)
-  RPC_CLIENT_FLAG = 1
-else ifeq (${RPC_CLIENT},mixed)
-  RPC_CLIENT_FLAG = 2
-endif
-ifdef RPC_CLIENT_FLAG
-CFLAGS		+= -DRPC_CLIENT=${RPC_CLIENT_FLAG}
+  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_REMOTE -DHAL_RSA_USE_MODEXP=0
+else ifeq "${RPC_MODE}" "client-mixed"
+  OBJ += ${RPC_CLIENT_OBJ} ${RPC_DISPATCH_OBJ}
+  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_MIXED -DHAL_RSA_USE_MODEXP=0
+  KS = volatile
 endif
 
 TFMDIR		:= $(abspath ../thirdparty/libtfm)
-CFLAGS		+= -g3 -Wall -std=c99 -I${TFMDIR}
+CFLAGS		+= -g3 -Wall -std=c99 -Wno-strict-aliasing -I${TFMDIR}
 LDFLAGS		:= -g3 -L${TFMDIR} -ltfm
 
 CFLAGS		+= -DHAL_STATIC_HASH_STATE_BLOCKS=${STATIC_HASH_STATE_BLOCKS}
@@ -175,24 +191,17 @@ all: ${LIB}
 	cd tests; ${MAKE} CFLAGS='${CFLAGS} -I..' LDFLAGS='${LDFLAGS}' $@
 	cd utils; ${MAKE} CFLAGS='${CFLAGS} -I..' LDFLAGS='${LDFLAGS}' $@
 
-local:
-	${MAKE} RPC_CLIENT=local RPC_TRANSPORT=none
-
 client:
-	${MAKE} RPC_CLIENT=remote
+	${MAKE} RPC_MODE=client-simple
 
 mixed:
-	${MAKE} RPC_CLIENT=mixed KS=volatile
+	${MAKE} RPC_MODE=client-mixed
 
 server:
-	${MAKE} RPC_SERVER=yes
-
-loopback:
-	${MAKE} RPC_CLIENT=remote RPC_SERVER=yes RPC_TRANSPORT=loopback
+	${MAKE} RPC_MODE=server
 
 daemon: cryptech_rpcd
-#	${MAKE} RPC_CLIENT=mixed RPC_TRANSPORT=daemon
-	${MAKE} RPC_CLIENT=remote RPC_TRANSPORT=daemon
+	${MAKE} RPC_MODE=client-mixed RPC_TRANSPORT=daemon
 
 cryptech_rpcd: daemon.o slip.o rpc_serial.o xdr.o
 	${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}
@@ -212,7 +221,7 @@ last_gasp_pin_internal.h:
 	./utils/last_gasp_default_pin >$@
 
 test: all
-	export RPC_CLIENT RPC_SERVER
+	export RPC_MODE
 	cd tests; ${MAKE} -k $@
 
 clean:
@@ -227,3 +236,6 @@ tags: TAGS
 
 TAGS: *.[ch] tests/*.[ch] utils/*.[ch]
 	etags $^
+
+help usage:
+	@echo ${USAGE}
