@@ -181,7 +181,7 @@ endif
 
 TFMDIR		:= $(abspath ../thirdparty/libtfm)
 CFLAGS		+= -g3 -Wall -std=c99 -Wno-strict-aliasing -I${TFMDIR}
-LDFLAGS		:= -g3 -L${TFMDIR} -ltfm
+LDFLAGS		+= -g3 -L${TFMDIR} -ltfm
 
 CFLAGS		+= -DHAL_STATIC_HASH_STATE_BLOCKS=${STATIC_HASH_STATE_BLOCKS}
 CFLAGS		+= -DHAL_STATIC_HMAC_STATE_BLOCKS=${STATIC_HMAC_STATE_BLOCKS}
