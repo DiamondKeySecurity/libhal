@@ -118,7 +118,7 @@ ifeq "${KS}" "mmap"
 else ifeq "${KS}" "volatile"
   KS_OBJ += ks_volatile.o
 else ifeq "${KS}" "flash"
-  KS_OBJ += ks_flash.o
+  KS_OBJ += ks_flash.o masterkey.o
 endif
 
 # RPC_MODE = none | server | client-simple | client-mixed

@@ -40,6 +40,7 @@
 
 #define HAL_OK CMIS_HAL_OK
 #include "stm-keystore.h"
+#include "masterkey.h"
 #undef HAL_OK
 
 #include <string.h>
@@ -323,10 +324,16 @@ hal_error_t hal_ks_get_kek(uint8_t *kek,
                       (kek_max < bitsToBytes(256)) ? bitsToBytes(192) :
                       bitsToBytes(256));
 
-  #warning Faking the Key Encryption Key
-  memset(kek, 4, len);
+  if (masterkey_volatile_read(kek, len) == HSM_MASTERKEY_SET) {
+      *kek_len = len;
+      return LIBHAL_OK;
+  }
+  if (masterkey_flash_read(kek, len) == HSM_MASTERKEY_SET) {
+      *kek_len = len;
+      return LIBHAL_OK;
+  }
 
-  return LIBHAL_OK;
+  return HAL_ERROR_KEYSTORE_ACCESS;
 }
 
 
