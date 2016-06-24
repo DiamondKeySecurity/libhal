@@ -324,11 +324,11 @@ hal_error_t hal_ks_get_kek(uint8_t *kek,
                       (kek_max < bitsToBytes(256)) ? bitsToBytes(192) :
                       bitsToBytes(256));
 
-  if (masterkey_volatile_read(kek, len) == HSM_MASTERKEY_SET) {
+  if (masterkey_volatile_read(kek, len) == LIBHAL_OK) {
       *kek_len = len;
       return LIBHAL_OK;
   }
-  if (masterkey_flash_read(kek, len) == HSM_MASTERKEY_SET) {
+  if (masterkey_flash_read(kek, len) == LIBHAL_OK) {
       *kek_len = len;
       return LIBHAL_OK;
   }

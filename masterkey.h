@@ -35,19 +35,12 @@
 #ifndef __STM32_HSM_MASTERKEY_H
 #define __STM32_HSM_MASTERKEY_H
 
-typedef enum {
-    HSM_MASTERKEY_FAIL,
-    HSM_MASTERKEY_OK,
-    HSM_MASTERKEY_SET,
-    HSM_MASTERKEY_NOT_SET,
-} masterkey_status_t;
+extern hal_error_t masterkey_volatile_read(uint8_t *buf, size_t len);
+extern hal_error_t masterkey_volatile_write(uint8_t *buf, size_t len);
+extern hal_error_t masterkey_volatile_erase(size_t len);
 
-extern masterkey_status_t masterkey_volatile_read(uint8_t *buf, size_t len);
-extern masterkey_status_t masterkey_volatile_write(uint8_t *buf, size_t len);
-extern masterkey_status_t masterkey_volatile_erase(size_t len);
-
-extern masterkey_status_t masterkey_flash_read(uint8_t *buf, size_t len);
-extern masterkey_status_t masterkey_flash_write(uint8_t *buf, size_t len);
-extern masterkey_status_t masterkey_flash_erase(size_t len);
+extern hal_error_t masterkey_flash_read(uint8_t *buf, size_t len);
+extern hal_error_t masterkey_flash_write(uint8_t *buf, size_t len);
+extern hal_error_t masterkey_flash_erase(size_t len);
 
 #endif /* __STM32_HSM_MASTERKEY_H */

@@ -139,6 +139,9 @@
   DEFINE_HAL_ERROR(HAL_ERROR_RPC_PACKET_OVERFLOW,       "RPC packet overflow")                          \
   DEFINE_HAL_ERROR(HAL_ERROR_RPC_BAD_FUNCTION,          "Bad RPC function number")                      \
   DEFINE_HAL_ERROR(HAL_ERROR_KEY_NAME_TOO_LONG,         "Key name too long")                            \
+  DEFINE_HAL_ERROR(HAL_ERROR_MASTERKEY_NOT_SET,         "Master key (Key Encryption Key) not set")      \
+  DEFINE_HAL_ERROR(HAL_ERROR_MASTERKEY_FAIL,            "Master key generic failure")                   \
+  DEFINE_HAL_ERROR(HAL_ERROR_MASTERKEY_BAD_LENGTH,      "Master key of unacceptable length")            \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
