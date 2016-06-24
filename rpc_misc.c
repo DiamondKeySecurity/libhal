@@ -210,7 +210,10 @@ static hal_error_t set_pin(const hal_client_handle_t client,
 
   hal_ks_pin_t p = *pp;
 
-  if (p.iterations == 0)
+  /*
+   * Another all-zeros vs all-ones disagreement between drivers.
+   */
+  if (p.iterations == 0x00000000 || p.iterations == 0xffffffff)
     p.iterations = HAL_PIN_DEFAULT_ITERATIONS;
 
   if ((err = hal_get_random(NULL, p.salt, sizeof(p.salt)))      != HAL_OK ||

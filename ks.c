@@ -371,27 +371,35 @@ hal_error_t hal_ks_get_pin(const hal_user_t user,
   default:		return HAL_ERROR_BAD_ARGUMENTS;
   }
 
+#warning Need better "Have we been initialized yet?" test
   /*
    * If we were looking for the WHEEL PIN and it appears to be
    * completely unset, return the compiled-in last-gasp PIN.  This is
-   * not a great answer, but we need some kind of bootstrapping
+   * a terrible answer, but we need some kind of bootstrapping
    * mechanism.  Feel free to suggest something better.
    *
    * We probably need some more general "have we been initialized?"
    * state somewhere, and might want to refuse to do things like
    * storing keys until we've been initialized and the appropriate
    * PINs have been set.
+   *
+   * Just to make things more fun, some drivers return all zeros for
+   * "this has never been set", some return all ones to indicate the
+   * same thing.  REALLY need a flag somewhere.
    */
 
-  if (user == HAL_USER_WHEEL && (*pin)->iterations == 0) {
-    uint8_t u = 0;
-    for (int i = 0; i < sizeof((*pin)->pin); i++)
-      u |= (*pin)->pin[i];
-    for (int i = 0; i < sizeof((*pin)->salt); i++)
-      u |= (*pin)->salt[i];
-    if (u == 0)
-      *pin = &hal_last_gasp_pin;
+  uint8_t u00 = 0x00, uFF = 0xFF;
+  for (int i = 0; i < sizeof((*pin)->pin); i++) {
+    u00 |= (*pin)->pin[i];
+    uFF &= (*pin)->pin[i];
   }
+  for (int i = 0; i < sizeof((*pin)->salt); i++) {
+    u00 |= (*pin)->salt[i];
+    uFF &= (*pin)->salt[i];
+  }
+  if (user == HAL_USER_WHEEL && ((u00 == 0x00 && (*pin)->iterations == 0x00000000) ||
+                                 (uFF == 0xFF && (*pin)->iterations == 0xFFFFFFFF)))
+    *pin = &hal_last_gasp_pin;
 
   return HAL_OK;
 }
