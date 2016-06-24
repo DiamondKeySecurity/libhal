@@ -179,7 +179,11 @@ else ifeq "${RPC_MODE}" "client-mixed"
   KS = volatile
 endif
 
-TFMDIR		:= $(abspath ../thirdparty/libtfm)
+ifndef CRYPTECH_ROOT
+  CRYPTECH_ROOT := $(abspath ../..)
+endif
+
+TFMDIR		?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
 CFLAGS		+= -g3 -Wall -std=c99 -Wno-strict-aliasing -I${TFMDIR}
 LDFLAGS		+= -g3 -L${TFMDIR} -ltfm
 
@@ -187,9 +191,14 @@ CFLAGS		+= -DHAL_STATIC_HASH_STATE_BLOCKS=${STATIC_HASH_STATE_BLOCKS}
 CFLAGS		+= -DHAL_STATIC_HMAC_STATE_BLOCKS=${STATIC_HMAC_STATE_BLOCKS}
 CFLAGS		+= -DHAL_STATIC_PKEY_STATE_BLOCKS=${STATIC_PKEY_STATE_BLOCKS}
 
+CFLAGS		+= -I${CRYPTECH_ROOT}/sw/libhal
+
+export CFLAGS
+export LDFLAGS
+
 all: ${LIB}
-	cd tests; ${MAKE} CFLAGS='${CFLAGS} -I..' LDFLAGS='${LDFLAGS}' $@
-	cd utils; ${MAKE} CFLAGS='${CFLAGS} -I..' LDFLAGS='${LDFLAGS}' $@
+	cd tests; ${MAKE} $@
+	cd utils; ${MAKE} $@
 
 client:
 	${MAKE} RPC_MODE=client-simple
@@ -225,7 +234,7 @@ test: all
 	cd tests; ${MAKE} -k $@
 
 clean:
-	rm -f *.o ${LIB}
+	rm -f *.o ${LIB} cryptech_rpcd
 	cd tests; ${MAKE} $@
 	cd utils; ${MAKE} $@
 

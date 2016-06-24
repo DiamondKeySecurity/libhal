@@ -31,7 +31,7 @@ INC	= ../hal.h
 LIB	= ../libhal.a
 BIN	= eim_peek_poke cores
 
-CFLAGS	= -g3 -Wall -fPIC -std=c99 -I..
+CFLAGS	?= -g3 -Wall -fPIC -std=c99 -I..
 
 all: $(if $(wildcard ../hal_io_eim.o),eim_peek_poke) $(if $(wildcard ../core.o),cores)
 

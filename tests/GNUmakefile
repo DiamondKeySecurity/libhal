@@ -27,8 +27,8 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-INC	= ../hal.h
-LIB	= ../libhal.a
+INC	?= ../hal.h
+LIB	?= ../libhal.a
 
 # Which tests to build depends on how the library was compiled.
 
@@ -52,7 +52,7 @@ else
 
 endif
 
-CFLAGS	= -g3 -Wall -fPIC -std=c99 -I..
+CFLAGS ?= -g3 -Wall -fPIC -std=c99 -I..
 
 all: ${BIN}
 

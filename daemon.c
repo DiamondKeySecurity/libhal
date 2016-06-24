@@ -112,8 +112,13 @@ static rpc_buffer_t ibuf, obuf;
 #ifndef DEVICE
 #define DEVICE "/dev/ttyUSB0"
 #endif
+
 #ifndef SPEED
 #define SPEED B921600
+#endif
+
+#ifndef B921600
+#define B921600 921600
 #endif
 
 #ifndef SOCKET_NAME
