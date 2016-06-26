@@ -27,19 +27,29 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-INC	= ../hal.h
-LIB	= ../libhal.a
-BIN	= eim_peek_poke cores
+ifndef CRYPTECH_ROOT
+  CRYPTECH_ROOT := $(abspath ../../..)
+endif
 
-CFLAGS	?= -g3 -Wall -fPIC -std=c99 -I..
+LIBTFM_SRC	?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
+LIBTFM_BLD	?= ${LIBTFM_SRC}
 
-all: $(if $(wildcard ../hal_io_eim.o),eim_peek_poke) $(if $(wildcard ../core.o),cores)
+LIBHAL_SRC	?= ${CRYPTECH_ROOT}/sw/libhal
+LIBHAL_BLD	?= ${LIBHAL_SRC}
+
+LIBS		= ${LIBHAL_BLD}/libhal.a ${LIBTFM_BLD}/libtfm.a
+
+CFLAGS		?= -g3 -Wall -fPIC -std=c99 -I${LIBHAL_SRC} -I${LIBTFM_BLD}
+
+BIN		= eim_peek_poke cores
+
+all: $(if $(wildcard ${LIBHAL_BLD}/hal_io_eim.o),eim_peek_poke) $(if $(wildcard ${LIBHAL_BLD}/core.o),cores)
 
 clean:
 	rm -f *.o ${BIN}
 
-${BIN}: %: %.o ${LIB}
+${BIN}: %: %.o ${LIBS}
 	${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}
 
-%.o: %.c ${INC}
+%.o: %.c ${LIBHAL_SRC}/*.h
 	${CC} ${CFLAGS} -c -o $@ $<

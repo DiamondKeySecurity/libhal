@@ -183,18 +183,22 @@ ifndef CRYPTECH_ROOT
   CRYPTECH_ROOT := $(abspath ../..)
 endif
 
-TFMDIR		?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
-CFLAGS		+= -g3 -Wall -std=c99 -Wno-strict-aliasing -I${TFMDIR}
-LDFLAGS		+= -g3 -L${TFMDIR} -ltfm
+LIBTFM_SRC	?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
+LIBTFM_BLD	?= ${LIBTFM_SRC}
 
+# tfm.h is a generated file, because our Makefile customizes a few
+# settings from the upstream libtfm distribution.  Because of this, we
+# need to search the libtfm build directory, not the libtfm source
+# directory.
+
+CFLAGS		+= -g3 -Wall -std=c99 -Wno-strict-aliasing
 CFLAGS		+= -DHAL_STATIC_HASH_STATE_BLOCKS=${STATIC_HASH_STATE_BLOCKS}
 CFLAGS		+= -DHAL_STATIC_HMAC_STATE_BLOCKS=${STATIC_HMAC_STATE_BLOCKS}
 CFLAGS		+= -DHAL_STATIC_PKEY_STATE_BLOCKS=${STATIC_PKEY_STATE_BLOCKS}
-
 CFLAGS		+= -I${CRYPTECH_ROOT}/sw/libhal
+CFLAGS		+= -I${LIBTFM_BLD}
 
 export CFLAGS
-export LDFLAGS
 
 all: ${LIB}
 	cd tests; ${MAKE} $@

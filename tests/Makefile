@@ -27,8 +27,19 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-INC	?= ../hal.h
-LIB	?= ../libhal.a
+ifndef CRYPTECH_ROOT
+  CRYPTECH_ROOT := $(abspath ../../..)
+endif
+
+LIBTFM_SRC	?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
+LIBTFM_BLD	?= ${LIBTFM_SRC}
+
+LIBHAL_SRC	?= ${CRYPTECH_ROOT}/sw/libhal
+LIBHAL_BLD	?= ${LIBHAL_SRC}
+
+LIBS		= ${LIBHAL_BLD}/libhal.a ${LIBTFM_BLD}/libtfm.a
+
+CFLAGS		?= -g3 -Wall -fPIC -std=c99 -I${LIBHAL_SRC} -I${LIBTFM_BLD}
 
 # Which tests to build depends on how the library was compiled.
 
@@ -52,8 +63,6 @@ else
 
 endif
 
-CFLAGS ?= -g3 -Wall -fPIC -std=c99 -I..
-
 all: ${BIN}
 
 test: all
@@ -62,8 +71,8 @@ test: all
 clean distclean:
 	rm -f *.o ${ALL_TESTS}
 
-${BIN}: %: %.o ${LIB}
+${BIN}: %: %.o ${LIBS}
 	${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}
 
-%.o: %.c ${INC}
+%.o: %.c ${LBHAL_SRC}/*.h ${LIBTFM_BLD}/tfm.h
 	${CC} ${CFLAGS} -c -o $@ $<
