@@ -316,6 +316,9 @@ typedef struct {
 
 } hal_ks_keydb_t;
 
+extern hal_error_t hal_set_pin_default_iterations(const hal_client_handle_t client,
+                                                  const uint32_t iterations);
+
 /*
  * Internal functions within the keystore implementation.  Think of
  * these as concrete methods for the keystore API subclassed onto

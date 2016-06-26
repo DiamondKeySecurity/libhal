@@ -85,6 +85,8 @@ typedef struct {
 #define HAL_PIN_DEFAULT_ITERATIONS 20000
 #endif
 
+static uint32_t hal_pin_default_iterations = HAL_PIN_DEFAULT_ITERATIONS;
+
 #ifndef HAL_STATIC_CLIENT_STATE_BLOCKS
 #define HAL_STATIC_CLIENT_STATE_BLOCKS	10
 #endif
@@ -135,7 +137,7 @@ static hal_error_t login(const hal_client_handle_t client,
     return err;
 
   uint8_t buf[sizeof(p->pin)];
-  const uint32_t iterations = p->iterations == 0 ? HAL_PIN_DEFAULT_ITERATIONS : p->iterations;
+  const uint32_t iterations = p->iterations == 0 ? hal_pin_default_iterations : p->iterations;
 
   if ((err = hal_pbkdf2(NULL, hal_hash_sha256, (const uint8_t *) pin, pin_len,
                         p->salt, sizeof(p->salt), buf, sizeof(buf), iterations)) != HAL_OK)
@@ -210,11 +212,7 @@ static hal_error_t set_pin(const hal_client_handle_t client,
 
   hal_ks_pin_t p = *pp;
 
-  /*
-   * Another all-zeros vs all-ones disagreement between drivers.
-   */
-  if (p.iterations == 0x00000000 || p.iterations == 0xffffffff)
-    p.iterations = HAL_PIN_DEFAULT_ITERATIONS;
+  p.iterations = hal_pin_default_iterations;
 
   if ((err = hal_get_random(NULL, p.salt, sizeof(p.salt)))      != HAL_OK ||
       (err = hal_pbkdf2(NULL, hal_hash_sha256,
@@ -224,6 +222,18 @@ static hal_error_t set_pin(const hal_client_handle_t client,
       (err = hal_ks_set_pin(user, &p))                          != HAL_OK)
     return err;
 
+  return HAL_OK;
+}
+
+hal_error_t hal_set_pin_default_iterations(const hal_client_handle_t client,
+                                           const uint32_t iterations)
+{
+  if ((is_logged_in(client, HAL_USER_WHEEL) != HAL_OK) &&
+      (is_logged_in(client, HAL_USER_SO) != HAL_OK))
+    return HAL_ERROR_FORBIDDEN;
+
+  /* should probably store this in flash somewhere */
+  hal_pin_default_iterations = (iterations == 0) ? HAL_PIN_DEFAULT_ITERATIONS : iterations;
   return HAL_OK;
 }
 
