@@ -54,7 +54,7 @@ parser.add_argument("-p", "--pin",
                     help    = "PIN plaintext before PBKDF2 processing")
 parser.add_argument("-i", "--iterations",
                     type    = int,
-                    default = 100000,
+                    default = 10000,
                     help    = "PBKDF2 iteration count")
 parser.add_argument("-d", "--derived-key-length",
                     type    = int,
