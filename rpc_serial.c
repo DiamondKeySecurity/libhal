@@ -75,14 +75,7 @@ hal_error_t hal_serial_init(const char * const device, const uint32_t speed)
     if (tcgetattr (fd, &tty) != 0)
 	return perror("tcgetattr"), HAL_ERROR_RPC_TRANSPORT;
 
-#if HAL_RPC_SERIAL_USE_MACOSX_IOCTL
-
-    termios_speed = speed;
-
-    if (ioctl(fd, IOSSIOSPEED, &speed) < 0)
-        return perror("ioctl()"), HAL_ERROR_RPC_TRANSPORT;
-
-#else
+#if !HAL_RPC_SERIAL_USE_MACOSX_IOCTL
 
     switch (speed) {
     case 115200:
@@ -113,6 +106,15 @@ hal_error_t hal_serial_init(const char * const device, const uint32_t speed)
 
     if (tcsetattr (fd, TCSANOW, &tty) != 0)
 	return perror("tcsetattr"), HAL_ERROR_RPC_TRANSPORT;
+
+#if HAL_RPC_SERIAL_USE_MACOSX_IOCTL
+
+    termios_speed = speed;
+
+    if (ioctl(fd, IOSSIOSPEED, &speed) < 0)
+        return perror("ioctl(IOSSIOSPEED)"), HAL_ERROR_RPC_TRANSPORT;
+
+#endif
 
     return HAL_OK;
 }
