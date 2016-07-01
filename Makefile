@@ -142,7 +142,9 @@ ifneq "${RPC_MODE}" "none"
   OBJ += rpc_api.o xdr.o
 endif
 
-ifeq "${RPC_TRANSPORT}" "serial"
+ifeq "${RPC_MODE}" "server"
+  OBJ += slip.o
+else ifeq "${RPC_TRANSPORT}" "serial"
   OBJ += slip.o rpc_serial.o
 endif
 
