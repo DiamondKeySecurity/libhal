@@ -47,7 +47,17 @@
 
 hal_error_t hal_rpc_client_transport_init(void)
 {
-    return hal_serial_init(HAL_CLIENT_SERIAL_DEFAULT_DEVICE, HAL_CLIENT_SERIAL_DEFAULT_SPEED);
+    const char *device = getenv(HAL_CLIENT_SERIAL_DEVICE_ENVVAR);
+    const char *speed_ = getenv(HAL_CLIENT_SERIAL_SPEED_ENVVAR);
+    uint32_t    speed  = HAL_CLIENT_SERIAL_DEFAULT_SPEED;
+
+    if (device == NULL)
+        device = HAL_CLIENT_SERIAL_DEFAULT_DEVICE;
+
+    if (speed_ != NULL)
+        speed = (uint32_t) strtoul(speed_, NULL, 10);
+
+    return hal_serial_init(device, speed);
 }
 
 hal_error_t hal_rpc_client_transport_close(void)

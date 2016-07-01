@@ -478,6 +478,13 @@ typedef enum {
 #define HAL_CLIENT_SERIAL_DEFAULT_SPEED         921600
 #endif
 
+/*
+ * Names of environment variables for setting the above in RPC clients.
+ */
+
+#define	HAL_CLIENT_SERIAL_DEVICE_ENVVAR		"HAL_CLIENT_SERIAL_DEVICE"
+#define	HAL_CLIENT_SERIAL_SPEED_ENVVAR		"HAL_CLIENT_SERIAL_SPEED"
+
 #endif /* _HAL_INTERNAL_H_ */
 
 /*
