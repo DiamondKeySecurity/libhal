@@ -44,7 +44,7 @@ USAGE := "usage: ${MAKE} [IO_BUS=eim|i2c|fmc] [RPC_MODE=none|server|client-simpl
 IO_BUS		?= eim
 KS		?= volatile
 RPC_MODE	?= none
-RPC_TRANSPORT	?= daemon
+RPC_TRANSPORT	?= serial
 MODEXP_CORE	?= no
 
 ifeq (,$(and \
@@ -143,7 +143,7 @@ ifneq "${RPC_MODE}" "none"
 endif
 
 ifeq "${RPC_TRANSPORT}" "serial"
-  OBJ += slip.o
+  OBJ += slip.o rpc_serial.o
 endif
 
 RPC_CLIENT_OBJ = rpc_client.o

@@ -75,6 +75,17 @@ hal_error_t hal_xdr_decode_int(const uint8_t ** const inbuf, const uint8_t * con
     return HAL_OK;
 }
 
+/* Undo the last decode_int - roll back the input pointer.
+ */
+hal_error_t hal_xdr_undecode_int(const uint8_t ** const inbuf)
+{
+    if (inbuf == NULL || *inbuf == NULL)
+        return HAL_ERROR_BAD_ARGUMENTS;
+
+    *inbuf -= sizeof(uint32_t);
+    return HAL_OK;
+}
+
 /* encode/decode_buffer. This covers variable-length string and opaque types.
  * The data is preceded by a 4-byte length word (encoded as above), and padded
  * to a multiple of 4 bytes as necessary.

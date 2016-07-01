@@ -47,6 +47,8 @@ hal_error_t hal_xdr_decode_int(const uint8_t ** const inbuf,
                                const uint8_t * const limit,
                                uint32_t * const value);
 
+hal_error_t hal_xdr_undecode_int(const uint8_t ** const inbuf);
+
 hal_error_t hal_xdr_encode_buffer(uint8_t ** const outbuf,
                                   const uint8_t * const limit,
                                   const uint8_t * const value,

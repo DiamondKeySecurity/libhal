@@ -44,8 +44,11 @@
 #include "hal_internal.h"
 #include "slip_internal.h"
 
-#define DEVICE "/dev/ttyUSB0"
-#define SPEED B115200
+/* XXX These REALLY ought to be passed from the client app command line,
+ * rather than compiled into the library.
+ */
+#define DEVICE "/dev/ttyUSB1"
+#define SPEED B921600
 
 hal_error_t hal_rpc_client_transport_init(void)
 {
@@ -64,5 +67,8 @@ hal_error_t hal_rpc_send(const uint8_t * const buf, const size_t len)
 
 hal_error_t hal_rpc_recv(uint8_t * const buf, size_t * const len)
 {
-    return hal_slip_recv(buf, *len);
+    size_t maxlen = *len;
+    *len = 0;
+    hal_error_t err = hal_slip_recv(buf, len, maxlen);
+    return err;
 }
