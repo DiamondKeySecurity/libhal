@@ -450,6 +450,34 @@ typedef enum {
 #define RPC_CLIENT_MIXED        2
 #define RPC_CLIENT_NONE         3
 
+/*
+ * Maximum size of a HAL RPC packet.
+ */
+
+#ifndef HAL_RPC_MAX_PKT_SIZE
+#define HAL_RPC_MAX_PKT_SIZE    4096
+#endif
+
+/*
+ * Location of AF_UNIX socket for RPC client mux daemon.
+ */
+
+#ifndef HAL_CLIENT_DAEMON_DEFAULT_SOCKET_NAME
+#define HAL_CLIENT_DAEMON_DEFAULT_SOCKET_NAME   "/tmp/cryptech_rpcd.socket"
+#endif
+
+/*
+ * Default device name and line speed for HAL RPC serial connection to HSM.
+ */
+
+#ifndef HAL_CLIENT_SERIAL_DEFAULT_DEVICE
+#define HAL_CLIENT_SERIAL_DEFAULT_DEVICE 	"/dev/ttyUSB0"
+#endif
+
+#ifndef HAL_CLIENT_SERIAL_DEFAULT_SPEED
+#define HAL_CLIENT_SERIAL_DEFAULT_SPEED         921600
+#endif
+
 #endif /* _HAL_INTERNAL_H_ */
 
 /*

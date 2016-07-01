@@ -41,10 +41,10 @@ LIB		= libhal.a
 
 USAGE := "usage: ${MAKE} [IO_BUS=eim|i2c|fmc] [RPC_MODE=none|server|client-simple|client-mixed] [KS=volatile|mmap|flash] [RPC_TRANSPORT=none|loopback|serial|daemon] [MODEXP_CORE=no|yes]"
 
-IO_BUS		?= eim
+IO_BUS		?= none
 KS		?= volatile
 RPC_MODE	?= none
-RPC_TRANSPORT	?= daemon
+RPC_TRANSPORT	?= none
 MODEXP_CORE	?= no
 
 ifeq (,$(and \
@@ -72,7 +72,7 @@ endif
 # makefile, so the working definition of "always want" is sometimes
 # just "building this is harmless even if we don't use it."
 
-OBJ = errorstrings.o hash.o asn1.o ecdsa.o rsa.o ${KS_OBJ}
+OBJ = errorstrings.o hash.o asn1.o ecdsa.o rsa.o ${KS_OBJ} rpc_api.o xdr.o rpc_hash.o rpc_misc.o rpc_pkey.o rpc_client.o rpc_server.o
 
 # Object files to build when we're on a platform with direct access
 # to our hardware (Verilog) cores.
@@ -138,43 +138,37 @@ endif
 # the C preprocessor: we can use symbolic names so long as they're defined as macros
 # in the C code, but we can't use things like C enum symbols.
 
-ifneq "${RPC_MODE}" "none"
-  OBJ += rpc_api.o xdr.o
-endif
-
 ifeq "${RPC_TRANSPORT}" "serial"
-  OBJ += slip.o
-endif
-
-RPC_CLIENT_OBJ = rpc_client.o
-ifeq "${RPC_TRANSPORT}" "loopback"
-  RPC_CLIENT_OBJ += rpc_client_loopback.o
-else ifeq "${RPC_TRANSPORT}" "serial"
-  RPC_CLIENT_OBJ += rpc_client_serial.o
+  OBJ += slip.o rpc_serial.o
 else ifeq "${RPC_TRANSPORT}" "daemon"
-  RPC_CLIENT_OBJ += rpc_client_daemon.o
+  OBJ += slip.o rpc_serial.o
 endif
 
-RPC_DISPATCH_OBJ = rpc_hash.o rpc_misc.o rpc_pkey.o
-
-RPC_SERVER_OBJ = rpc_server.o
 ifeq "${RPC_TRANSPORT}" "loopback"
-  RPC_SERVER_OBJ += rpc_server_loopback.o
+  RPC_CLIENT_OBJ = rpc_client_loopback.o
 else ifeq "${RPC_TRANSPORT}" "serial"
-  RPC_SERVER_OBJ += rpc_server_serial.o
+  RPC_CLIENT_OBJ = rpc_client_serial.o
+else ifeq "${RPC_TRANSPORT}" "daemon"
+  RPC_CLIENT_OBJ = rpc_client_daemon.o
+endif
+
+ifeq "${RPC_TRANSPORT}" "loopback"
+  RPC_SERVER_OBJ = rpc_server_loopback.o
+else ifeq "${RPC_TRANSPORT}" "serial"
+  RPC_SERVER_OBJ = rpc_server_serial.o
 endif
 
 ifeq "${RPC_MODE}" "none"
   OBJ += ${CORE_OBJ}
   CFLAGS += -DHAL_RSA_USE_MODEXP=${RSA_USE_MODEXP_CORE}
 else ifeq "${RPC_MODE}" "server"
-  OBJ += ${CORE_OBJ} ${RPC_SERVER_OBJ} ${RPC_DISPATCH_OBJ}
+  OBJ += ${CORE_OBJ} ${RPC_SERVER_OBJ}
   CFLAGS += -DRPC_CLIENT=RPC_CLIENT_LOCAL -DHAL_RSA_USE_MODEXP=${RSA_USE_MODEXP_CORE}
 else ifeq "${RPC_MODE}" "client-simple"
   OBJ += ${RPC_CLIENT_OBJ}
   CFLAGS += -DRPC_CLIENT=RPC_CLIENT_REMOTE -DHAL_RSA_USE_MODEXP=0
 else ifeq "${RPC_MODE}" "client-mixed"
-  OBJ += ${RPC_CLIENT_OBJ} ${RPC_DISPATCH_OBJ}
+  OBJ += ${RPC_CLIENT_OBJ}
   CFLAGS += -DRPC_CLIENT=RPC_CLIENT_MIXED -DHAL_RSA_USE_MODEXP=0
   KS = volatile
 endif
@@ -205,18 +199,21 @@ all: ${LIB}
 	cd utils; ${MAKE} $@
 
 client:
-	${MAKE} RPC_MODE=client-simple
+	${MAKE} RPC_MODE=client-simple RPC_TRANSPORT=daemon
 
 mixed:
-	${MAKE} RPC_MODE=client-mixed
-
-server:
-	${MAKE} RPC_MODE=server
-
-daemon: cryptech_rpcd
 	${MAKE} RPC_MODE=client-mixed RPC_TRANSPORT=daemon
 
-cryptech_rpcd: daemon.o slip.o rpc_serial.o xdr.o
+server:
+	${MAKE} RPC_MODE=server RPC_TRANSPORT=serial IO_BUS=fmc
+
+serial:
+	${MAKE} RPC_MODE=client-mixed RPC_TRANSPORT=serial
+
+daemon:
+	${MAKE} RPC_MODE=client-mixed RPC_TRANSPORT=daemon ${LIB} cryptech_rpcd
+
+cryptech_rpcd: daemon.o ${LIB}
 	${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}
 
 ${OBJ}: ${INC}

@@ -33,6 +33,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -44,12 +45,9 @@
 #include "hal_internal.h"
 #include "slip_internal.h"
 
-#define DEVICE "/dev/ttyUSB0"
-#define SPEED B115200
-
 hal_error_t hal_rpc_client_transport_init(void)
 {
-    return hal_serial_init(DEVICE, SPEED);
+    return hal_serial_init(HAL_CLIENT_SERIAL_DEFAULT_DEVICE, HAL_CLIENT_SERIAL_DEFAULT_SPEED);
 }
 
 hal_error_t hal_rpc_client_transport_close(void)
@@ -64,5 +62,5 @@ hal_error_t hal_rpc_send(const uint8_t * const buf, const size_t len)
 
 hal_error_t hal_rpc_recv(uint8_t * const buf, size_t * const len)
 {
-    return hal_slip_recv(buf, *len);
+    return hal_slip_recv(buf, len, *len);
 }

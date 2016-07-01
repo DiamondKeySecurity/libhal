@@ -50,8 +50,7 @@ extern hal_error_t hal_serial_send_char(const uint8_t c);
 extern hal_error_t hal_serial_recv_char(uint8_t * const c);
 
 #ifndef STM32F4XX
-#include <termios.h>            /* speed_t */
-extern hal_error_t hal_serial_init(const char * const device, const speed_t speed);
+extern hal_error_t hal_serial_init(const char * const device, const uint32_t speed);
 extern hal_error_t hal_serial_close(void);
 extern int hal_serial_get_fd(void);
 #endif

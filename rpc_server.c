@@ -712,10 +712,9 @@ void hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
     hal_xdr_encode_int(&optr, olimit, ret);
 }
 
-#define MAX_PKT_SIZE 4096
 #define interrupt 0
 
-static uint8_t inbuf[MAX_PKT_SIZE], outbuf[MAX_PKT_SIZE];
+static uint8_t inbuf[HAL_RPC_MAX_PKT_SIZE], outbuf[HAL_RPC_MAX_PKT_SIZE];
 
 void hal_rpc_server_main(void)
 {

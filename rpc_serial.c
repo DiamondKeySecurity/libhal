@@ -44,12 +44,28 @@
 #include "hal_internal.h"
 #include "slip_internal.h"
 
+/*
+ * Not thrilled about having OS-specific conditionals, but as such things
+ * go, this seems relatively safe: gcc and clang both define it on Mac OS X,
+ * and anything *not* on Mac OS X which defines it is begging for trouble.
+ */
+
+#ifndef HAL_RPC_SERIAL_USE_MACOSX_IOCTL
+#define HAL_RPC_SERIAL_USE_MACOSX_IOCTL	(defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__))
+#endif
+
+#if HAL_RPC_SERIAL_USE_MACOSX_IOCTL
+#include <IOKit/serial/ioss.h>
+#include <sys/ioctl.h>
+#endif
+
 static int fd = -1;
 
-hal_error_t hal_serial_init(const char * const device, const speed_t speed)
+hal_error_t hal_serial_init(const char * const device, const uint32_t speed)
 {
     struct termios tty;
-    
+    speed_t termios_speed;
+
     fd = open(device, O_RDWR | O_NOCTTY | O_SYNC);
     if (fd == -1) {
         fprintf(stderr, "open %s: ", device);
@@ -59,8 +75,31 @@ hal_error_t hal_serial_init(const char * const device, const speed_t speed)
     if (tcgetattr (fd, &tty) != 0)
 	return perror("tcgetattr"), HAL_ERROR_RPC_TRANSPORT;
 
+#if HAL_RPC_SERIAL_USE_MACOSX_IOCTL
+
+    termios_speed = speed;
+
+    if (ioctl(fd, IOSSIOSPEED, &speed) < 0)
+        return perror("ioctl()"), HAL_ERROR_RPC_TRANSPORT;
+
+#else
+
+    switch (speed) {
+    case 115200:
+        termios_speed = B115200;
+	break;
+    case 921600:
+        termios_speed = B921600;
+	break;
+    default:
+        fprintf(stderr, "invalid line speed %lu\n", (unsigned long) speed);
+	return HAL_ERROR_RPC_TRANSPORT;
+    }
+
     cfsetospeed (&tty, speed);
     cfsetispeed (&tty, speed);
+
+#endif
 
     tty.c_cflag &= ~CSIZE;
     tty.c_cflag |= (CS8 | CLOCAL | CREAD);

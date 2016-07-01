@@ -41,10 +41,6 @@
 #include "hal.h"
 #include "hal_internal.h"
 
-#ifndef SOCKET_NAME
-#define SOCKET_NAME "/tmp/cryptechd.socket"
-#endif
-
 static int sock = -1;
 
 hal_error_t hal_rpc_client_transport_init(void)
@@ -57,7 +53,7 @@ hal_error_t hal_rpc_client_transport_init(void)
         return perror("socket"), HAL_ERROR_RPC_TRANSPORT;
     memset(&name, 0, sizeof(struct sockaddr_un));
     name.sun_family = AF_UNIX;
-    strncpy(name.sun_path, SOCKET_NAME, sizeof(name.sun_path) - 1);
+    strncpy(name.sun_path, HAL_CLIENT_DAEMON_DEFAULT_SOCKET_NAME, sizeof(name.sun_path) - 1);
     ret = connect(sock, (const struct sockaddr *) &name, sizeof(struct sockaddr_un));
     if (ret == -1)
         return perror("connect"), HAL_ERROR_RPC_TRANSPORT;

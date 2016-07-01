@@ -42,6 +42,7 @@
 #include <getopt.h>             /* required with -std=c99 */
 #include <termios.h>            /* for default speed */
 
+#include "hal_internal.h"
 #include "slip_internal.h"
 #include "xdr_internal.h"
 
@@ -99,32 +100,13 @@ static void poll_remove(int fd)
     /* if it's not found, return without an error */
 }
 
-#ifndef MAX_PKT_SIZE    /* move this to hal_internal.h */
-#define MAX_PKT_SIZE 4096
-#endif
-
 typedef struct {
     size_t len;
-    uint8_t buf[MAX_PKT_SIZE];
+    uint8_t buf[HAL_RPC_MAX_PKT_SIZE];
 } rpc_buffer_t;
 static rpc_buffer_t ibuf, obuf;
 
-#ifndef DEVICE
-#define DEVICE "/dev/ttyUSB0"
-#endif
-
-#ifndef SPEED
-#define SPEED B921600
-#endif
-
-#ifndef B921600
-#define B921600 921600
-#endif
-
-#ifndef SOCKET_NAME
-#define SOCKET_NAME "/tmp/cryptechd.socket"
-#endif
-char *socket_name = SOCKET_NAME;
+const char *socket_name = HAL_CLIENT_DAEMON_DEFAULT_SOCKET_NAME;
 
 /* Set up an atexit handler to remove the filesystem entry for the unix domain
  * socket. This will trigger on error exits, but not on the "normal" SIGKILL.
@@ -151,8 +133,8 @@ int main(int argc, char *argv[])
     int lsock;
     int dsock;
     int opt;
-    char *device = DEVICE;
-    speed_t speed = SPEED;
+    const char *device = HAL_CLIENT_SERIAL_DEFAULT_DEVICE;
+    uint32_t speed     = HAL_CLIENT_SERIAL_DEFAULT_SPEED;
 
     while ((opt = getopt(argc, argv, "hn:d:s:")) != -1) {
         switch (opt) {
@@ -168,10 +150,7 @@ int main(int argc, char *argv[])
         case 's':
             switch (atoi(optarg)) {
             case 115200:
-                speed = B115200;
-                break;
             case 921600:
-                speed = B921600;
                 break;
             default:
                 printf("invalid speed value %s\n", optarg);
@@ -218,11 +197,13 @@ int main(int argc, char *argv[])
      */
     memset(&name, 0, sizeof(struct sockaddr_un));
 
-    /* Bind the listening socket.
+    /* Bind the listening socket.  On some platforms, we have to pass the "real"
+     * (number of bytes in use) length of the sockaddr_un to get the name bound
+     * correctly, so use the SUN_LEN() macro to calculate that.
      */
     name.sun_family = AF_UNIX;
     strncpy(name.sun_path, socket_name, sizeof(name.sun_path) - 1);
-    ret = bind(lsock, (const struct sockaddr *) &name, sizeof(struct sockaddr_un));
+    ret = bind(lsock, (const struct sockaddr *) &name, SUN_LEN(&name));
     if (ret == -1) {
         perror("bind");
         exit(EXIT_FAILURE);
@@ -291,11 +272,11 @@ int main(int argc, char *argv[])
                 /* client data socket */
                 else {
                     uint8_t *bufptr = obuf.buf;
-                    const uint8_t * const limit = obuf.buf + MAX_PKT_SIZE;
+                    const uint8_t * const limit = obuf.buf + HAL_RPC_MAX_PKT_SIZE;
                     /* First word of the request is the client ID. */
                     hal_xdr_encode_int(&bufptr, limit, pollfds[i].fd);
                     /* Get the client's rpc request packet. */
-                    obuf.len = recv(pollfds[i].fd, bufptr, MAX_PKT_SIZE - 4, 0);
+                    obuf.len = recv(pollfds[i].fd, bufptr, HAL_RPC_MAX_PKT_SIZE - 4, 0);
 #ifdef DEBUG
                     printf("data socket %d received request:\n", pollfds[i].fd);
                     hexdump(obuf.buf, obuf.len + 4);
