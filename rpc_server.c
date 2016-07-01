@@ -47,8 +47,11 @@
 static hal_error_t get_version(const uint8_t **iptr, const uint8_t * const ilimit,
                                uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     uint32_t version;
     hal_error_t ret;
+
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
 
     /* call the local function */
     ret = hal_rpc_local_misc_dispatch.get_version(&version);
@@ -61,9 +64,11 @@ static hal_error_t get_version(const uint8_t **iptr, const uint8_t * const ilimi
 static hal_error_t get_random(const uint8_t **iptr, const uint8_t * const ilimit,
                               uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     uint32_t length;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &length));
     /* sanity check length */
     if (length == 0 || length > olimit - *optr - 4)
@@ -134,7 +139,10 @@ static hal_error_t logout(const uint8_t **iptr, const uint8_t * const ilimit,
 static hal_error_t logout_all(const uint8_t **iptr, const uint8_t * const ilimit,
                               uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     hal_error_t ret;
+
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
 
     /* call the local function */
     ret = hal_rpc_local_misc_dispatch.logout_all();
@@ -159,10 +167,12 @@ static hal_error_t is_logged_in(const uint8_t **iptr, const uint8_t * const ilim
 static hal_error_t hash_get_digest_len(const uint8_t **iptr, const uint8_t * const ilimit,
                                        uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     uint32_t alg;
     size_t length;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &alg));
 
     /* call the local function */
@@ -175,12 +185,14 @@ static hal_error_t hash_get_digest_len(const uint8_t **iptr, const uint8_t * con
 static hal_error_t hash_get_digest_algorithm_id(const uint8_t **iptr, const uint8_t * const ilimit,
                                                 uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     uint32_t alg;
     size_t len;
     uint32_t len_max;
     uint8_t *optr_orig = *optr;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &alg));
     check(hal_xdr_decode_int(iptr, ilimit, &len_max));
     /* sanity check len_max */
@@ -206,10 +218,12 @@ static hal_error_t hash_get_digest_algorithm_id(const uint8_t **iptr, const uint
 static hal_error_t hash_get_algorithm(const uint8_t **iptr, const uint8_t * const ilimit,
                                       uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     hal_hash_handle_t hash;
     hal_digest_algorithm_t alg;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &hash.handle));
 
     /* call the local function */
@@ -245,11 +259,13 @@ static hal_error_t hash_initialize(const uint8_t **iptr, const uint8_t * const i
 static hal_error_t hash_update(const uint8_t **iptr, const uint8_t * const ilimit,
                                uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     hal_hash_handle_t hash;
     const uint8_t *data;
     uint32_t length;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &hash.handle));
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &data, &length));
 
@@ -261,10 +277,12 @@ static hal_error_t hash_update(const uint8_t **iptr, const uint8_t * const ilimi
 static hal_error_t hash_finalize(const uint8_t **iptr, const uint8_t * const ilimit,
                                  uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     hal_hash_handle_t hash;
     uint32_t length;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &hash.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &length));
     /* sanity check length */
@@ -392,9 +410,11 @@ static hal_error_t pkey_generate_ec(const uint8_t **iptr, const uint8_t * const 
 static hal_error_t pkey_close(const uint8_t **iptr, const uint8_t * const ilimit,
                               uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     hal_pkey_handle_t pkey;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
 
     /* call the local function */
@@ -405,9 +425,11 @@ static hal_error_t pkey_close(const uint8_t **iptr, const uint8_t * const ilimit
 static hal_error_t pkey_delete(const uint8_t **iptr, const uint8_t * const ilimit,
                                uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     hal_pkey_handle_t pkey;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
 
     /* call the local function */
@@ -418,11 +440,13 @@ static hal_error_t pkey_delete(const uint8_t **iptr, const uint8_t * const ilimi
 static hal_error_t pkey_rename(const uint8_t **iptr, const uint8_t * const ilimit,
                                uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     hal_pkey_handle_t pkey;
     const uint8_t *name;
     uint32_t name_len;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &name, &name_len));
 
@@ -434,10 +458,12 @@ static hal_error_t pkey_rename(const uint8_t **iptr, const uint8_t * const ilimi
 static hal_error_t pkey_get_key_type(const uint8_t **iptr, const uint8_t * const ilimit,
                                      uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     hal_pkey_handle_t pkey;
     hal_key_type_t type;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
 
     /* call the local function */
@@ -450,10 +476,12 @@ static hal_error_t pkey_get_key_type(const uint8_t **iptr, const uint8_t * const
 static hal_error_t pkey_get_key_flags(const uint8_t **iptr, const uint8_t * const ilimit,
                                       uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     hal_pkey_handle_t pkey;
     hal_key_flags_t flags;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
 
     /* call the local function */
@@ -466,10 +494,12 @@ static hal_error_t pkey_get_key_flags(const uint8_t **iptr, const uint8_t * cons
 static hal_error_t pkey_get_public_key_len(const uint8_t **iptr, const uint8_t * const ilimit,
                                            uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     hal_pkey_handle_t pkey;
     size_t len;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
 
     /* call the local function */
@@ -481,12 +511,14 @@ static hal_error_t pkey_get_public_key_len(const uint8_t **iptr, const uint8_t *
 static hal_error_t pkey_get_public_key(const uint8_t **iptr, const uint8_t * const ilimit,
                                        uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     hal_pkey_handle_t pkey;
     size_t len;
     uint32_t len_max;
     uint8_t *optr_orig = *optr;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &len_max));
     /* sanity check len_max */
@@ -512,6 +544,7 @@ static hal_error_t pkey_get_public_key(const uint8_t **iptr, const uint8_t * con
 static hal_error_t pkey_remote_sign(const uint8_t **iptr, const uint8_t * const ilimit,
                                     uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     hal_session_handle_t session;
     hal_pkey_handle_t pkey;
     hal_hash_handle_t hash;
@@ -522,6 +555,7 @@ static hal_error_t pkey_remote_sign(const uint8_t **iptr, const uint8_t * const 
     uint8_t *optr_orig = *optr;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &session.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &hash.handle));
@@ -546,6 +580,7 @@ static hal_error_t pkey_remote_sign(const uint8_t **iptr, const uint8_t * const 
 static hal_error_t pkey_remote_verify(const uint8_t **iptr, const uint8_t * const ilimit,
                                       uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     hal_session_handle_t session;
     hal_pkey_handle_t pkey;
     hal_hash_handle_t hash;
@@ -555,6 +590,7 @@ static hal_error_t pkey_remote_verify(const uint8_t **iptr, const uint8_t * cons
     uint32_t sig_len;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &session.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &hash.handle));
@@ -583,11 +619,13 @@ static hal_error_t hal_xdr_encode_pkey_info(uint8_t **optr, const uint8_t * cons
 static hal_error_t pkey_list(const uint8_t **iptr, const uint8_t * const ilimit,
                              uint8_t **optr, const uint8_t * const olimit)
 {
+    hal_client_handle_t client __attribute__((unused));
     uint8_t *optr_orig = *optr;
     uint32_t result_max;
     hal_key_flags_t flags;
     hal_error_t ret;
 
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &result_max));
     check(hal_xdr_decode_int(iptr, ilimit, &flags));
 
@@ -613,13 +651,16 @@ void hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
                              uint8_t * const obuf, size_t * const olen)
 {
     const uint8_t * iptr = ibuf;
-    const uint8_t * ilimit = ibuf + ilen;
-    uint8_t * optr = obuf + 4;		/* reserve 4 bytes for return code */
-    uint8_t * olimit = obuf + *olen;
+    const uint8_t * const ilimit = ibuf + ilen;
+    uint8_t * optr = obuf + 12;	/* reserve space for opcode, client, and response code */
+    const uint8_t * const olimit = obuf + *olen;
     uint32_t rpc_func_num;
+    uint32_t client_handle;
     hal_error_t ret;
 
     hal_xdr_decode_int(&iptr, ilimit, &rpc_func_num);
+    hal_xdr_decode_int(&iptr, ilimit, &client_handle);
+    hal_xdr_undecode_int(&iptr);
     switch (rpc_func_num) {
     case RPC_FUNC_GET_VERSION:
         ret = get_version(&iptr, ilimit, &optr, olimit);
@@ -706,9 +747,11 @@ void hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
         ret = HAL_ERROR_RPC_BAD_FUNCTION;
         break;
     }
-    /* encode the return code at the beginning of the payload */
+    /* Encode opcode, client ID, and response code at the beginning of the payload */
     *olen = optr - obuf;
     optr = obuf;
+    hal_xdr_encode_int(&optr, olimit, rpc_func_num);
+    hal_xdr_encode_int(&optr, olimit, client_handle);
     hal_xdr_encode_int(&optr, olimit, ret);
 }
 

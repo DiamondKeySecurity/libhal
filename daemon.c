@@ -243,13 +243,13 @@ int main(int argc, char *argv[])
                         hexdump(ibuf.buf, ibuf.len);
 #endif
                         /* We've got a complete rpc response packet. */
-                        const uint8_t *bufptr = ibuf.buf;
+                        const uint8_t *bufptr = ibuf.buf + 4;
                         const uint8_t * const limit = ibuf.buf + ibuf.len;
                         uint32_t sock;
-                        /* First word of the response is the client ID. */
+                        /* Second word of the response is the client ID. */
                         hal_xdr_decode_int(&bufptr, limit, &sock);
                         /* Pass response on to the client that requested it. */
-                        send(sock, bufptr, ibuf.len - 4, 0);
+                        send(sock, ibuf.buf, ibuf.len, 0);
                         /* Reinitialize the receive buffer. */
                         memset(&ibuf, 0, sizeof(ibuf));
                     }
@@ -271,43 +271,25 @@ int main(int argc, char *argv[])
 
                 /* client data socket */
                 else {
-                    uint8_t *bufptr = obuf.buf;
                     const uint8_t * const limit = obuf.buf + HAL_RPC_MAX_PKT_SIZE;
-                    /* First word of the request is the client ID. */
-                    hal_xdr_encode_int(&bufptr, limit, pollfds[i].fd);
                     /* Get the client's rpc request packet. */
-                    obuf.len = recv(pollfds[i].fd, bufptr, HAL_RPC_MAX_PKT_SIZE - 4, 0);
+                    obuf.len = recv(pollfds[i].fd, obuf.buf, HAL_RPC_MAX_PKT_SIZE, 0);
 #ifdef DEBUG
                     printf("data socket %d received request:\n", pollfds[i].fd);
-                    hexdump(obuf.buf, obuf.len + 4);
+                    hexdump(obuf.buf, obuf.len);
 #endif
 
-		    /* Fill in the client handle arg as needed. */
-		    uint32_t opcode;
-		    hal_xdr_decode_int((const uint8_t ** const)&bufptr, limit, &opcode);
-		    switch (opcode) {
-		    case RPC_FUNC_SET_PIN:
-		    case RPC_FUNC_LOGIN:
-		    case RPC_FUNC_LOGOUT:
-		    case RPC_FUNC_IS_LOGGED_IN:
-		    case RPC_FUNC_HASH_INITIALIZE:
-		    case RPC_FUNC_PKEY_LOAD:
-		    case RPC_FUNC_PKEY_FIND:
-		    case RPC_FUNC_PKEY_GENERATE_RSA:
-		    case RPC_FUNC_PKEY_GENERATE_EC:
-			/* first argument is client handle */
-			hal_xdr_encode_int(&bufptr, limit, pollfds[i].fd);
-			break;
-		    default:
-			break;
-		    }
+		    /* Fill in the client handle arg - first field after opcode. */
+                    uint8_t *bufptr = obuf.buf + 4;
+                    hal_xdr_encode_int(&bufptr, limit, pollfds[i].fd);
 
                     if (obuf.len > 0) {
 #ifdef DEBUG
-                        printf("passing to serial port\n");
+                        printf("passing to serial port:\n");
+                        hexdump(obuf.buf, obuf.len);
 #endif
                         /* Pass it on to the serial port. */
-                        hal_slip_send(obuf.buf, obuf.len + 4);
+                        hal_slip_send(obuf.buf, obuf.len);
                     }
                     else {
 #ifdef DEBUG

@@ -62,5 +62,8 @@ hal_error_t hal_rpc_send(const uint8_t * const buf, const size_t len)
 
 hal_error_t hal_rpc_recv(uint8_t * const buf, size_t * const len)
 {
-    return hal_slip_recv(buf, len, *len);
+    size_t maxlen = *len;
+    *len = 0;
+    hal_error_t err = hal_slip_recv(buf, len, maxlen);
+    return err;
 }

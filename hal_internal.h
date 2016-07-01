@@ -438,7 +438,7 @@ typedef enum {
     RPC_FUNC_PKEY_RENAME,
 } rpc_func_num_t;
 
-#define RPC_VERSION 0x00010000          /* 0.1.0.0 */
+#define RPC_VERSION 0x01010000          /* 1.1.0.0 */
 
 /*
  * RPC client locality. These have to be defines rather than an enum,
