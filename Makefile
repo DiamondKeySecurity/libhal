@@ -72,7 +72,8 @@ endif
 # makefile, so the working definition of "always want" is sometimes
 # just "building this is harmless even if we don't use it."
 
-OBJ = errorstrings.o hash.o asn1.o ecdsa.o rsa.o ${KS_OBJ} rpc_api.o xdr.o rpc_hash.o rpc_misc.o rpc_pkey.o rpc_client.o rpc_server.o
+OBJ += errorstrings.o hash.o asn1.o ecdsa.o rsa.o ${KS_OBJ} xdr.o slip.o
+OBJ += rpc_api.o rpc_hash.o rpc_misc.o rpc_pkey.o rpc_client.o rpc_server.o
 
 # Object files to build when we're on a platform with direct access
 # to our hardware (Verilog) cores.
@@ -128,7 +129,7 @@ endif
 #   client-mixed:	Like client-simple but do hashing locally in software and
 #			support a local keystore (for PKCS #11 public keys, etc)
 #
-# RPC_TRANSPORT = loopback | serial | daemon
+# RPC_TRANSPORT = none | loopback | serial | daemon
 #   loopback:		Communicate over loopback socket on Novena
 #   serial:		Communicate over USB in serial pass-through mode
 #   daemon:		Communicate over USB via a daemon, to arbitrate multiple clients
@@ -138,10 +139,8 @@ endif
 # the C preprocessor: we can use symbolic names so long as they're defined as macros
 # in the C code, but we can't use things like C enum symbols.
 
-ifeq "${RPC_TRANSPORT}" "serial"
-  OBJ += slip.o rpc_serial.o
-else ifeq "${RPC_TRANSPORT}" "daemon"
-  OBJ += slip.o rpc_serial.o
+ifneq "${RPC_MODE}" "server"
+  OBJ += rpc_serial.o
 endif
 
 ifeq "${RPC_TRANSPORT}" "loopback"
