@@ -49,6 +49,16 @@
 static char usage[] =
     "usage: %s [-n socketname] [-d ttydevice] [-s ttyspeed]\n";
 
+/*
+ * Work around glibc "feature test" insanity.  This isn't the correct
+ * definition according to the POSIX, but it does what seems to be the
+ * normal hack on Linux (where this is broken more often than not).
+ */
+
+#ifndef SUN_LEN
+#define SUN_LEN(_sun_ptr_)  (sizeof(*(_sun_ptr_)))
+#endif
+
 /* select() is hopelessly broken, and epoll() is Linux-specific, so we'll use
  * poll() until such a time as libevent or libev seems more appropriate.
  * Unfortunately, poll() doesn't come with any macros or functions to manage
