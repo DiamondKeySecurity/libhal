@@ -192,6 +192,7 @@ CFLAGS		+= -I${CRYPTECH_ROOT}/sw/libhal
 CFLAGS		+= -I${LIBTFM_BLD}
 
 export CFLAGS
+export RPC_MODE
 
 all: ${LIB}
 	cd tests; ${MAKE} $@
