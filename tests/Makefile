@@ -45,7 +45,7 @@ CFLAGS		?= -g3 -Wall -fPIC -std=c99 -I${LIBHAL_SRC} -I${LIBTFM_BLD}
 
 CORE_TESTS	= test-aes-key-wrap test-hash test-pbkdf2 test-ecdsa test-bus test-trng test-rsa test-mkmif
 SERVER_TESTS	= test-rpc_server
-CLIENT_TESTS	= test-rpc_hash test-rpc_pkey test-rpc_get_version test-rpc_get_random
+CLIENT_TESTS	= test-rpc_hash test-rpc_pkey test-rpc_get_version test-rpc_get_random test-rpc_login test-rpc_bighash
 
 ALL_TESTS	= ${CORE_TESTS} ${SERVER_TESTS} ${CLIENT_TESTS}
 
@@ -62,6 +62,8 @@ else
   BIN += ${CLIENT_TESTS}
 
 endif
+
+$(info Building libhal with configuration IO_BUS=${IO_BUS} RPC_MODE=${RPC_MODE} KS=${KS} RPC_TRANSPORT=${RPC_TRANSPORT} MODEXP_CORE=${MODEXP_CORE})
 
 all: ${BIN}
 
