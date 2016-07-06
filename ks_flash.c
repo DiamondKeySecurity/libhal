@@ -324,7 +324,8 @@ hal_error_t hal_ks_get_kek(uint8_t *kek,
                       (kek_max < bitsToBytes(256)) ? bitsToBytes(192) :
                       bitsToBytes(256));
 
-  if (masterkey_volatile_read(kek, len) == LIBHAL_OK) {
+  hal_error_t err = masterkey_volatile_read(kek, len);
+  if (err == LIBHAL_OK) {
       *kek_len = len;
       return LIBHAL_OK;
   }
@@ -333,7 +334,12 @@ hal_error_t hal_ks_get_kek(uint8_t *kek,
       return LIBHAL_OK;
   }
 
-  return HAL_ERROR_KEYSTORE_ACCESS;
+  /* Both keystores returned an error, probably HAL_ERROR_MASTERKEY_NOT_SET.
+   * I could try to be clever and compare the errors, but really the volatile
+   * keystore is the important one (you shouldn't store the master key in
+   * flash), so return that error.
+   */
+  return err;
 }
 
 
