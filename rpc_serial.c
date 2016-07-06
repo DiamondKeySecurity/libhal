@@ -64,7 +64,6 @@ static int fd = -1;
 hal_error_t hal_serial_init(const char * const device, const uint32_t speed)
 {
     struct termios tty;
-    speed_t termios_speed;
 
     fd = open(device, O_RDWR | O_NOCTTY | O_SYNC);
     if (fd == -1) {
@@ -76,6 +75,7 @@ hal_error_t hal_serial_init(const char * const device, const uint32_t speed)
 	return perror("tcgetattr"), HAL_ERROR_RPC_TRANSPORT;
 
 #if !HAL_RPC_SERIAL_USE_MACOSX_IOCTL
+    speed_t termios_speed;
 
     switch (speed) {
     case 115200:
@@ -89,8 +89,8 @@ hal_error_t hal_serial_init(const char * const device, const uint32_t speed)
 	return HAL_ERROR_RPC_TRANSPORT;
     }
 
-    cfsetospeed (&tty, speed);
-    cfsetispeed (&tty, speed);
+    cfsetospeed (&tty, termios_speed);
+    cfsetispeed (&tty, termios_speed);
 
 #endif
 
