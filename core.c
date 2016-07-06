@@ -4,7 +4,7 @@
  * This module contains code to probe the FPGA for its installed cores.
  *
  * Author: Paul Selkirk, Rob Austein
- * Copyright (c) 2015, NORDUnet A/S All rights reserved.
+ * Copyright (c) 2015-2016, NORDUnet A/S All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -42,35 +42,8 @@
 #include "hal_internal.h"
 
 /*
- * Each Cryptech core has a set of 4-byte registers, which are accessed
- * through a 16-bit address. The address space is divided as follows:
- *   3 bits segment selector       | up to 8 segments
- *   5 bits core selector          | up to 32 cores/segment (see note below)
- *   8 bits register selector      | up to 256 registers/core (see modexp below)
- *
- * i.e, the address is structured as:
- * sss ccccc rrrrrrrr
- *
- * The I2C and UART communication channels use this 16-bit address format
- * directly in their read and write commands.
- *
- * The EIM communications channel translates this 16-bit address into a
- * 32-bit memory-mapped address in the range 0x08000000..807FFFF:
- * 00001000000000 sss 0 ccccc rrrrrrrr 00
- *
- * EIM, as implemented on the Novena, uses a 19-bit address space:
- *   Bits 18..16 are the semgent selector.
- *   Bits 15..10 are the core selector.
- *   Bits 9..2 are the register selector.
- *   Bits 1..0 are zero, because reads and writes are always word aligned.
- *
- * Note that EIM can support 64 cores per segment, but we sacrifice one bit
- * in order to map it into a 16-bit address space.
- */
-
-/*
  * Structure of our internal database is private, in case we want to
- * be change representation (array, tree, list of lists, whatever) at
+ * change representation (array, tree, list of lists, whatever) at
  * some later date without having to change the public API.
  */
 

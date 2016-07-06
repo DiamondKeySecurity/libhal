@@ -4,7 +4,7 @@
  * This module contains common code to talk to the FPGA over the FMC bus.
  *
  * Author: Paul Selkirk
- * Copyright (c) 2014-2015, NORDUnet A/S All rights reserved.
+ * Copyright (c) 2014-2016, NORDUnet A/S All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -61,17 +61,10 @@ static hal_error_t init(void)
 }
 
 /* Translate cryptech register number to FMC address.
- *
- * register number format:
- * 3 bits segment selector
- * 5 bits core selector (6 bits in native eim)
- * 8 bits register selector
- *
- * sss ccccc rrrrrrrr => sss 0 ccccc rrrrrrrr 00
  */
 static hal_addr_t fmc_offset(hal_addr_t offset)
 {
-  return ((offset & ~0x1fff) << 3) + ((offset & 0x1fff) << 2);
+  return offset << 2;
 }
 
 void hal_io_set_debug(int onoff)
