@@ -109,7 +109,7 @@ static const char *format_hex(const uint8_t *bin, const size_t len, char *hex, c
   return hex;
 }
 
-static int run_test(const hal_core_t *core,
+static int run_test(hal_core_t *core,
                     const uint8_t * const K, const size_t K_len,
                     const uint8_t * const C, const size_t C_len)
 {
@@ -169,7 +169,7 @@ int main (int argc, char *argv[])
 
   printf("Testing whether AES core reports present...");
 
-  const hal_core_t *core = hal_core_find(AES_CORE_NAME, NULL);
+  hal_core_t *core = hal_core_find(AES_CORE_NAME, NULL);
 
   if (core == NULL) {
     printf("no, skipping keywrap tests\n");

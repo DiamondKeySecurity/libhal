@@ -44,7 +44,7 @@
 
 int main(int argc, char *argv[])
 {
-    const hal_core_t *core;
+    hal_core_t *core;
     const hal_core_info_t *info;
 
     for (core = hal_core_iterate(NULL); core != NULL; core = hal_core_iterate(core)) {

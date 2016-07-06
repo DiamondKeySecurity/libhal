@@ -138,12 +138,14 @@ static hal_error_t set_buffer(const hal_core_t *core,
  * Run one modexp operation.
  */
 
-hal_error_t hal_modexp(const hal_core_t *core,
+hal_error_t hal_modexp(hal_core_t *core,
                        const uint8_t * const msg, const size_t msg_len, /* Message */
                        const uint8_t * const exp, const size_t exp_len, /* Exponent */
                        const uint8_t * const mod, const size_t mod_len, /* Modulus */
                        uint8_t *result, const size_t result_len)
 {
+  hal_error_t err;
+
   /*
    * All pointers must be set, neither message nor exponent may be
    * longer than modulus, result buffer must not be shorter than
@@ -159,6 +161,22 @@ hal_error_t hal_modexp(const hal_core_t *core,
       msg_len > mod_len || exp_len > mod_len || result_len < mod_len ||
       ((msg_len | exp_len | mod_len) & 3) != 0)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (((err = hal_core_alloc(MODEXPS6_NAME, &core)) == HAL_ERROR_CORE_NOT_FOUND) &&
+      ((err = hal_core_alloc(MODEXPA7_NAME, &core)) != HAL_OK))
+    return err;
+
+#undef  check
+#define check(_expr_)                                                   \
+  do {                                                                  \
+    hal_error_t _err = (_expr_);                                        \
+    if (_err != HAL_OK && debug)                                        \
+      printf("%s failed: %s\n", #_expr_, hal_error_string(_err));       \
+    if (_err != HAL_OK) {                                               \
+      hal_core_free(core);                                              \
+      return _err;                                                      \
+    }                                                                   \
+  } while (0)
 
   /*
    * We probably ought to take the mode (fast vs constant-time) as an

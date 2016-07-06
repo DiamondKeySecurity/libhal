@@ -63,7 +63,7 @@
 
 
 static int volatile_init = 0, flash_init = 0;
-static const hal_core_t *core = NULL;
+static hal_core_t *core = NULL;
 
 #define MKM_VOLATILE_STATUS_ADDRESS	0
 #define MKM_VOLATILE_SCLK_DIV		0x20

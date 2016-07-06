@@ -46,7 +46,7 @@
  * if and when we get clever about reusing HMAC state for speed.
  */
 
-static hal_error_t do_hmac(const hal_core_t *core,
+static hal_error_t do_hmac(hal_core_t *core,
                            const hal_hash_descriptor_t * const d,
                            const uint8_t * const pw,   const size_t pw_len,
                            const uint8_t * const data, const size_t data_len,
@@ -78,7 +78,7 @@ static hal_error_t do_hmac(const hal_core_t *core,
  * Derive a key from a passphrase using the PBKDF2 algorithm.
  */
 
-hal_error_t hal_pbkdf2(const hal_core_t *core,
+hal_error_t hal_pbkdf2(hal_core_t *core,
                        const hal_hash_descriptor_t * const descriptor,
                        const uint8_t * const password, const size_t password_length,
                        const uint8_t * const salt,     const size_t salt_length,
@@ -107,6 +107,13 @@ hal_error_t hal_pbkdf2(const hal_core_t *core,
 
   memset(result, 0, sizeof(result));
   memset(mac,    0, sizeof(mac));
+
+#if 1
+  /* HACK - find the second sha256 core, to avoid interfering with rpc.
+   */
+  core = hal_core_find(descriptor->core_name, NULL);
+  core = hal_core_find(descriptor->core_name, core);
+#endif
 
   /*
    * We probably should check here to see whether the password is

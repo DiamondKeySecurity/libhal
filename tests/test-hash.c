@@ -540,7 +540,7 @@ static const uint8_t hmac_sha2_tc_7_result_sha512[] = { /* 64 bytes */
   0xfa, 0x8c, 0x6a, 0x58
 };
 
-static int _test_hash(const hal_core_t *core,
+static int _test_hash(hal_core_t *core,
                       const hal_hash_descriptor_t * const descriptor,
                       const uint8_t * const data, const size_t data_len,
                       const uint8_t * const result, const size_t result_len,
@@ -588,7 +588,7 @@ static int _test_hash(const hal_core_t *core,
     return 1;
 }
 
-static int _test_hmac(const hal_core_t *core,
+static int _test_hmac(hal_core_t *core,
                       const hal_hash_descriptor_t * const descriptor,
                       const uint8_t * const key,  const size_t key_len,
                       const uint8_t * const data, const size_t data_len,
@@ -643,7 +643,7 @@ static int _test_hmac(const hal_core_t *core,
 #define test_hmac(_core_, _desc_, _key_, _data_, _result_, _label_) \
   _test_hmac(_core_, _desc_, _key_, sizeof(_key_), _data_, sizeof(_data_), _result_, sizeof(_result_), _label_)
 
-static void show_core(const hal_core_t *core, const char *whinge)
+static void show_core(hal_core_t *core, const char *whinge)
 {
   const hal_core_info_t *core_info = hal_core_info(core);
   if (core_info != NULL)
@@ -654,9 +654,9 @@ static void show_core(const hal_core_t *core, const char *whinge)
 
 int main (int argc, char *argv[])
 {
-  const hal_core_t * const sha1_core   = hal_core_find(SHA1_NAME,   NULL);
-  const hal_core_t * const sha256_core = hal_core_find(SHA256_NAME, NULL);
-  const hal_core_t * const sha512_core = hal_core_find(SHA512_NAME, NULL);
+  hal_core_t * const sha1_core   = hal_core_find(SHA1_NAME,   NULL);
+  hal_core_t * const sha256_core = hal_core_find(SHA256_NAME, NULL);
+  hal_core_t * const sha512_core = hal_core_find(SHA512_NAME, NULL);
 
   show_core(sha1_core,   "sha-1");
   show_core(sha256_core, "sha-256");

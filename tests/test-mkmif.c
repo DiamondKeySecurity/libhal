@@ -19,7 +19,7 @@ typedef union {
     uint32_t word;
 } byteword_t;
 
-static hal_error_t sclk_test(const hal_core_t *core, const uint32_t divisor)
+static hal_error_t sclk_test(hal_core_t *core, const uint32_t divisor)
 {
     uint32_t readback;
     hal_error_t err;
@@ -41,7 +41,7 @@ static hal_error_t sclk_test(const hal_core_t *core, const uint32_t divisor)
     return HAL_OK;
 }
 
-static hal_error_t init_test(const hal_core_t *core)
+static hal_error_t init_test(hal_core_t *core)
 {
     hal_error_t err;
 
@@ -55,7 +55,7 @@ static hal_error_t init_test(const hal_core_t *core)
     return HAL_OK;
 }
 
-static hal_error_t write_test(const hal_core_t *core)
+static hal_error_t write_test(hal_core_t *core)
 {
     uint32_t write_data;
     uint32_t write_address;
@@ -78,7 +78,7 @@ static hal_error_t write_test(const hal_core_t *core)
     return HAL_OK;
 }
 
-static hal_error_t read_test(const hal_core_t *core)
+static hal_error_t read_test(hal_core_t *core)
 {
     uint32_t read_data;
     uint32_t read_address;
@@ -101,7 +101,7 @@ static hal_error_t read_test(const hal_core_t *core)
     return HAL_OK;
 }
 
-static hal_error_t write_read_test(const hal_core_t *core)
+static hal_error_t write_read_test(hal_core_t *core)
 {
     uint32_t data;
     uint32_t readback;
@@ -131,7 +131,7 @@ static hal_error_t write_read_test(const hal_core_t *core)
 
 int main(void)
 {
-    const hal_core_t *core = hal_core_find(MKMIF_NAME, NULL);
+    hal_core_t *core = hal_core_find(MKMIF_NAME, NULL);
 
     if (core == NULL) {
         printf("MKMIF core not present, not testing.\n");

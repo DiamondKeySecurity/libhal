@@ -76,6 +76,7 @@
 
 struct hal_core {
   hal_core_info_t info;
+  uint32_t busy;
   struct hal_core *next;
 };
 
@@ -166,12 +167,12 @@ static hal_core_t *probe_cores(void)
   return NULL;
 }
 
-const hal_core_t * hal_core_iterate(const hal_core_t *core)
+hal_core_t * hal_core_iterate(hal_core_t *core)
 {
   return core == NULL ? probe_cores() : core->next;
 }
 
-const hal_core_t *hal_core_find(const char *name, const hal_core_t *core)
+hal_core_t *hal_core_find(const char *name, hal_core_t *core)
 {
   for (core = hal_core_iterate(core); core != NULL; core = core->next)
     if (name_matches(core, name))
@@ -179,18 +180,64 @@ const hal_core_t *hal_core_find(const char *name, const hal_core_t *core)
   return NULL;
 }
 
-hal_error_t hal_core_check_name(const hal_core_t **core, const char *name)
+__attribute__((weak)) void hal_critical_section_start(void)
 {
-  if (core == NULL || name == NULL)
+  return;
+}
+
+__attribute__((weak)) void hal_critical_section_end(void)
+{
+  return;
+}
+
+hal_error_t hal_core_alloc(const char *name, hal_core_t **pcore)
+{
+  hal_core_t *core;
+  hal_error_t err = HAL_ERROR_CORE_NOT_FOUND;
+  
+  if (name == NULL && (pcore == NULL || *pcore == NULL))
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if (*core == NULL && (*core = hal_core_find(name, NULL)) != NULL)
-    return HAL_OK;
+  core = *pcore;
+  if (name == NULL)
+    name = core->info.name;
 
-  if (*core == NULL || !name_matches(*core, name))
-    return HAL_ERROR_CORE_NOT_FOUND;
+  hal_critical_section_start();
+  if (core != NULL) {
+    /* if we can reallocate the same core, do it now */
+    if (!core->busy) {
+      core->busy = 1;
+      hal_critical_section_end();
+      return HAL_OK;
+    }
+    /* else fall through to search */
+  }
+  for (core = hal_core_iterate(NULL); core != NULL; core = core->next) {
+    if (name_matches(core, name)) {
+      if (core->busy) {
+        err = HAL_ERROR_CORE_BUSY;
+        continue;
+      }
+      else {
+        err = HAL_OK;
+        *pcore = core;
+        core->busy = 1;
+        break;
+      }
+    }
+  }
+  hal_critical_section_end();
 
-  return HAL_OK;
+  return err;
+}
+
+void hal_core_free(hal_core_t *core)
+{
+  if (core != NULL) {
+    hal_critical_section_start();
+    core->busy = 0;
+    hal_critical_section_end();
+  }
 }
 
 hal_addr_t hal_core_base(const hal_core_t *core)
@@ -201,6 +248,11 @@ hal_addr_t hal_core_base(const hal_core_t *core)
 const hal_core_info_t *hal_core_info(const hal_core_t *core)
 {
   return core == NULL ? NULL : &core->info;
+}
+
+const int hal_core_busy(const hal_core_t *core)
+{
+  return (int)core->busy;
 }
 
 /*
