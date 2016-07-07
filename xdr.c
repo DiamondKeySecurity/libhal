@@ -165,21 +165,28 @@ hal_error_t hal_xdr_decode_buffer_in_place(const uint8_t **inbuf, const uint8_t 
  */
 hal_error_t hal_xdr_decode_buffer(const uint8_t **inbuf, const uint8_t * const limit, uint8_t * const value, uint32_t * const len)
 {
+    if (inbuf == NULL || value == NULL || len == NULL)
+        return HAL_ERROR_BAD_ARGUMENTS;
+
     hal_error_t ret;
     const uint8_t *vptr;
     const uint8_t *orig_inbuf = *inbuf;
     uint32_t xdr_len;
 
-    if ((ret = hal_xdr_decode_buffer_in_place(inbuf, limit, &vptr, &xdr_len)) == HAL_OK) {
-	*len = xdr_len;
-	if (*len < xdr_len) {
-	    /* user buffer is too small, undo read of length */
-	    *inbuf = orig_inbuf;
-	    return HAL_ERROR_XDR_BUFFER_OVERFLOW;
-	}
+    if ((ret = hal_xdr_decode_buffer_in_place(inbuf, limit, &vptr, &xdr_len)) != HAL_OK)
+        return ret;
 
-        memcpy(value, vptr, *len);
+    if (*len < xdr_len) {
+        /* user buffer is too small, undo read of length */
+        *inbuf = orig_inbuf;
+	ret = HAL_ERROR_XDR_BUFFER_OVERFLOW;
     }
+    else {
+        memcpy(value, vptr, xdr_len);
+    }
+
+    *len = xdr_len;
+
     return ret;
 }
 
