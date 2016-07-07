@@ -34,6 +34,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -143,8 +144,15 @@ int main(int argc, char *argv[])
     int lsock;
     int dsock;
     int opt;
-    const char *device = HAL_CLIENT_SERIAL_DEFAULT_DEVICE;
-    uint32_t speed     = HAL_CLIENT_SERIAL_DEFAULT_SPEED;
+    const char *device = getenv(HAL_CLIENT_SERIAL_DEVICE_ENVVAR);
+    const char *speed_ = getenv(HAL_CLIENT_SERIAL_SPEED_ENVVAR);
+    uint32_t    speed  = HAL_CLIENT_SERIAL_DEFAULT_SPEED;
+
+    if (device == NULL)
+        device = HAL_CLIENT_SERIAL_DEFAULT_DEVICE;
+
+    if (speed_ != NULL)
+        speed = (uint32_t) strtoul(speed_, NULL, 10);
 
     while ((opt = getopt(argc, argv, "hn:d:s:")) != -1) {
         switch (opt) {
@@ -158,7 +166,8 @@ int main(int argc, char *argv[])
             device = optarg;
             break;
         case 's':
-            switch (atoi(optarg)) {
+	    speed = (uint32_t) strtoul(optarg, NULL, 10);
+            switch (speed) {
             case 115200:
             case 921600:
                 break;
