@@ -731,10 +731,10 @@ void hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
     case RPC_FUNC_PKEY_GET_PUBLIC_KEY:
         ret = pkey_get_public_key(&iptr, ilimit, &optr, olimit);
         break;
-    case RPC_FUNC_PKEY_REMOTE_SIGN:
+    case RPC_FUNC_PKEY_SIGN:
         ret = pkey_remote_sign(&iptr, ilimit, &optr, olimit);
         break;
-    case RPC_FUNC_PKEY_REMOTE_VERIFY:
+    case RPC_FUNC_PKEY_VERIFY:
         ret = pkey_remote_verify(&iptr, ilimit, &optr, olimit);
         break;
     case RPC_FUNC_PKEY_LIST:
