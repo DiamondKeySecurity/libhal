@@ -10,9 +10,11 @@ tests/test-ecdsa-*.der
 tests/test-hash
 tests/test-mkmif
 tests/test-pbkdf2
+tests/test-rpc_bighash
 tests/test-rpc_get_random
 tests/test-rpc_get_version
 tests/test-rpc_hash
+tests/test-rpc_login
 tests/test-rpc_pkey
 tests/test-rpc_server
 tests/test-rsa
