@@ -191,6 +191,12 @@ CFLAGS		+= -DHAL_STATIC_PKEY_STATE_BLOCKS=${STATIC_PKEY_STATE_BLOCKS}
 CFLAGS		+= -I${CRYPTECH_ROOT}/sw/libhal
 CFLAGS		+= -I${LIBTFM_BLD}
 
+# Enable software hash cores everywhere for now.  In theory, there might be situations
+# where we don't want them on the HSM, but they're relatively harmless, and the bootstrap
+# sequence on new hardware works a lot better when we can log in before loading the FPGA.
+
+CFLAGS		+= -DHAL_ENABLE_SOFTWARE_HASH_CORES=1
+
 export CFLAGS
 export RPC_MODE
 
