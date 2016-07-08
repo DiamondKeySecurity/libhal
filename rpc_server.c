@@ -647,8 +647,8 @@ static hal_error_t pkey_list(const uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-void hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
-                             uint8_t * const obuf, size_t * const olen)
+hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
+                                    uint8_t * const obuf, size_t * const olen)
 {
     const uint8_t * iptr = ibuf;
     const uint8_t * const ilimit = ibuf + ilen;
@@ -658,9 +658,9 @@ void hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
     uint32_t client_handle;
     hal_error_t ret;
 
-    hal_xdr_decode_int(&iptr, ilimit, &rpc_func_num);
-    hal_xdr_decode_int(&iptr, ilimit, &client_handle);
-    hal_xdr_undecode_int(&iptr);
+    check(hal_xdr_decode_int(&iptr, ilimit, &rpc_func_num));
+    check(hal_xdr_decode_int(&iptr, ilimit, &client_handle));
+    check(hal_xdr_undecode_int(&iptr));
     switch (rpc_func_num) {
     case RPC_FUNC_GET_VERSION:
         ret = get_version(&iptr, ilimit, &optr, olimit);
@@ -750,9 +750,10 @@ void hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
     /* Encode opcode, client ID, and response code at the beginning of the payload */
     *olen = optr - obuf;
     optr = obuf;
-    hal_xdr_encode_int(&optr, olimit, rpc_func_num);
-    hal_xdr_encode_int(&optr, olimit, client_handle);
-    hal_xdr_encode_int(&optr, olimit, ret);
+    check(hal_xdr_encode_int(&optr, olimit, rpc_func_num));
+    check(hal_xdr_encode_int(&optr, olimit, client_handle));
+    check(hal_xdr_encode_int(&optr, olimit, ret));
+    return HAL_OK;
 }
 
 #define interrupt 0
@@ -770,8 +771,8 @@ void hal_rpc_server_main(void)
         ret = hal_rpc_recvfrom(inbuf, &ilen, &opaque);
         if (ret == HAL_OK) {
             olen = sizeof(outbuf);
-            hal_rpc_server_dispatch(inbuf, ilen, outbuf, &olen);
-            hal_rpc_sendto(outbuf, olen, opaque);
+            if (hal_rpc_server_dispatch(inbuf, ilen, outbuf, &olen) == HAL_OK)
+                hal_rpc_sendto(outbuf, olen, opaque);
         }
     }
 }
