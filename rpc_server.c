@@ -40,7 +40,7 @@
  * RPC calls.
  */
 
-#define check(op) if ((ret = (op)) != HAL_OK) return ret;
+#define check(op) do { hal_error_t _err = (op); if (_err != HAL_OK) return _err; } while (0)
 
 #define pad(n) (((n) + 3) & ~3)
 
@@ -497,7 +497,6 @@ static hal_error_t pkey_get_public_key_len(const uint8_t **iptr, const uint8_t *
     hal_client_handle_t client __attribute__((unused));
     hal_pkey_handle_t pkey;
     size_t len;
-    hal_error_t ret;
 
     check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
