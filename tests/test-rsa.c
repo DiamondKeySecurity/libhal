@@ -49,7 +49,7 @@
  * Run one modexp test.
  */
 
-static int test_modexp(const hal_core_t *core,
+static int test_modexp(hal_core_t *core,
                        const char * const kind,
                        const rsa_tc_t * const tc,
                        const rsa_tc_bn_t * const msg, /* Input message */
@@ -74,7 +74,7 @@ static int test_modexp(const hal_core_t *core,
  * Run one RSA CRT test.
  */
 
-static int test_decrypt(const hal_core_t *core,
+static int test_decrypt(hal_core_t *core,
                         const char * const kind,
                         const rsa_tc_t * const tc)
 {
@@ -115,7 +115,7 @@ static int test_decrypt(const hal_core_t *core,
  * Run one RSA key generation + CRT test.
  */
 
-static int test_gen(const hal_core_t *core,
+static int test_gen(hal_core_t *core,
                     const char * const kind,
                     const rsa_tc_t * const tc)
 {
@@ -277,7 +277,7 @@ static void _time_check(const struct timeval t0, const int ok)
  * and try generating a signature with that.
  */
 
-static int test_rsa(const hal_core_t *core, const rsa_tc_t * const tc)
+static int test_rsa(hal_core_t *core, const rsa_tc_t * const tc)
 {
   int ok = 1;
 
@@ -298,7 +298,7 @@ static int test_rsa(const hal_core_t *core, const rsa_tc_t * const tc)
 
 int main(int argc, char *argv[])
 {
-  const hal_core_t *core = hal_core_find(MODEXPS6_NAME, NULL);
+  hal_core_t *core = hal_core_find(MODEXPS6_NAME, NULL);
   if (core == NULL)
       core = hal_core_find(MODEXPA7_NAME, NULL);
   const hal_core_info_t *core_info = hal_core_info(core);

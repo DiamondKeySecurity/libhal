@@ -100,11 +100,11 @@ struct hal_hash_driver {
  */
 
 struct hal_hash_state {
-  const hal_core_t *core;
+  hal_core_t *core;
   const hal_hash_descriptor_t *descriptor;
   const hal_hash_driver_t *driver;
-  uint64_t msg_length_high;                     /* Total data hashed in this message */
-  uint64_t msg_length_low;                      /* (128 bits in SHA-512 cases) */
+  long long unsigned msg_length_high;           /* Total data hashed in this message */
+  long long unsigned msg_length_low;            /* (128 bits in SHA-512 cases) */
   uint8_t block[HAL_MAX_HASH_BLOCK_LENGTH],     /* Block we're accumulating */
     core_state[HAL_MAX_HASH_DIGEST_LENGTH];     /* Saved core state */
   size_t block_used;                            /* How much of the block we've used */
@@ -362,42 +362,10 @@ static inline const hal_hash_driver_t *check_driver(const hal_hash_descriptor_t 
 }
 
 /*
- * Internal utility to check core against descriptor, including
- * attempting to locate an appropriate core if we weren't given one.
- */
-
-static inline hal_error_t check_core(const hal_core_t **core,
-                                     const hal_hash_descriptor_t * const descriptor,
-                                     unsigned *flags)
-{
-  assert(descriptor != NULL && descriptor->driver != NULL);
-
-#if RPC_CLIENT == RPC_CLIENT_MIXED
-  hal_error_t err = HAL_ERROR_CORE_NOT_FOUND;
-#else
-  hal_error_t err = hal_core_check_name(core, descriptor->core_name);
-#endif
-
-#if HAL_ENABLE_SOFTWARE_HASH_CORES
-
-  if (err == HAL_ERROR_CORE_NOT_FOUND && descriptor->driver->sw_core) {
-
-    if (flags != NULL)
-      *flags |= STATE_FLAG_SOFTWARE_CORE;
-
-    err = HAL_OK;
-  }
-
-#endif /* HAL_ENABLE_SOFTWARE_HASH_CORES */
-
-  return err;
-}
-
-/*
  * Initialize hash state.
  */
 
-hal_error_t hal_hash_initialize(const hal_core_t *core,
+hal_error_t hal_hash_initialize(hal_core_t *core,
                                 const hal_hash_descriptor_t * const descriptor,
                                 hal_hash_state_t **state_,
                                 void *state_buffer, const size_t state_length)
@@ -405,16 +373,12 @@ hal_error_t hal_hash_initialize(const hal_core_t *core,
   const hal_hash_driver_t * const driver = check_driver(descriptor);
   hal_hash_state_t *state = state_buffer;
   unsigned flags = 0;
-  hal_error_t err;
 
   if (driver == NULL || state_ == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   if (state_buffer != NULL && state_length < descriptor->hash_state_length)
     return HAL_ERROR_BAD_ARGUMENTS;
-
-  if ((err = check_core(&core, descriptor, &flags)) != HAL_OK)
-    return err;
 
   if (state_buffer == NULL && (state = alloc_static_hash_state()) == NULL)
       return HAL_ERROR_ALLOCATION_FAILURE;
@@ -515,9 +479,6 @@ static hal_error_t hash_write_block(hal_hash_state_t * const state)
   uint8_t ctrl_cmd[4];
   hal_error_t err;
 
-  if (HAL_ENABLE_SOFTWARE_HASH_CORES && (state->flags & STATE_FLAG_SOFTWARE_CORE) != 0)
-    return state->driver->sw_core(state);
-
   if ((err = hal_io_wait_ready(state->core)) != HAL_OK)
     return err;
 
@@ -556,7 +517,7 @@ hal_error_t hal_hash_update(hal_hash_state_t *state,            /* Opaque state 
                             size_t data_buffer_length)          /* Length of data_buffer */
 {
   const uint8_t *p = data_buffer;
-  hal_error_t err;
+  hal_error_t err = HAL_OK;
   size_t n;
 
   if (state == NULL || data_buffer == NULL)
@@ -567,6 +528,11 @@ hal_error_t hal_hash_update(hal_hash_state_t *state,            /* Opaque state 
 
   assert(state->descriptor != NULL && state->driver != NULL);
   assert(state->descriptor->block_length <= sizeof(state->block));
+
+#if RPC_CLIENT != RPC_CLIENT_MIXED
+  if ((err = hal_core_alloc(state->descriptor->core_name, &state->core)) != HAL_OK)
+      return err;
+#endif
 
   while ((n = state->descriptor->block_length - state->block_used) <= data_buffer_length) {
     /*
@@ -582,7 +548,7 @@ hal_error_t hal_hash_update(hal_hash_state_t *state,            /* Opaque state 
     data_buffer_length -= n;
     p += n;
     if ((err = hash_write_block(state)) != HAL_OK)
-      return err;
+      goto out;
     state->block_count++;
   }
 
@@ -600,7 +566,11 @@ hal_error_t hal_hash_update(hal_hash_state_t *state,            /* Opaque state 
     state->block_used += data_buffer_length;
   }
 
-  return HAL_OK;
+out:
+#if RPC_CLIENT != RPC_CLIENT_MIXED
+  hal_core_free(state->core);
+#endif
+  return err;
 }
 
 /*
@@ -627,6 +597,11 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
 
   assert(state->descriptor->block_length <= sizeof(state->block));
 
+#if RPC_CLIENT != RPC_CLIENT_MIXED
+  if ((err = hal_core_alloc(NULL, &state->core)) != HAL_OK)
+      return err;
+#endif
+
   /*
    * Add padding, then pull result from the core
    */
@@ -646,7 +621,7 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
     if (n > 0)
       memset(state->block + state->block_used, 0, n);
     if ((err = hash_write_block(state)) != HAL_OK)
-      return err;
+      goto out;
     state->block_count++;
     state->block_used = 0;
   }
@@ -671,25 +646,27 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
 
   /* Push final block */
   if ((err = hash_write_block(state)) != HAL_OK)
-    return err;
+    goto out;
   state->block_count++;
 
   /* All data pushed to core, now we just need to read back the result */
-  if (HAL_ENABLE_SOFTWARE_HASH_CORES && (state->flags & STATE_FLAG_SOFTWARE_CORE) != 0)
-    swytebop(digest_buffer, state->core_state, state->descriptor->digest_length, state->driver->sw_word_size);
-#if RPC_CLIENT != RPC_CLIENT_MIXED
-  else if ((err = hash_read_digest(state->core, state->driver, digest_buffer, state->descriptor->digest_length)) != HAL_OK)
+#if RPC_CLIENT == RPC_CLIENT_MIXED
+  swytebop(digest_buffer, state->core_state, state->descriptor->digest_length, state->driver->sw_word_size);
+out:
+  return err;
+#else
+  err = hash_read_digest(state->core, state->driver, digest_buffer, state->descriptor->digest_length);
+out:
+  hal_core_free(state->core);
+  return err;
 #endif
-    return err;
-
-  return HAL_OK;
 }
 
 /*
  * Initialize HMAC state.
  */
 
-hal_error_t hal_hmac_initialize(const hal_core_t *core,
+hal_error_t hal_hmac_initialize(hal_core_t *core,
                                 const hal_hash_descriptor_t * const descriptor,
                                 hal_hmac_state_t **state_,
                                 void *state_buffer, const size_t state_length,
@@ -705,9 +682,6 @@ hal_error_t hal_hmac_initialize(const hal_core_t *core,
 
   if (state_buffer != NULL && state_length < descriptor->hmac_state_length)
     return HAL_ERROR_BAD_ARGUMENTS;
-
-  if ((err = check_core(&core, descriptor, NULL)) != HAL_OK)
-    return err;
 
   if (state_buffer == NULL && (state = alloc_static_hmac_state()) == NULL)
     return HAL_ERROR_ALLOCATION_FAILURE;

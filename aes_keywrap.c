@@ -156,7 +156,7 @@ static hal_error_t do_block(const hal_core_t *core, uint8_t *b1, uint8_t *b2)
  * buffer size.
  */
 
-hal_error_t hal_aes_keywrap(const hal_core_t *core,
+hal_error_t hal_aes_keywrap(hal_core_t *core,
                             const uint8_t *K, const size_t K_len,
                             const uint8_t * const Q,
                             const size_t m,
@@ -170,14 +170,14 @@ hal_error_t hal_aes_keywrap(const hal_core_t *core,
 
   assert(calculated_C_len % 8 == 0);
 
-  if ((err = hal_core_check_name(&core, AES_CORE_NAME)) != HAL_OK)
-    return err;
-
   if (Q == NULL || C == NULL || C_len == NULL || *C_len < calculated_C_len)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if ((err = load_kek(core, K, K_len, KEK_encrypting)) != HAL_OK)
+  if ((err = hal_core_alloc(AES_CORE_NAME, &core)) != HAL_OK)
     return err;
+
+  if ((err = load_kek(core, K, K_len, KEK_encrypting)) != HAL_OK)
+      goto out;
 
   *C_len = calculated_C_len;
 
@@ -198,7 +198,7 @@ hal_error_t hal_aes_keywrap(const hal_core_t *core,
 
   if (n == 1) {
     if ((err = do_block(core, C, C + 8)) != HAL_OK)
-      return err;
+        goto out;
   }
 
   else {
@@ -206,7 +206,7 @@ hal_error_t hal_aes_keywrap(const hal_core_t *core,
       for (i = 1; i <= n; i++) {
         uint32_t t = n * j + i;
         if ((err = do_block(core, C, C + i * 8)) != HAL_OK)
-          return err;
+            goto out;
         C[7] ^= t & 0xFF; t >>= 8;
         C[6] ^= t & 0xFF; t >>= 8;
         C[5] ^= t & 0xFF; t >>= 8;
@@ -215,7 +215,9 @@ hal_error_t hal_aes_keywrap(const hal_core_t *core,
     }
   }
 
-  return HAL_OK;
+out:
+  hal_core_free(core);
+  return err;
 }
 
 
@@ -225,7 +227,7 @@ hal_error_t hal_aes_keywrap(const hal_core_t *core,
  * Q should be the same size as C.  Q and C can overlap.
  */
 
-hal_error_t hal_aes_keyunwrap(const hal_core_t * core,
+hal_error_t hal_aes_keyunwrap(hal_core_t * core,
                               const uint8_t *K, const size_t K_len,
                               const uint8_t * const C,
                               const size_t C_len,
@@ -237,14 +239,14 @@ hal_error_t hal_aes_keyunwrap(const hal_core_t * core,
   long i, j;
   size_t m;
 
-  if ((err = hal_core_check_name(&core, AES_CORE_NAME)) != HAL_OK)
-    return err;
-
   if (C == NULL || Q == NULL || C_len % 8 != 0 || C_len < 16 || Q_len == NULL || *Q_len < C_len)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if ((err = load_kek(core, K, K_len, KEK_decrypting)) != HAL_OK)
+  if ((err = hal_core_alloc(AES_CORE_NAME, &core)) != HAL_OK)
     return err;
+
+  if ((err = load_kek(core, K, K_len, KEK_decrypting)) != HAL_OK)
+    goto out;
 
   n = (C_len / 8) - 1;
 
@@ -253,7 +255,7 @@ hal_error_t hal_aes_keyunwrap(const hal_core_t * core,
 
   if (n == 1) {
     if ((err = do_block(core, Q, Q + 8)) != HAL_OK)
-      return err;
+      goto out;
   }
 
   else {
@@ -265,7 +267,7 @@ hal_error_t hal_aes_keyunwrap(const hal_core_t * core,
         Q[5] ^= t & 0xFF; t >>= 8;
         Q[4] ^= t & 0xFF;
         if ((err = do_block(core, Q, Q + i * 8)) != HAL_OK)
-          return err;
+          goto out;
       }
     }
   }
@@ -287,7 +289,9 @@ hal_error_t hal_aes_keyunwrap(const hal_core_t * core,
 
   memmove(Q, Q + 8, m);
 
-  return HAL_OK;
+out:
+  hal_core_free(core);
+  return err;
 }
 
 /*

@@ -43,23 +43,23 @@
 #define WAIT_FOR_CSPRNG_VALID   1
 #endif
 
-hal_error_t hal_get_random(const hal_core_t *core, void *buffer, const size_t length)
+hal_error_t hal_get_random(hal_core_t *core, void *buffer, const size_t length)
 {
   uint8_t temp[4], *buf = buffer;
   hal_error_t err;
   size_t i;
 
-  if ((err = hal_core_check_name(&core, CSPRNG_NAME)) != HAL_OK)
+  if ((err = hal_core_alloc(CSPRNG_NAME, &core)) != HAL_OK)
     return err;
 
   for (i = 0; i < length; i += 4) {
     const int last = (length - i) < 4;
 
     if (WAIT_FOR_CSPRNG_VALID && (err = hal_io_wait_valid(core)) != HAL_OK)
-      return err;
+      goto out;
 
     if ((err = hal_io_read(core, CSPRNG_ADDR_RANDOM, (last ? temp : &buf[i]), 4)) != HAL_OK)
-      return err;
+      goto out;
 
     if (last)
       for (; i < length; i++)
@@ -67,10 +67,15 @@ hal_error_t hal_get_random(const hal_core_t *core, void *buffer, const size_t le
   }
 
   for (i = 0, buf = buffer; i < length; i++, buf++)
-    if (*buf != 0)
-      return HAL_OK;
+    if (*buf != 0) {
+      err = HAL_OK;
+      goto out;
+    }
+  err = HAL_ERROR_CSPRNG_BROKEN;
 
-  return HAL_ERROR_CSPRNG_BROKEN;
+out:
+  hal_core_free(core);
+  return err;
 }
 
 /*

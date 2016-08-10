@@ -43,77 +43,77 @@ typedef union {
     uint32_t word;
 } byteword_t;
 
-hal_error_t hal_mkmif_init(const hal_core_t *core)
+hal_error_t hal_mkmif_init(hal_core_t *core)
 {
     byteword_t cmd;
     hal_error_t err;
-
-    if (core == NULL)
-        return HAL_ERROR_CORE_NOT_FOUND;
 
     cmd.word = htonl(MKMIF_CTRL_CMD_INIT);
 
-    if ((err = hal_io_write(core, MKMIF_ADDR_CTRL, cmd.byte, 4)) ||
-        (err = hal_io_wait_ready(core)))
-        return err;
+    err = hal_core_alloc(MKMIF_NAME, &core) ||
+        hal_io_write(core, MKMIF_ADDR_CTRL, cmd.byte, 4) ||
+        hal_io_wait_ready(core);
 
-    return HAL_OK;
+    hal_core_free(core);
+    return err;
 }
 
-hal_error_t hal_mkmif_set_clockspeed(const hal_core_t *core, const uint32_t divisor)
+hal_error_t hal_mkmif_set_clockspeed(hal_core_t *core, const uint32_t divisor)
 {
     byteword_t data;
-
-    if (core == NULL)
-        return HAL_ERROR_CORE_NOT_FOUND;
+    hal_error_t err;
 
     data.word = htonl(divisor);
 
-    return hal_io_write(core, MKMIF_ADDR_SCLK_DIV, data.byte, 4);
+    err = hal_core_alloc(MKMIF_NAME, &core) ||
+        hal_io_write(core, MKMIF_ADDR_SCLK_DIV, data.byte, 4);
+
+    hal_core_free(core);
+    return err;
 }
 
-hal_error_t hal_mkmif_get_clockspeed(const hal_core_t *core, uint32_t *divisor)
+hal_error_t hal_mkmif_get_clockspeed(hal_core_t *core, uint32_t *divisor)
 {
     byteword_t data;
     hal_error_t err;
 
-    if (core == NULL)
-        return HAL_ERROR_CORE_NOT_FOUND;
+    err = hal_core_alloc(MKMIF_NAME, &core) ||
+        hal_io_read(core, MKMIF_ADDR_SCLK_DIV, data.byte, 4);
 
-    if ((err = hal_io_read(core, MKMIF_ADDR_SCLK_DIV, data.byte, 4)))
-        return err;
+    if (err == HAL_OK)
+        *divisor = htonl(data.word);
 
-    *divisor = htonl(data.word);
-    return HAL_OK;
+    hal_core_free(core);
+    return err;
 }
 
-hal_error_t hal_mkmif_write(const hal_core_t *core, uint32_t addr, const uint8_t *buf, size_t len)
+hal_error_t hal_mkmif_write(hal_core_t *core, uint32_t addr, const uint8_t *buf, size_t len)
 {
     byteword_t cmd;
     hal_error_t err;
-
-    if (core == NULL)
-        return HAL_ERROR_CORE_NOT_FOUND;
 
     if (len % 4 != 0)
         return HAL_ERROR_IO_BAD_COUNT;
 
     cmd.word = htonl(MKMIF_CTRL_CMD_WRITE);
 
-    for (; len > 0; addr += 4, buf += 4, len -= 4) {
-        byteword_t write_addr;
-        write_addr.word = htonl((uint32_t)addr);
-        if ((err = hal_io_write(core, MKMIF_ADDR_EMEM_ADDR, write_addr.byte, 4)) ||
-            (err = hal_io_write(core, MKMIF_ADDR_EMEM_DATA, buf, 4)) ||
-            (err = hal_io_write(core, MKMIF_ADDR_CTRL, cmd.byte, 4)) ||
-            (err = hal_io_wait_ready(core)))
-            return err;
+    if ((err = hal_core_alloc(MKMIF_NAME, &core)) == HAL_OK) {
+        for (; len > 0; addr += 4, buf += 4, len -= 4) {
+            byteword_t write_addr;
+            write_addr.word = htonl((uint32_t)addr);
+            if ((err = hal_io_write(core, MKMIF_ADDR_EMEM_ADDR, write_addr.byte, 4)) ||
+                (err = hal_io_write(core, MKMIF_ADDR_EMEM_DATA, buf, 4)) ||
+                (err = hal_io_write(core, MKMIF_ADDR_CTRL, cmd.byte, 4)) ||
+                (err = hal_io_wait_ready(core)))
+                return err;
+        }
     }
 
-    return HAL_OK;
+    hal_core_free(core);
+    return err;
 }
 
-hal_error_t hal_mkmif_write_word(const hal_core_t *core, uint32_t addr, const uint32_t data)
+hal_error_t hal_mkmif_write_word(hal_core_t *core, uint32_t addr, const uint32_t data)
 {
     byteword_t d;
 
@@ -122,33 +122,34 @@ hal_error_t hal_mkmif_write_word(const hal_core_t *core, uint32_t addr, const ui
     return hal_mkmif_write(core, addr, d.byte, 4);
 }
 
-hal_error_t hal_mkmif_read(const hal_core_t *core, uint32_t addr, uint8_t *buf, size_t len)
+hal_error_t hal_mkmif_read(hal_core_t *core, uint32_t addr, uint8_t *buf, size_t len)
 {
     byteword_t cmd;
     hal_error_t err;
-
-    if (core == NULL)
-        return HAL_ERROR_CORE_NOT_FOUND;
 
     if (len % 4 != 0)
         return HAL_ERROR_IO_BAD_COUNT;
 
     cmd.word = htonl(MKMIF_CTRL_CMD_READ);
 
-    for (; len > 0; addr += 4, buf += 4, len -= 4) {
-        byteword_t read_addr;
-        read_addr.word = htonl((uint32_t)addr);
-        if ((err = hal_io_write(core, MKMIF_ADDR_EMEM_ADDR, read_addr.byte, 4)) ||
-            (err = hal_io_write(core, MKMIF_ADDR_CTRL, cmd.byte, 4)) ||
-            (err = hal_io_wait_valid(core)) ||
-            (err = hal_io_read(core, MKMIF_ADDR_EMEM_DATA, buf, 4)))
-            return err;
+    if ((err = hal_core_alloc(MKMIF_NAME, &core)) == HAL_OK) {
+        for (; len > 0; addr += 4, buf += 4, len -= 4) {
+            byteword_t read_addr;
+            read_addr.word = htonl((uint32_t)addr);
+            if ((err = hal_io_write(core, MKMIF_ADDR_EMEM_ADDR, read_addr.byte, 4)) ||
+                (err = hal_io_write(core, MKMIF_ADDR_CTRL, cmd.byte, 4)) ||
+                (err = hal_io_wait_valid(core)) ||
+                (err = hal_io_read(core, MKMIF_ADDR_EMEM_DATA, buf, 4)))
+                goto out;
+        }
     }
 
-    return HAL_OK;
+out:
+    hal_core_free(core);
+    return err;
 }
 
-hal_error_t hal_mkmif_read_word(const hal_core_t *core, uint32_t addr, uint32_t *data)
+hal_error_t hal_mkmif_read_word(hal_core_t *core, uint32_t addr, uint32_t *data)
 {
     byteword_t d;
     hal_error_t err;

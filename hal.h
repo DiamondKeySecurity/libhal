@@ -127,6 +127,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_KEY_NOT_ON_CURVE,          "EC key is not on its purported curve")         \
   DEFINE_HAL_ERROR(HAL_ERROR_INVALID_SIGNATURE,         "Invalid signature")                            \
   DEFINE_HAL_ERROR(HAL_ERROR_CORE_NOT_FOUND,            "Requested core not found")                     \
+  DEFINE_HAL_ERROR(HAL_ERROR_CORE_BUSY,                 "Requested core busy")                          \
   DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_ACCESS,           "Could not access keystore")                    \
   DEFINE_HAL_ERROR(HAL_ERROR_KEY_NOT_FOUND,             "Key not found")                                \
   DEFINE_HAL_ERROR(HAL_ERROR_KEY_NAME_IN_USE,           "Key name in use")                              \
@@ -204,11 +205,15 @@ typedef struct {
   hal_addr_t base;
 } hal_core_info_t;
 
-extern const hal_core_t *hal_core_find(const char *name, const hal_core_t *core);
+extern hal_core_t *hal_core_find(const char *name, hal_core_t *core);
 extern const hal_core_info_t *hal_core_info(const hal_core_t *core);
-extern hal_error_t hal_core_check_name(const hal_core_t **core, const char *name);
 extern hal_addr_t hal_core_base(const hal_core_t *core);
-extern const hal_core_t * hal_core_iterate(const hal_core_t *core);
+extern hal_core_t * hal_core_iterate(hal_core_t *core);
+extern hal_error_t hal_core_alloc(const char *name, hal_core_t **core);
+extern void hal_core_free(hal_core_t *core);
+extern void hal_critical_section_start(void);
+extern void hal_critical_section_end(void);
+extern const int hal_core_busy(const hal_core_t *core);
 
 /*
  * Slightly higher level public API, still working directly with cores.
@@ -218,7 +223,7 @@ extern const hal_core_t * hal_core_iterate(const hal_core_t *core);
  * Get random bytes from the CSPRNG.
  */
 
-extern hal_error_t hal_get_random(const hal_core_t *core, void *buffer, const size_t length);
+extern hal_error_t hal_get_random(hal_core_t *core, void *buffer, const size_t length);
 
 /*
  * Hash and HMAC API.
@@ -289,7 +294,7 @@ extern const hal_hash_descriptor_t hal_hash_sha512[1];
 
 extern void hal_hash_set_debug(int onoff);
 
-extern hal_error_t hal_hash_initialize(const hal_core_t *core,
+extern hal_error_t hal_hash_initialize(hal_core_t *core,
                                        const hal_hash_descriptor_t * const descriptor,
                                        hal_hash_state_t **state,
                                        void *state_buffer, const size_t state_length);
@@ -300,7 +305,7 @@ extern hal_error_t hal_hash_update(hal_hash_state_t *state,
 extern hal_error_t hal_hash_finalize(hal_hash_state_t *state,
                                      uint8_t *digest, const size_t length);
 
-extern hal_error_t hal_hmac_initialize(const hal_core_t *core,
+extern hal_error_t hal_hmac_initialize(hal_core_t *core,
                                        const hal_hash_descriptor_t * const descriptor,
                                        hal_hmac_state_t **state,
                                        void *state_buffer, const size_t state_length,
@@ -323,12 +328,12 @@ extern const hal_hash_descriptor_t *hal_hmac_get_descriptor(const hal_hmac_state
  * AES key wrap functions.
  */
 
-extern hal_error_t hal_aes_keywrap(const hal_core_t *core,
+extern hal_error_t hal_aes_keywrap(hal_core_t *core,
                                    const uint8_t *kek, const size_t kek_length,
                                    const uint8_t *plaintext, const size_t plaintext_length,
                                    uint8_t *cyphertext, size_t *ciphertext_length);
 
-extern hal_error_t hal_aes_keyunwrap(const hal_core_t *core,
+extern hal_error_t hal_aes_keyunwrap(hal_core_t *core,
                                      const uint8_t *kek, const size_t kek_length,
                                      const uint8_t *ciphertext, const size_t ciphertext_length,
                                      unsigned char *plaintext, size_t *plaintext_length);
@@ -340,7 +345,7 @@ extern size_t hal_aes_keywrap_ciphertext_length(const size_t plaintext_length);
  * the pseudo-random function (PRF).
  */
 
-extern hal_error_t hal_pbkdf2(const hal_core_t *core,
+extern hal_error_t hal_pbkdf2(hal_core_t *core,
                               const hal_hash_descriptor_t * const descriptor,
 			      const uint8_t * const password, const size_t password_length,
 			      const uint8_t * const salt,     const size_t salt_length,
@@ -353,7 +358,7 @@ extern hal_error_t hal_pbkdf2(const hal_core_t *core,
 
 extern void hal_modexp_set_debug(const int onoff);
 
-extern hal_error_t hal_modexp(const hal_core_t *core,
+extern hal_error_t hal_modexp(hal_core_t *core,
                               const uint8_t * const msg, const size_t msg_len, /* Message */
                               const uint8_t * const exp, const size_t exp_len, /* Exponent */
                               const uint8_t * const mod, const size_t mod_len, /* Modulus */
@@ -363,13 +368,13 @@ extern hal_error_t hal_modexp(const hal_core_t *core,
  * Master Key Memory Interface
  */
 
-extern hal_error_t hal_mkmif_init(const hal_core_t *core);
-extern hal_error_t hal_mkmif_set_clockspeed(const hal_core_t *core, const uint32_t divisor);
-extern hal_error_t hal_mkmif_get_clockspeed(const hal_core_t *core, uint32_t *divisor);
-extern hal_error_t hal_mkmif_write(const hal_core_t *core, uint32_t addr, const uint8_t *buf, size_t len);
-extern hal_error_t hal_mkmif_write_word(const hal_core_t *core, uint32_t addr, const uint32_t data);
-extern hal_error_t hal_mkmif_read(const hal_core_t *core, uint32_t addr, uint8_t *buf, size_t len);
-extern hal_error_t hal_mkmif_read_word(const hal_core_t *core, uint32_t addr, uint32_t *data);
+extern hal_error_t hal_mkmif_init(hal_core_t *core);
+extern hal_error_t hal_mkmif_set_clockspeed(hal_core_t *core, const uint32_t divisor);
+extern hal_error_t hal_mkmif_get_clockspeed(hal_core_t *core, uint32_t *divisor);
+extern hal_error_t hal_mkmif_write(hal_core_t *core, uint32_t addr, const uint8_t *buf, size_t len);
+extern hal_error_t hal_mkmif_write_word(hal_core_t *core, uint32_t addr, const uint32_t data);
+extern hal_error_t hal_mkmif_read(hal_core_t *core, uint32_t addr, uint8_t *buf, size_t len);
+extern hal_error_t hal_mkmif_read_word(hal_core_t *core, uint32_t addr, uint32_t *data);
 
 
 /*

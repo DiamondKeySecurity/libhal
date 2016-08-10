@@ -154,7 +154,7 @@ static void print_hex(const uint8_t * const val, const size_t len)
     printf(" %02x", val[i]);
 }
 
-static int _test_pbkdf2(const hal_core_t *core,
+static int _test_pbkdf2(hal_core_t *core,
                         const uint8_t * const pwd,  const size_t pwd_len,
                         const uint8_t * const salt, const size_t salt_len,
                         const uint8_t * const dk,   const size_t dk_len,
@@ -198,7 +198,7 @@ static int _test_pbkdf2(const hal_core_t *core,
 
 int main (int argc, char *argv[])
 {
-  const hal_core_t *core = hal_core_find(SHA1_NAME, NULL);
+  hal_core_t *core = hal_core_find(SHA1_NAME, NULL);
   int ok = 1;
 
   if (core == NULL)
