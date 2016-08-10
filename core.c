@@ -93,10 +93,10 @@ static const struct { const char *name; hal_addr_t extra; } gaps[] = {
   { "modexpa7", 3 * CORE_SIZE }, /* ModexpA7 uses four slots */
 };
 
+static hal_core_t *head = NULL;
+
 static hal_core_t *probe_cores(void)
 {
-  static hal_core_t *head = NULL;
-
   if (head != NULL)
     return head;
 
@@ -165,6 +165,20 @@ static hal_core_t *probe_cores(void)
   }
 #endif
   return NULL;
+}
+
+void hal_core_reset_table(void)
+{
+#if HAL_STATIC_CORE_STATE_BLOCKS > 0
+    head = NULL;
+    memset(core_table, 0, sizeof(core_table));
+#else
+    while (head != NULL) {
+        hal_core_t *next = head->next;
+        free(head);
+        head = next;
+    }
+#endif
 }
 
 hal_core_t * hal_core_iterate(hal_core_t *core)
