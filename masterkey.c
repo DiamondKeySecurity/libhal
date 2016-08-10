@@ -89,22 +89,19 @@ hal_error_t masterkey_volatile_init()
 	    return HAL_ERROR_CORE_NOT_FOUND;
 	}
 
-	err =
-	    hal_mkmif_set_clockspeed(core, MKM_VOLATILE_SCLK_DIV) ||
-	    hal_mkmif_init(core) ||
-	    hal_mkmif_read_word(core, MKM_VOLATILE_STATUS_ADDRESS, &status);
-
-	if (err != LIBHAL_OK) return err;
+	if ((err = hal_mkmif_set_clockspeed(core, MKM_VOLATILE_SCLK_DIV)) != LIBHAL_OK ||
+            (err = hal_mkmif_init(core)) != LIBHAL_OK ||
+            (err = hal_mkmif_read_word(core, MKM_VOLATILE_STATUS_ADDRESS, &status)) != LIBHAL_OK)
+            return err;
 
 	if (status != MKM_STATUS_SET && status != MKM_STATUS_NOT_SET) {
 	    /* XXX Something is a bit fishy here. If we just write the status word, it reads back wrong sometimes,
 	     * while if we write the full buf too it is consistently right afterwards.
 	     */
 	    uint8_t buf[KEK_LENGTH] = {0};
-	    err =
-		hal_mkmif_write(core, MKM_VOLATILE_STATUS_ADDRESS + 4, buf, sizeof(buf)) ||
-		hal_mkmif_write_word(core, MKM_VOLATILE_STATUS_ADDRESS, MKM_STATUS_NOT_SET);
-	    if (err != LIBHAL_OK) return err;
+	    if ((err = hal_mkmif_write(core, MKM_VOLATILE_STATUS_ADDRESS + 4, buf, sizeof(buf))) != LIBHAL_OK ||
+		(err = hal_mkmif_write_word(core, MKM_VOLATILE_STATUS_ADDRESS, MKM_STATUS_NOT_SET)) != LIBHAL_OK)
+                return err;
 	}
 
 	volatile_init = 1;
@@ -119,11 +116,9 @@ hal_error_t masterkey_volatile_read(uint8_t *buf, size_t len)
 
     if (len && len != KEK_LENGTH) return HAL_ERROR_MASTERKEY_BAD_LENGTH;
 
-    err =
-	masterkey_volatile_init() ||
-	hal_mkmif_read_word(core, MKM_VOLATILE_STATUS_ADDRESS, &status);
-
-    if (err != LIBHAL_OK) return err;
+    if ((err = masterkey_volatile_init()) != LIBHAL_OK ||
+	(err = hal_mkmif_read_word(core, MKM_VOLATILE_STATUS_ADDRESS, &status)) != LIBHAL_OK)
+        return err;
 
     if (buf != NULL && len) {
 	/* Don't return the random bytes in the RAM memory in case it isn't initialized.
@@ -151,12 +146,12 @@ hal_error_t masterkey_volatile_write(uint8_t *buf, size_t len)
     if (len != KEK_LENGTH) return HAL_ERROR_MASTERKEY_BAD_LENGTH;
     if (! buf) return HAL_ERROR_MASTERKEY_FAIL;
 
-    err =
-	masterkey_volatile_init() ||
-	hal_mkmif_write(core, MKM_VOLATILE_STATUS_ADDRESS + 4, buf, len) ||
-	hal_mkmif_write_word(core, MKM_VOLATILE_STATUS_ADDRESS, MKM_STATUS_SET);
+    if ((err = masterkey_volatile_init()) != LIBHAL_OK ||
+	(err = hal_mkmif_write(core, MKM_VOLATILE_STATUS_ADDRESS + 4, buf, len)) != LIBHAL_OK ||
+	(err = hal_mkmif_write_word(core, MKM_VOLATILE_STATUS_ADDRESS, MKM_STATUS_SET)) != LIBHAL_OK)
+        return err;
 
-    return err;
+    return LIBHAL_OK;
 }
 
 hal_error_t masterkey_volatile_erase(size_t len)
@@ -166,12 +161,12 @@ hal_error_t masterkey_volatile_erase(size_t len)
 
     if (len != KEK_LENGTH) return HAL_ERROR_MASTERKEY_BAD_LENGTH;
 
-    err =
-	masterkey_volatile_init() ||
-	hal_mkmif_write(core, MKM_VOLATILE_STATUS_ADDRESS + 4, buf, sizeof(buf)) ||
-	hal_mkmif_write_word(core, MKM_VOLATILE_STATUS_ADDRESS, MKM_STATUS_NOT_SET);
+    if ((err = masterkey_volatile_init()) != LIBHAL_OK ||
+	(err = hal_mkmif_write(core, MKM_VOLATILE_STATUS_ADDRESS + 4, buf, sizeof(buf))) != LIBHAL_OK ||
+	(err = hal_mkmif_write_word(core, MKM_VOLATILE_STATUS_ADDRESS, MKM_STATUS_NOT_SET)) != LIBHAL_OK)
+        return err;
 
-    return err;
+    return LIBHAL_OK;
 }
 
 hal_error_t masterkey_flash_init()
@@ -187,10 +182,11 @@ hal_error_t masterkey_flash_read(uint8_t *buf, size_t len)
 {
     uint8_t page[KEYSTORE_PAGE_SIZE];
     uint32_t *status = (uint32_t *) page;
+    hal_error_t err;
 
     if (len && len != KEK_LENGTH) return HAL_ERROR_MASTERKEY_BAD_LENGTH;
 
-    if (masterkey_flash_init() != LIBHAL_OK) return HAL_ERROR_MASTERKEY_FAIL;
+    if ((err = masterkey_flash_init()) != LIBHAL_OK) return err;
 
     if (! keystore_read_data(MKM_FLASH_STATUS_ADDRESS, page, sizeof(page))) {
 	memset(page, 0, sizeof(page));

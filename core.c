@@ -52,6 +52,14 @@ struct hal_core {
   struct hal_core *next;
 };
 
+#ifndef	HAL_STATIC_CORE_STATE_BLOCKS
+#define	HAL_STATIC_CORE_STATE_BLOCKS 0
+#endif
+
+#if HAL_STATIC_CORE_STATE_BLOCKS > 0
+static hal_core_t core_table[HAL_STATIC_CORE_STATE_BLOCKS];
+#endif
+
 /*
  * Check whether a core's name matches a particular string.  This is a
  * bit nasty due to non-null-terminated fixed-length names.
@@ -91,16 +99,23 @@ static hal_core_t *probe_cores(void)
   if (head != NULL)
     return head;
 
-  hal_core_t **tail = &head;
   hal_core_t *core = NULL;
+  hal_core_t **tail = &head;
   hal_error_t err = HAL_OK;
+#if HAL_STATIC_CORE_STATE_BLOCKS > 0
+  int n = 0;
+#endif
 
   for (hal_addr_t addr = CORE_MIN; addr < CORE_MAX; addr += CORE_SIZE) {
 
+#if HAL_STATIC_CORE_STATE_BLOCKS > 0
+    core = &core_table[n];
+#else
     if (core == NULL && (core = malloc(sizeof(hal_core_t))) == NULL) {
       err = HAL_ERROR_ALLOCATION_FAILURE;
       goto fail;
     }
+#endif
 
     memset(core, 0, sizeof(*core));
     core->info.base = addr;
@@ -109,7 +124,7 @@ static hal_core_t *probe_cores(void)
         (err = hal_io_read(core, ADDR_VERSION, (uint8_t *) core->info.version, 4)) != HAL_OK)
       goto fail;
 
-    if (core->info.name[0] == '\0')
+    if (core->info.name[0] == 0x00 || core->info.name[0] == 0xff)
       continue;
 
     for (int i = 0; i < sizeof(gaps)/sizeof(*gaps); i++) {
@@ -122,20 +137,32 @@ static hal_core_t *probe_cores(void)
     *tail = core;
     tail = &core->next;
     core = NULL;
+
+#if HAL_STATIC_CORE_STATE_BLOCKS > 0
+    if (++n >= HAL_STATIC_CORE_STATE_BLOCKS)
+      break;
+#endif
   }
 
+#if HAL_STATIC_CORE_STATE_BLOCKS > 0
+#else
   if (core != NULL)
     free(core);
+#endif
 
   return head;
 
  fail:
+#if HAL_STATIC_CORE_STATE_BLOCKS > 0
+  memset(core_table, 0, sizeof(core_table));
+#else
   if (core != NULL)
     free(core);
   while ((core = head) != NULL) {
     head = core->next;
     free(core);
   }
+#endif
   return NULL;
 }
 
