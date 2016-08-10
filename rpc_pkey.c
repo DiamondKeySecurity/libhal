@@ -142,8 +142,8 @@ static inline pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
  * basic) ASN.1 encoding, which we perform inline.
  */
 
-static hal_error_t pkcs1_construct_digestinfo(const hal_hash_handle_t handle,
-                                              uint8_t *digest_info, size_t *digest_info_len, const size_t digest_info_max)
+hal_error_t hal_rpc_pkey_pkcs1_construct_digestinfo(const hal_hash_handle_t handle,
+                                                    uint8_t *digest_info, size_t *digest_info_len, const size_t digest_info_max)
 {
   assert(digest_info != NULL && digest_info_len != NULL);
 
@@ -623,7 +623,7 @@ static hal_error_t pkey_local_sign_rsa(uint8_t *keybuf, const size_t keybuf_len,
     return HAL_ERROR_RESULT_TOO_LONG;
 
   if (input == NULL) {
-    if ((err = pkcs1_construct_digestinfo(hash, signature, &input_len, *signature_len)) != HAL_OK)
+    if ((err = hal_rpc_pkey_pkcs1_construct_digestinfo(hash, signature, &input_len, *signature_len)) != HAL_OK)
       return err;
     input = signature;
   }
@@ -751,7 +751,7 @@ static hal_error_t pkey_local_verify_rsa(uint8_t *keybuf, const size_t keybuf_le
     return err;
 
   if (input == NULL) {
-    if ((err = pkcs1_construct_digestinfo(hash, expected, &input_len, sizeof(expected))) != HAL_OK)
+    if ((err = hal_rpc_pkey_pkcs1_construct_digestinfo(hash, expected, &input_len, sizeof(expected))) != HAL_OK)
       return err;
     input = expected;
   }
