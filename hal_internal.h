@@ -244,6 +244,18 @@ extern const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch, hal_rpc_remote
 #define HAL_PKEY_HANDLE_PROXIMATE_FLAG  (1 << 31)
 
 /*
+ * Mostly used by the local_pkey code, but the mixed_pkey code needs
+ * it to pad hashes for RSA PKCS #1.5 signatures.  This may indicate
+ * that we need a slightly more general internal API here, but not
+ * worth worrying about as long as we can treat RSA as a special case
+ * and just pass the plain hash for everything else.
+ */
+
+extern hal_error_t hal_rpc_pkey_pkcs1_construct_digestinfo(const hal_hash_handle_t handle,
+                                                           uint8_t *digest_info, size_t *digest_info_len,
+                                                           const size_t digest_info_max);
+
+/*
  * Keystore API.
  *
  * The original design for this subsystem used two separate tables,

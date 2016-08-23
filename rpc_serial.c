@@ -35,6 +35,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/file.h>
 #include <netinet/in.h>
 #include <termios.h>
 #include <unistd.h>
@@ -66,11 +67,17 @@ hal_error_t hal_serial_init(const char * const device, const uint32_t speed)
     struct termios tty;
     speed_t termios_speed;
 
+    /*
+     * Apparently Linux is too cool to need an atomic mechanism for
+     * locking an existing file, so we can't uses O_EXLOCK.  Sigh.
+     */
+
     fd = open(device, O_RDWR | O_NOCTTY | O_SYNC);
-    if (fd == -1) {
-        fprintf(stderr, "open %s: ", device);
-	return perror(""), HAL_ERROR_RPC_TRANSPORT;
-    }
+    if (fd == -1)
+	return perror(device), HAL_ERROR_RPC_TRANSPORT;
+
+    if (flock(fd, LOCK_EX) < 0)
+        return perror(device), HAL_ERROR_RPC_TRANSPORT;
 
     if (tcgetattr (fd, &tty) != 0)
 	return perror("tcgetattr"), HAL_ERROR_RPC_TRANSPORT;

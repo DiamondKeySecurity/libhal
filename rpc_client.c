@@ -833,17 +833,30 @@ static hal_error_t pkey_mixed_sign(const hal_session_handle_t session,
                                              signature, signature_len, signature_max);
 
   hal_digest_algorithm_t alg;
+  hal_key_type_t pkey_type;
   size_t digest_len;
   hal_error_t err;
 
   if ((err = hal_rpc_hash_get_algorithm(hash, &alg))           != HAL_OK ||
-      (err = hal_rpc_hash_get_digest_length(alg, &digest_len)) != HAL_OK)
+      (err = hal_rpc_hash_get_digest_length(alg, &digest_len)) != HAL_OK ||
+      (err = hal_rpc_pkey_get_key_type(pkey, &pkey_type))      != HAL_OK)
     return err;
 
-  uint8_t digest[digest_len];
+  uint8_t digest[digest_len > signature_max ? digest_len : signature_max];
 
-  if ((err = hal_rpc_hash_finalize(hash, digest, digest_len)) != HAL_OK)
-    return err;
+  switch (pkey_type) {
+
+  case HAL_KEY_TYPE_RSA_PRIVATE:
+  case HAL_KEY_TYPE_RSA_PUBLIC:
+    if ((err = hal_rpc_pkey_pkcs1_construct_digestinfo(hash, digest, &digest_len, sizeof(digest))) != HAL_OK)
+      return err;
+    break;
+
+  default:
+    if ((err = hal_rpc_hash_finalize(hash, digest, digest_len)) != HAL_OK)
+      return err;
+
+  }
 
   return mixed_handle_dispatch(pkey)->sign(session, pkey, hal_hash_handle_none, digest, digest_len,
                                            signature, signature_len, signature_max);
@@ -860,17 +873,30 @@ static hal_error_t pkey_mixed_verify(const hal_session_handle_t session,
                                                signature, signature_len);
 
   hal_digest_algorithm_t alg;
+  hal_key_type_t pkey_type;
   size_t digest_len;
   hal_error_t err;
 
   if ((err = hal_rpc_hash_get_algorithm(hash, &alg))           != HAL_OK ||
-      (err = hal_rpc_hash_get_digest_length(alg, &digest_len)) != HAL_OK)
+      (err = hal_rpc_hash_get_digest_length(alg, &digest_len)) != HAL_OK ||
+      (err = hal_rpc_pkey_get_key_type(pkey, &pkey_type))      != HAL_OK)
     return err;
 
-  uint8_t digest[digest_len];
+  uint8_t digest[digest_len > signature_len ? digest_len : signature_len];
 
-  if ((err = hal_rpc_hash_finalize(hash, digest, digest_len)) != HAL_OK)
-    return err;
+  switch (pkey_type) {
+
+  case HAL_KEY_TYPE_RSA_PRIVATE:
+  case HAL_KEY_TYPE_RSA_PUBLIC:
+    if ((err = hal_rpc_pkey_pkcs1_construct_digestinfo(hash, digest, &digest_len, sizeof(digest))) != HAL_OK)
+      return err;
+    break;
+
+  default:
+    if ((err = hal_rpc_hash_finalize(hash, digest, digest_len)) != HAL_OK)
+      return err;
+
+  }
 
   return mixed_handle_dispatch(pkey)->verify(session, pkey, hal_hash_handle_none,
                                              digest, digest_len, signature, signature_len);
