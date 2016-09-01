@@ -794,32 +794,13 @@ static hal_error_t pkey_remote_list(hal_pkey_info_t *result,
 }
 
 #if RPC_CLIENT == RPC_CLIENT_MIXED
+
 /*
  * "Mixed" mode pkey operations, where the public key operation itself
  * takes place on the HSM but the hashing takes place locally.  If
  * we're given a hash context in this case, it's local, so we have to
  * pull the digest from the hash context and send that to the HSM.
- *
- * These methods are also responsible for dispatching pkey operations
- * to the local or remote key store based on the PROXIMATE flags.
- * These flags are only meaningful when operating in mixed mode.
  */
-
-static inline const hal_rpc_pkey_dispatch_t *mixed_flags_dispatch(const hal_key_flags_t flags)
-{
-  if ((flags & HAL_KEY_FLAG_PROXIMATE) == 0)
-    return &hal_rpc_remote_pkey_dispatch;
-  else
-    return &hal_rpc_local_pkey_dispatch;
-}
-
-static inline const hal_rpc_pkey_dispatch_t *mixed_handle_dispatch(const hal_pkey_handle_t pkey)
-{
-  if  ((pkey.handle & HAL_PKEY_HANDLE_PROXIMATE_FLAG) == 0)
-    return &hal_rpc_remote_pkey_dispatch;
-  else
-    return &hal_rpc_local_pkey_dispatch;
-}
 
 static hal_error_t pkey_mixed_sign(const hal_session_handle_t session,
                                    const hal_pkey_handle_t pkey,
@@ -828,7 +809,7 @@ static hal_error_t pkey_mixed_sign(const hal_session_handle_t session,
                                    uint8_t * signature, size_t *signature_len, const size_t signature_max)
 {
   if (input != NULL)
-    return mixed_handle_dispatch(pkey)->sign(session, pkey, hash, input, input_len,
+    return hal_rpc_remote_pkey_dispatch.sign(session, pkey, hash, input, input_len,
                                              signature, signature_len, signature_max);
 
   hal_digest_algorithm_t alg;
@@ -847,7 +828,7 @@ static hal_error_t pkey_mixed_sign(const hal_session_handle_t session,
 
   case HAL_KEY_TYPE_RSA_PRIVATE:
   case HAL_KEY_TYPE_RSA_PUBLIC:
-    if ((err = hal_rpc_pkey_pkcs1_construct_digestinfo(hash, digest, &digest_len, sizeof(digest))) != HAL_OK)
+    if ((err = hal_rpc_pkcs1_construct_digestinfo(hash, digest, &digest_len, sizeof(digest))) != HAL_OK)
       return err;
     break;
 
@@ -857,7 +838,7 @@ static hal_error_t pkey_mixed_sign(const hal_session_handle_t session,
 
   }
 
-  return mixed_handle_dispatch(pkey)->sign(session, pkey, hal_hash_handle_none, digest, digest_len,
+  return hal_rpc_remote_pkey_dispatch.sign(session, pkey, hal_hash_handle_none, digest, digest_len,
                                            signature, signature_len, signature_max);
 }
 
@@ -868,7 +849,7 @@ static hal_error_t pkey_mixed_verify(const hal_session_handle_t session,
                                      const uint8_t * const signature, const size_t signature_len)
 {
   if (input != NULL)
-    return mixed_handle_dispatch(pkey)->verify(session, pkey, hash, input, input_len,
+    return hal_rpc_remote_pkey_dispatch.verify(session, pkey, hash, input, input_len,
                                                signature, signature_len);
 
   hal_digest_algorithm_t alg;
@@ -887,7 +868,7 @@ static hal_error_t pkey_mixed_verify(const hal_session_handle_t session,
 
   case HAL_KEY_TYPE_RSA_PRIVATE:
   case HAL_KEY_TYPE_RSA_PUBLIC:
-    if ((err = hal_rpc_pkey_pkcs1_construct_digestinfo(hash, digest, &digest_len, sizeof(digest))) != HAL_OK)
+    if ((err = hal_rpc_pkcs1_construct_digestinfo(hash, digest, &digest_len, sizeof(digest))) != HAL_OK)
       return err;
     break;
 
@@ -897,94 +878,10 @@ static hal_error_t pkey_mixed_verify(const hal_session_handle_t session,
 
   }
 
-  return mixed_handle_dispatch(pkey)->verify(session, pkey, hal_hash_handle_none,
+  return hal_rpc_remote_pkey_dispatch.verify(session, pkey, hal_hash_handle_none,
                                              digest, digest_len, signature, signature_len);
 }
 
-static hal_error_t pkey_mixed_load(const hal_client_handle_t client,
-				   const hal_session_handle_t session,
-				   hal_pkey_handle_t *pkey,
-				   const hal_key_type_t type,
-				   const hal_curve_name_t curve,
-                                   hal_uuid_t *name,
-				   const uint8_t * const der, const size_t der_len,
-				   const hal_key_flags_t flags)
-{
-  return mixed_flags_dispatch(flags)->load(client, session, pkey, type, curve, name, der, der_len, flags);
-}
-
-static hal_error_t pkey_mixed_find(const hal_client_handle_t client,
-				   const hal_session_handle_t session,
-				   hal_pkey_handle_t *pkey,
-				   const hal_key_type_t type,
-				   const hal_uuid_t * const name,
-				   const hal_key_flags_t flags)
-{
-  return mixed_flags_dispatch(flags)->find(client, session, pkey, type, name, flags);
-}
-
-static hal_error_t pkey_mixed_generate_rsa(const hal_client_handle_t client,
-					   const hal_session_handle_t session,
-					   hal_pkey_handle_t *pkey,
-					   hal_uuid_t *name,
-					   const unsigned key_length,
-					   const uint8_t * const public_exponent, const size_t public_exponent_len,
-					   const hal_key_flags_t flags)
-{
-  return mixed_flags_dispatch(flags)->generate_rsa(client, session, pkey, name, key_length,
-                                                   public_exponent, public_exponent_len, flags);
-}
-
-static hal_error_t pkey_mixed_generate_ec(const hal_client_handle_t client,
-					  const hal_session_handle_t session,
-					  hal_pkey_handle_t *pkey,
-					  hal_uuid_t *name,
-					  const hal_curve_name_t curve,
-					  const hal_key_flags_t flags)
-{
-  return mixed_flags_dispatch(flags)->generate_ec(client, session, pkey, name, curve, flags);
-}
-
-static hal_error_t pkey_mixed_close(const hal_pkey_handle_t pkey)
-{
-  return mixed_handle_dispatch(pkey)->close(pkey);
-}
-
-static hal_error_t pkey_mixed_delete(const hal_pkey_handle_t pkey)
-{
-  return mixed_handle_dispatch(pkey)->delete(pkey);
-}
-
-static hal_error_t pkey_mixed_get_key_type(const hal_pkey_handle_t pkey,
-					   hal_key_type_t *key_type)
-{
-  return mixed_handle_dispatch(pkey)->get_key_type(pkey, key_type);
-}
-
-static hal_error_t pkey_mixed_get_key_flags(const hal_pkey_handle_t pkey,
-					    hal_key_flags_t *flags)
-{
-  return mixed_handle_dispatch(pkey)->get_key_flags(pkey, flags);
-}
-
-static size_t pkey_mixed_get_public_key_len(const hal_pkey_handle_t pkey)
-{
-  return mixed_handle_dispatch(pkey)->get_public_key_len(pkey);
-}
-
-static hal_error_t pkey_mixed_get_public_key(const hal_pkey_handle_t pkey,
-					     uint8_t *der, size_t *der_len, const size_t der_max)
-{
-  return mixed_handle_dispatch(pkey)->get_public_key(pkey, der, der_len, der_max);
-}
-
-static hal_error_t pkey_mixed_list(hal_pkey_info_t *result,
-				   unsigned *result_len,
-				   const unsigned result_max,
-                                   hal_key_flags_t flags)
-{
-  return mixed_flags_dispatch(flags)->list(result, result_len, result_max, flags);
-}
 #endif /* RPC_CLIENT == RPC_CLIENT_MIXED */
 
 /*
@@ -1028,19 +925,19 @@ const hal_rpc_pkey_dispatch_t hal_rpc_remote_pkey_dispatch = {
 
 #if RPC_CLIENT == RPC_CLIENT_MIXED
 const hal_rpc_pkey_dispatch_t hal_rpc_mixed_pkey_dispatch = {
-  pkey_mixed_load,
-  pkey_mixed_find,
-  pkey_mixed_generate_rsa,
-  pkey_mixed_generate_ec,
-  pkey_mixed_close,
-  pkey_mixed_delete,
-  pkey_mixed_get_key_type,
-  pkey_mixed_get_key_flags,
-  pkey_mixed_get_public_key_len,
-  pkey_mixed_get_public_key,
+  pkey_remote_load,
+  pkey_remote_find,
+  pkey_remote_generate_rsa,
+  pkey_remote_generate_ec,
+  pkey_remote_close,
+  pkey_remote_delete,
+  pkey_remote_get_key_type,
+  pkey_remote_get_key_flags,
+  pkey_remote_get_public_key_len,
+  pkey_remote_get_public_key,
   pkey_mixed_sign,
   pkey_mixed_verify,
-  pkey_mixed_list
+  pkey_remote_list
 };
 #endif /* RPC_CLIENT == RPC_CLIENT_MIXED */
 

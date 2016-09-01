@@ -44,9 +44,13 @@
 #undef HAL_OK
 
 #include <string.h>
+#include <assert.h>
 
+#include "last_gasp_pin_internal.h"
 
-#define PAGE_SIZE_MASK			(KEYSTORE_PAGE_SIZE - 1)
+#define PAGE_SIZE_MASK          (KEYSTORE_PAGE_SIZE - 1)
+
+#define KEK_LENGTH              (bitsToBytes(256))
 
 /*
  * Temporary hack: In-memory copy of entire (tiny) keystore database.
@@ -98,7 +102,7 @@ static inline uint32_t _get_key_offset(uint32_t num)
 
 static hal_error_t ks_init(void)
 {
-  if (db.ks.driver == hal_ks_flash_driver)
+  if (db.ks.driver == hal_ks_token_driver)
     return LIBHAL_OK;
 
   if (db.ks.driver != NULL)
@@ -107,7 +111,7 @@ static hal_error_t ks_init(void)
   uint8_t page_buf[KEYSTORE_PAGE_SIZE];
   uint32_t idx = 0;             /* Current index into db.keys[] */
 
-  memset(db, 0, sizeof(*db));
+  memset(&db, 0, sizeof(db));
 
   if (keystore_check_id() != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
@@ -184,7 +188,7 @@ static hal_error_t ks_init(void)
     idx++;
   }
 
-  db.ks.driver = hal_ks_flash_driver;
+  db.ks.driver = hal_ks_token_driver;
 
   return LIBHAL_OK;
 }
@@ -208,7 +212,7 @@ static hal_error_t _write_data_to_flash(const uint32_t offset, const uint8_t *da
       return HAL_ERROR_KEYSTORE_ACCESS;
   }
 
-  return LIBLIBHAL_OK;
+  return LIBHAL_OK;
 }
 
 /*
@@ -256,7 +260,7 @@ static hal_error_t ks_open(const hal_ks_driver_t * const driver,
 {
   hal_error_t err;
 
-  if (driver != hal_ks_flash_driver || ks == NULL)
+  if (driver != hal_ks_token_driver || ks == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   if ((err = ks_init()) != LIBHAL_OK)
@@ -328,7 +332,7 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
 
     *der_len = der_max;
 
-    if ((err = hal_ks_get_kek(kek, &kek_len, sizeof(kek))) == LIBHAL_OK)
+    if ((err = hal_get_kek(kek, &kek_len, sizeof(kek))) == LIBHAL_OK)
       err = hal_aes_keyunwrap(NULL, kek, kek_len, k->der, k->der_len, der, der_len);
 
     memset(kek, 0, sizeof(kek));
@@ -401,7 +405,7 @@ static hal_error_t ks_store(hal_ks_t *ks,
 
   hal_error_t err;
 
-  if ((err = hal_ks_get_kek(kek, &kek_len, sizeof(kek))) == LIBHAL_OK)
+  if ((err = hal_get_kek(kek, &kek_len, sizeof(kek))) == LIBHAL_OK)
     err = hal_aes_keywrap(NULL, kek, kek_len, der, der_len, k.der, &k.der_len);
 
   memset(kek, 0, sizeof(kek));
@@ -483,7 +487,7 @@ static hal_error_t ks_delete(hal_ks_t *ks,
   if (k == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
 
-  const int loc = k - db.keys
+  const int loc = k - db.keys;
   uint32_t offset = _get_key_offset(loc);
 
   if (loc < 0 || offset > KEYSTORE_SECTOR_SIZE)
@@ -500,9 +504,9 @@ static hal_error_t ks_delete(hal_ks_t *ks,
   return _write_data_to_flash(offset, (uint8_t *) k, sizeof(*k));
 }
 
-const hal_ks_driver_t hal_ks_flash_driver[1] = {{
-  ks_flash_open,
-  ks_flash_close,
+const hal_ks_driver_t hal_ks_token_driver[1] = {{
+  ks_open,
+  ks_close,
   ks_store,
   ks_fetch,
   ks_delete,
@@ -590,7 +594,7 @@ hal_error_t hal_ks_set_pin(const hal_user_t user,
 }
 
 
-hal_error_t hal_ks_get_kek(uint8_t *kek,
+hal_error_t hal_get_kek(uint8_t *kek,
                            size_t *kek_len,
                            const size_t kek_max)
 {

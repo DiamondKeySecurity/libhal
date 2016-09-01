@@ -144,7 +144,7 @@ hal_error_t hal_ks_set_pin(const hal_user_t user,
   return HAL_OK;
 }
 
-hal_error_t hal_ks_get_kek(uint8_t *kek,
+hal_error_t hal_get_kek(uint8_t *kek,
                            size_t *kek_len,
                            const size_t kek_max)
 {

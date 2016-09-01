@@ -969,15 +969,17 @@ static hal_error_t sw_hash_core_sha1(hal_hash_state_t *state)
 
     if (debug)
       fprintf(stderr,
-              "[Round %02d < a = 0x%08x, b = 0x%08x, c = 0x%08x, d = 0x%08x, e = 0x%08x, f = 0x%08x, k = 0x%08x, w = 0x%08x]\n",
-              i, S[a], S[b], S[c], S[d], S[e], f, k, W[i]);
+              "[Round %02d < a = 0x%08lx, b = 0x%08lx, c = 0x%08lx, d = 0x%08lx, e = 0x%08lx, f = 0x%08lx, k = 0x%08lx, w = 0x%08lx]\n",
+              i, (unsigned long) S[a], (unsigned long) S[b], (unsigned long) S[c], (unsigned long) S[d], (unsigned long) S[e],
+              (unsigned long) f, (unsigned long) k, (unsigned long) W[i]);
 
     S[e] = rot_l_32(S[a], 5) + f + S[e] + k + W[i];
     S[b] = rot_l_32(S[b], 30);
 
     if (debug)
-      fprintf(stderr, "[Round %02d > a = 0x%08x, b = 0x%08x, c = 0x%08x, d = 0x%08x, e = 0x%08x]\n",
-              i, S[a], S[b], S[c], S[d], S[e]);
+      fprintf(stderr, "[Round %02d > a = 0x%08lx, b = 0x%08lx, c = 0x%08lx, d = 0x%08lx, e = 0x%08lx]\n",
+              i, (unsigned long) S[a], (unsigned long) S[b],
+              (unsigned long) S[c], (unsigned long) S[d], (unsigned long) S[e]);
   }
 
   for (int i = 0; i < 5; i++)

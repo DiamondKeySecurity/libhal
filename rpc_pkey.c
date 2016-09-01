@@ -113,49 +113,6 @@ static inline hal_pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
  */
 
 /*
- * Construct a PKCS #1 DigestInfo object.  This requires some (very
- * basic) ASN.1 encoding, which we perform inline.
- */
-
-hal_error_t hal_rpc_pkey_pkcs1_construct_digestinfo(const hal_hash_handle_t handle,
-                                                    uint8_t *digest_info, size_t *digest_info_len, const size_t digest_info_max)
-{
-  assert(digest_info != NULL && digest_info_len != NULL);
-
-  hal_digest_algorithm_t alg;
-  size_t len, alg_len;
-  hal_error_t err;
-
-  if ((err = hal_rpc_hash_get_algorithm(handle, &alg))                     != HAL_OK ||
-      (err = hal_rpc_hash_get_digest_length(alg, &len))                    != HAL_OK ||
-      (err = hal_rpc_hash_get_digest_algorithm_id(alg, NULL, &alg_len, 0)) != HAL_OK)
-    return err;
-
-  *digest_info_len = len + alg_len + 4;
-
-  if (*digest_info_len >= digest_info_max)
-    return HAL_ERROR_RESULT_TOO_LONG;
-
-  assert(*digest_info_len < 130);
-
-  uint8_t *d = digest_info;
-
-  *d++ = 0x30;                /* SEQUENCE */
-  *d++ = (uint8_t) (*digest_info_len - 2);
-
-  if ((err = hal_rpc_hash_get_digest_algorithm_id(alg, d, NULL, alg_len)) != HAL_OK)
-    return err;
-  d += alg_len;
-
-  *d++ = 0x04;                /* OCTET STRING */
-  *d++ = (uint8_t) len;
-
-  assert(digest_info + *digest_info_len == d + len);
-
-  return hal_rpc_hash_finalize(handle, d, len);
-}
-
-/*
  * Pad an octet string with PKCS #1.5 padding for use with RSA.
  *
  * For the moment, this only handles type 01 encryption blocks, thus
@@ -203,19 +160,10 @@ static hal_error_t pkcs1_5_pad(const uint8_t * const data, const size_t data_len
 
 static inline hal_error_t ks_open_from_flags(hal_ks_t **ks, const hal_key_flags_t flags)
 {
-  if ((flags & HAL_KEY_FLAG_TOKEN) == 0)
-    return hal_ks_open(hal_ks_volatile_driver, ks);
-
-#if 0
-
-    return hal_ks_open(hal_ks_token_driver, ks);
-
-#else
-#warning This needs to open hal_ks_token_driver here, once we get around to writing that driver
-
-    return HAL_ERROR_KS_DRIVER_NOT_FOUND;
-
-#endif
+  return hal_ks_open((flags & HAL_KEY_FLAG_TOKEN) == 0
+                     ? hal_ks_volatile_driver
+                     : hal_ks_token_driver,
+                     ks);
 }
 
 /*
@@ -640,7 +588,7 @@ static hal_error_t pkey_local_sign_rsa(uint8_t *keybuf, const size_t keybuf_len,
     return HAL_ERROR_RESULT_TOO_LONG;
 
   if (input == NULL) {
-    if ((err = hal_rpc_pkey_pkcs1_construct_digestinfo(hash, signature, &input_len, *signature_len)) != HAL_OK)
+    if ((err = hal_rpc_pkcs1_construct_digestinfo(hash, signature, &input_len, *signature_len)) != HAL_OK)
       return err;
     input = signature;
   }
@@ -773,7 +721,7 @@ static hal_error_t pkey_local_verify_rsa(uint8_t *keybuf, const size_t keybuf_le
     return err;
 
   if (input == NULL) {
-    if ((err = hal_rpc_pkey_pkcs1_construct_digestinfo(hash, expected, &input_len, sizeof(expected))) != HAL_OK)
+    if ((err = hal_rpc_pkcs1_construct_digestinfo(hash, expected, &input_len, sizeof(expected))) != HAL_OK)
       return err;
     input = expected;
   }

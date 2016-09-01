@@ -40,10 +40,10 @@ LIB		= libhal.a
 
 # Error checking on known control options, some of which allow the user entirely too much rope.
 
-USAGE := "usage: ${MAKE} [IO_BUS=eim|i2c|fmc] [RPC_MODE=none|server|client-simple|client-mixed] [KS=volatile|mmap|flash] [RPC_TRANSPORT=none|loopback|serial|daemon] [MODEXP_CORE=no|yes]"
+USAGE := "usage: ${MAKE} [IO_BUS=eim|i2c|fmc] [RPC_MODE=none|server|client-simple|client-mixed] [KS=mmap|flash] [RPC_TRANSPORT=none|loopback|serial|daemon] [MODEXP_CORE=no|yes]"
 
 IO_BUS		?= none
-KS		?= volatile
+KS		?= flash
 RPC_MODE	?= none
 RPC_TRANSPORT	?= none
 MODEXP_CORE	?= no
@@ -51,7 +51,7 @@ MODEXP_CORE	?= no
 ifeq (,$(and \
 	$(filter	none eim i2c fmc			,${IO_BUS}),\
 	$(filter	none server client-simple client-mixed	,${RPC_MODE}),\
-	$(filter	volatile mmap flash			,${KS}),\
+	$(filter	mmap flash				,${KS}),\
 	$(filter	none loopback serial daemon		,${RPC_TRANSPORT}),\
 	$(filter	no yes					,${MODEXP_CORE})))
   $(error ${USAGE})
@@ -73,9 +73,8 @@ endif
 # makefile, so the working definition of "always want" is sometimes
 # just "building this is harmless even if we don't use it."
 
-OBJ += errorstrings.o hash.o asn1.o ecdsa.o rsa.o ${KS_OBJ} xdr.o slip.o
-OBJ += rpc_api.o rpc_hash.o rpc_misc.o rpc_pkey.o rpc_client.o rpc_server.o
-OBJ += uuid.o
+OBJ += errorstrings.o hash.o asn1.o ecdsa.o rsa.o xdr.o slip.o
+OBJ += rpc_api.o rpc_hash.o uuid.o rpc_pkcs1.o
 
 # Object files to build when we're on a platform with direct access
 # to our hardware (Verilog) cores.
@@ -106,20 +105,23 @@ ifneq "${IO_BUS}" "fmc"
   CFLAGS += -fPIC
 endif
 
-# The mmap and flash keystore implementations are both server code.
+# The keystore code has mutated a bit with the new API, and the Makefile,
+# probably needs more extensive changes to track that.
 #
-# The volatile keystore (conventional memory) is client code, to
-# support using the same API for things like PKCS #11 "session" objects.
+# In the old world, the volatile keystore was for the client side,
+# while the flash and mmap keystores were for the server side (on the
+# Alpha and the Novena, respectively).
 #
-# Default at the moment is mmap, since that should work on the Novena
-# and we haven't yet written the flash code for the bridge board.
+# In the new world, all keystores are on the server side, and the
+# volatile keystore is always present, to support things like PKCS #11
+# "session" objects.
+#
+# The mmap keystore hasn't been rewritten for the new API yet.
 
-#KS_OBJ = ks.o
+KS_OBJ = ks_volatile.o
 
 ifeq "${KS}" "mmap"
   KS_OBJ += ks_mmap.o
-else ifeq "${KS}" "volatile"
-  KS_OBJ += ks_volatile.o
 else ifeq "${KS}" "flash"
   KS_OBJ += ks_flash.o masterkey.o
 endif
@@ -145,18 +147,22 @@ ifneq "${RPC_MODE}" "server"
   OBJ += rpc_serial.o
 endif
 
-ifeq "${RPC_TRANSPORT}" "loopback"
-  RPC_CLIENT_OBJ = rpc_client_loopback.o
-else ifeq "${RPC_TRANSPORT}" "serial"
-  RPC_CLIENT_OBJ = rpc_client_serial.o
-else ifeq "${RPC_TRANSPORT}" "daemon"
-  RPC_CLIENT_OBJ = rpc_client_daemon.o
-endif
+RPC_CLIENT_OBJ = rpc_client.o
 
 ifeq "${RPC_TRANSPORT}" "loopback"
-  RPC_SERVER_OBJ = rpc_server_loopback.o
+  RPC_CLIENT_OBJ += rpc_client_loopback.o
 else ifeq "${RPC_TRANSPORT}" "serial"
-  RPC_SERVER_OBJ = rpc_server_serial.o
+  RPC_CLIENT_OBJ += rpc_client_serial.o
+else ifeq "${RPC_TRANSPORT}" "daemon"
+  RPC_CLIENT_OBJ += rpc_client_daemon.o
+endif
+
+RPC_SERVER_OBJ = ${KS_OBJ} rpc_misc.o rpc_pkey.o rpc_server.o
+
+ifeq "${RPC_TRANSPORT}" "loopback"
+  RPC_SERVER_OBJ += rpc_server_loopback.o
+else ifeq "${RPC_TRANSPORT}" "serial"
+  RPC_SERVER_OBJ += rpc_server_serial.o
 endif
 
 ifeq "${RPC_MODE}" "none"
@@ -171,7 +177,6 @@ else ifeq "${RPC_MODE}" "client-simple"
 else ifeq "${RPC_MODE}" "client-mixed"
   OBJ += ${RPC_CLIENT_OBJ}
   CFLAGS += -DRPC_CLIENT=RPC_CLIENT_MIXED -DHAL_RSA_USE_MODEXP=0
-  KS = volatile
 endif
 
 ifndef CRYPTECH_ROOT
@@ -234,7 +239,7 @@ asn1.o rsa.o ecdsa.o:				asn1_internal.h
 ecdsa.o:					ecdsa_curves.h
 novena-eim.o hal_io_eim.o:			novena-eim.h
 slip.o rpc_client_serial.o rpc_server_serial.o:	slip_internal.h
-ks.o:						last_gasp_pin_internal.h
+ks_flash.o:					last_gasp_pin_internal.h
 
 last_gasp_pin_internal.h:
 	./utils/last_gasp_default_pin >$@

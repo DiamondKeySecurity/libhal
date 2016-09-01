@@ -117,7 +117,7 @@ hal_error_t hal_ks_store(const hal_key_type_t type,
   uint8_t kek[KEK_LENGTH];
   size_t kek_len;
 
-  if ((err = hal_ks_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
+  if ((err = hal_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
     err = hal_aes_keywrap(NULL, kek, kek_len, der, der_len, k.der, &k.der_len);
 
   memset(kek, 0, sizeof(kek));
@@ -239,7 +239,7 @@ hal_error_t hal_ks_fetch(const hal_key_type_t type,
 
     *der_len = der_max;
 
-    if ((err = hal_ks_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
+    if ((err = hal_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
       err = hal_aes_keyunwrap(NULL, kek, kek_len, k->der, k->der_len, der, der_len);
 
     memset(kek, 0, sizeof(kek));

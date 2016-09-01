@@ -250,9 +250,9 @@ extern const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch, hal_rpc_remote
  * and just pass the plain hash for everything else.
  */
 
-extern hal_error_t hal_rpc_pkey_pkcs1_construct_digestinfo(const hal_hash_handle_t handle,
-                                                           uint8_t *digest_info, size_t *digest_info_len,
-                                                           const size_t digest_info_max);
+extern hal_error_t hal_rpc_pkcs1_construct_digestinfo(const hal_hash_handle_t handle,
+                                                      uint8_t *digest_info, size_t *digest_info_len,
+                                                      const size_t digest_info_max);
 
 /*
  * UUID stuff.  All UUIDs we use (or are likely to use) are type 4 "random" UUIDs
@@ -323,7 +323,7 @@ typedef struct {
   uint8_t salt[HAL_PIN_SALT_LENGTH];
 } hal_ks_pin_t;
 
-extern hal_error_t hal_ks_get_kek(uint8_t *kek,
+extern hal_error_t hal_get_kek(uint8_t *kek,
                                   size_t *kek_len,
                                   const size_t kek_max);
 
@@ -420,7 +420,9 @@ struct hal_ks {
    */
 };
 
-extern const hal_ks_driver_t hal_ks_volatile_driver[1];
+extern const hal_ks_driver_t
+   hal_ks_volatile_driver[1],
+   hal_ks_token_driver[1];
 
 static inline hal_error_t hal_ks_open(const hal_ks_driver_t * const driver,
 			       hal_ks_t **ks)
