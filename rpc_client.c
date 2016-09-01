@@ -411,13 +411,14 @@ static hal_error_t pkey_remote_load(const hal_client_handle_t client,
                                     hal_pkey_handle_t *pkey,
                                     const hal_key_type_t type,
                                     const hal_curve_name_t curve,
-                                    const uint8_t * const name, const size_t name_len,
+                                    hal_uuid_t *name,
                                     const uint8_t * const der, const size_t der_len,
                                     const hal_key_flags_t flags)
 {
-  uint8_t outbuf[nargs(8) + pad(name_len) + pad(der_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(4)];
+  uint8_t outbuf[nargs(7) + pad(der_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t inbuf[nargs(5) + pad(sizeof(name->uuid))];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint32_t name_len = sizeof(name->uuid);
   hal_error_t rpc_ret;
 
   check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_LOAD));
@@ -425,7 +426,6 @@ static hal_error_t pkey_remote_load(const hal_client_handle_t client,
   check(hal_xdr_encode_int(&optr, olimit, session.handle));
   check(hal_xdr_encode_int(&optr, olimit, type));
   check(hal_xdr_encode_int(&optr, olimit, curve));
-  check(hal_xdr_encode_buffer(&optr, olimit, name, name_len));
   check(hal_xdr_encode_buffer(&optr, olimit, der, der_len));
   check(hal_xdr_encode_int(&optr, olimit, flags));
   check(hal_rpc_send(outbuf, optr - outbuf));
@@ -433,8 +433,13 @@ static hal_error_t pkey_remote_load(const hal_client_handle_t client,
   check(read_matching_packet(RPC_FUNC_PKEY_LOAD, inbuf, sizeof(inbuf), &iptr, &ilimit));
 
   check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
-  if (rpc_ret == HAL_OK)
+
+  if (rpc_ret == HAL_OK) {
     check(hal_xdr_decode_int(&iptr, ilimit, &pkey->handle));
+    check(hal_xdr_decode_buffer(&iptr, ilimit, name->uuid, &name_len));
+    if (name_len != sizeof(name->uuid))
+      return HAL_ERROR_KEY_NAME_TOO_LONG;
+  }
 
   return rpc_ret;
 }
@@ -443,10 +448,10 @@ static hal_error_t pkey_remote_find(const hal_client_handle_t client,
                                     const hal_session_handle_t session,
                                     hal_pkey_handle_t *pkey,
                                     const hal_key_type_t type,
-                                    const uint8_t * const name, const size_t name_len,
+                                    const hal_uuid_t * const name,
                                     const hal_key_flags_t flags)
 {
-  uint8_t outbuf[nargs(6) + pad(name_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t outbuf[nargs(6) + pad(sizeof(name->uuid))], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(4)];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   hal_error_t rpc_ret;
@@ -455,13 +460,14 @@ static hal_error_t pkey_remote_find(const hal_client_handle_t client,
   check(hal_xdr_encode_int(&optr, olimit, client.handle));
   check(hal_xdr_encode_int(&optr, olimit, session.handle));
   check(hal_xdr_encode_int(&optr, olimit, type));
-  check(hal_xdr_encode_buffer(&optr, olimit, name, name_len));
+  check(hal_xdr_encode_buffer(&optr, olimit, name->uuid, sizeof(name->uuid)));
   check(hal_xdr_encode_int(&optr, olimit, flags));
   check(hal_rpc_send(outbuf, optr - outbuf));
 
   check(read_matching_packet(RPC_FUNC_PKEY_FIND, inbuf, sizeof(inbuf), &iptr, &ilimit));
 
   check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
+
   if (rpc_ret == HAL_OK)
     check(hal_xdr_decode_int(&iptr, ilimit, &pkey->handle));
 
@@ -471,20 +477,20 @@ static hal_error_t pkey_remote_find(const hal_client_handle_t client,
 static hal_error_t pkey_remote_generate_rsa(const hal_client_handle_t client,
                                             const hal_session_handle_t session,
                                             hal_pkey_handle_t *pkey,
-                                            const uint8_t * const name, const size_t name_len,
+                                            hal_uuid_t *name,
                                             const unsigned key_len,
                                             const uint8_t * const exp, const size_t exp_len,
                                             const hal_key_flags_t flags)
 {
-  uint8_t outbuf[nargs(7) + pad(name_len) + pad(exp_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(4)];
+  uint8_t outbuf[nargs(6) + pad(exp_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t inbuf[nargs(5) + pad(sizeof(name->uuid))];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint32_t name_len = sizeof(name->uuid);
   hal_error_t rpc_ret;
 
   check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_GENERATE_RSA));
   check(hal_xdr_encode_int(&optr, olimit, client.handle));
   check(hal_xdr_encode_int(&optr, olimit, session.handle));
-  check(hal_xdr_encode_buffer(&optr, olimit, name, name_len));
   check(hal_xdr_encode_int(&optr, olimit, key_len));
   check(hal_xdr_encode_buffer(&optr, olimit, exp, exp_len));
   check(hal_xdr_encode_int(&optr, olimit, flags));
@@ -493,8 +499,13 @@ static hal_error_t pkey_remote_generate_rsa(const hal_client_handle_t client,
   check(read_matching_packet(RPC_FUNC_PKEY_GENERATE_RSA, inbuf, sizeof(inbuf), &iptr, &ilimit));
 
   check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
-  if (rpc_ret == HAL_OK)
+
+  if (rpc_ret == HAL_OK) {
     check(hal_xdr_decode_int(&iptr, ilimit, &pkey->handle));
+    check(hal_xdr_decode_buffer(&iptr, ilimit, name->uuid, &name_len));
+    if (name_len != sizeof(name->uuid))
+      return HAL_ERROR_KEY_NAME_TOO_LONG;
+  }
 
   return rpc_ret;
 }
@@ -502,19 +513,19 @@ static hal_error_t pkey_remote_generate_rsa(const hal_client_handle_t client,
 static hal_error_t pkey_remote_generate_ec(const hal_client_handle_t client,
                                            const hal_session_handle_t session,
                                            hal_pkey_handle_t *pkey,
-                                           const uint8_t * const name, const size_t name_len,
+                                           hal_uuid_t *name,
                                            const hal_curve_name_t curve,
                                            const hal_key_flags_t flags)
 {
-  uint8_t outbuf[nargs(6) + pad(name_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(4)];
+  uint8_t outbuf[nargs(5)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t inbuf[nargs(5) + pad(sizeof(name->uuid))];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint32_t name_len = sizeof(name->uuid);
   hal_error_t rpc_ret;
 
   check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_GENERATE_EC));
   check(hal_xdr_encode_int(&optr, olimit, client.handle));
   check(hal_xdr_encode_int(&optr, olimit, session.handle));
-  check(hal_xdr_encode_buffer(&optr, olimit, name, name_len));
   check(hal_xdr_encode_int(&optr, olimit, curve));
   check(hal_xdr_encode_int(&optr, olimit, flags));
   check(hal_rpc_send(outbuf, optr - outbuf));
@@ -522,8 +533,13 @@ static hal_error_t pkey_remote_generate_ec(const hal_client_handle_t client,
   check(read_matching_packet(RPC_FUNC_PKEY_GENERATE_EC, inbuf, sizeof(inbuf), &iptr, &ilimit));
 
   check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
-  if (rpc_ret == HAL_OK)
+
+  if (rpc_ret == HAL_OK) {
     check(hal_xdr_decode_int(&iptr, ilimit, &pkey->handle));
+    check(hal_xdr_decode_buffer(&iptr, ilimit, name->uuid, &name_len));
+    if (name_len != sizeof(name->uuid))
+      return HAL_ERROR_KEY_NAME_TOO_LONG;
+  }
 
   return rpc_ret;
 }
@@ -565,28 +581,6 @@ static hal_error_t pkey_remote_delete(const hal_pkey_handle_t pkey)
   check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
   return rpc_ret;
 }
-
-static hal_error_t pkey_remote_rename(const hal_pkey_handle_t pkey,
-                                      const uint8_t * const name, const size_t name_len)
-{
-  uint8_t outbuf[nargs(4) + pad(name_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(3)];
-  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
-  hal_client_handle_t dummy_client = {0};
-  hal_error_t rpc_ret;
-
-  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_RENAME));
-  check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
-  check(hal_xdr_encode_int(&optr, olimit, pkey.handle));
-  check(hal_xdr_encode_buffer(&optr, olimit, name, name_len));
-  check(hal_rpc_send(outbuf, optr - outbuf));
-
-  check(read_matching_packet(RPC_FUNC_PKEY_RENAME, inbuf, sizeof(inbuf), &iptr, &ilimit));
-
-  check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
-  return rpc_ret;
-}
-
 
 static hal_error_t pkey_remote_get_key_type(const hal_pkey_handle_t pkey,
                                             hal_key_type_t *type)
@@ -750,12 +744,17 @@ static hal_error_t pkey_remote_verify(const hal_session_handle_t session,
 
 static hal_error_t hal_xdr_decode_pkey_info(const uint8_t **iptr, const uint8_t * const ilimit, hal_pkey_info_t *info)
 {
-  uint32_t i32;
+  uint32_t u32;
 
-  check(hal_xdr_decode_int(iptr, ilimit, &i32)); info->type = i32;
-  check(hal_xdr_decode_int(iptr, ilimit, &i32)); info->curve = i32;
-  check(hal_xdr_decode_int(iptr, ilimit, &i32)); info->flags = i32;
-  check(hal_xdr_decode_buffer(iptr, ilimit, (uint8_t *)&info->name[0], &i32)); info->name_len = i32;
+  check(hal_xdr_decode_int(iptr, ilimit, &u32)); info->type  = u32;
+  check(hal_xdr_decode_int(iptr, ilimit, &u32)); info->curve = u32;
+  check(hal_xdr_decode_int(iptr, ilimit, &u32)); info->flags = u32;
+
+  u32 = sizeof(info->name.uuid);
+  check(hal_xdr_decode_buffer(iptr, ilimit, info->name.uuid, &u32));
+  if (u32 != sizeof(info->name.uuid))
+    return HAL_ERROR_KEY_NAME_TOO_LONG;
+
   return HAL_OK;
 }
 
@@ -907,46 +906,43 @@ static hal_error_t pkey_mixed_load(const hal_client_handle_t client,
 				   hal_pkey_handle_t *pkey,
 				   const hal_key_type_t type,
 				   const hal_curve_name_t curve,
-				   const uint8_t * const name, const size_t name_len,
+                                   hal_uuid_t *name,
 				   const uint8_t * const der, const size_t der_len,
 				   const hal_key_flags_t flags)
 {
-  return mixed_flags_dispatch(flags)->load(client, session, pkey, type, curve,
-                                           name, name_len, der, der_len, flags);
+  return mixed_flags_dispatch(flags)->load(client, session, pkey, type, curve, name, der, der_len, flags);
 }
 
 static hal_error_t pkey_mixed_find(const hal_client_handle_t client,
 				   const hal_session_handle_t session,
 				   hal_pkey_handle_t *pkey,
 				   const hal_key_type_t type,
-				   const uint8_t * const name, const size_t name_len,
+				   const hal_uuid_t * const name,
 				   const hal_key_flags_t flags)
 {
-  return mixed_flags_dispatch(flags)->find(client, session, pkey, type,
-                                           name, name_len, flags);
+  return mixed_flags_dispatch(flags)->find(client, session, pkey, type, name, flags);
 }
 
 static hal_error_t pkey_mixed_generate_rsa(const hal_client_handle_t client,
 					   const hal_session_handle_t session,
 					   hal_pkey_handle_t *pkey,
-					   const uint8_t * const name, const size_t name_len,
+					   hal_uuid_t *name,
 					   const unsigned key_length,
 					   const uint8_t * const public_exponent, const size_t public_exponent_len,
 					   const hal_key_flags_t flags)
 {
-  return mixed_flags_dispatch(flags)->generate_rsa(client, session, pkey,
-                                                   name, name_len, key_length,
+  return mixed_flags_dispatch(flags)->generate_rsa(client, session, pkey, name, key_length,
                                                    public_exponent, public_exponent_len, flags);
 }
 
 static hal_error_t pkey_mixed_generate_ec(const hal_client_handle_t client,
 					  const hal_session_handle_t session,
 					  hal_pkey_handle_t *pkey,
-					  const uint8_t * const name, const size_t name_len,
+					  hal_uuid_t *name,
 					  const hal_curve_name_t curve,
 					  const hal_key_flags_t flags)
 {
-  return mixed_flags_dispatch(flags)->generate_ec(client, session, pkey, name, name_len, curve, flags);
+  return mixed_flags_dispatch(flags)->generate_ec(client, session, pkey, name, curve, flags);
 }
 
 static hal_error_t pkey_mixed_close(const hal_pkey_handle_t pkey)
@@ -957,12 +953,6 @@ static hal_error_t pkey_mixed_close(const hal_pkey_handle_t pkey)
 static hal_error_t pkey_mixed_delete(const hal_pkey_handle_t pkey)
 {
   return mixed_handle_dispatch(pkey)->delete(pkey);
-}
-
-static hal_error_t pkey_mixed_rename(const hal_pkey_handle_t pkey,
-                                     const uint8_t * const name, const size_t name_len)
-{
-  return mixed_handle_dispatch(pkey)->rename(pkey, name, name_len);
 }
 
 static hal_error_t pkey_mixed_get_key_type(const hal_pkey_handle_t pkey,
@@ -1027,7 +1017,6 @@ const hal_rpc_pkey_dispatch_t hal_rpc_remote_pkey_dispatch = {
   pkey_remote_generate_ec,
   pkey_remote_close,
   pkey_remote_delete,
-  pkey_remote_rename,
   pkey_remote_get_key_type,
   pkey_remote_get_key_flags,
   pkey_remote_get_public_key_len,
@@ -1045,7 +1034,6 @@ const hal_rpc_pkey_dispatch_t hal_rpc_mixed_pkey_dispatch = {
   pkey_mixed_generate_ec,
   pkey_mixed_close,
   pkey_mixed_delete,
-  pkey_mixed_rename,
   pkey_mixed_get_key_type,
   pkey_mixed_get_key_flags,
   pkey_mixed_get_public_key_len,

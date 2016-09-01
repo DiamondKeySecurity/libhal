@@ -36,6 +36,8 @@
 #ifndef _HAL_INTERNAL_H_
 #define _HAL_INTERNAL_H_
 
+#include <string.h>
+
 #include "hal.h"
 #include "verilog_constants.h"
 
@@ -169,7 +171,7 @@ typedef struct {
                        hal_pkey_handle_t *pkey,
                        const hal_key_type_t type,
                        const hal_curve_name_t curve,
-                       const uint8_t * const name, const size_t name_len,
+                       hal_uuid_t *name,
                        const uint8_t * const der, const size_t der_len,
                        const hal_key_flags_t flags);
 
@@ -177,13 +179,13 @@ typedef struct {
                        const hal_session_handle_t session,
                        hal_pkey_handle_t *pkey,
                        const hal_key_type_t type,
-                       const uint8_t * const name, const size_t name_len,
+                       const hal_uuid_t * const name,
                        const hal_key_flags_t flags);
 
   hal_error_t  (*generate_rsa)(const hal_client_handle_t client,
                                const hal_session_handle_t session,
                                hal_pkey_handle_t *pkey,
-                               const uint8_t * const name, const size_t name_len,
+                               hal_uuid_t *name,
                                const unsigned key_length,
                                const uint8_t * const public_exponent, const size_t public_exponent_len,
                                const hal_key_flags_t flags);
@@ -191,16 +193,13 @@ typedef struct {
   hal_error_t  (*generate_ec)(const hal_client_handle_t client,
                               const hal_session_handle_t session,
                               hal_pkey_handle_t *pkey,
-                              const uint8_t * const name, const size_t name_len,
+                              hal_uuid_t *name,
                               const hal_curve_name_t curve,
                               const hal_key_flags_t flags);
 
   hal_error_t  (*close)(const hal_pkey_handle_t pkey);
 
   hal_error_t  (*delete)(const hal_pkey_handle_t pkey);
-
-  hal_error_t  (*rename)(const hal_pkey_handle_t pkey,
-                         const uint8_t * const name, const size_t name_len);
 
   hal_error_t  (*get_key_type)(const hal_pkey_handle_t pkey,
                                hal_key_type_t *key_type);
@@ -241,7 +240,7 @@ extern const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch, hal_rpc_remote
  * See code in rpc_pkey.c for how this flag fits into the pkey handle.
  */
 
-#define HAL_PKEY_HANDLE_PROXIMATE_FLAG  (1 << 31)
+#define HAL_PKEY_HANDLE_TOKEN_FLAG  (1 << 31)
 
 /*
  * Mostly used by the local_pkey code, but the mixed_pkey code needs
@@ -256,14 +255,27 @@ extern hal_error_t hal_rpc_pkey_pkcs1_construct_digestinfo(const hal_hash_handle
                                                            const size_t digest_info_max);
 
 /*
+ * UUID stuff.  All UUIDs we use (or are likely to use) are type 4 "random" UUIDs
+ */
+
+static inline int hal_uuid_cmp(const hal_uuid_t * const a, const hal_uuid_t * const b)
+{
+  return memcmp(a, b, sizeof(hal_uuid_t));
+}
+
+extern hal_error_t hal_uuid_gen(hal_uuid_t *uuid);
+
+/*
  * Keystore API.
- *
- * The original design for this subsystem used two separate tables,
- * one for RSA keys, one for EC keys, because the RSA keys are so much
- * larger than the EC keys.  This led to unnecessarily complex and
- * duplicated code, so for now we treat all keys the same, and waste
- * the unneeded space in the case of EC keys.
- *
+ */
+
+/*
+ * The first chunk of this is stuff that's really internal to the
+ * keystore implementation(s), and perhaps should move to a separate
+ * ks_internal.h.
+ */
+
+/*
  * Sizes for ASN.1-encoded keys, this may not be exact due to ASN.1
  * INTEGER encoding rules but should be good enough for buffer sizing:
  *
@@ -278,29 +290,26 @@ extern hal_error_t hal_rpc_pkey_pkcs1_construct_digestinfo(const hal_hash_handle
  * wrapped form (see hal_aes_keywrap_cyphertext_length()).
  *
  * We also need to store PINs somewhere, so they go into the keystore
- * data structure even though they're not keys.  Like keys, they're
- * stored in a relatively safe form (PBKDF2), so while we would prefer
- * to keep them private, they don't require tamper-protected RAM.
+ * even though they're not keys.  Like keys, they're stored in a
+ * relatively safe form (PBKDF2), so while we would prefer to keep
+ * them private, they don't require tamper-protected RAM.
  */
 
 #define HAL_KS_WRAPPED_KEYSIZE  ((4655 + 15) & ~7)
 
-#ifndef HAL_STATIC_PKEY_STATE_BLOCKS
-#define HAL_STATIC_PKEY_STATE_BLOCKS 0
-#endif
-
-/* This struct is ordered such that all metadata appears before the
+/*
+ * This struct is ordered such that all metadata appears before the
  * big buffers, in order for all metadata to be loaded with a single
  * page read from e.g. the ks_flash module.
  */
+
 typedef struct {
   hal_key_type_t type;
   hal_curve_name_t curve;
   hal_key_flags_t flags;
   uint8_t in_use;
-  size_t name_len;
   size_t der_len;
-  uint8_t name[HAL_RPC_PKEY_NAME_MAX];
+  hal_uuid_t name;
   uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
 } hal_ks_key_t;
 
@@ -313,37 +322,6 @@ typedef struct {
   uint8_t pin[HAL_MAX_HASH_DIGEST_LENGTH];
   uint8_t salt[HAL_PIN_SALT_LENGTH];
 } hal_ks_pin_t;
-
-typedef struct {
-
-#if HAL_STATIC_PKEY_STATE_BLOCKS > 0
-  hal_ks_key_t keys[HAL_STATIC_PKEY_STATE_BLOCKS];
-#else
-  #warning No keys in keydb
-#endif
-
-  hal_ks_pin_t wheel_pin;
-  hal_ks_pin_t so_pin;
-  hal_ks_pin_t user_pin;
-
-} hal_ks_keydb_t;
-
-extern hal_error_t hal_set_pin_default_iterations(const hal_client_handle_t client,
-                                                  const uint32_t iterations);
-
-/*
- * Internal functions within the keystore implementation.  Think of
- * these as concrete methods for the keystore API subclassed onto
- * various storage technologies.
- */
-
-extern const hal_ks_keydb_t *hal_ks_get_keydb(void);
-
-extern hal_error_t hal_ks_set_keydb(const hal_ks_key_t * const key,
-                                    const int loc,
-                                    const int updating);
-
-extern hal_error_t hal_ks_del_keydb(const int loc);
 
 extern hal_error_t hal_ks_get_kek(uint8_t *kek,
                                   size_t *kek_len,
@@ -359,38 +337,154 @@ extern hal_error_t hal_ks_get_kek(uint8_t *kek,
  * Unclear whether these should also call the ASN.1 encode/decode
  * functions.  For the moment, the answer is no, but we may need to
  * revisit this as the underlying Verilog API evolves.
+ *
+ * hal_pkey_slot_t is defined here too, so that keystore drivers can
+ * piggyback on the pkey database for storage related to keys on which
+ * the user currently has an active pkey handle.  Nothing outside the
+ * pkey and keystore code should touch this.
  */
 
-extern hal_error_t hal_ks_store(const hal_key_type_t type,
-                                const hal_curve_name_t curve,
-                                const hal_key_flags_t flags,
-                                const uint8_t * const name, const size_t name_len,
-                                const uint8_t * const der,  const size_t der_len,
-                                int *hint);
+typedef struct {
+  hal_client_handle_t client_handle;
+  hal_session_handle_t session_handle;
+  hal_pkey_handle_t pkey_handle;
+  hal_key_type_t type;
+  hal_curve_name_t curve;
+  hal_key_flags_t flags;
+  hal_uuid_t name;
 
-extern hal_error_t hal_ks_exists(const hal_key_type_t type,
-                                 const uint8_t * const name, const size_t name_len,
-                                 int *hint);
+  /*
+   * We used to stash a "hint" value here for the keystore driver to
+   * speed things up when we had multiple operations on the same key.
+   * Removed as premature optimization during keystore rewrite, but we
+   * may want to put something like this back once the new API has
+   * stablized.  If so, form would probably be a union containing
+   * keystore-driver-specific data, which everything else (including
+   * the pkey code) should treat as opaque: making it really opaque
+   * would complicate memory allocation and isn't worth it for an
+   * internal API.
+   */
 
-extern hal_error_t hal_ks_fetch(const hal_key_type_t type,
-                                const uint8_t * const name, const size_t name_len,
-                                hal_curve_name_t *curve,
-                                hal_key_flags_t *flags,
-                                uint8_t *der, size_t *der_len, const size_t der_max,
-                                int *hint);
+  /*
+   * This might be where we'd stash a (hal_core_t *) pointing to a
+   * core which has already been loaded with the key, if we were
+   * trying to be clever about using multiple signing cores.  Moot
+   * point (ie, no way we could possibly test such a thing) as long as
+   * the FPGA is too small to hold more than one modexp core and ECDSA
+   * is entirely software, so skip it for now, but the implied
+   * semantics are interesting: a pkey handle starts to resemble an
+   * initialized signing core, and once all the cores are in use, one
+   * can't load another key without closing an existing pkey handle.
+   */
+} hal_pkey_slot_t;
 
-extern hal_error_t hal_ks_delete(const hal_key_type_t type,
-                                 const uint8_t * const name, const size_t name_len,
-                                 int *hint);
+typedef struct hal_ks_driver hal_ks_driver_t;
 
-extern hal_error_t hal_ks_rename(const hal_key_type_t type,
-                                 const uint8_t * const old_name, const size_t old_name_len,
-                                 const uint8_t * const new_name, const size_t new_name_len,
-                                 int *hint);
+typedef struct hal_ks hal_ks_t;
 
-extern hal_error_t hal_ks_list(hal_pkey_info_t *result,
-                               unsigned *result_len,
-                               const unsigned result_max);
+struct hal_ks_driver {
+
+  hal_error_t (*open)(const hal_ks_driver_t * const driver,
+                      hal_ks_t **ks);
+
+  hal_error_t (*close)(hal_ks_t *ks);
+
+  hal_error_t (*store)(hal_ks_t *ks,
+                       const hal_pkey_slot_t * const slot,
+		       const uint8_t * const der,  const size_t der_len);
+
+  hal_error_t (*fetch)(hal_ks_t *ks,
+                       hal_pkey_slot_t *slot,
+		       uint8_t *der, size_t *der_len, const size_t der_max);
+
+  hal_error_t (*delete)(hal_ks_t *ks,
+                        const hal_pkey_slot_t * const slot);
+
+  hal_error_t (*list)(hal_ks_t *ks,
+		      hal_pkey_info_t *result,
+		      unsigned *result_len,
+		      const unsigned result_max);
+};
+
+
+struct hal_ks {
+  const hal_ks_driver_t *driver;
+  /*
+   * Any other common portions of hal_ks_t go here.
+   */
+
+  /*
+   * Driver-specific stuff is handled by a form of subclassing:
+   * driver module embeds this structure at the head of whatever
+   * else it needs, and performs casts as needed.
+   */
+};
+
+extern const hal_ks_driver_t hal_ks_volatile_driver[1];
+
+static inline hal_error_t hal_ks_open(const hal_ks_driver_t * const driver,
+			       hal_ks_t **ks)
+{
+  if (driver == NULL || driver->open == NULL || ks == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  return driver->open(driver, ks);
+}
+
+static inline hal_error_t hal_ks_close(hal_ks_t *ks)
+{
+  if (ks == NULL || ks->driver == NULL || ks->driver->close == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  return ks->driver->close(ks);
+}
+
+static inline hal_error_t hal_ks_store(hal_ks_t *ks,
+                                       hal_pkey_slot_t *slot,
+                                       const uint8_t * const der,  const size_t der_len)
+{
+  if (ks == NULL || ks->driver == NULL || ks->driver->store == NULL || slot == NULL || der == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  return ks->driver->store(ks, slot, der, der_len);
+}
+
+static inline hal_error_t hal_ks_fetch(hal_ks_t *ks,
+                                       hal_pkey_slot_t *slot,
+                                       uint8_t *der, size_t *der_len, const size_t der_max)
+{
+  if (ks == NULL || ks->driver == NULL || ks->driver->fetch == NULL || slot == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  return ks->driver->fetch(ks, slot, der, der_len, der_max);
+}
+
+static inline hal_error_t hal_ks_delete(hal_ks_t *ks,
+                                        hal_pkey_slot_t *slot)
+{
+  if (ks == NULL || ks->driver == NULL || ks->driver->delete == NULL || slot == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  return ks->driver->delete(ks, slot);
+}
+
+static inline hal_error_t hal_ks_list(hal_ks_t *ks,
+                                      hal_pkey_info_t *result,
+                                      unsigned *result_len,
+                                      const unsigned result_max)
+{
+  if (ks == NULL || ks->driver == NULL || ks->driver->list == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  return ks->driver->list(ks, result, result_len, result_max);
+}
+
+/*
+ * This stuff might want renaming, eg, to hal_pin_*().
+ */
+
+extern hal_error_t hal_set_pin_default_iterations(const hal_client_handle_t client,
+                                                  const uint32_t iterations);
 
 extern hal_error_t hal_ks_get_pin(const hal_user_t user,
                                   const hal_ks_pin_t **pin);

@@ -75,6 +75,7 @@ endif
 
 OBJ += errorstrings.o hash.o asn1.o ecdsa.o rsa.o ${KS_OBJ} xdr.o slip.o
 OBJ += rpc_api.o rpc_hash.o rpc_misc.o rpc_pkey.o rpc_client.o rpc_server.o
+OBJ += uuid.o
 
 # Object files to build when we're on a platform with direct access
 # to our hardware (Verilog) cores.
@@ -113,7 +114,7 @@ endif
 # Default at the moment is mmap, since that should work on the Novena
 # and we haven't yet written the flash code for the bridge board.
 
-KS_OBJ = ks.o
+#KS_OBJ = ks.o
 
 ifeq "${KS}" "mmap"
   KS_OBJ += ks_mmap.o

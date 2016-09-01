@@ -75,7 +75,7 @@ static inline int check_pkey_flags(const hal_key_flags_t flags)
   return (flags &~ (HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE |
                     HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT  |
                     HAL_KEY_FLAG_USAGE_DATAENCIPHERMENT |
-                    HAL_KEY_FLAG_PROXIMATE)) == 0;
+                    HAL_KEY_FLAG_TOKEN)) == 0;
 }
 
 static inline int check_pkey_type_curve_flags(const hal_key_type_t type,
@@ -218,36 +218,31 @@ hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
                               hal_pkey_handle_t *pkey,
                               const hal_key_type_t type,
                               const hal_curve_name_t curve,
-                              const uint8_t * const name, const size_t name_len,
+                              hal_uuid_t *name,
                               const uint8_t * const der, const size_t der_len,
                               const hal_key_flags_t flags)
 {
-  if (pkey == NULL || name == NULL || der == NULL || der_len == 0 ||
-      !check_pkey_type_curve_flags(type, curve, flags))
+  if (pkey == NULL || name == NULL || der == NULL || der_len == 0 || !check_pkey_type_curve_flags(type, curve, flags))
     return HAL_ERROR_BAD_ARGUMENTS;
-  if (name_len > HAL_RPC_PKEY_NAME_MAX)
-    return HAL_ERROR_KEY_NAME_TOO_LONG;
-  return hal_rpc_pkey_dispatch->load(client, session, pkey, type, curve, name, name_len, der, der_len, flags);
+  return hal_rpc_pkey_dispatch->load(client, session, pkey, type, curve, name, der, der_len, flags);
 }
 
 hal_error_t hal_rpc_pkey_find(const hal_client_handle_t client,
                               const hal_session_handle_t session,
                               hal_pkey_handle_t *pkey,
                               const hal_key_type_t type,
-                              const uint8_t * const name, const size_t name_len,
+                              const hal_uuid_t * const name,
                               const hal_key_flags_t flags)
 {
   if (pkey == NULL || name == NULL || !check_pkey_type(type))
     return HAL_ERROR_BAD_ARGUMENTS;
-  if (name_len > HAL_RPC_PKEY_NAME_MAX)
-    return HAL_ERROR_KEY_NAME_TOO_LONG;
-  return hal_rpc_pkey_dispatch->find(client, session, pkey, type, name, name_len, flags);
+  return hal_rpc_pkey_dispatch->find(client, session, pkey, type, name, flags);
 }
 
 hal_error_t hal_rpc_pkey_generate_rsa(const hal_client_handle_t client,
                                       const hal_session_handle_t session,
                                       hal_pkey_handle_t *pkey,
-                                      const uint8_t * const name, const size_t name_len,
+                                      hal_uuid_t *name,
                                       const unsigned key_len,
                                       const uint8_t * const exp, const size_t exp_len,
                                       const hal_key_flags_t flags)
@@ -255,24 +250,20 @@ hal_error_t hal_rpc_pkey_generate_rsa(const hal_client_handle_t client,
   if (pkey == NULL || name == NULL || key_len == 0 || (key_len & 7) != 0 ||
       exp == NULL || exp_len == 0 || !check_pkey_flags(flags))
     return HAL_ERROR_BAD_ARGUMENTS;
-  if (name_len > HAL_RPC_PKEY_NAME_MAX)
-    return HAL_ERROR_KEY_NAME_TOO_LONG;
-  return hal_rpc_pkey_dispatch->generate_rsa(client, session, pkey, name, name_len, key_len, exp, exp_len, flags);
+  return hal_rpc_pkey_dispatch->generate_rsa(client, session, pkey, name, key_len, exp, exp_len, flags);
 }
 
 hal_error_t hal_rpc_pkey_generate_ec(const hal_client_handle_t client,
                                      const hal_session_handle_t session,
                                      hal_pkey_handle_t *pkey,
-                                     const uint8_t * const name, const size_t name_len,
+                                     hal_uuid_t *name,
                                      const hal_curve_name_t curve,
                                      const hal_key_flags_t flags)
 {
   if (pkey == NULL || name == NULL ||
       !check_pkey_type_curve_flags(HAL_KEY_TYPE_EC_PRIVATE, curve, flags))
     return HAL_ERROR_BAD_ARGUMENTS;
-  if (name_len > HAL_RPC_PKEY_NAME_MAX)
-    return HAL_ERROR_KEY_NAME_TOO_LONG;
-  return hal_rpc_pkey_dispatch->generate_ec(client, session, pkey, name, name_len, curve, flags);
+  return hal_rpc_pkey_dispatch->generate_ec(client, session, pkey, name, curve, flags);
 }
 
 hal_error_t hal_rpc_pkey_close(const hal_pkey_handle_t pkey)
@@ -283,16 +274,6 @@ hal_error_t hal_rpc_pkey_close(const hal_pkey_handle_t pkey)
 hal_error_t hal_rpc_pkey_delete(const hal_pkey_handle_t pkey)
 {
   return hal_rpc_pkey_dispatch->delete(pkey);
-}
-
-hal_error_t hal_rpc_pkey_rename(const hal_pkey_handle_t pkey,
-                                const uint8_t * const name, const size_t name_len)
-{
-  if (name == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-  if (name_len > HAL_RPC_PKEY_NAME_MAX)
-    return HAL_ERROR_KEY_NAME_TOO_LONG;
-  return hal_rpc_pkey_dispatch->rename(pkey, name, name_len);
 }
 
 hal_error_t hal_rpc_pkey_get_key_type(const hal_pkey_handle_t pkey,

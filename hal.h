@@ -143,6 +143,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_MASTERKEY_NOT_SET,         "Master key (Key Encryption Key) not set")      \
   DEFINE_HAL_ERROR(HAL_ERROR_MASTERKEY_FAIL,            "Master key generic failure")                   \
   DEFINE_HAL_ERROR(HAL_ERROR_MASTERKEY_BAD_LENGTH,      "Master key of unacceptable length")            \
+  DEFINE_HAL_ERROR(HAL_ERROR_KS_DRIVER_NOT_FOUND,       "Keystore driver not found")                    \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -675,7 +676,7 @@ extern hal_error_t hal_rpc_hash_finalize(const hal_hash_handle_t hash,
  * a session handle and which ones don't...).
  */
 
-#define	HAL_RPC_PKEY_NAME_MAX 128
+typedef struct { uint8_t uuid[16]; } hal_uuid_t;
 
 typedef struct { uint32_t handle; } hal_pkey_handle_t;
 
@@ -684,14 +685,14 @@ typedef uint32_t hal_key_flags_t;
 #define	HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE	(1 << 0)
 #define	HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT      (1 << 1)
 #define	HAL_KEY_FLAG_USAGE_DATAENCIPHERMENT	(1 << 2)
-#define	HAL_KEY_FLAG_PROXIMATE                  (1 << 3)
+#define	HAL_KEY_FLAG_TOKEN                      (1 << 3)
 
 extern hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
                                      const hal_session_handle_t session,
                                      hal_pkey_handle_t *pkey,
                                      const hal_key_type_t type,
                                      const hal_curve_name_t curve,
-                                     const uint8_t * const name, const size_t name_len,
+                                     hal_uuid_t *name,
                                      const uint8_t * const der, const size_t der_len,
                                      const hal_key_flags_t flags);
 
@@ -699,13 +700,13 @@ extern hal_error_t hal_rpc_pkey_find(const hal_client_handle_t client,
                                      const hal_session_handle_t session,
                                      hal_pkey_handle_t *pkey,
                                      const hal_key_type_t type,
-                                     const uint8_t * const name, const size_t name_len,
+                                     const hal_uuid_t * const name,
                                      const hal_key_flags_t flags);
 
 extern hal_error_t hal_rpc_pkey_generate_rsa(const hal_client_handle_t client,
                                              const hal_session_handle_t session,
                                              hal_pkey_handle_t *pkey,
-                                             const uint8_t * const name, const size_t name_len,
+                                             hal_uuid_t *name,
                                              const unsigned key_length,
                                              const uint8_t * const public_exponent, const size_t public_exponent_len,
                                              const hal_key_flags_t flags);
@@ -713,16 +714,13 @@ extern hal_error_t hal_rpc_pkey_generate_rsa(const hal_client_handle_t client,
 extern hal_error_t hal_rpc_pkey_generate_ec(const hal_client_handle_t client,
                                             const hal_session_handle_t session,
                                             hal_pkey_handle_t *pkey,
-                                            const uint8_t * const name, const size_t name_len,
+                                            hal_uuid_t *name,
                                             const hal_curve_name_t curve,
                                             const hal_key_flags_t flags);
 
 extern hal_error_t hal_rpc_pkey_close(const hal_pkey_handle_t pkey);
 
 extern hal_error_t hal_rpc_pkey_delete(const hal_pkey_handle_t pkey);
-
-extern hal_error_t hal_rpc_pkey_rename(const hal_pkey_handle_t pkey,
-                                       const uint8_t * const name, const size_t name_len);
 
 extern hal_error_t hal_rpc_pkey_get_key_type(const hal_pkey_handle_t pkey,
                                              hal_key_type_t *type);
@@ -751,8 +749,7 @@ typedef struct {
   hal_key_type_t type;
   hal_curve_name_t curve;
   hal_key_flags_t flags;
-  char name[HAL_RPC_PKEY_NAME_MAX];
-  size_t name_len;
+  hal_uuid_t name;
   /* ... */
 } hal_pkey_info_t;
 
@@ -762,10 +759,16 @@ extern hal_error_t hal_rpc_pkey_list(hal_pkey_info_t *result,
                                      hal_key_flags_t flags);
 
 extern hal_error_t hal_rpc_client_init(void);
+
 extern hal_error_t hal_rpc_client_close(void);
+
 extern hal_error_t hal_rpc_server_init(void);
+
 extern hal_error_t hal_rpc_server_close(void);
-extern hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen, uint8_t * const obuf, size_t * const olen);
+
+extern hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
+                                           uint8_t * const obuf, size_t * const olen);
+
 extern void hal_rpc_server_main(void);
 
 #endif /* _HAL_H_ */

@@ -39,35 +39,12 @@
 #include "hal.h"
 #include "hal_internal.h"
 
-typedef struct {
-  hal_client_handle_t client_handle;
-  hal_session_handle_t session_handle;
-  hal_pkey_handle_t pkey_handle;
-  hal_key_type_t type;
-  hal_curve_name_t curve;
-  hal_key_flags_t flags;
-  uint8_t name[HAL_RPC_PKEY_NAME_MAX];
-  size_t name_len;
-  int ks_hint;
-  /*
-   * This might be where we'd stash a (hal_core_t *) pointing to a
-   * core which has already been loaded with the key, if we were
-   * trying to be clever about using multiple signing cores.  Moot
-   * point (ie, no way we could possibly test such a thing) as long as
-   * the FPGA is too small to hold more than one modexp core and ECDSA
-   * is entirely software, so skip it for now, but the implied
-   * semantics are interesting: a pkey handle starts to resemble an
-   * initialized signing core, and once all the cores are in use, one
-   * can't load another key without closing an existing pkey handle.
-   */
-} pkey_slot_t;
-
 #ifndef HAL_STATIC_PKEY_STATE_BLOCKS
 #define HAL_STATIC_PKEY_STATE_BLOCKS 0
 #endif
 
 #if HAL_STATIC_PKEY_STATE_BLOCKS > 0
-static pkey_slot_t pkey_handle[HAL_STATIC_PKEY_STATE_BLOCKS];
+static hal_pkey_slot_t pkey_handle[HAL_STATIC_PKEY_STATE_BLOCKS];
 #endif
 
 /*
@@ -82,23 +59,23 @@ static pkey_slot_t pkey_handle[HAL_STATIC_PKEY_STATE_BLOCKS];
  * handlers to route calls to the appropriate destination.
  */
 
-static inline pkey_slot_t *alloc_slot(const hal_key_flags_t flags)
+static inline hal_pkey_slot_t *alloc_slot(const hal_key_flags_t flags)
 {
 #if HAL_STATIC_PKEY_STATE_BLOCKS > 0
   static uint16_t next_glop = 0;
   uint32_t glop = ++next_glop << 16;
   next_glop %= 0x7FFF;
 
-  assert((glop & HAL_PKEY_HANDLE_PROXIMATE_FLAG) == 0);
+  assert((glop & HAL_PKEY_HANDLE_TOKEN_FLAG) == 0);
 
-  if ((flags & HAL_KEY_FLAG_PROXIMATE) != 0)
-    glop |= HAL_PKEY_HANDLE_PROXIMATE_FLAG;
+  if ((flags & HAL_KEY_FLAG_TOKEN) != 0)
+    glop |= HAL_PKEY_HANDLE_TOKEN_FLAG;
 
   for (int i = 0; i < sizeof(pkey_handle)/sizeof(*pkey_handle); i++) {
     if (pkey_handle[i].type != HAL_KEY_TYPE_NONE)
       continue;
+    memset(&pkey_handle[i], 0, sizeof(pkey_handle[i]));
     pkey_handle[i].pkey_handle.handle = i | glop;
-    pkey_handle[i].ks_hint = -1;
     return &pkey_handle[i];
   }
 #endif
@@ -111,7 +88,7 @@ static inline pkey_slot_t *alloc_slot(const hal_key_flags_t flags)
  * the right glop.  Returns slot pointer on success, NULL otherwise.
  */
 
-static inline pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
+static inline hal_pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
 {
 #if HAL_STATIC_PKEY_STATE_BLOCKS > 0
   const int i = (int) (handle.handle & 0xFFFF);
@@ -129,12 +106,10 @@ static inline pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
  * Need to check detailed PKCS #11 rules, but, from memory, we may be supposed to allow
  * access to non-token objects even when not logged in.  Maybe.  Rules are complex.
  *
- * I think the libhal translation of this resolves around what we've
- * been calling the PROXIMATE flags (which probably ought to be
- * renamed to *_NONTOKEN_*, slightly less confusing name).  For token
- * objects, we insist on being logged in properly; for non-token
- * objects, we do whatever silly thing PKCS #11 wants us to do,
- * probably defaulting to requiring login if PKCS #11 gives us a choice.
+ * I think the libhal translation of this resolves around HAL_KEY_FLAG_TOKEN.
+ * For token objects, we insist on being logged in properly; for non-token
+ * objects, we do whatever silly thing PKCS #11 wants us to do, probably
+ * defaulting to requiring login if PKCS #11 gives us a choice.
  */
 
 /*
@@ -223,6 +198,27 @@ static hal_error_t pkcs1_5_pad(const uint8_t * const data, const size_t data_len
 }
 
 /*
+ * Given key flags, open appropriate keystore driver.
+ */
+
+static inline hal_error_t ks_open_from_flags(hal_ks_t **ks, const hal_key_flags_t flags)
+{
+  if ((flags & HAL_KEY_FLAG_TOKEN) == 0)
+    return hal_ks_open(hal_ks_volatile_driver, ks);
+
+#if 0
+
+    return hal_ks_open(hal_ks_token_driver, ks);
+
+#else
+#warning This needs to open hal_ks_token_driver here, once we get around to writing that driver
+
+    return HAL_ERROR_KS_DRIVER_NOT_FOUND;
+
+#endif
+}
+
+/*
  * Receive key from application, store it with supplied name, return a key handle.
  */
 
@@ -231,30 +227,39 @@ static hal_error_t pkey_local_load(const hal_client_handle_t client,
                                    hal_pkey_handle_t *pkey,
                                    const hal_key_type_t type,
                                    const hal_curve_name_t curve,
-                                   const uint8_t * const name, const size_t name_len,
+                                   hal_uuid_t *name,
                                    const uint8_t * const der, const size_t der_len,
                                    const hal_key_flags_t flags)
 {
-  pkey_slot_t *slot;
-  hal_error_t err;
+  assert(pkey != NULL && name != NULL);
 
-  assert(sizeof(slot->name) >= name_len && pkey != NULL);
+  hal_pkey_slot_t *slot;
+  hal_ks_t *ks = NULL;
+  hal_error_t err;
 
   if ((slot = alloc_slot(flags)) == NULL)
     return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
 
-  if ((err = hal_ks_store(type, curve, flags, name, name_len, der, der_len, &slot->ks_hint)) != HAL_OK)
+  if ((err = hal_uuid_gen(&slot->name)) != HAL_OK)
     return err;
 
-  memcpy(slot->name, name, name_len);
   slot->client_handle = client;
   slot->session_handle = session;
   slot->type = type;
   slot->curve = curve;
   slot->flags = flags;
-  slot->name_len = name_len;
+
+  if ((err = ks_open_from_flags(&ks, flags)) == HAL_OK &&
+      (err = hal_ks_store(ks, slot, der, der_len)) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
+
+  if (err != HAL_OK)
+    return err;
 
   *pkey = slot->pkey_handle;
+  *name = slot->name;
   return HAL_OK;
 }
 
@@ -266,25 +271,31 @@ static hal_error_t pkey_local_find(const hal_client_handle_t client,
                                    const hal_session_handle_t session,
                                    hal_pkey_handle_t *pkey,
                                    const hal_key_type_t type,
-                                   const uint8_t * const name, const size_t name_len,
+                                   const hal_uuid_t * const name,
                                    const hal_key_flags_t flags)
 {
-  pkey_slot_t *slot;
-  hal_error_t err;
+  assert(pkey != NULL && name != NULL);
 
-  assert(sizeof(slot->name) >= name_len && pkey != NULL);
+  hal_pkey_slot_t *slot;
+  hal_ks_t *ks = NULL;
+  hal_error_t err;
 
   if ((slot = alloc_slot(flags)) == NULL)
     return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
 
-  if ((err = hal_ks_fetch(type, name, name_len, &slot->curve, &slot->flags, NULL, NULL, 0, &slot->ks_hint)) != HAL_OK)
-    return err;
-
-  memcpy(slot->name, name, name_len);
+  slot->name = *name;
   slot->client_handle = client;
   slot->session_handle = session;
   slot->type = type;
-  slot->name_len = name_len;
+
+  if ((err = ks_open_from_flags(&ks, flags)) == HAL_OK &&
+      (err = hal_ks_fetch(ks, slot, NULL, NULL, 0)) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
+
+  if (err != HAL_OK)
+    return err;
 
   *pkey = slot->pkey_handle;
   return HAL_OK;
@@ -297,21 +308,30 @@ static hal_error_t pkey_local_find(const hal_client_handle_t client,
 static hal_error_t pkey_local_generate_rsa(const hal_client_handle_t client,
                                            const hal_session_handle_t session,
                                            hal_pkey_handle_t *pkey,
-                                           const uint8_t * const name, const size_t name_len,
+                                           hal_uuid_t *name,
                                            const unsigned key_length,
                                            const uint8_t * const public_exponent, const size_t public_exponent_len,
                                            const hal_key_flags_t flags)
 {
-  pkey_slot_t *slot;
-  hal_error_t err;
+  assert(pkey != NULL && name != NULL && (key_length & 7) == 0);
 
-  assert(sizeof(slot->name) >= name_len && pkey != NULL && (key_length & 7) == 0);
+  uint8_t keybuf[hal_rsa_key_t_size];
+  hal_rsa_key_t *key = NULL;
+  hal_pkey_slot_t *slot;
+  hal_ks_t *ks = NULL;
+  hal_error_t err;
 
   if ((slot = alloc_slot(flags)) == NULL)
     return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
 
-  uint8_t keybuf[hal_rsa_key_t_size];
-  hal_rsa_key_t *key = NULL;
+  if ((err = hal_uuid_gen(&slot->name)) != HAL_OK)
+    return err;
+
+  slot->client_handle = client;
+  slot->session_handle = session;
+  slot->type = HAL_KEY_TYPE_RSA_PRIVATE;
+  slot->curve = HAL_CURVE_NONE;
+  slot->flags = flags;
 
   if ((err = hal_rsa_key_gen(NULL, &key, keybuf, sizeof(keybuf), key_length / 8,
                              public_exponent, public_exponent_len)) != HAL_OK)
@@ -320,9 +340,12 @@ static hal_error_t pkey_local_generate_rsa(const hal_client_handle_t client,
   uint8_t der[hal_rsa_private_key_to_der_len(key)];
   size_t der_len;
 
-  if ((err = hal_rsa_private_key_to_der(key, der, &der_len, sizeof(der))) == HAL_OK)
-    err = hal_ks_store(HAL_KEY_TYPE_RSA_PRIVATE, HAL_CURVE_NONE, flags,
-                       name, name_len, der, der_len, &slot->ks_hint);
+  if ((err = hal_rsa_private_key_to_der(key, der, &der_len, sizeof(der))) == HAL_OK &&
+      (err = ks_open_from_flags(&ks, flags)) == HAL_OK &&
+      (err = hal_ks_store(ks, slot, der, der_len)) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
 
   memset(keybuf, 0, sizeof(keybuf));
   memset(der, 0, sizeof(der));
@@ -330,15 +353,8 @@ static hal_error_t pkey_local_generate_rsa(const hal_client_handle_t client,
   if (err != HAL_OK)
     return err;
 
-  memcpy(slot->name, name, name_len);
-  slot->client_handle = client;
-  slot->session_handle = session;
-  slot->type = HAL_KEY_TYPE_RSA_PRIVATE;
-  slot->curve = HAL_CURVE_NONE;
-  slot->flags = flags;
-  slot->name_len = name_len;
-
   *pkey = slot->pkey_handle;
+  *name = slot->name;
   return HAL_OK;
 }
 
@@ -350,20 +366,29 @@ static hal_error_t pkey_local_generate_rsa(const hal_client_handle_t client,
 static hal_error_t pkey_local_generate_ec(const hal_client_handle_t client,
                                           const hal_session_handle_t session,
                                           hal_pkey_handle_t *pkey,
-                                          const uint8_t * const name, const size_t name_len,
+                                          hal_uuid_t *name,
                                           const hal_curve_name_t curve,
                                           const hal_key_flags_t flags)
 {
-  pkey_slot_t *slot;
-  hal_error_t err;
+  assert(pkey != NULL && name != NULL);
 
-  assert(sizeof(slot->name) >= name_len && pkey != NULL);
+  uint8_t keybuf[hal_ecdsa_key_t_size];
+  hal_ecdsa_key_t *key = NULL;
+  hal_pkey_slot_t *slot;
+  hal_ks_t *ks = NULL;
+  hal_error_t err;
 
   if ((slot = alloc_slot(flags)) == NULL)
     return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
 
-  uint8_t keybuf[hal_ecdsa_key_t_size];
-  hal_ecdsa_key_t *key = NULL;
+  if ((err = hal_uuid_gen(&slot->name)) != HAL_OK)
+    return err;
+
+  slot->client_handle = client;
+  slot->session_handle = session;
+  slot->type = HAL_KEY_TYPE_EC_PRIVATE;
+  slot->curve = curve;
+  slot->flags = flags;
 
   if ((err = hal_ecdsa_key_gen(NULL, &key, keybuf, sizeof(keybuf), curve)) != HAL_OK)
     return err;
@@ -371,9 +396,12 @@ static hal_error_t pkey_local_generate_ec(const hal_client_handle_t client,
   uint8_t der[hal_ecdsa_private_key_to_der_len(key)];
   size_t der_len;
 
-  if ((err = hal_ecdsa_private_key_to_der(key, der, &der_len, sizeof(der))) == HAL_OK)
-    err = hal_ks_store(HAL_KEY_TYPE_EC_PRIVATE, curve, flags,
-                       name, name_len, der, der_len, &slot->ks_hint);
+  if ((err = hal_ecdsa_private_key_to_der(key, der, &der_len, sizeof(der))) == HAL_OK &&
+      (err = ks_open_from_flags(&ks, flags)) == HAL_OK &&
+      (err = hal_ks_store(ks, slot, der, der_len)) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
 
   memset(keybuf, 0, sizeof(keybuf));
   memset(der, 0, sizeof(der));
@@ -381,15 +409,8 @@ static hal_error_t pkey_local_generate_ec(const hal_client_handle_t client,
   if (err != HAL_OK)
     return err;
 
-  memcpy(slot->name, name, name_len);
-  slot->client_handle = client;
-  slot->session_handle = session;
-  slot->type = HAL_KEY_TYPE_EC_PRIVATE;
-  slot->curve = curve;
-  slot->flags = flags;
-  slot->name_len = name_len;
-
   *pkey = slot->pkey_handle;
+  *name = slot->name;
   return HAL_OK;
 }
 
@@ -399,7 +420,7 @@ static hal_error_t pkey_local_generate_ec(const hal_client_handle_t client,
 
 static hal_error_t pkey_local_close(const hal_pkey_handle_t pkey)
 {
-  pkey_slot_t *slot;
+  hal_pkey_slot_t *slot;
 
   if ((slot = find_handle(pkey)) == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
@@ -415,39 +436,22 @@ static hal_error_t pkey_local_close(const hal_pkey_handle_t pkey)
 
 static hal_error_t pkey_local_delete(const hal_pkey_handle_t pkey)
 {
-  pkey_slot_t *slot = find_handle(pkey);
+  hal_pkey_slot_t *slot = find_handle(pkey);
 
   if (slot == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
 
-  hal_error_t err = hal_ks_delete(slot->type, slot->name, slot->name_len, &slot->ks_hint);
+  hal_ks_t *ks = NULL;
+  hal_error_t err;
+
+  if ((err = ks_open_from_flags(&ks, slot->flags)) == HAL_OK &&
+      (err = hal_ks_delete(ks, slot)) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
 
   if (err == HAL_OK || err == HAL_ERROR_KEY_NOT_FOUND)
     memset(slot, 0, sizeof(*slot));
-
-  return err;
-}
-
-/*
- * Rename a key in the key store, given its key handle and a new name.
- */
-
-static hal_error_t pkey_local_rename(const hal_pkey_handle_t pkey,
-                                     const uint8_t * const name, const size_t name_len)
-{
-  pkey_slot_t *slot = find_handle(pkey);
-
-  if (slot == NULL)
-    return HAL_ERROR_KEY_NOT_FOUND;
-
-  hal_error_t err = hal_ks_rename(slot->type, slot->name, slot->name_len, name, name_len, &slot->ks_hint);
-
-  if (err == HAL_OK) {
-    assert(name_len <= sizeof(slot->name));
-    memcpy(slot->name, name, name_len);
-    memset(slot->name + name_len, 0, sizeof(slot->name) - name_len);
-    slot->name_len = name_len;
-  }
 
   return err;
 }
@@ -462,7 +466,7 @@ static hal_error_t pkey_local_get_key_type(const hal_pkey_handle_t pkey,
   if (type == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  pkey_slot_t *slot = find_handle(pkey);
+  hal_pkey_slot_t *slot = find_handle(pkey);
 
   if (slot == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
@@ -482,7 +486,7 @@ static hal_error_t pkey_local_get_key_flags(const hal_pkey_handle_t pkey,
   if (flags == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  pkey_slot_t *slot = find_handle(pkey);
+  hal_pkey_slot_t *slot = find_handle(pkey);
 
   if (slot == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
@@ -498,7 +502,7 @@ static hal_error_t pkey_local_get_key_flags(const hal_pkey_handle_t pkey,
 
 static size_t pkey_local_get_public_key_len(const hal_pkey_handle_t pkey)
 {
-  pkey_slot_t *slot = find_handle(pkey);
+  hal_pkey_slot_t *slot = find_handle(pkey);
 
   if (slot == NULL)
     return 0;
@@ -510,9 +514,16 @@ static size_t pkey_local_get_public_key_len(const hal_pkey_handle_t pkey)
   hal_ecdsa_key_t *ecdsa_key = NULL;
   uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
   size_t der_len;
+  hal_ks_t *ks = NULL;
+  hal_error_t err;
 
-  if (hal_ks_fetch(slot->type, slot->name, slot->name_len, NULL, NULL,
-                   der, &der_len, sizeof(der), &slot->ks_hint) == HAL_OK) {
+  if ((err = ks_open_from_flags(&ks, slot->flags)) == HAL_OK &&
+      (err = hal_ks_fetch(ks, slot, der, &der_len, sizeof(der))) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
+
+  if (err == HAL_OK) {
     switch (slot->type) {
 
     case HAL_KEY_TYPE_RSA_PUBLIC:
@@ -548,7 +559,7 @@ static size_t pkey_local_get_public_key_len(const hal_pkey_handle_t pkey)
 static hal_error_t pkey_local_get_public_key(const hal_pkey_handle_t pkey,
                                              uint8_t *der, size_t *der_len, const size_t der_max)
 {
-  pkey_slot_t *slot = find_handle(pkey);
+  hal_pkey_slot_t *slot = find_handle(pkey);
 
   if (slot == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
@@ -558,10 +569,16 @@ static hal_error_t pkey_local_get_public_key(const hal_pkey_handle_t pkey,
   hal_ecdsa_key_t *ecdsa_key = NULL;
   uint8_t buf[HAL_KS_WRAPPED_KEYSIZE];
   size_t buf_len;
+  hal_ks_t *ks = NULL;
   hal_error_t err;
 
-  if ((err = hal_ks_fetch(slot->type, slot->name, slot->name_len, NULL, NULL,
-                          buf, &buf_len, sizeof(buf), &slot->ks_hint)) == HAL_OK) {
+  if ((err = ks_open_from_flags(&ks, slot->flags)) == HAL_OK &&
+      (err = hal_ks_fetch(ks, slot, buf, &buf_len, sizeof(buf))) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
+
+  if (err == HAL_OK) {
     switch (slot->type) {
 
     case HAL_KEY_TYPE_RSA_PUBLIC:
@@ -678,7 +695,7 @@ static hal_error_t pkey_local_sign(const hal_session_handle_t session,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * signature, size_t *signature_len, const size_t signature_max)
 {
-  pkey_slot_t *slot = find_handle(pkey);
+  hal_pkey_slot_t *slot = find_handle(pkey);
 
   if (slot == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
@@ -703,9 +720,14 @@ static hal_error_t pkey_local_sign(const hal_session_handle_t session,
   uint8_t keybuf[hal_rsa_key_t_size > hal_ecdsa_key_t_size ? hal_rsa_key_t_size : hal_ecdsa_key_t_size];
   uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
   size_t der_len;
+  hal_ks_t *ks = NULL;
   hal_error_t err;
 
-  err = hal_ks_fetch(slot->type, slot->name, slot->name_len, NULL, NULL, der, &der_len, sizeof(der), &slot->ks_hint);
+  if ((err = ks_open_from_flags(&ks, slot->flags)) == HAL_OK &&
+      (err = hal_ks_fetch(ks, slot, der, &der_len, sizeof(der))) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
 
   if (err == HAL_OK)
     err = signer(keybuf, sizeof(keybuf), der, der_len, hash, input, input_len, signature, signature_len, signature_max);
@@ -820,7 +842,7 @@ static hal_error_t pkey_local_verify(const hal_session_handle_t session,
                                      const uint8_t * const input, const size_t input_len,
                                      const uint8_t * const signature, const size_t signature_len)
 {
-  pkey_slot_t *slot = find_handle(pkey);
+  hal_pkey_slot_t *slot = find_handle(pkey);
 
   if (slot == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
@@ -847,9 +869,14 @@ static hal_error_t pkey_local_verify(const hal_session_handle_t session,
   uint8_t keybuf[hal_rsa_key_t_size > hal_ecdsa_key_t_size ? hal_rsa_key_t_size : hal_ecdsa_key_t_size];
   uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
   size_t der_len;
+  hal_ks_t *ks = NULL;
   hal_error_t err;
 
-  err = hal_ks_fetch(slot->type, slot->name, slot->name_len, NULL, NULL, der, &der_len, sizeof(der), &slot->ks_hint);
+  if ((err = ks_open_from_flags(&ks, slot->flags)) == HAL_OK &&
+      (err = hal_ks_fetch(ks, slot, der, &der_len, sizeof(der))) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
 
   if (err == HAL_OK)
     err = verifier(keybuf, sizeof(keybuf), slot->type, der, der_len, hash, input, input_len, signature, signature_len);
@@ -870,7 +897,16 @@ static hal_error_t pkey_local_list(hal_pkey_info_t *result,
                                    const unsigned result_max,
                                    hal_key_flags_t flags)
 {
-  return hal_ks_list(result, result_len, result_max);
+  hal_ks_t *ks = NULL;
+  hal_error_t err;
+
+  if ((err = ks_open_from_flags(&ks, flags)) == HAL_OK &&
+      (err = hal_ks_list(ks, result, result_len, result_max)) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
+
+  return err;
 }
 
 const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch = {
@@ -880,7 +916,6 @@ const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch = {
   pkey_local_generate_ec,
   pkey_local_close,
   pkey_local_delete,
-  pkey_local_rename,
   pkey_local_get_key_type,
   pkey_local_get_key_flags,
   pkey_local_get_public_key_len,
