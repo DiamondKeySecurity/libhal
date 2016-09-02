@@ -54,7 +54,7 @@ static inline const char *ecdsa_curve_to_string(const hal_curve_name_t curve)
   }
 }
 
-static int test_rsa_testvec(const rsa_tc_t * const tc)
+static int test_rsa_testvec(const rsa_tc_t * const tc, hal_key_flags_t flags)
 {
   const hal_client_handle_t client = {0};
   const hal_session_handle_t session = {0};
@@ -64,7 +64,10 @@ static int test_rsa_testvec(const rsa_tc_t * const tc)
 
   assert(tc != NULL);
 
-  printf("Starting %lu-bit RSA test vector tests\n", (unsigned long) tc->size);
+  flags |= HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE;
+
+  printf("Starting %lu-bit RSA test vector tests, flags 0x%lx\n",
+         (unsigned long) tc->size, (unsigned long) flags);
 
   uint8_t tc_keybuf[hal_rsa_key_t_size];
   hal_rsa_key_t *tc_key = NULL;
@@ -92,8 +95,7 @@ static int test_rsa_testvec(const rsa_tc_t * const tc)
   assert(len == sizeof(private_der));
 
   if ((err = hal_rpc_pkey_load(client, session, &private_key, HAL_KEY_TYPE_RSA_PRIVATE, HAL_CURVE_NONE,
-                               &private_name, private_der, sizeof(private_der),
-                               HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)) != HAL_OK)
+                               &private_name, private_der, sizeof(private_der), flags)) != HAL_OK)
     return printf("Could not load private key into RPC: %s\n", hal_error_string(err)), 0;
 
   if ((err = hal_rsa_public_key_to_der(tc_key, public_der, &len, sizeof(public_der))) != HAL_OK)
@@ -102,8 +104,7 @@ static int test_rsa_testvec(const rsa_tc_t * const tc)
   assert(len == sizeof(public_der));
 
   if ((err = hal_rpc_pkey_load(client, session, &public_key, HAL_KEY_TYPE_RSA_PUBLIC, HAL_CURVE_NONE,
-                               &public_name, public_der, sizeof(public_der),
-                               HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)) != HAL_OK)
+                               &public_name, public_der, sizeof(public_der), flags)) != HAL_OK)
     return printf("Could not load public key into RPC: %s\n", hal_error_string(err)), 0;
 
   uint8_t sig[tc->s.len];
@@ -137,7 +138,7 @@ static int test_rsa_testvec(const rsa_tc_t * const tc)
   return 1;
 }
 
-static int test_ecdsa_testvec(const ecdsa_tc_t * const tc)
+static int test_ecdsa_testvec(const ecdsa_tc_t * const tc, hal_key_flags_t flags)
 {
   const hal_client_handle_t client = {0};
   const hal_session_handle_t session = {0};
@@ -147,7 +148,10 @@ static int test_ecdsa_testvec(const ecdsa_tc_t * const tc)
 
   assert(tc != NULL);
 
-  printf("Starting ECDSA %s test vector tests\n", ecdsa_curve_to_string(tc->curve));
+  flags |= HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE;
+
+  printf("Starting ECDSA %s test vector tests, flags 0x%lx\n",
+         ecdsa_curve_to_string(tc->curve), (unsigned long) flags);
 
   uint8_t tc_keybuf[hal_ecdsa_key_t_size];
   hal_ecdsa_key_t *tc_key = NULL;
@@ -168,8 +172,7 @@ static int test_ecdsa_testvec(const ecdsa_tc_t * const tc)
   assert(len == sizeof(private_der));
 
   if ((err = hal_rpc_pkey_load(client, session, &private_key, HAL_KEY_TYPE_EC_PRIVATE, tc->curve,
-                               &private_name, private_der, sizeof(private_der),
-                               HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)) != HAL_OK)
+                               &private_name, private_der, sizeof(private_der), flags)) != HAL_OK)
     return printf("Could not load private key into RPC: %s\n", hal_error_string(err)), 0;
 
   if ((err = hal_ecdsa_public_key_to_der(tc_key, public_der, &len, sizeof(public_der))) != HAL_OK)
@@ -178,8 +181,7 @@ static int test_ecdsa_testvec(const ecdsa_tc_t * const tc)
   assert(len == sizeof(public_der));
 
   if ((err = hal_rpc_pkey_load(client, session, &public_key, HAL_KEY_TYPE_EC_PUBLIC, tc->curve,
-                               &public_name, public_der, sizeof(public_der),
-                               HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)) != HAL_OK)
+                               &public_name, public_der, sizeof(public_der), flags)) != HAL_OK)
     return printf("Could not load public key into RPC: %s\n", hal_error_string(err)), 0;
 
   if ((err = hal_rpc_pkey_verify(session, public_key, hal_hash_handle_none,
@@ -206,7 +208,7 @@ static int test_ecdsa_testvec(const ecdsa_tc_t * const tc)
   return 1;
 }
 
-static int test_rsa_generate(const rsa_tc_t * const tc)
+static int test_rsa_generate(const rsa_tc_t * const tc, hal_key_flags_t flags)
 {
   const hal_client_handle_t client = {0};
   const hal_session_handle_t session = {0};
@@ -216,13 +218,15 @@ static int test_rsa_generate(const rsa_tc_t * const tc)
 
   assert(tc != NULL);
 
-  printf("Starting %lu-bit RSA key generation tests\n", (unsigned long) tc->size);
+  flags |= HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE;
+
+  printf("Starting %lu-bit RSA key generation tests, flags 0x%lx\n",
+         (unsigned long) tc->size, (unsigned long) flags);
 
   hal_uuid_t private_name, public_name;
 
   if ((err = hal_rpc_pkey_generate_rsa(client, session, &private_key, &private_name,
-                                       tc->size, tc->e.val, tc->e.len,
-                                       HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)) != HAL_OK)
+                                       tc->size, tc->e.val, tc->e.len, flags)) != HAL_OK)
     return printf("Could not generate RSA private key: %s\n", hal_error_string(err)), 0;
 
   uint8_t public_der[hal_rpc_pkey_get_public_key_len(private_key)];
@@ -233,8 +237,7 @@ static int test_rsa_generate(const rsa_tc_t * const tc)
   assert(len == sizeof(public_der));
 
   if ((err = hal_rpc_pkey_load(client, session, &public_key, HAL_KEY_TYPE_RSA_PUBLIC, HAL_CURVE_NONE,
-                               &public_name, public_der, sizeof(public_der),
-                               HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)) != HAL_OK)
+                               &public_name, public_der, sizeof(public_der), flags)) != HAL_OK)
     return printf("Could not load public key into RPC: %s\n", hal_error_string(err)), 0;
 
   uint8_t sig[tc->s.len];
@@ -265,7 +268,7 @@ static int test_rsa_generate(const rsa_tc_t * const tc)
   return 1;
 }
 
-static int test_ecdsa_generate(const ecdsa_tc_t * const tc)
+static int test_ecdsa_generate(const ecdsa_tc_t * const tc, hal_key_flags_t flags)
 {
   const hal_client_handle_t client = {0};
   const hal_session_handle_t session = {0};
@@ -275,13 +278,14 @@ static int test_ecdsa_generate(const ecdsa_tc_t * const tc)
 
   assert(tc != NULL);
 
-  printf("Starting ECDSA %s key generation tests\n", ecdsa_curve_to_string(tc->curve));
+  flags |= HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE;
+
+  printf("Starting ECDSA %s key generation tests, flags 0x%lx\n",
+         ecdsa_curve_to_string(tc->curve), (unsigned long) flags);
 
   hal_uuid_t private_name, public_name;
 
-  if ((err = hal_rpc_pkey_generate_ec(client, session, &private_key,
-                                      &private_name,
-                                      tc->curve, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)) != HAL_OK)
+  if ((err = hal_rpc_pkey_generate_ec(client, session, &private_key, &private_name, tc->curve, flags)) != HAL_OK)
     return printf("Could not generate EC key pair: %s\n", hal_error_string(err)), 0;
 
   uint8_t public_der[hal_rpc_pkey_get_public_key_len(private_key)];
@@ -292,8 +296,7 @@ static int test_ecdsa_generate(const ecdsa_tc_t * const tc)
   assert(len == sizeof(public_der));
 
   if ((err = hal_rpc_pkey_load(client, session, &public_key, HAL_KEY_TYPE_EC_PUBLIC, tc->curve,
-                               &public_name, public_der, sizeof(public_der),
-                               HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)) != HAL_OK)
+                               &public_name, public_der, sizeof(public_der), flags)) != HAL_OK)
     return printf("Could not load public key into RPC: %s\n", hal_error_string(err)), 0;
 
   uint8_t sig[tc->sig_len + 4];
@@ -323,16 +326,21 @@ int main (int argc, char *argv[])
   hal_rpc_client_init();
 
   for (int i = 0; i < (sizeof(rsa_tc)/sizeof(*rsa_tc)); i++)
-    ok &= test_rsa_testvec(&rsa_tc[i]);
+    for (int j = 0; j < 2; j++)
+      ok &= test_rsa_testvec(&rsa_tc[i], j * HAL_KEY_FLAG_TOKEN);
 
   for (int i = 0; i < (sizeof(ecdsa_tc)/sizeof(*ecdsa_tc)); i++)
-    ok &= test_ecdsa_testvec(&ecdsa_tc[i]);
+    for (int j = 0; j < 2; j++)
+      ok &= test_ecdsa_testvec(&ecdsa_tc[i], j * HAL_KEY_FLAG_TOKEN);
 
   for (int i = 0; i < (sizeof(rsa_tc)/sizeof(*rsa_tc)); i++)
-    ok &= test_rsa_generate(&rsa_tc[i]);
+    for (int j = 0; j < 2; j++)
+      ok &= test_rsa_generate(&rsa_tc[i], j * HAL_KEY_FLAG_TOKEN);
 
   for (int i = 0; i < (sizeof(ecdsa_tc)/sizeof(*ecdsa_tc)); i++)
-    ok &= test_ecdsa_generate(&ecdsa_tc[i]);
+    for (int j = 0; j < 2; j++)
+      ok &= test_ecdsa_generate(&ecdsa_tc[i], j * HAL_KEY_FLAG_TOKEN);
+
 
   ok &= hal_rpc_client_close();
 
