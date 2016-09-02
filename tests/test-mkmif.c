@@ -61,12 +61,12 @@ static hal_error_t write_test(hal_core_t *core)
     uint32_t write_address;
     int i;
     hal_error_t err;
-    
+
     for (write_data = 0x01020304, write_address = 0, i = 0;
          i < 0x10;
          write_data += 0x01010101, write_address += 4, ++i) {
 
-        printf("Trying to write 0x%08x to memory address 0x%08x.\n", 
+        printf("Trying to write 0x%08x to memory address 0x%08x.\n",
                (unsigned int)write_data, (unsigned int)write_address);
 
         if ((err = hal_mkmif_write_word(core, write_address, write_data)) != HAL_OK) {
@@ -84,7 +84,7 @@ static hal_error_t read_test(hal_core_t *core)
     uint32_t read_address;
     int i;
     hal_error_t err;
-    
+
     for (read_address = 0, i = 0;
          i < 0x10;
          read_address += 4, ++i) {
@@ -115,7 +115,7 @@ static hal_error_t write_read_test(hal_core_t *core)
         printf("write error: %s\n", hal_error_string(err));
         return err;
     }
-      
+
     if ((err = hal_mkmif_read_word(core, 0x00000000, &readback)) != HAL_OK) {
         printf("read error: %s\n", hal_error_string(err));
         return err;
@@ -125,7 +125,7 @@ static hal_error_t write_read_test(hal_core_t *core)
         printf("read %08x, expected %08x\n", (unsigned int)readback, (unsigned int)data);
         return HAL_ERROR_IO_UNEXPECTED;
     }
-      
+
     return HAL_OK;
 }
 

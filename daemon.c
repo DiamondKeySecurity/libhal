@@ -74,7 +74,7 @@ static void poll_add(int fd)
 {
     /* add 4 entries at a time to avoid having to realloc too often */
 #define NNEW 4
-    
+
     /* expand the array if necessary */
     if (nfds == npollfds) {
         npollfds = nfds + NNEW;
@@ -247,7 +247,7 @@ int main(int argc, char *argv[])
             perror("poll");
             exit(EXIT_FAILURE);
         }
-        
+
         for (nfds_t i = 0; i < nfds; ++i) {
             if (pollfds[i].revents != 0) {
                 /* XXX POLLERR|POLLHUP|POLLNVAL */

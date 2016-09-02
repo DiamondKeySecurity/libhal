@@ -32,6 +32,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <stdio.h>
 #include <assert.h>
 
 #include "hal.h"
@@ -67,6 +68,41 @@ hal_error_t hal_uuid_gen(hal_uuid_t *uuid)
 
   return HAL_OK;
 }
+
+hal_error_t hal_uuid_parse(hal_uuid_t *uuid, const char * const string)
+{
+  static const char fmt[]
+    = "%2hhx%2hhx%2hhx%2hhx-%2hhx%2hhx-%2hhx%2hhx-%2hhx%2hhx-%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx";
+
+  if (uuid == NULL || string == NULL ||
+      sscanf(string, fmt,
+	     uuid->uuid +  0, uuid->uuid +  1, uuid->uuid +  2, uuid->uuid +  3,
+	     uuid->uuid +  4, uuid->uuid +  5, uuid->uuid +  6, uuid->uuid +  7,
+	     uuid->uuid +  8, uuid->uuid +  9, uuid->uuid + 10, uuid->uuid + 11,
+	     uuid->uuid + 12, uuid->uuid + 13, uuid->uuid + 14, uuid->uuid + 15) != 16)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  return HAL_OK;
+}
+
+hal_error_t hal_uuid_format(const hal_uuid_t * const uuid, char *buffer, const size_t buffer_len)
+{
+  static const char fmt[]
+    = "%02hhx%02hhx%02hhx%02hhx-%02hhx%02hhx-%02hhx%02hhx-%02hhx%02hhx-%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx";
+
+  if (uuid == NULL || buffer == NULL || buffer_len < HAL_UUID_TEXT_SIZE)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (buffer_len != snprintf(buffer, buffer_len, fmt,
+			     uuid->uuid[ 0], uuid->uuid[ 1], uuid->uuid[ 2], uuid->uuid[ 3],
+			     uuid->uuid[ 4], uuid->uuid[ 5], uuid->uuid[ 6], uuid->uuid[ 7],
+			     uuid->uuid[ 8], uuid->uuid[ 9], uuid->uuid[10], uuid->uuid[11],
+			     uuid->uuid[12], uuid->uuid[13], uuid->uuid[14], uuid->uuid[15]))
+    return HAL_ERROR_RESULT_TOO_LONG;
+
+  return HAL_OK;
+}
+
 
 /*
  * Local variables:

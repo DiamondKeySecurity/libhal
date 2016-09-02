@@ -208,7 +208,7 @@ hal_error_t hal_core_alloc(const char *name, hal_core_t **pcore)
 {
   hal_core_t *core;
   hal_error_t err = HAL_ERROR_CORE_NOT_FOUND;
-  
+
   if (name == NULL && (pcore == NULL || *pcore == NULL))
     return HAL_ERROR_BAD_ARGUMENTS;
 

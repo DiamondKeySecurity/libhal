@@ -144,7 +144,7 @@ hal_error_t hal_slip_recv(uint8_t * const buf, size_t * const len, const size_t 
 {
     int complete;
     hal_error_t ret;
-    
+
     while (1) {
 	ret = hal_slip_recv_char(buf, len, maxlen, &complete);
 	if ((ret != HAL_OK) || complete)

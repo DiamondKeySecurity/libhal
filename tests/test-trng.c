@@ -84,7 +84,7 @@ static hal_error_t test_random(const char *name)
             return err;
         }
 
-        printf("%08x ", rnd);
+        printf("%08lx ", (unsigned long) rnd);
     }
     printf("\n");
 
@@ -106,7 +106,7 @@ int main(void)
     }
     else {
 	for (i = 0; i < 8; ++i) {
-	    printf("%08x ", rnd[i]);
+	    printf("%08lx ", (unsigned long) rnd[i]);
 	}
 	printf("\n");
     }
