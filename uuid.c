@@ -93,11 +93,11 @@ hal_error_t hal_uuid_format(const hal_uuid_t * const uuid, char *buffer, const s
   if (uuid == NULL || buffer == NULL || buffer_len < HAL_UUID_TEXT_SIZE)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if (buffer_len != snprintf(buffer, buffer_len, fmt,
-			     uuid->uuid[ 0], uuid->uuid[ 1], uuid->uuid[ 2], uuid->uuid[ 3],
-			     uuid->uuid[ 4], uuid->uuid[ 5], uuid->uuid[ 6], uuid->uuid[ 7],
-			     uuid->uuid[ 8], uuid->uuid[ 9], uuid->uuid[10], uuid->uuid[11],
-			     uuid->uuid[12], uuid->uuid[13], uuid->uuid[14], uuid->uuid[15]))
+  if (snprintf(buffer, buffer_len, fmt,
+               uuid->uuid[ 0], uuid->uuid[ 1], uuid->uuid[ 2], uuid->uuid[ 3],
+               uuid->uuid[ 4], uuid->uuid[ 5], uuid->uuid[ 6], uuid->uuid[ 7],
+               uuid->uuid[ 8], uuid->uuid[ 9], uuid->uuid[10], uuid->uuid[11],
+               uuid->uuid[12], uuid->uuid[13], uuid->uuid[14], uuid->uuid[15]) != HAL_UUID_TEXT_SIZE - 1)
     return HAL_ERROR_RESULT_TOO_LONG;
 
   return HAL_OK;
