@@ -203,8 +203,10 @@ static hal_error_t pkey_local_load(const hal_client_handle_t client,
   else if (ks != NULL)
     (void) hal_ks_close(ks);
 
-  if (err != HAL_OK)
+  if (err != HAL_OK) {
+    slot->type = HAL_KEY_TYPE_NONE;
     return err;
+  }
 
   *pkey = slot->pkey_handle;
   *name = slot->name;
@@ -242,8 +244,10 @@ static hal_error_t pkey_local_find(const hal_client_handle_t client,
   else if (ks != NULL)
     (void) hal_ks_close(ks);
 
-  if (err != HAL_OK)
+  if (err != HAL_OK) {
+    slot->type = HAL_KEY_TYPE_NONE;
     return err;
+  }
 
   *pkey = slot->pkey_handle;
   return HAL_OK;
@@ -282,8 +286,10 @@ static hal_error_t pkey_local_generate_rsa(const hal_client_handle_t client,
   slot->flags = flags;
 
   if ((err = hal_rsa_key_gen(NULL, &key, keybuf, sizeof(keybuf), key_length / 8,
-                             public_exponent, public_exponent_len)) != HAL_OK)
+                             public_exponent, public_exponent_len)) != HAL_OK) {
+    slot->type = HAL_KEY_TYPE_NONE;
     return err;
+  }
 
   uint8_t der[hal_rsa_private_key_to_der_len(key)];
   size_t der_len;
@@ -298,8 +304,10 @@ static hal_error_t pkey_local_generate_rsa(const hal_client_handle_t client,
   memset(keybuf, 0, sizeof(keybuf));
   memset(der, 0, sizeof(der));
 
-  if (err != HAL_OK)
+  if (err != HAL_OK) {
+    slot->type = HAL_KEY_TYPE_NONE;
     return err;
+  }
 
   *pkey = slot->pkey_handle;
   *name = slot->name;
@@ -338,8 +346,10 @@ static hal_error_t pkey_local_generate_ec(const hal_client_handle_t client,
   slot->curve = curve;
   slot->flags = flags;
 
-  if ((err = hal_ecdsa_key_gen(NULL, &key, keybuf, sizeof(keybuf), curve)) != HAL_OK)
+  if ((err = hal_ecdsa_key_gen(NULL, &key, keybuf, sizeof(keybuf), curve)) != HAL_OK) {
+    slot->type = HAL_KEY_TYPE_NONE;
     return err;
+  }
 
   uint8_t der[hal_ecdsa_private_key_to_der_len(key)];
   size_t der_len;
@@ -354,8 +364,10 @@ static hal_error_t pkey_local_generate_ec(const hal_client_handle_t client,
   memset(keybuf, 0, sizeof(keybuf));
   memset(der, 0, sizeof(der));
 
-  if (err != HAL_OK)
+  if (err != HAL_OK) {
+    slot->type = HAL_KEY_TYPE_NONE;
     return err;
+  }
 
   *pkey = slot->pkey_handle;
   *name = slot->name;
