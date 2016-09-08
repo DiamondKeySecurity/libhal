@@ -125,8 +125,8 @@ hal_error_t hal_ks_del_keydb(const int loc)
   return HAL_OK;
 }
 
-hal_error_t hal_ks_set_pin(const hal_user_t user,
-                           const hal_ks_pin_t * const pin)
+hal_error_t hal_set_pin(const hal_user_t user,
+                        const hal_ks_pin_t * const pin)
 {
   if (pin == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;

@@ -519,8 +519,8 @@ const hal_ks_driver_t hal_ks_token_driver[1] = {{
  * because it's the flash we've got.
  */
 
-hal_error_t hal_ks_get_pin(const hal_user_t user,
-                           const hal_ks_pin_t **pin)
+hal_error_t hal_get_pin(const hal_user_t user,
+                        const hal_ks_pin_t **pin)
 {
   if (pin == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -560,8 +560,8 @@ hal_error_t hal_ks_get_pin(const hal_user_t user,
   return LIBHAL_OK;
 }
 
-hal_error_t hal_ks_set_pin(const hal_user_t user,
-                           const hal_ks_pin_t * const pin)
+hal_error_t hal_set_pin(const hal_user_t user,
+                        const hal_ks_pin_t * const pin)
 {
   uint32_t active_sector_offset;
 

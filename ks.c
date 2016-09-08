@@ -353,8 +353,8 @@ hal_error_t hal_ks_list(hal_pkey_info_t *result,
   return HAL_OK;
 }
 
-hal_error_t hal_ks_get_pin(const hal_user_t user,
-                           const hal_ks_pin_t **pin)
+hal_error_t hal_get_pin(const hal_user_t user,
+                        const hal_ks_pin_t **pin)
 {
   if (pin == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;

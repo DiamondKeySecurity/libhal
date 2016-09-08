@@ -118,7 +118,7 @@ endif
 #
 # The mmap keystore hasn't been rewritten for the new API yet.
 
-KS_OBJ = ks_volatile.o
+KS_OBJ = ks_index.o ks_volatile.o
 
 ifeq "${KS}" "mmap"
   KS_OBJ += ks_mmap.o

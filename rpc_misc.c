@@ -133,7 +133,7 @@ static hal_error_t login(const hal_client_handle_t client,
   const hal_ks_pin_t *p;
   hal_error_t err;
 
-  if ((err = hal_ks_get_pin(user, &p)) != HAL_OK)
+  if ((err = hal_get_pin(user, &p)) != HAL_OK)
     return err;
 
   uint8_t buf[sizeof(p->pin)];
@@ -207,7 +207,7 @@ static hal_error_t set_pin(const hal_client_handle_t client,
   const hal_ks_pin_t *pp;
   hal_error_t err;
 
-  if ((err = hal_ks_get_pin(user, &pp)) != HAL_OK)
+  if ((err = hal_get_pin(user, &pp)) != HAL_OK)
     return err;
 
   hal_ks_pin_t p = *pp;
@@ -219,7 +219,7 @@ static hal_error_t set_pin(const hal_client_handle_t client,
                         (const uint8_t *) newpin, newpin_len,
                         p.salt, sizeof(p.salt),
                         p.pin,  sizeof(p.pin), p.iterations))   != HAL_OK ||
-      (err = hal_ks_set_pin(user, &p))                          != HAL_OK)
+      (err = hal_set_pin(user, &p))                             != HAL_OK)
     return err;
 
   return HAL_OK;

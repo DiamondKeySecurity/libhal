@@ -304,6 +304,12 @@ extern hal_error_t hal_uuid_format(const hal_uuid_t * const uuid, char *buffer, 
 #define HAL_KS_WRAPPED_KEYSIZE  ((4655 + 15) & ~7)
 
 /*
+ * hal_ks_key_t probably should not be here, or perhaps even exist at
+ * all, since it's really a relic of an older design from before we
+ * understood how the keystore flash fit into this picture.  Leaving
+ * it in place for now, but expect it to go away once the new ks_index
+ * stuff is ready to use.
+ *
  * This struct is ordered such that all metadata appears before the
  * big buffers, in order for all metadata to be loaded with a single
  * page read from e.g. the ks_flash module.
@@ -488,17 +494,99 @@ static inline hal_error_t hal_ks_list(hal_ks_t *ks,
 }
 
 /*
+ * Keystore index.  This is intended to be usable by both memory-based
+ * (in-memory, mmap(), ...) keystores and keystores based on raw flash.
+ * Some of the features aren't really necessary for memory-based keystores,
+ * but should be harmless.
+ *
+ * General approach is multiple arrays, all but one of which are
+ * indexed by "block" numbers, where a block number might be a slot in
+ * yet another static array, the number of a flash sub-sector, or
+ * whatever is the appropriate unit for holding one keystore record.
+ *
+ * The index array contains nothing but flags and block numbers, and
+ * is deliberately a small data structure so that moving data around
+ * within it is relatively cheap.
+ *
+ * The index array is divided into two portions: the index proper, and
+ * the free queue.  The index proper is ordered according to the names
+ * (UUIDs) of the corresponding blocks; the free queue is a FIFO, to
+ * support a simplistic form of wear leveling in flash-based keystores.
+ *
+ * Key names are kept in a separate array, indexed by block number.
+ *
+ * The all-ones UUID, which (by definition) cannot be a valid key
+ * UUID, is reserved for the (non-key) block used to stash PINs and
+ * other small data which aren't really part of the keystore proper
+ * but are kept with it because the keystore is the flash we have.
+ *
+ * At the moment, this design leaves no room for "continuation" blocks
+ * (additional blocks for keys so large that they won't fit in a
+ * single flash sub-sector, or whatever).  Not sure we need that, but
+ * if we do, adding it would be fairly simple: change the keyname
+ * array to be an array of two-element structures, the first of which
+ * is the name UUID, the second of which is the offset within the
+ * series of blocks sharing that name (usually just one block, so the
+ * offset would usually just be zero).  Implement that if and when we
+ * need it.
+ *
+ * Note that this API deliberately says nothing about how the keys
+ * themselves are stored, that's up to the keystore driver.  This
+ * portion of the API is only concerned with allocation and naming.
+ */
+
+typedef struct {
+  unsigned size;                /* Array length */
+  unsigned used;                /* How many blocks are in use */
+  uint16_t *index;              /* Index/freelist array */
+  hal_uuid_t *names;            /* Keyname array */
+} hal_ks_index_t;
+
+/*
+ * Finish setting up key index.  Caller must populate index, free
+ * list, and name array.
+ *
+ * This function checks a few things then sorts the index proper.
+ *
+ * If driver cares about wear leveling, driver must supply the free
+ * list in the desired order (FIFO); figuring out what that order is a
+ * problem for the keystore driver.
+ */
+extern hal_error_t hal_ks_index_setup(hal_ks_index_t *ksi);
+
+/*
+ * Find a key block, return its block number.
+ */
+extern hal_error_t hal_ks_index_find(hal_ks_index_t *ksi,
+                                     const hal_uuid_t * const name,
+                                     unsigned *blockno);
+
+/*
+ * Add a key block, return its block number.
+ */
+extern hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
+                                    const hal_uuid_t * const name,
+                                    unsigned *blockno);
+
+/*
+ * Delete a key block, returns its block number (driver may need it).
+ */
+extern hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
+                                       const hal_uuid_t * const name,
+                                       unsigned *blockno);
+
+/*
  * This stuff might want renaming, eg, to hal_pin_*().
  */
 
 extern hal_error_t hal_set_pin_default_iterations(const hal_client_handle_t client,
                                                   const uint32_t iterations);
 
-extern hal_error_t hal_ks_get_pin(const hal_user_t user,
-                                  const hal_ks_pin_t **pin);
+extern hal_error_t hal_get_pin(const hal_user_t user,
+                               const hal_ks_pin_t **pin);
 
-extern hal_error_t hal_ks_set_pin(const hal_user_t user,
-                                  const hal_ks_pin_t * const pin);
+extern hal_error_t hal_set_pin(const hal_user_t user,
+                               const hal_ks_pin_t * const pin);
 
 /*
  * RPC lowest-level send and receive routines. These are blocking, and
