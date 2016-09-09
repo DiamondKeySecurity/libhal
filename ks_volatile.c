@@ -142,7 +142,6 @@ static hal_error_t ks_store(hal_ks_t *ks,
     if (!ksv->db->keys[i].in_use && loc < 0)
       loc = i;
     if (ksv->db->keys[i].in_use &&
-        ksv->db->keys[i].type == slot->type &&
         hal_uuid_cmp(&ksv->db->keys[i].name, &slot->name) == 0)
       return HAL_ERROR_KEY_NAME_IN_USE;
   }

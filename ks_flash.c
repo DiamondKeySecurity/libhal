@@ -306,7 +306,7 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
                             hal_pkey_slot_t *slot,
                             uint8_t *der, size_t *der_len, const size_t der_max)
 {
-  if (ks != &db.ks || slot == NULL || !acceptable_key_type(slot->type))
+  if (ks != &db.ks || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   const hal_ks_key_t * const k = find(&slot->name);
@@ -479,7 +479,7 @@ static hal_error_t ks_store(hal_ks_t *ks,
 static hal_error_t ks_delete(hal_ks_t *ks,
                              const hal_pkey_slot_t * const slot)
 {
-  if (ks != &db.ks || slot == NULL || !acceptable_key_type(slot->type))
+  if (ks != &db.ks || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   hal_ks_key_t *k = find(&slot->name);
