@@ -354,7 +354,6 @@ static hal_error_t pkey_find(const uint8_t **iptr, const uint8_t * const ilimit,
     hal_client_handle_t client;
     hal_session_handle_t session;
     hal_pkey_handle_t pkey;
-    uint32_t type;
     const uint8_t *name_ptr;
     uint32_t name_len;
     hal_key_flags_t flags;
@@ -362,7 +361,6 @@ static hal_error_t pkey_find(const uint8_t **iptr, const uint8_t * const ilimit,
 
     check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &session.handle));
-    check(hal_xdr_decode_int(iptr, ilimit, &type));
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &name_ptr, &name_len));
     check(hal_xdr_decode_int(iptr, ilimit, &flags));
 
@@ -370,7 +368,7 @@ static hal_error_t pkey_find(const uint8_t **iptr, const uint8_t * const ilimit,
         return HAL_ERROR_KEY_NAME_TOO_LONG;
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.find(client, session, &pkey, type, (const hal_uuid_t *) name_ptr, flags);
+    ret = hal_rpc_local_pkey_dispatch.find(client, session, &pkey, (const hal_uuid_t *) name_ptr, flags);
 
     if (ret == HAL_OK)
         check(hal_xdr_encode_int(optr, olimit, pkey.handle));

@@ -291,13 +291,12 @@ static inline int acceptable_key_type(const hal_key_type_t type)
   }
 }
 
-static inline hal_ks_key_t *find(const hal_key_type_t type,
-                          const hal_uuid_t * const name)
+static inline hal_ks_key_t *find(const hal_uuid_t * const name)
 {
-  assert(name != NULL && acceptable_key_type(type));
+  assert(name != NULL);
 
   for (int i = 0; i < sizeof(db.keys)/sizeof(*db.keys); i++)
-    if (db.keys[i].in_use && db.keys[i].type == type && hal_uuid_cmp(&db.keys[i].name, name) == 0)
+    if (db.keys[i].in_use && hal_uuid_cmp(&db.keys[i].name, name) == 0)
       return &db.keys[i];
 
   return NULL;
@@ -310,11 +309,12 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
   if (ks != &db.ks || slot == NULL || !acceptable_key_type(slot->type))
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  const hal_ks_key_t * const k = find(slot->type, &slot->name);
+  const hal_ks_key_t * const k = find(&slot->name);
 
   if (k == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
 
+  slot->type  = k->type;
   slot->curve = k->curve;
   slot->flags = k->flags;
 
@@ -384,7 +384,7 @@ static hal_error_t ks_store(hal_ks_t *ks,
   if (ks != &db.ks || slot == NULL || der == NULL || der_len == 0 || !acceptable_key_type(slot->type))
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if (find(slot->type, &slot->name) != NULL)
+  if (find(&slot->name) != NULL)
     return HAL_ERROR_KEY_NAME_IN_USE;
 
   int loc = -1;
@@ -482,7 +482,7 @@ static hal_error_t ks_delete(hal_ks_t *ks,
   if (ks != &db.ks || slot == NULL || !acceptable_key_type(slot->type))
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  hal_ks_key_t *k = find(slot->type, &slot->name);
+  hal_ks_key_t *k = find(&slot->name);
 
   if (k == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;

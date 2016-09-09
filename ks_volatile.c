@@ -176,14 +176,12 @@ static hal_error_t ks_store(hal_ks_t *ks,
   return HAL_OK;
 }
 
-static hal_ks_key_t *find(ks_t *ksv,
-                          const hal_key_type_t type,
-                          const hal_uuid_t * const name)
+static hal_ks_key_t *find(ks_t *ksv, const hal_uuid_t * const name)
 {
-  assert(ksv != NULL && name != NULL && acceptable_key_type(type));
+  assert(ksv != NULL && name != NULL);
 
   for (int i = 0; i < sizeof(ksv->db->keys)/sizeof(*ksv->db->keys); i++)
-    if (ksv->db->keys[i].in_use && ksv->db->keys[i].type == type && hal_uuid_cmp(&ksv->db->keys[i].name, name) == 0)
+    if (ksv->db->keys[i].in_use && hal_uuid_cmp(&ksv->db->keys[i].name, name) == 0)
       return &ksv->db->keys[i];
 
   return NULL;
@@ -193,7 +191,7 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
                             hal_pkey_slot_t *slot,
                             uint8_t *der, size_t *der_len, const size_t der_max)
 {
-  if (ks == NULL || slot == NULL || !acceptable_key_type(slot->type))
+  if (ks == NULL || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   ks_t *ksv = ks_to_ksv(ks);
@@ -201,11 +199,12 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
   if (ksv->db == NULL)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
-  const hal_ks_key_t * const k = find(ksv, slot->type, &slot->name);
+  const hal_ks_key_t * const k = find(ksv, &slot->name);
 
   if (k == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
 
+  slot->type  = k->type;
   slot->curve = k->curve;
   slot->flags = k->flags;
 
@@ -238,7 +237,7 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
 static hal_error_t ks_delete(hal_ks_t *ks,
                              const hal_pkey_slot_t * const slot)
 {
-  if (ks == NULL || slot == NULL || !acceptable_key_type(slot->type))
+  if (ks == NULL || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   ks_t *ksv = ks_to_ksv(ks);
@@ -246,7 +245,7 @@ static hal_error_t ks_delete(hal_ks_t *ks,
   if (ksv->db == NULL)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
-  hal_ks_key_t *k = find(ksv, slot->type, &slot->name);
+  hal_ks_key_t *k = find(ksv, &slot->name);
 
   if (k == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;

@@ -447,11 +447,10 @@ static hal_error_t pkey_remote_load(const hal_client_handle_t client,
 static hal_error_t pkey_remote_find(const hal_client_handle_t client,
                                     const hal_session_handle_t session,
                                     hal_pkey_handle_t *pkey,
-                                    const hal_key_type_t type,
                                     const hal_uuid_t * const name,
                                     const hal_key_flags_t flags)
 {
-  uint8_t outbuf[nargs(6) + pad(sizeof(name->uuid))], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t outbuf[nargs(5) + pad(sizeof(name->uuid))], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(4)];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   hal_error_t rpc_ret;
@@ -459,7 +458,6 @@ static hal_error_t pkey_remote_find(const hal_client_handle_t client,
   check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_FIND));
   check(hal_xdr_encode_int(&optr, olimit, client.handle));
   check(hal_xdr_encode_int(&optr, olimit, session.handle));
-  check(hal_xdr_encode_int(&optr, olimit, type));
   check(hal_xdr_encode_buffer(&optr, olimit, name->uuid, sizeof(name->uuid)));
   check(hal_xdr_encode_int(&optr, olimit, flags));
   check(hal_rpc_send(outbuf, optr - outbuf));

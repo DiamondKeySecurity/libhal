@@ -178,7 +178,6 @@ typedef struct {
   hal_error_t  (*find)(const hal_client_handle_t client,
                        const hal_session_handle_t session,
                        hal_pkey_handle_t *pkey,
-                       const hal_key_type_t type,
                        const hal_uuid_t * const name,
                        const hal_key_flags_t flags);
 
