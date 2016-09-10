@@ -293,11 +293,6 @@ extern hal_error_t hal_uuid_format(const hal_uuid_t * const uuid, char *buffer, 
  *
  * Plus we need a bit of AES-keywrap overhead, since we're storing the
  * wrapped form (see hal_aes_keywrap_cyphertext_length()).
- *
- * We also need to store PINs somewhere, so they go into the keystore
- * even though they're not keys.  Like keys, they're stored in a
- * relatively safe form (PBKDF2), so while we would prefer to keep
- * them private, they don't require tamper-protected RAM.
  */
 
 #define HAL_KS_WRAPPED_KEYSIZE  ((4655 + 15) & ~7)
