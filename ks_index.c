@@ -56,8 +56,8 @@ static int ks_find(const hal_ks_index_t * const ksi,
   int hi = ksi->used;
 
   for (;;) {
-    int m = (lo + hi) >> 1;
-    if (m == lo) {
+    int m = (lo + hi) / 2;
+    if (hi == 0 || m == lo) {
       *where = hi;
       return 0;
     }
