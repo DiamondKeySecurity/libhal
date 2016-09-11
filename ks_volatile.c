@@ -88,11 +88,7 @@ typedef struct {
 } ks_t;
 
 static db_t volatile_db;
-
-static ks_t volatile_ks = {
-  { hal_ks_volatile_driver },
-  &volatile_db
-};
+static ks_t volatile_ks;
 
 static inline ks_t *ks_to_ksv(hal_ks_t *ks)
 {
@@ -128,12 +124,29 @@ static hal_error_t ks_init(db_t *db)
   return err;
 }
 
+static hal_error_t ks_volatile_init(const hal_ks_driver_t * const driver)
+{
+  if (volatile_ks.ks.driver != NULL)
+    return HAL_ERROR_KEYSTORE_ACCESS;
+  volatile_ks.ks.driver = driver;
+  volatile_ks.db = &volatile_db;
+  return ks_init(volatile_ks.db);
+}
+
+static hal_error_t ks_volatile_shutdown(const hal_ks_driver_t * const driver)
+{
+  if (volatile_ks.ks.driver != driver)
+    return HAL_ERROR_KEYSTORE_ACCESS;
+  memset(&volatile_ks, 0, sizeof(volatile_ks));
+  return HAL_OK;
+}
+
 static hal_error_t ks_volatile_open(const hal_ks_driver_t * const driver,
                                     hal_ks_t **ks)
 {
   assert(driver != NULL && ks != NULL);
   *ks = &volatile_ks.ks;
-  return ks_init(volatile_ks.db);
+  return HAL_OK;
 }
 
 static hal_error_t ks_volatile_close(hal_ks_t *ks)
@@ -294,6 +307,8 @@ static hal_error_t ks_list(hal_ks_t *ks,
 }
 
 const hal_ks_driver_t hal_ks_volatile_driver[1] = {{
+  ks_volatile_init,
+  ks_volatile_shutdown,
   ks_volatile_open,
   ks_volatile_close,
   ks_store,

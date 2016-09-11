@@ -807,12 +807,26 @@ const hal_rpc_pkey_dispatch_t *hal_rpc_pkey_dispatch = &hal_rpc_local_pkey_dispa
 
 hal_error_t hal_rpc_server_init(void)
 {
-    return hal_rpc_server_transport_init();
+    hal_error_t err;
+
+    if ((err = hal_ks_init(hal_ks_volatile_driver)) != HAL_OK ||
+        (err = hal_ks_init(hal_ks_token_driver))    != HAL_OK ||
+        (err = hal_rpc_server_transport_init())     != HAL_OK)
+        return err;
+
+    return HAL_OK;
 }
 
 hal_error_t hal_rpc_server_close(void)
 {
-    return hal_rpc_server_transport_close();
+    hal_error_t err;
+
+    if ((err = hal_rpc_server_transport_close())        != HAL_OK ||
+        (err = hal_ks_shutdown(hal_ks_token_driver))    != HAL_OK ||
+        (err = hal_ks_shutdown(hal_ks_volatile_driver)) != HAL_OK)
+        return err;
+
+    return HAL_OK;
 }
 
 

@@ -100,13 +100,10 @@ static inline uint32_t _get_key_offset(uint32_t num)
   return offset;
 }
 
-static hal_error_t ks_init(void)
+static hal_error_t ks_init(const hal_ks_driver_t * const driver)
 {
-  if (db.ks.driver == hal_ks_token_driver)
-    return LIBHAL_OK;
-
   if (db.ks.driver != NULL)
-    return HAL_ERROR_IMPOSSIBLE;
+    return HAL_ERROR_KEYSTORE_ACCESS;
 
   uint8_t page_buf[KEYSTORE_PAGE_SIZE];
   uint32_t idx = 0;             /* Current index into db.keys[] */
@@ -188,8 +185,16 @@ static hal_error_t ks_init(void)
     idx++;
   }
 
-  db.ks.driver = hal_ks_token_driver;
+  db.ks.driver = driver;
 
+  return LIBHAL_OK;
+}
+
+static hal_error_t ks_shutdown(const hal_ks_driver_t * const driver)
+{
+  if (db.ks.driver != driver)
+    return HAL_ERROR_KEYSTORE_ACCESS;
+  memset(&db, 0, sizeof(db));
   return LIBHAL_OK;
 }
 
@@ -258,13 +263,8 @@ static hal_error_t _write_db_to_flash(const uint32_t sector_offset)
 static hal_error_t ks_open(const hal_ks_driver_t * const driver,
                                     hal_ks_t **ks)
 {
-  hal_error_t err;
-
   if (driver != hal_ks_token_driver || ks == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
-
-  if ((err = ks_init()) != LIBHAL_OK)
-    return err;
 
   *ks = &db.ks;
   return LIBHAL_OK;
@@ -505,6 +505,8 @@ static hal_error_t ks_delete(hal_ks_t *ks,
 }
 
 const hal_ks_driver_t hal_ks_token_driver[1] = {{
+  ks_init,
+  ks_shutdown,
   ks_open,
   ks_close,
   ks_store,
@@ -524,11 +526,6 @@ hal_error_t hal_get_pin(const hal_user_t user,
 {
   if (pin == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
-
-  hal_error_t err;
-
-  if ((err = ks_init()) != LIBHAL_OK)
-    return err;
 
   switch (user) {
   case HAL_USER_WHEEL:  *pin = &db.wheel_pin;  break;
