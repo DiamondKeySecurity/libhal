@@ -102,9 +102,6 @@ static inline uint32_t _get_key_offset(uint32_t num)
 
 static hal_error_t ks_init(const hal_ks_driver_t * const driver)
 {
-  if (db.ks.driver != NULL)
-    return HAL_ERROR_KEYSTORE_ACCESS;
-
   uint8_t page_buf[KEYSTORE_PAGE_SIZE];
   uint32_t idx = 0;             /* Current index into db.keys[] */
 

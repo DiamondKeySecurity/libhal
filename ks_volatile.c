@@ -126,8 +126,6 @@ static hal_error_t ks_init(db_t *db)
 
 static hal_error_t ks_volatile_init(const hal_ks_driver_t * const driver)
 {
-  if (volatile_ks.ks.driver != NULL)
-    return HAL_ERROR_KEYSTORE_ACCESS;
   volatile_ks.ks.driver = driver;
   volatile_ks.db = &volatile_db;
   return ks_init(volatile_ks.db);
