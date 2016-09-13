@@ -123,7 +123,7 @@ KS_OBJ = ks_index.o ks_volatile.o
 ifeq "${KS}" "mmap"
   KS_OBJ += ks_mmap.o
 else ifeq "${KS}" "flash"
-  KS_OBJ += ks_flash.o masterkey.o
+  KS_OBJ += ks_flash.o mkm.o
 endif
 
 # RPC_MODE = none | server | client-simple | client-mixed

@@ -40,7 +40,6 @@
 
 #define HAL_OK CMIS_HAL_OK
 #include "stm-keystore.h"
-#include "masterkey.h"
 #undef HAL_OK
 
 #include <string.h>
@@ -53,16 +52,124 @@
 #define KEK_LENGTH              (bitsToBytes(256))
 
 /*
+ * Revised flash keystore database.  Work in progress.
+ *
+ * General consideration:
+ *
+ * - bits can only be cleared, not set, unless one wants to erase the
+ *   (sub)sector.  This has some odd knock on effects in terms of
+ *   things like values of enumerated constants used here.
+ *
+ * - At the moment, all of hte the low-level flash code deals with
+ *   sectors, not sub-sectors, so for the moment we only use the first
+ *   sub-sector of each sector.  Fixing this should not involve any
+ *   major changes to the code, just redefinition of some constants
+ *   here once we figure out what effect this will have on the rest of
+ *   the code that shares the same low-level flash code.  In either
+ *   case we're dealing with "blocks", where a block is a sector now
+ *   and will be a sub-sector later.
+ *
+ * - This code assumes we're using ks_index.c, including its notion
+ *   of a free list and its attempt at light-weight wear leveling.
+ */
+
+/*
+ * Known block states.
+ *
+ * This assumes that an enum is stored as a 32-bit unsigned integer,
+ * which may be a bad assumption.  Might be better to use uint32_t (or
+ * whatever) and inline functions for safe casting.
+ *
+ * Might want an additional state 0xDEADDEAD to mark blocks which
+ * are known to be unusable, but the current hardware is NOR flash
+ * so that may not be as important as it would be with NAND flash.
+ */
+
+typedef enum {
+  FLASH_ERASED = 0xFFFFFFFF,    /* Pristine erased block (candidate for reuse) */
+  FLASH_ZEROED = 0x00000000,    /* Zeroed block (recently used) */
+  FLASH_KEYBLK = 0x55555555,    /* Block contains key material */
+  FLASH_PINBLK = 0xAAAAAAAA,    /* Block contains PINs */
+} flash_block_type_t;
+
+typedef struct {
+
+  /*
+   * What kind of flash block this is
+   */
+  flash_block_type_t    block_type;
+
+  /*
+   * CRC-32 of block contents.  crc_mask width should be at least as
+   * many bits as there are slots in the crc array.  Once all of the
+   * slots have been used, we have to move to a new block.  Using 32
+   * slots initially, adjust that up or down once we have some clue
+   * how well this design works and how many slots we really want.
+   */
+  uint32_t              crc_mask;
+  hal_crc32_t           crc[32];
+
+  /*
+   * Payload for key and PIN blocks.  Anonymous structures and unions
+   * until and unless we have a reason to name them.
+   *
+   * Storing the KEK in a PIN block is a dangerous kludge and should
+   * be removed as soon as we have a battery backup for the MKM.
+   *
+   * We probably want some kind of TLV format for optional attributes
+   * in key objects, and might want to put the DER key itself there to
+   * save space.
+   */
+
+  union {
+
+    struct {
+      hal_uuid_t        name;
+      hal_key_type_t    type;
+      hal_curve_name_t  curve;
+      hal_key_flags_t   flags;
+      size_t            der_len;
+      uint8_t           der[HAL_KS_WRAPPED_KEYSIZE];
+    }                   key;
+
+    struct {
+      struct {
+        hal_user_t      user;
+        hal_ks_pin_t    pin;
+      }                 pins[40];
+      uint8_t           kek[KEK_LENGTH];        /* Kludge */
+    }                   pin;
+
+  } payload;
+
+} flash_block_t;
+
+
+#warning Old keystore code below here
+/*
  * Temporary hack: In-memory copy of entire (tiny) keystore database.
  * This is backwards compatability to let us debug without changing
  * too many moving parts at the same time, but will need to be
  * replaced by something that can handle a much larger number of keys,
  * which is one of the main points of the new keystore API.
+ *
+ * hal_ks_key_t is ordered such that all metadata appears before the
+ * big buffers, in order for all metadata to be loaded with a single
+ * page read.
  */
 
 typedef struct {
-  hal_ks_t ks;                  /* Must be first (C "subclassing") */
+  hal_key_type_t type;
+  hal_curve_name_t curve;
+  hal_key_flags_t flags;
+  uint8_t in_use;
+  size_t der_len;
+  hal_uuid_t name;
+  uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
+} hal_ks_key_t;
 
+typedef struct {
+  hal_ks_t ks;                  /* Must be first (C "subclassing") */
   hal_ks_pin_t wheel_pin;
   hal_ks_pin_t so_pin;
   hal_ks_pin_t user_pin;
@@ -77,8 +184,8 @@ typedef struct {
 
 static db_t db;
 
-#define FLASH_SECTOR_1_OFFSET	(0 * KEYSTORE_SECTOR_SIZE)
-#define FLASH_SECTOR_2_OFFSET	(1 * KEYSTORE_SECTOR_SIZE)
+#define FLASH_SECTOR_1_OFFSET   (0 * KEYSTORE_SECTOR_SIZE)
+#define FLASH_SECTOR_2_OFFSET   (1 * KEYSTORE_SECTOR_SIZE)
 
 static inline uint32_t _active_sector_offset()
 {
@@ -329,7 +436,7 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
 
     *der_len = der_max;
 
-    if ((err = hal_get_kek(kek, &kek_len, sizeof(kek))) == LIBHAL_OK)
+    if ((err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek))) == LIBHAL_OK)
       err = hal_aes_keyunwrap(NULL, kek, kek_len, k->der, k->der_len, der, der_len);
 
     memset(kek, 0, sizeof(kek));
@@ -402,7 +509,7 @@ static hal_error_t ks_store(hal_ks_t *ks,
 
   hal_error_t err;
 
-  if ((err = hal_get_kek(kek, &kek_len, sizeof(kek))) == LIBHAL_OK)
+  if ((err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek))) == LIBHAL_OK)
     err = hal_aes_keywrap(NULL, kek, kek_len, der, der_len, k.der, &k.der_len);
 
   memset(kek, 0, sizeof(kek));
@@ -526,9 +633,9 @@ hal_error_t hal_get_pin(const hal_user_t user,
 
   switch (user) {
   case HAL_USER_WHEEL:  *pin = &db.wheel_pin;  break;
-  case HAL_USER_SO:	*pin = &db.so_pin;     break;
-  case HAL_USER_NORMAL:	*pin = &db.user_pin;   break;
-  default:		return HAL_ERROR_BAD_ARGUMENTS;
+  case HAL_USER_SO:     *pin = &db.so_pin;     break;
+  case HAL_USER_NORMAL: *pin = &db.user_pin;   break;
+  default:              return HAL_ERROR_BAD_ARGUMENTS;
   }
 
   /*
@@ -566,9 +673,9 @@ hal_error_t hal_set_pin(const hal_user_t user,
 
   switch (user) {
   case HAL_USER_WHEEL:  p = &db.wheel_pin;  break;
-  case HAL_USER_SO:	p = &db.so_pin;     break;
-  case HAL_USER_NORMAL:	p = &db.user_pin;   break;
-  default:		return HAL_ERROR_BAD_ARGUMENTS;
+  case HAL_USER_SO:     p = &db.so_pin;     break;
+  case HAL_USER_NORMAL: p = &db.user_pin;   break;
+  default:              return HAL_ERROR_BAD_ARGUMENTS;
   }
 
   memcpy(p, pin, sizeof(*p));
@@ -587,39 +694,12 @@ hal_error_t hal_set_pin(const hal_user_t user,
   return _write_db_to_flash(active_sector_offset);
 }
 
-
-hal_error_t hal_get_kek(uint8_t *kek,
-                           size_t *kek_len,
-                           const size_t kek_max)
-{
-  if (kek == NULL || kek_len == NULL || kek_max < bitsToBytes(128))
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  const size_t len = ((kek_max < bitsToBytes(192)) ? bitsToBytes(128) :
-                      (kek_max < bitsToBytes(256)) ? bitsToBytes(192) :
-                      bitsToBytes(256));
-
-  hal_error_t err = masterkey_volatile_read(kek, len);
-
-  if (err == LIBHAL_OK) {
-    *kek_len = len;
-    return LIBHAL_OK;
-  }
-
-  if (masterkey_flash_read(kek, len) == LIBHAL_OK) {
-    *kek_len = len;
-    return LIBHAL_OK;
-  }
-
-  /*
-   * Both keystores returned an error, probably HAL_ERROR_MASTERKEY_NOT_SET.
-   * I could try to be clever and compare the errors, but really the volatile
-   * keystore is the important one (you shouldn't store the master key in
-   * flash), so return that error.
-   */
-  return err;
-}
-
+#warning MKM flash kludge support needed here
+/*
+ * Need functions to handle lower level stuff we want
+ * hal_mkm_flash_read() and hal_mkm_flash_write() to call, since we're
+ * stuffing that data into the PIN block.
+ */
 
 /*
  * Local variables:

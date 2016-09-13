@@ -192,7 +192,7 @@ static hal_error_t ks_store(hal_ks_t *ks,
   k.curve   = slot->curve;
   k.flags   = slot->flags;
 
-  if ((err = hal_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
+  if ((err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
     err = hal_aes_keywrap(NULL, kek, kek_len, der, der_len, k.der, &k.der_len);
 
   memset(kek, 0, sizeof(kek));
@@ -242,7 +242,7 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
 
     *der_len = der_max;
 
-    if ((err = hal_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
+    if ((err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
       err = hal_aes_keyunwrap(NULL, kek, kek_len, k->der, k->der_len, der, der_len);
 
     memset(kek, 0, sizeof(kek));

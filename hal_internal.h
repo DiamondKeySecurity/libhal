@@ -294,16 +294,6 @@ static inline hal_crc32_t hal_crc32_finalize(hal_crc32_t crc)
 }
 
 /*
- * Keystore API.
- */
-
-/*
- * The first chunk of this is stuff that's really internal to the
- * keystore implementation(s), and perhaps should move to a separate
- * ks_internal.h.
- */
-
-/*
  * Sizes for ASN.1-encoded keys, this may not be exact due to ASN.1
  * INTEGER encoding rules but should be good enough for buffer sizing:
  *
@@ -321,26 +311,10 @@ static inline hal_crc32_t hal_crc32_finalize(hal_crc32_t crc)
 #define HAL_KS_WRAPPED_KEYSIZE  ((4655 + 15) & ~7)
 
 /*
- * hal_ks_key_t probably should not be here, or perhaps even exist at
- * all, since it's really a relic of an older design from before we
- * understood how the keystore flash fit into this picture.  Leaving
- * it in place for now, but expect it to go away once the new ks_index
- * stuff is ready to use.
+ * PINs.
  *
- * This struct is ordered such that all metadata appears before the
- * big buffers, in order for all metadata to be loaded with a single
- * page read from e.g. the ks_flash module.
+ * The functions here might want renaming, eg, to hal_pin_*().
  */
-
-typedef struct {
-  hal_key_type_t type;
-  hal_curve_name_t curve;
-  hal_key_flags_t flags;
-  uint8_t in_use;
-  size_t der_len;
-  hal_uuid_t name;
-  uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
-} hal_ks_key_t;
 
 #ifndef HAL_PIN_SALT_LENGTH
 #define HAL_PIN_SALT_LENGTH 16
@@ -352,9 +326,43 @@ typedef struct {
   uint8_t salt[HAL_PIN_SALT_LENGTH];
 } hal_ks_pin_t;
 
-extern hal_error_t hal_get_kek(uint8_t *kek,
-                                  size_t *kek_len,
-                                  const size_t kek_max);
+extern hal_error_t hal_set_pin_default_iterations(const hal_client_handle_t client,
+                                                  const uint32_t iterations);
+
+extern hal_error_t hal_get_pin(const hal_user_t user,
+                               const hal_ks_pin_t **pin);
+
+extern hal_error_t hal_set_pin(const hal_user_t user,
+                               const hal_ks_pin_t * const pin);
+
+/*
+ * Master key memory (MKM) and key-encryption-key (KEK).
+ *
+ * Providing a mechanism for storing the KEK in flash is a horrible
+ * kludge which defeats the entire purpose of having the MKM.  We
+ * support it for now because the Alpha hardware does not yet have
+ * a working battery backup for the MKM, but it should go away RSN.
+ */
+
+#ifndef HAL_MKM_FLASH_BACKUP_KLUDGE
+#define HAL_MKM_FLASH_BACKUP_KLUDGE 1
+#endif
+
+extern hal_error_t hal_mkm_get_kek(uint8_t *kek, size_t *kek_len, const size_t kek_max);
+
+extern hal_error_t hal_mkm_volatile_read(uint8_t *buf, const size_t len);
+extern hal_error_t hal_mkm_volatile_write(const uint8_t * const buf, const size_t len);
+extern hal_error_t hal_mkm_volatile_erase(const size_t len);
+
+#if HAL_MKM_FLASH_BACKUP_KLUDGE
+
+#warning MKM flash backup kludge enabled.  Do NOT use this in production!
+
+extern hal_error_t hal_mkm_flash_read(uint8_t *buf, const size_t len);
+extern hal_error_t hal_mkm_flash_write(const uint8_t * const buf, const size_t len);
+extern hal_error_t hal_mkm_flash_erase(const size_t len);
+
+#endif
 
 /*
  * Keystore API for use by the pkey implementation.
@@ -611,19 +619,6 @@ extern hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
 extern hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
                                        const hal_uuid_t * const name,
                                        unsigned *blockno);
-
-/*
- * This stuff might want renaming, eg, to hal_pin_*().
- */
-
-extern hal_error_t hal_set_pin_default_iterations(const hal_client_handle_t client,
-                                                  const uint32_t iterations);
-
-extern hal_error_t hal_get_pin(const hal_user_t user,
-                               const hal_ks_pin_t **pin);
-
-extern hal_error_t hal_set_pin(const hal_user_t user,
-                               const hal_ks_pin_t * const pin);
 
 /*
  * RPC lowest-level send and receive routines. These are blocking, and
