@@ -307,7 +307,7 @@ static hal_crc32_t calculate_block_crc(const flash_block_t * const block)
 
   crc = hal_crc32_update(crc,
                          block->bytes + sizeof(flash_block_header_t),
-                         sizeof(block) - sizeof(flash_block_header_t));
+                         sizeof(*block) - sizeof(flash_block_header_t));
 
   return hal_crc32_finalize(crc);
 }
@@ -340,25 +340,22 @@ static hal_error_t block_read(const unsigned blockno, flash_block_t *block)
   assert(block != NULL && blockno < NUM_FLASH_BLOCKS && sizeof(*block) == KEYSTORE_SUBSECTOR_SIZE);
 
   /* Sigh, magic numeric return codes */
-  if (keystore_read_data(block_offset(blockno), block->bytes, sizeof(block)) != 1)
+  if (keystore_read_data(block_offset(blockno), block->bytes, sizeof(*block)) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   switch (block_get_type(block)) {
   case FLASH_KEYBLK:
   case FLASH_PINBLK:
-    if (calculate_block_crc(block) != block->header.crc1)
-      return HAL_ERROR_KEYSTORE_BAD_CRC;
-    break;
+    return calculate_block_crc(block) == block->header.crc1 ? HAL_OK : HAL_ERROR_KEYSTORE_BAD_CRC;
   case FLASH_KEYOLD:
   case FLASH_PINOLD:
-    if (calculate_block_crc(block) != block->header.crc2)
-      return HAL_ERROR_KEYSTORE_BAD_CRC;
-    break;
+    return calculate_block_crc(block) == block->header.crc2 ? HAL_OK : HAL_ERROR_KEYSTORE_BAD_CRC;
+  case FLASH_ERASED:
+  case FLASH_ZEROED:
+    return HAL_OK;
   default:
-    break;
+    return HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE;
   }
-
-  return HAL_OK;
 }
 
 /*
@@ -407,7 +404,7 @@ static hal_error_t block_write(const unsigned blockno, flash_block_t *block)
   }
 
   /* Sigh, magic numeric return codes */
-  if (keystore_write_data(block_offset(blockno), block->bytes, sizeof(block)) != 1)
+  if (keystore_write_data(block_offset(blockno), block->bytes, sizeof(*block)) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   return HAL_OK;
@@ -465,7 +462,13 @@ static hal_error_t block_erase_maybe(const unsigned blockno)
   if (block == NULL)
     return HAL_ERROR_IMPOSSIBLE;
 
-  if ((err = block_read(blockno, block)) != HAL_OK)
+  err = block_read(blockno, block);
+
+  if (err == HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE ||
+      err == HAL_ERROR_KEYSTORE_BAD_CRC)
+    return block_erase(blockno);
+
+  if (err != HAL_OK)
     return err;
 
   for (int i = 0; i < sizeof(*block); i++)
@@ -516,13 +519,15 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
   for (int i = 0; i < NUM_FLASH_BLOCKS; i++) {
 
     /*
-     * Read one block.  If the CRC is bad, it's old data we don't
-     * understand, something we were writing when we crashed, or bad
-     * flash; in any of these cases, we want the block to ends up near
-     * the end of the free list.
+     * Read one block.  If the CRC is bad or the block type is
+     * unknown, it's old data we don't understand, something we were
+     * writing when we crashed, or bad flash; in any of these cases,
+     * we want the block to ends up near the end of the free list.
      */
 
-    if ((err = block_read(i, block)) == HAL_ERROR_KEYSTORE_BAD_CRC)
+    err = block_read(i, block);
+
+    if (err == HAL_ERROR_KEYSTORE_BAD_CRC || err == HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE)
       block_types[i] = FLASH_UNKNOWN;
 
     else if (err == HAL_OK)
@@ -1070,12 +1075,27 @@ hal_error_t hal_set_pin(const hal_user_t user,
 
 #if HAL_MKM_FLASH_BACKUP_KLUDGE
 
+/*
+ * Horrible insecure kludge in lieu of a battery for the MKM.
+ *
+ * API here is a little strange:
+ *
+ * - NULL buffer on read means do all the work without returning the
+ *   value;
+ *
+ * - All calls pass a length parameter, but any length other than the
+ *   compiled in constant just returns an immediate error, there's no
+ *   notion of buffer max length vs buffer used length, querying for
+ *   the size of buffer really needed, or anything like that.
+ *
+ * We might want to rewrite this some day, if we don't replace it with
+ * a battery first.  For now we just preserve the API as we found it
+ * while re-implementing it on top of the new keystore.
+ */
+
 hal_error_t hal_mkm_flash_read(uint8_t *buf, const size_t len)
 {
-  if (buf == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (len != KEK_LENGTH)
+  if (buf != NULL && len != KEK_LENGTH)
     return HAL_ERROR_MASTERKEY_BAD_LENGTH;
 
   flash_block_t *block;
@@ -1088,7 +1108,9 @@ hal_error_t hal_mkm_flash_read(uint8_t *buf, const size_t len)
   if (block->pin.kek_set != FLASH_KEK_SET)
     return HAL_ERROR_MASTERKEY_NOT_SET;
 
-  memcpy(buf, block->pin.kek, len);
+  if (buf != NULL)
+    memcpy(buf, block->pin.kek, len);
+
   return HAL_OK;
 }
 

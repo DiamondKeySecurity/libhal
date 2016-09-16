@@ -306,9 +306,16 @@ static inline hal_crc32_t hal_crc32_finalize(hal_crc32_t crc)
  *
  * Plus we need a bit of AES-keywrap overhead, since we're storing the
  * wrapped form (see hal_aes_keywrap_cyphertext_length()).
+ *
+ * A buffer big enough for a 8192-bit RSA key would overflow one
+ * sub-sector on the flash chip we're using on the Alpha.  We could
+ * invent some more complex scheme where key blocks are allowed to
+ * span multiple sub-sectors, but since an 8192-bit RSA key would also
+ * be unusably slow with the current RSA implementation, for the
+ * moment we take the easy way out and cap this at 4096-bit RSA.
  */
 
-#define HAL_KS_WRAPPED_KEYSIZE  ((4655 + 15) & ~7)
+#define HAL_KS_WRAPPED_KEYSIZE  ((2351 + 15) & ~7)
 
 /*
  * PINs.
