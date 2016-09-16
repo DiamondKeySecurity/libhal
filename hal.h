@@ -144,6 +144,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_MASTERKEY_FAIL,            "Master key generic failure")                   \
   DEFINE_HAL_ERROR(HAL_ERROR_MASTERKEY_BAD_LENGTH,      "Master key of unacceptable length")            \
   DEFINE_HAL_ERROR(HAL_ERROR_KS_DRIVER_NOT_FOUND,       "Keystore driver not found")                    \
+  DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_BAD_CRC,          "Bad CRC in keystore")                          \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */

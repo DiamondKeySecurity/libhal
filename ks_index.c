@@ -216,6 +216,15 @@ hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
 }
 
 /*
+ * Might want a hal_ks_index_replace(), which would be an efficiency
+ * hack replacement (roughly 2x) for a delete followed by an add with
+ * the same name.  Implementation would be to find the old existing
+ * block, pull the first block off the free list, sliding the free
+ * list down, drop the new block in instead of the old, put the old
+ * block at the end of the free list, and return the new block.
+ */
+
+/*
  * Local variables:
  * indent-tabs-mode: nil
  * End:

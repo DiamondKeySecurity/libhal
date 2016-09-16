@@ -348,6 +348,10 @@ extern hal_error_t hal_set_pin(const hal_user_t user,
 #define HAL_MKM_FLASH_BACKUP_KLUDGE 1
 #endif
 
+#ifndef KEK_LENGTH
+#define KEK_LENGTH      (bitsToBytes(256))
+#endif
+
 extern hal_error_t hal_mkm_get_kek(uint8_t *kek, size_t *kek_len, const size_t kek_max);
 
 extern hal_error_t hal_mkm_volatile_read(uint8_t *buf, const size_t len);
@@ -356,7 +360,7 @@ extern hal_error_t hal_mkm_volatile_erase(const size_t len);
 
 #if HAL_MKM_FLASH_BACKUP_KLUDGE
 
-#warning MKM flash backup kludge enabled.  Do NOT use this in production!
+/* #warning MKM flash backup kludge enabled.  Do NOT use this in production! */
 
 extern hal_error_t hal_mkm_flash_read(uint8_t *buf, const size_t len);
 extern hal_error_t hal_mkm_flash_write(const uint8_t * const buf, const size_t len);

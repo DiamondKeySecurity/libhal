@@ -62,13 +62,12 @@
 #include <string.h>
 
 
-static int volatile_init = 0, flash_init = 0;
+static int volatile_init = 0;
 static hal_core_t *core = NULL;
 
 #define MKM_VOLATILE_STATUS_ADDRESS     0
 #define MKM_VOLATILE_SCLK_DIV           0x20
 #define MKM_FLASH_STATUS_ADDRESS        (KEYSTORE_SECTOR_SIZE * (KEYSTORE_NUM_SECTORS - 1))
-#define KEK_LENGTH (256 / 8)
 
 /*
  * Match uninitialized flash for the "not set" value.
@@ -177,99 +176,10 @@ hal_error_t hal_mkm_volatile_erase(const size_t len)
   return LIBHAL_OK;
 }
 
-#if HAL_MKM_FLASH_BACKUP_KLUDGE
-
-static hal_error_t hal_mkm_flash_init(void)
-{
-  if (flash_init)
-    return LIBHAL_OK;
-
-  if (!keystore_check_id())
-    return HAL_ERROR_IO_UNEXPECTED;
-
-  flash_init = 1;
-  return LIBHAL_OK;
-}
-
-hal_error_t hal_mkm_flash_read(uint8_t *buf, const size_t len)
-{
-  uint8_t page[KEYSTORE_PAGE_SIZE];
-  uint32_t *status = (uint32_t *) page;
-  hal_error_t err;
-
-  if (len && len != KEK_LENGTH)
-    return HAL_ERROR_MASTERKEY_BAD_LENGTH;
-
-  if ((err = hal_mkm_flash_init()) != LIBHAL_OK)
-    return err;
-
-  if (!keystore_read_data(MKM_FLASH_STATUS_ADDRESS, page, sizeof(page))) {
-    memset(page, 0, sizeof(page));
-    return HAL_ERROR_MASTERKEY_FAIL;
-  }
-
-  if (buf != NULL && len) {
-    /*
-     * Don't return what's in the flash memory in case it isn't initialized.
-     * Or maybe we should fill the buffer with proper random data in that case... hmm.
-     */
-    if (*status == MKM_STATUS_SET)
-      memcpy(buf, page + 4, len);
-    else
-      memset(buf, 0x0, len);
-  }
-
-  memset(page + 4, 0, sizeof(page) - 4);
-
-  if (*status == MKM_STATUS_SET)
-    return LIBHAL_OK;
-
-  if (*status == MKM_STATUS_ERASED || *status == MKM_STATUS_NOT_SET)
-    return HAL_ERROR_MASTERKEY_NOT_SET;
-
-  return HAL_ERROR_MASTERKEY_FAIL;
-}
-
-hal_error_t hal_mkm_flash_write(const uint8_t * const buf, const size_t len)
-{
-  uint8_t page[KEYSTORE_PAGE_SIZE] = {0xff};
-  uint32_t *status = (uint32_t *) page;
-  int res;
-
-  if (len != KEK_LENGTH)
-    return HAL_ERROR_MASTERKEY_BAD_LENGTH;
-
-  if (buf == NULL)
-    return HAL_ERROR_MASTERKEY_FAIL;
-
-  if (hal_mkm_flash_init() != LIBHAL_OK)
-    return HAL_ERROR_MASTERKEY_FAIL;
-
-  *status = MKM_STATUS_SET;
-  memcpy(page + 4, buf, len);
-
-  res = keystore_write_data(MKM_FLASH_STATUS_ADDRESS, page, sizeof(page));
-  memset(page, 0, sizeof(page));
-  if (res != 1)
-    return HAL_ERROR_MASTERKEY_FAIL;
-
-  return LIBHAL_OK;
-}
-
-hal_error_t hal_mkm_flash_erase(const size_t len)
-{
-  if (len != KEK_LENGTH)
-    return HAL_ERROR_MASTERKEY_BAD_LENGTH;
-
-  if (keystore_erase_sectors(MKM_FLASH_STATUS_ADDRESS / KEYSTORE_SECTOR_SIZE,
-                             MKM_FLASH_STATUS_ADDRESS / KEYSTORE_SECTOR_SIZE) != 1)
-    return HAL_ERROR_MASTERKEY_FAIL;
-
-  return LIBHAL_OK;
-}
-
-#endif /* HAL_MKM_FLASH_BACKUP_KLUDGE */
-
+/*
+ * hal_mkm_flash_*() functions moved to ks_flash.c, to keep all the code that
+ * knows intimate details of the keystore flash layout in one place.
+ */
 
 hal_error_t hal_mkm_get_kek(uint8_t *kek,
 			    size_t *kek_len,

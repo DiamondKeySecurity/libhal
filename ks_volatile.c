@@ -99,9 +99,6 @@ static hal_error_t ks_init(db_t *db)
 {
   assert(db != NULL);
 
-  if (db->ksi.size)             /* Already initialized */
-    return HAL_OK;
-
   /*
    * Set up keystore with empty index and full free list.
    * Since this driver doesn't care about wear leveling,
