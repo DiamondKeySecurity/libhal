@@ -169,7 +169,7 @@ else ifeq "${RPC_MODE}" "client-simple"
   CFLAGS += -DRPC_CLIENT=RPC_CLIENT_REMOTE -DHAL_RSA_USE_MODEXP=0
 else ifeq "${RPC_MODE}" "client-mixed"
   OBJ += ${RPC_CLIENT_OBJ}
-  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_MIXED -DHAL_RSA_USE_MODEXP=0
+  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_MIXED -DHAL_RSA_USE_MODEXP=0 -DHAL_ONLY_USE_SOFTWARE_HASH_CORES=1
   KS = volatile
 endif
 
@@ -218,8 +218,9 @@ server:
 serial:
 	${MAKE} RPC_MODE=client-mixed RPC_TRANSPORT=serial
 
-daemon:
-	${MAKE} RPC_MODE=client-mixed RPC_TRANSPORT=daemon ${LIB} cryptech_rpcd
+daemon: mixed cryptech_rpcd
+
+.PHONY: client mixed server serial daemon
 
 cryptech_rpcd: daemon.o ${LIB}
 	${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}

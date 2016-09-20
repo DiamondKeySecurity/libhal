@@ -48,12 +48,21 @@
  * for use when the Verilog cores aren't available.
  */
 
-#if RPC_CLIENT == RPC_CLIENT_MIXED
-#define HAL_ENABLE_SOFTWARE_HASH_CORES 1
-#endif
-
 #ifndef HAL_ENABLE_SOFTWARE_HASH_CORES
 #define HAL_ENABLE_SOFTWARE_HASH_CORES 0
+#endif
+
+/*
+ * Use only the software hash cores when running on remote host, without
+ * access to the Verilog cores.
+ */
+
+#ifndef HAL_ONLY_USE_SOFTWARE_HASH_CORES
+#define HAL_ONLY_USE_SOFTWARE_HASH_CORES 0
+#endif
+
+#if HAL_ONLY_USE_SOFTWARE_HASH_CORES && ! HAL_ENABLE_SOFTWARE_HASH_CORES
+#error HAL_ONLY_USE_SOFTWARE_HASH_CORES && ! HAL_ENABLE_SOFTWARE_HASH_CORES
 #endif
 
 typedef hal_error_t (*sw_hash_core_t)(hal_hash_state_t *);
@@ -103,8 +112,8 @@ struct hal_hash_state {
   hal_core_t *core;
   const hal_hash_descriptor_t *descriptor;
   const hal_hash_driver_t *driver;
-  long long unsigned msg_length_high;           /* Total data hashed in this message */
-  long long unsigned msg_length_low;            /* (128 bits in SHA-512 cases) */
+  uint64_t msg_length_high;                     /* Total data hashed in this message */
+  uint64_t msg_length_low;                      /* (128 bits in SHA-512 cases) */
   uint8_t block[HAL_MAX_HASH_BLOCK_LENGTH],     /* Block we're accumulating */
     core_state[HAL_MAX_HASH_DIGEST_LENGTH];     /* Saved core state */
   size_t block_used;                            /* How much of the block we've used */
@@ -219,7 +228,7 @@ const hal_hash_descriptor_t hal_hash_sha512_224[1] = {{
   SHA512_BLOCK_LEN, SHA512_224_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha512_224, sizeof(dalgid_sha512_224),
-  &sha512_224_driver, SHA512_NAME, 0
+  &sha512_224_driver, SHA512_NAME, 1
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512_256[1] = {{
@@ -227,7 +236,7 @@ const hal_hash_descriptor_t hal_hash_sha512_256[1] = {{
   SHA512_BLOCK_LEN, SHA512_256_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha512_256, sizeof(dalgid_sha512_256),
-  &sha512_256_driver, SHA512_NAME, 0
+  &sha512_256_driver, SHA512_NAME, 1
 }};
 
 const hal_hash_descriptor_t hal_hash_sha384[1] = {{
@@ -235,7 +244,7 @@ const hal_hash_descriptor_t hal_hash_sha384[1] = {{
   SHA512_BLOCK_LEN, SHA384_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha384, sizeof(dalgid_sha384),
-  &sha384_driver, SHA512_NAME, 0
+  &sha384_driver, SHA512_NAME, 1
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512[1] = {{
@@ -243,7 +252,7 @@ const hal_hash_descriptor_t hal_hash_sha512[1] = {{
   SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha512, sizeof(dalgid_sha512),
-  &sha512_driver, SHA512_NAME, 0
+  &sha512_driver, SHA512_NAME, 1
 }};
 
 /*
@@ -349,6 +358,39 @@ static inline void swytebop(void *out_, const void * const in_, const size_t n, 
 }
 
 /*
+ * Internal utility to check core against descriptor, including
+ * attempting to locate an appropriate core if we weren't given one.
+ */
+
+static inline hal_error_t check_core(hal_core_t **core,
+                                     const hal_hash_descriptor_t * const descriptor,
+                                     unsigned *flags)
+{
+  assert(descriptor != NULL && descriptor->driver != NULL);
+
+#if HAL_ONLY_USE_SOFTWARE_HASH_CORES
+  hal_error_t err = HAL_ERROR_CORE_NOT_FOUND;
+#else
+  hal_error_t err = hal_core_alloc(descriptor->core_name, core);
+#endif
+
+#if HAL_ENABLE_SOFTWARE_HASH_CORES
+  if ((err == HAL_ERROR_CORE_NOT_FOUND || err == HAL_ERROR_CORE_BUSY) &&
+      descriptor->driver->sw_core) {
+
+    *core = NULL;
+
+    if (flags != NULL)
+      *flags |= STATE_FLAG_SOFTWARE_CORE;
+
+    err = HAL_OK;
+  }
+#endif /* HAL_ENABLE_SOFTWARE_HASH_CORES */
+
+  return err;
+}
+
+/*
  * Internal utility to do whatever checking we need of a descriptor,
  * then extract the driver pointer in a way that works nicely with
  * initialization of an automatic const pointer.
@@ -373,12 +415,26 @@ hal_error_t hal_hash_initialize(hal_core_t *core,
   const hal_hash_driver_t * const driver = check_driver(descriptor);
   hal_hash_state_t *state = state_buffer;
   unsigned flags = 0;
+  hal_error_t err;
 
   if (driver == NULL || state_ == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   if (state_buffer != NULL && state_length < descriptor->hash_state_length)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if ((err = check_core(&core, descriptor, &flags)) != HAL_OK)
+    return err;
+
+#if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
+  /*
+   * If we're using a Verilog core that can save/restore state, then we
+   * free it after every operation, so that it can possibly be used by
+   * another client.
+   */
+  if (descriptor->can_restore_state)
+      hal_core_free(core);
+#endif
 
   if (state_buffer == NULL && (state = alloc_static_hash_state()) == NULL)
       return HAL_ERROR_ALLOCATION_FAILURE;
@@ -415,7 +471,7 @@ void hal_hash_cleanup(hal_hash_state_t **state_)
   *state_ = NULL;
 }
 
-#if RPC_CLIENT != RPC_CLIENT_MIXED
+#if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
 
 /*
  * Read hash result from core.  At least for now, this also serves to
@@ -473,9 +529,12 @@ static hal_error_t hash_write_block(hal_hash_state_t * const state)
   if (debug)
     fprintf(stderr, "[ %s ]\n", state->block_count == 0 ? "init" : "next");
 
-#if RPC_CLIENT == RPC_CLIENT_MIXED
-  return state->driver->sw_core(state);
-#else
+#if HAL_ENABLE_SOFTWARE_HASH_CORES
+  if ((state->flags & STATE_FLAG_SOFTWARE_CORE) != 0)
+    return state->driver->sw_core(state);
+#endif
+
+#if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
   uint8_t ctrl_cmd[4];
   hal_error_t err;
 
@@ -506,6 +565,9 @@ static hal_error_t hash_write_block(hal_hash_state_t * const state)
 
   return hal_io_wait_valid(state->core);
 #endif
+
+  /*NOTREACHED*/
+  return HAL_ERROR_IMPOSSIBLE;
 }
 
 /*
@@ -529,8 +591,10 @@ hal_error_t hal_hash_update(hal_hash_state_t *state,            /* Opaque state 
   assert(state->descriptor != NULL && state->driver != NULL);
   assert(state->descriptor->block_length <= sizeof(state->block));
 
-#if RPC_CLIENT != RPC_CLIENT_MIXED
-  if ((err = hal_core_alloc(state->descriptor->core_name, &state->core)) != HAL_OK)
+#if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
+  if (((state->flags & STATE_FLAG_SOFTWARE_CORE) == 0) &&
+      state->descriptor->can_restore_state &&
+      (err = hal_core_alloc(state->descriptor->core_name, &state->core)) != HAL_OK)
       return err;
 #endif
 
@@ -540,7 +604,7 @@ hal_error_t hal_hash_update(hal_hash_state_t *state,            /* Opaque state 
      */
     if (debug)
       fprintf(stderr, "[ Full block, data_buffer_length %lu, used %lu, n %lu, msg_length %llu ]\n",
-              (unsigned long) data_buffer_length, (unsigned long) state->block_used, (unsigned long) n, state->msg_length_low);
+              (unsigned long) data_buffer_length, (unsigned long) state->block_used, (unsigned long) n, (unsigned long long)state->msg_length_low);
     memcpy(state->block + state->block_used, p, n);
     if ((state->msg_length_low += n) < n)
       state->msg_length_high++;
@@ -558,7 +622,7 @@ hal_error_t hal_hash_update(hal_hash_state_t *state,            /* Opaque state 
      */
     if (debug)
       fprintf(stderr, "[ Partial block, data_buffer_length %lu, used %lu, n %lu, msg_length %llu ]\n",
-              (unsigned long) data_buffer_length, (unsigned long) state->block_used, (unsigned long) n, state->msg_length_low);
+              (unsigned long) data_buffer_length, (unsigned long) state->block_used, (unsigned long) n, (unsigned long long)state->msg_length_low);
     assert(data_buffer_length < n);
     memcpy(state->block + state->block_used, p, data_buffer_length);
     if ((state->msg_length_low += data_buffer_length) < data_buffer_length)
@@ -567,8 +631,9 @@ hal_error_t hal_hash_update(hal_hash_state_t *state,            /* Opaque state 
   }
 
 out:
-#if RPC_CLIENT != RPC_CLIENT_MIXED
-  hal_core_free(state->core);
+#if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
+  if (state->descriptor->can_restore_state)
+    hal_core_free(state->core);
 #endif
   return err;
 }
@@ -597,8 +662,10 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
 
   assert(state->descriptor->block_length <= sizeof(state->block));
 
-#if RPC_CLIENT != RPC_CLIENT_MIXED
-  if ((err = hal_core_alloc(NULL, &state->core)) != HAL_OK)
+#if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
+  if (((state->flags & STATE_FLAG_SOFTWARE_CORE) == 0) &&
+      state->descriptor->can_restore_state &&
+      (err = hal_core_alloc(state->descriptor->core_name, &state->core)) != HAL_OK)
       return err;
 #endif
 
@@ -617,7 +684,7 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
   if ((n = state->descriptor->block_length - state->block_used) < state->driver->length_length) {
     if (debug)
       fprintf(stderr, "[ Overflow block, used %lu, n %lu, msg_length %llu ]\n",
-              (unsigned long) state->block_used, (unsigned long) n, state->msg_length_low);
+              (unsigned long) state->block_used, (unsigned long) n, (unsigned long long)state->msg_length_low);
     if (n > 0)
       memset(state->block + state->block_used, 0, n);
     if ((err = hash_write_block(state)) != HAL_OK)
@@ -633,7 +700,7 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
     memset(state->block + state->block_used, 0, n);
   if (debug)
     fprintf(stderr, "[ Final block, used %lu, n %lu, msg_length %llu ]\n",
-            (unsigned long) state->block_used, (unsigned long) n, state->msg_length_low);
+            (unsigned long) state->block_used, (unsigned long) n, (unsigned long long)state->msg_length_low);
   p = state->block + state->descriptor->block_length;
   for (i = 0; (bit_length_low || bit_length_high) && i < state->driver->length_length; i++) {
     *--p = (uint8_t) (bit_length_low & 0xFF);
@@ -650,16 +717,22 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
   state->block_count++;
 
   /* All data pushed to core, now we just need to read back the result */
-#if RPC_CLIENT == RPC_CLIENT_MIXED
-  swytebop(digest_buffer, state->core_state, state->descriptor->digest_length, state->driver->sw_word_size);
-out:
-  return err;
-#else
-  err = hash_read_digest(state->core, state->driver, digest_buffer, state->descriptor->digest_length);
-out:
-  hal_core_free(state->core);
-  return err;
+#if HAL_ENABLE_SOFTWARE_HASH_CORES
+  if ((state->flags & STATE_FLAG_SOFTWARE_CORE) != 0) {
+    swytebop(digest_buffer, state->core_state, state->descriptor->digest_length, state->driver->sw_word_size);
+    return HAL_OK;
+  }
 #endif
+#if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
+  if ((state->flags & STATE_FLAG_SOFTWARE_CORE) == 0)
+    err = hash_read_digest(state->core, state->driver, digest_buffer, state->descriptor->digest_length);
+#endif
+
+out:
+#if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
+  hal_core_free(state->core);
+#endif
+  return err;
 }
 
 /*
@@ -970,14 +1043,14 @@ static hal_error_t sw_hash_core_sha1(hal_hash_state_t *state)
     if (debug)
       fprintf(stderr,
               "[Round %02d < a = 0x%08x, b = 0x%08x, c = 0x%08x, d = 0x%08x, e = 0x%08x, f = 0x%08x, k = 0x%08x, w = 0x%08x]\n",
-              i, S[a], S[b], S[c], S[d], S[e], f, k, W[i]);
+              i, (unsigned)S[a], (unsigned)S[b], (unsigned)S[c], (unsigned)S[d], (unsigned)S[e], (unsigned)f, (unsigned)k, (unsigned)W[i]);
 
     S[e] = rot_l_32(S[a], 5) + f + S[e] + k + W[i];
     S[b] = rot_l_32(S[b], 30);
 
     if (debug)
       fprintf(stderr, "[Round %02d > a = 0x%08x, b = 0x%08x, c = 0x%08x, d = 0x%08x, e = 0x%08x]\n",
-              i, S[a], S[b], S[c], S[d], S[e]);
+              i, (unsigned)S[a], (unsigned)S[b], (unsigned)S[c], (unsigned)S[d], (unsigned)S[e]);
   }
 
   for (int i = 0; i < 5; i++)

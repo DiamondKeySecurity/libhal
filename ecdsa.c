@@ -71,6 +71,7 @@
 #include <assert.h>
 
 #include "hal.h"
+#include "hal_internal.h"
 #include <tfm.h>
 #include "asn1_internal.h"
 
@@ -83,7 +84,7 @@
 #define HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM 0
 #endif
 
-#ifdef RPC_CLIENT
+#if defined(RPC_CLIENT) && RPC_CLIENT != RPC_CLIENT_LOCAL
 #define hal_get_random(core, buffer, length) hal_rpc_get_random(buffer, length)
 #endif
 
