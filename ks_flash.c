@@ -52,17 +52,8 @@
  * General consideration:
  *
  * - bits can only be cleared, not set, unless one wants to erase the
- *   (sub)sector.  This has some odd knock on effects in terms of
+ *   sector.  This has some odd knock on effects in terms of
  *   things like values of enumerated constants used here.
- *
- * - At the moment, all of the the low-level flash code deals with
- *   sectors, not sub-sectors, so for the moment we only use the first
- *   sub-sector of each sector.  Fixing this should not involve any
- *   major changes to the code, just redefinition of some constants
- *   here once we figure out what effect this will have on the rest of
- *   the code that shares the same low-level flash code.  In either
- *   case we're dealing with "blocks", where a block is a sector now
- *   and will be a sub-sector later.
  *
  * - This code assumes we're using ks_index.c, including its notion
  *   of a free list and its attempt at light-weight wear leveling.
@@ -163,21 +154,27 @@ typedef union {
 } flash_block_t;
 
 /*
- * In-memory index, cache, etc.
+ * In-memory cache.
+ */
+
+typedef struct {
+  unsigned            blockno;
+  uint32_t            lru;
+  flash_block_t       block;
+} cache_block_t;
+
+/*
+ * In-memory database.
  *
- * Some or all of this probably ought to be allocated out of external
- * SDRAM, but try it as a plain static variable initially.
- *
- * NUM_FLASH_BLOCKS should be KEYSTORE_NUM_SUBSECTORS, but all the
- * current flash code uses sectors rather than subsectors, so use
- * KEYSTORE_NUM_SECTORS until we have subsector erase code.
+ * The top-level structure is a static variable; the arrays are allocated at runtime
+ * using hal_allocate_static_memory() because they can get kind of large.
  */
 
 #ifndef KS_FLASH_CACHE_SIZE
 #define KS_FLASH_CACHE_SIZE 4
 #endif
 
-#define NUM_FLASH_BLOCKS        KEYSTORE_NUM_SECTORS
+#define NUM_FLASH_BLOCKS        KEYSTORE_NUM_SUBSECTORS
 
 typedef struct {
   hal_ks_t              ks;                  /* Must be first (C "subclassing") */
@@ -186,13 +183,7 @@ typedef struct {
   hal_ks_pin_t          so_pin;
   hal_ks_pin_t          user_pin;
   uint32_t              cache_lru;
-  struct {
-    unsigned            blockno;
-    uint32_t            lru;
-    flash_block_t       block;
-  }                     cache[KS_FLASH_CACHE_SIZE];
-  uint16_t              _index[NUM_FLASH_BLOCKS];
-  hal_uuid_t            _names[NUM_FLASH_BLOCKS];
+  cache_block_t         *cache;
 } db_t;
 
 /*
@@ -234,7 +225,7 @@ static inline flash_block_t *cache_pick_lru(void)
   uint32_t best_delta = 0;
   int      best_index = 0;
 
-  for (int i = 0; i < sizeof(db.cache)/sizeof(*db.cache); i++) {
+  for (int i = 0; i < KS_FLASH_CACHE_SIZE; i++) {
 
     if (db.cache[i].blockno == ~0)
       return &db.cache[i].block;
@@ -257,7 +248,7 @@ static inline flash_block_t *cache_pick_lru(void)
 
 static inline flash_block_t *cache_find_block(const unsigned blockno)
 {
-  for (int i = 0; i < sizeof(db.cache)/sizeof(*db.cache); i++)
+  for (int i = 0; i < KS_FLASH_CACHE_SIZE; i++)
     if (db.cache[i].blockno == blockno)
       return &db.cache[i].block;
   return NULL;
@@ -269,7 +260,7 @@ static inline flash_block_t *cache_find_block(const unsigned blockno)
 
 static inline void cache_mark_used(const flash_block_t * const block, const unsigned blockno)
 {
-  for (int i = 0; i < sizeof(db.cache)/sizeof(*db.cache); i++) {
+  for (int i = 0; i < KS_FLASH_CACHE_SIZE; i++) {
     if (&db.cache[i].block == block) {
       db.cache[i].blockno = blockno;
       db.cache[i].lru = ++db.cache_lru;
@@ -313,48 +304,66 @@ static hal_crc32_t calculate_block_crc(const flash_block_t * const block)
 }
 
 /*
- * Calculate block offset.  Once we have subsectors working this will
- * use subsector offsets, for the moment we have to use sector offsets.
+ * Calculate block offset.
  */
-
-#if 0
-#define BLOCK_OFFSET_SIZE       KEYSTORE_SUBSECTOR_SIZE
-#else
-#define BLOCK_OFFSET_SIZE       KEYSTORE_SECTOR_SIZE
-#endif
 
 static uint32_t block_offset(const unsigned blockno)
 {
-  return blockno * BLOCK_OFFSET_SIZE;
+  return blockno * KEYSTORE_SUBSECTOR_SIZE;
 }
 
 /*
- * Read a flash block.  In some cases we might be able to optimize by
- * reading just the first page, but NOR flash should be relatively
- * fast to read, and we need the whole block to check the CRC
- * anyway.
+ * Read a flash block.
+ *
+ * Sadly, flash on the Alpha is slow enough that it pays to
+ * check the first page before reading the rest of the block.
  */
 
-static hal_error_t block_read(const unsigned blockno, flash_block_t *block)
+static hal_error_t block_read(const unsigned blockno, flash_block_t *block, const int fast)
 {
   assert(block != NULL && blockno < NUM_FLASH_BLOCKS && sizeof(*block) == KEYSTORE_SUBSECTOR_SIZE);
 
   /* Sigh, magic numeric return codes */
-  if (keystore_read_data(block_offset(blockno), block->bytes, sizeof(*block)) != 1)
+  if (keystore_read_data(block_offset(blockno),
+                         block->bytes,
+                         KEYSTORE_PAGE_SIZE) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
-  switch (block_get_type(block)) {
+  flash_block_type_t block_type = block_get_type(block);
+  hal_crc32_t crc = 0;
+
+  switch (block_type) {
   case FLASH_KEYBLK:
   case FLASH_PINBLK:
-    return calculate_block_crc(block) == block->header.crc1 ? HAL_OK : HAL_ERROR_KEYSTORE_BAD_CRC;
+    crc = block->header.crc1;
+    break;
   case FLASH_KEYOLD:
   case FLASH_PINOLD:
-    return calculate_block_crc(block) == block->header.crc2 ? HAL_OK : HAL_ERROR_KEYSTORE_BAD_CRC;
+    crc = block->header.crc2;
+    break;
+  case FLASH_ERASED:
+  case FLASH_ZEROED:
+    if (fast)
+      return HAL_OK;
+    else
+      break;
+  default:
+    return HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE;
+  }
+
+  /* Sigh, magic numeric return codes */
+  if (keystore_read_data(block_offset(blockno) + KEYSTORE_PAGE_SIZE,
+                         block->bytes + KEYSTORE_PAGE_SIZE,
+                         sizeof(*block) - KEYSTORE_PAGE_SIZE) != 1)
+    return HAL_ERROR_KEYSTORE_ACCESS;
+
+  switch (block_type) {
+  default:
+    if (calculate_block_crc(block) != crc)
+      return HAL_ERROR_KEYSTORE_BAD_CRC;
   case FLASH_ERASED:
   case FLASH_ZEROED:
     return HAL_OK;
-  default:
-    return HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE;
   }
 }
 
@@ -375,7 +384,7 @@ static hal_error_t block_read_cached(const unsigned blockno, flash_block_t **blo
   if ((*block = cache_pick_lru()) == NULL)
     return HAL_ERROR_IMPOSSIBLE;
 
-  return block_read(blockno, *block);
+  return block_read(blockno, *block, 1);
 }
 
 /*
@@ -442,7 +451,7 @@ static hal_error_t block_erase(const unsigned blockno)
   assert(blockno < NUM_FLASH_BLOCKS);
 
   /* Sigh, magic numeric return codes */
-  if (keystore_erase_sectors(blockno, blockno) != 1)
+  if (keystore_erase_subsectors(blockno, blockno) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   return HAL_OK;
@@ -450,7 +459,7 @@ static hal_error_t block_erase(const unsigned blockno)
 
 /*
  * Erase a flash block if it hasn't already been erased.
- *
+ * We have to disable fast read for this to work properly.
  * May not be necessary, trying to avoid unnecessary wear.
  */
 
@@ -462,7 +471,7 @@ static hal_error_t block_erase_maybe(const unsigned blockno)
   if (block == NULL)
     return HAL_ERROR_IMPOSSIBLE;
 
-  err = block_read(blockno, block);
+  err = block_read(blockno, block, 0);
 
   if (err == HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE ||
       err == HAL_ERROR_KEYSTORE_BAD_CRC)
@@ -487,17 +496,27 @@ static hal_error_t block_erase_maybe(const unsigned blockno)
 static hal_error_t ks_init(const hal_ks_driver_t * const driver)
 {
   /*
-   * Initialize the in-memory database.  In the long run this probably
-   * needs to be using a block of SDRAM, which we would allocate here.
+   * Initialize the in-memory database.
    */
 
-  memset(&db, 0, sizeof(db));
-  db.ksi.size  = NUM_FLASH_BLOCKS;
-  db.ksi.used  = 0;
-  db.ksi.index = db._index;
-  db.ksi.names = db._names;
+  const size_t len = (sizeof(*db.ksi.index) * NUM_FLASH_BLOCKS +
+                      sizeof(*db.ksi.names) * NUM_FLASH_BLOCKS +
+                      sizeof(*db.cache)     * KS_FLASH_CACHE_SIZE);
 
-  for (int i = 0; i < sizeof(db.cache)/sizeof(*db.cache); i++)
+  uint8_t *mem = hal_allocate_static_memory(len);
+
+  if (mem == NULL)
+    return HAL_ERROR_ALLOCATION_FAILURE;
+
+  memset(&db, 0, sizeof(db));
+  memset(mem, 0, len);
+
+  db.ksi.size  = NUM_FLASH_BLOCKS;
+  db.ksi.index = (void *) mem; mem += sizeof(*db.ksi.index) * NUM_FLASH_BLOCKS;
+  db.ksi.names = (void *) mem; mem += sizeof(*db.ksi.names) * NUM_FLASH_BLOCKS;
+  db.cache     = (void *) mem;
+
+  for (int i = 0; i < KS_FLASH_CACHE_SIZE; i++)
     db.cache[i].blockno = ~0;
 
   /*
@@ -525,7 +544,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
      * we want the block to ends up near the end of the free list.
      */
 
-    err = block_read(i, block);
+    err = block_read(i, block, 1);
 
     if (err == HAL_ERROR_KEYSTORE_BAD_CRC || err == HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE)
       block_types[i] = FLASH_UNKNOWN;
@@ -651,7 +670,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
 
       hal_uuid_t name = db.ksi.names[i]; /* Paranoia */
 
-      if ((err = block_read(i, block)) != HAL_OK)
+      if ((err = block_read(i, block, 1)) != HAL_OK)
         return err;
 
       block->header.block_type = restore_type;
@@ -685,10 +704,13 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
     unsigned b;
 
     memset(block, 0xFF, sizeof(*block));
-    memset(&block->pin.so_pin,   0, sizeof(block->pin.so_pin));
-    memset(&block->pin.user_pin, 0, sizeof(block->pin.user_pin));
+
+    db.wheel_pin = hal_last_gasp_pin;
+
     block->header.block_type = FLASH_PINBLK;
-    block->pin.wheel_pin = hal_last_gasp_pin;
+    block->pin.wheel_pin = db.wheel_pin;
+    block->pin.so_pin    = db.so_pin;
+    block->pin.user_pin  = db.user_pin;
 
     if ((err = hal_ks_index_add(&db.ksi, &pin_uuid, &b)) != HAL_OK)
       return err;
@@ -725,7 +747,6 @@ static hal_error_t ks_shutdown(const hal_ks_driver_t * const driver)
 {
   if (db.ks.driver != driver)
     return HAL_ERROR_KEYSTORE_ACCESS;
-  memset(&db, 0, sizeof(db));
   return HAL_OK;
 }
 
