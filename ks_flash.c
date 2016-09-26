@@ -319,7 +319,7 @@ static uint32_t block_offset(const unsigned blockno)
  * check the first page before reading the rest of the block.
  */
 
-static hal_error_t block_read(const unsigned blockno, flash_block_t *block, const int fast)
+static hal_error_t block_read(const unsigned blockno, flash_block_t *block)
 {
   assert(block != NULL && blockno < NUM_FLASH_BLOCKS && sizeof(*block) == KEYSTORE_SUBSECTOR_SIZE);
 
@@ -343,10 +343,7 @@ static hal_error_t block_read(const unsigned blockno, flash_block_t *block, cons
     break;
   case FLASH_ERASED:
   case FLASH_ZEROED:
-    if (fast)
-      return HAL_OK;
-    else
-      break;
+    return HAL_OK;
   default:
     return HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE;
   }
@@ -384,7 +381,7 @@ static hal_error_t block_read_cached(const unsigned blockno, flash_block_t **blo
   if ((*block = cache_pick_lru()) == NULL)
     return HAL_ERROR_IMPOSSIBLE;
 
-  return block_read(blockno, *block, 1);
+  return block_read(blockno, *block);
 }
 
 /*
@@ -420,30 +417,22 @@ static hal_error_t block_write(const unsigned blockno, flash_block_t *block)
 }
 
 /*
- * Zero (not erase) a flash block.
+ * Zero (not erase) a flash block.  Just need to zero the first page.
  */
 
 static hal_error_t block_zero(const unsigned blockno)
 {
-  flash_block_t *block = cache_pick_lru();
-
-  if (block == NULL)
-    return HAL_ERROR_IMPOSSIBLE;
-
-  memset(block, 0, sizeof(*block));
+  uint8_t page[KEYSTORE_PAGE_SIZE] = {0};
 
   /* Sigh, magic numeric return codes */
-  if (keystore_write_data(block_offset(blockno), block->bytes, sizeof(*block)) != 1)
+  if (keystore_write_data(block_offset(blockno), page, sizeof(page)) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   return HAL_OK;
 }
 
 /*
- * Erase a flash block.
- *
- * At the moment this erases the whole sector, when we move to
- * subsector-based blocks that will need to change.
+ * Erase a flash block.  Also see block_erase_maybe(), below.
  */
 
 static hal_error_t block_erase(const unsigned blockno)
@@ -540,7 +529,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
      * we want the block to ends up near the end of the free list.
      */
 
-    err = block_read(i, block, 1);
+    err = block_read(i, block);
 
     if (err == HAL_ERROR_KEYSTORE_BAD_CRC || err == HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE)
       block_types[i] = FLASH_UNKNOWN;
@@ -666,7 +655,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
 
       hal_uuid_t name = db.ksi.names[i]; /* Paranoia */
 
-      if ((err = block_read(i, block, 1)) != HAL_OK)
+      if ((err = block_read(i, block)) != HAL_OK)
         return err;
 
       block->header.block_type = restore_type;
