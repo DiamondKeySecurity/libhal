@@ -461,30 +461,26 @@ static hal_error_t block_erase(const unsigned blockno)
  * Erase a flash block if it hasn't already been erased.
  * We have to disable fast read for this to work properly.
  * May not be necessary, trying to avoid unnecessary wear.
+ *
+ * Unclear whether there's any sane reason why this needs to be
+ * constant time, given how slow erasure is.  But side channel attacks
+ * can be tricky things, and it's theoretically possible that we could
+ * leak information about, eg, key length, so we do constant time.
  */
 
 static hal_error_t block_erase_maybe(const unsigned blockno)
 {
-  flash_block_t *block = cache_pick_lru();
-  hal_error_t err;
+  uint8_t mask = 0xFF;
 
-  if (block == NULL)
-    return HAL_ERROR_IMPOSSIBLE;
+  for (uint32_t a = block_offset(blockno); a < block_offset(blockno + 1); a += KEYSTORE_PAGE_SIZE) {
+    uint8_t page[KEYSTORE_PAGE_SIZE];
+    if (keystore_read_data(a, page, sizeof(page)) != 1)
+      return HAL_ERROR_KEYSTORE_ACCESS;
+    for (int i = 0; i < KEYSTORE_PAGE_SIZE; i++)
+      mask &= page[i];
+  }
 
-  err = block_read(blockno, block, 0);
-
-  if (err == HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE ||
-      err == HAL_ERROR_KEYSTORE_BAD_CRC)
-    return block_erase(blockno);
-
-  if (err != HAL_OK)
-    return err;
-
-  for (int i = 0; i < sizeof(*block); i++)
-    if (block->bytes[i] != 0xFF)
-      return block_erase(blockno);
-
-  return HAL_OK;
+  return mask == 0xFF ? HAL_OK : block_erase(blockno);
 }
 
 /*
