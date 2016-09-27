@@ -238,7 +238,7 @@ hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
 
   const size_t len = (ksi->size - ksi->used - 1) * sizeof(*ksi->index);
   const uint16_t b = ksi->index[ksi->used];
-  memmove(&ksi->index[ksi->used + 1], &ksi->index[ksi->used], len);
+  memmove(&ksi->index[ksi->used], &ksi->index[ksi->used + 1], len);
   ksi->index[ksi->size - 1] = ksi->index[where];
   ksi->index[where] = b;
 
