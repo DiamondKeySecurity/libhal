@@ -986,6 +986,14 @@ static hal_error_t fetch_pin_block(unsigned *b, flash_block_t **block)
  * Update the PIN block.  This block should always be present, but we
  * have to dance a bit to make sure we write the new PIN block before
  * destroying the old one.
+ *
+ * In theory we could simplify and speed this up a bit by taking
+ * advantage of knowing that the PIN block is always db.ksi.index[0]
+ * (because of the all-zeros UUID).  Maybe later.
+ *
+ * More generally, most of what happens here is part of updating any
+ * block, not just a PIN block, so we'll probably want to refactor
+ * once we get to the point where we need to update key blocks too.
  */
 
 static hal_error_t update_pin_block(const unsigned b1,
@@ -994,12 +1002,12 @@ static hal_error_t update_pin_block(const unsigned b1,
 {
   assert(block != NULL && new_data != NULL && block_get_type(block) == FLASH_PINBLK);
 
-  hal_error_t err;
-  unsigned b2;
+  if (db.ksi.used == db.ksi.size)
+    return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
 
   block->header.block_type = FLASH_PINOLD;
 
-  err = block_write(b1, block);
+  hal_error_t err = block_write(b1, block);
 
   cache_release(block);
 
@@ -1007,27 +1015,30 @@ static hal_error_t update_pin_block(const unsigned b1,
     return err;
 
   /*
-   * We could simplify and speed this up a bit by taking advantage of
-   * knowing that the PIN block is always db.ksi->index[0] (because of
-   * the all-zeros UUID).  Maybe later.
+   * At this point we're committed to an update, because the old flash
+   * block is now a tombstone and can't be reverted in place without
+   * risking data loss.  So the rest of this dance is to make sure
+   * that we don't destroy the tombstone unless we succeeed in writing
+   * the new block, so that we can attempt recovery on reboot.
    */
 
-  if ((err = hal_ks_index_replace(&db.ksi, &pin_uuid, &b2)) != HAL_OK)
-    return err;
+  unsigned b2 = db.ksi.index[db.ksi.used];
+
+  cache_mark_used(block, b2);
 
   block->pin = *new_data;
 
-  if (err == HAL_OK)
-    cache_mark_used(block, b2);
-
-  if (err == HAL_OK)
-    err = block_erase_maybe(b2);
-
-  if (err == HAL_OK)
-    err = block_write(b2, block);
-
-  if (err != HAL_OK)
+  if ((err = block_erase_maybe(b2))  != HAL_OK ||
+      (err = block_write(b2, block)) != HAL_OK)
     return err;
+
+  unsigned b3;
+
+  if ((err = hal_ks_index_replace(&db.ksi, &pin_uuid, &b3)) != HAL_OK)
+    return err;
+
+  if (b2 != b3)
+    return HAL_ERROR_IMPOSSIBLE;
 
   if ((err = block_zero(b1)) != HAL_OK)
     return err;
