@@ -1012,15 +1012,10 @@ static hal_error_t update_pin_block(const unsigned b1,
    * the all-zeros UUID).  Maybe later.
    */
 
-  if ((err = hal_ks_index_delete(&db.ksi, &pin_uuid, &b2)) != HAL_OK)
+  if ((err = hal_ks_index_replace(&db.ksi, &pin_uuid, &b2)) != HAL_OK)
     return err;
 
-  if (b2 != b1)
-    return HAL_ERROR_IMPOSSIBLE;
-
   block->pin = *new_data;
-
-  err = hal_ks_index_add(&db.ksi, &pin_uuid, &b2);
 
   if (err == HAL_OK)
     cache_mark_used(block, b2);

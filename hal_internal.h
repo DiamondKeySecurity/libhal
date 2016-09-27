@@ -646,6 +646,16 @@ extern hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
                                        unsigned *blockno);
 
 /*
+ * Replace a key block with a new one, return new block number.
+ * Name of block does not change.  This is an optimization of
+ * a delete immediately followed by an add for the same name.
+ */
+
+extern hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
+                                        const hal_uuid_t * const name,
+                                        unsigned *blockno);
+
+/*
  * RPC lowest-level send and receive routines. These are blocking, and
  * transport-specific (sockets, USB).
  */

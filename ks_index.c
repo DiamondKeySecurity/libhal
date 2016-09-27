@@ -170,7 +170,7 @@ hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
 
   /*
    * Grab first block on free list, which makes room to slide the
-   * index down by one slot so we can insert the new block number.
+   * index up by one slot so we can insert the new block number.
    */
 
   const size_t len = (ksi->used - where) * sizeof(*ksi->index);
@@ -215,14 +215,38 @@ hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
   return HAL_OK;
 }
 
-/*
- * Might want a hal_ks_index_replace(), which would be an efficiency
- * hack replacement (roughly 2x) for a delete followed by an add with
- * the same name.  Implementation would be to find the old existing
- * block, pull the first block off the free list, sliding the free
- * list down, drop the new block in instead of the old, put the old
- * block at the end of the free list, and return the new block.
- */
+hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
+                                 const hal_uuid_t * const name,
+                                 unsigned *blockno)
+{
+  if (ksi == NULL || ksi->index == NULL || ksi->names == NULL ||
+      ksi->size == 0 || ksi->used > ksi->size || name == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ksi->used == ksi->size)
+    return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
+
+  int where;
+
+  if (ksi->used == 0 || !ks_find(ksi, name, &where))
+    return HAL_ERROR_KEY_NOT_FOUND;
+
+  /*
+   * Grab first block from free list, slide free list down, put old
+   * block at end of free list and replace old block with new block.
+   */
+
+  const size_t len = (ksi->size - ksi->used - 1) * sizeof(*ksi->index);
+  const uint16_t b = ksi->index[ksi->used];
+  memmove(&ksi->index[ksi->used + 1], &ksi->index[ksi->used], len);
+  ksi->index[ksi->size - 1] = ksi->index[where];
+  ksi->index[where] = b;
+
+  if (blockno != NULL)
+    *blockno = b;
+
+  return HAL_OK;
+}
 
 /*
  * Local variables:
