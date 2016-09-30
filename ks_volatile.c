@@ -71,7 +71,7 @@ typedef struct {
 typedef struct {
   hal_ks_index_t        ksi;
   uint16_t              _index[HAL_STATIC_KS_VOLATILE_SLOTS];
-  hal_uuid_t            _names[HAL_STATIC_KS_VOLATILE_SLOTS];
+  hal_ks_name_t         _names[HAL_STATIC_KS_VOLATILE_SLOTS];
   ks_key_t              keys[HAL_STATIC_KS_VOLATILE_SLOTS];
 } db_t;
 
@@ -176,7 +176,7 @@ static hal_error_t ks_store(hal_ks_t *ks,
   if (ksv->db == NULL)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
-  if ((err = hal_ks_index_add(&ksv->db->ksi, &slot->name, &b)) != HAL_OK)
+  if ((err = hal_ks_index_add(&ksv->db->ksi, &slot->name, 0, &b, NULL)) != HAL_OK)
     return err;
 
   uint8_t kek[KEK_LENGTH];
@@ -197,7 +197,7 @@ static hal_error_t ks_store(hal_ks_t *ks,
   if (err == HAL_OK)
     ksv->db->keys[b] = k;
   else
-    (void) hal_ks_index_delete(&ksv->db->ksi, &slot->name, NULL);
+    (void) hal_ks_index_delete(&ksv->db->ksi, &slot->name, 0, NULL, NULL);
 
   return err;
 }
@@ -216,7 +216,7 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
   if (ksv->db == NULL)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
-  if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, &b)) != HAL_OK)
+  if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, NULL)) != HAL_OK)
     return err;
 
   const ks_key_t * const k = &ksv->db->keys[b];
@@ -264,7 +264,7 @@ static hal_error_t ks_delete(hal_ks_t *ks,
   if (ksv->db == NULL)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
-  if ((err = hal_ks_index_delete(&ksv->db->ksi, &slot->name, &b)) != HAL_OK)
+  if ((err = hal_ks_index_delete(&ksv->db->ksi, &slot->name, 0, &b, NULL)) != HAL_OK)
     return err;
 
   memset(&ksv->db->keys[b], 0, sizeof(ksv->db->keys[b]));
@@ -289,8 +289,10 @@ static hal_error_t ks_list(hal_ks_t *ks,
     return HAL_ERROR_RESULT_TOO_LONG;
 
   for (int i = 0; i < ksv->db->ksi.used; i++) {
-    unsigned b      = ksv->db->ksi.index[i];
-    result[i].name  = ksv->db->ksi.names[b];
+    unsigned b = ksv->db->ksi.index[i];
+    if (ksv->db->ksi.names[b].chunk > 0)
+      continue;
+    result[i].name  = ksv->db->ksi.names[b].name;
     result[i].type  = ksv->db->keys[b].type;
     result[i].curve = ksv->db->keys[b].curve;
     result[i].flags = ksv->db->keys[b].flags;

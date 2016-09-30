@@ -146,6 +146,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_KS_DRIVER_NOT_FOUND,       "Keystore driver not found")                    \
   DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_BAD_CRC,          "Bad CRC in keystore")                          \
   DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE,   "Unsupported keystore block type")              \
+  DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_LOST_DATA,        "Keystore appears to have lost data")           \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */

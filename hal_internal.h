@@ -584,21 +584,18 @@ static inline hal_error_t hal_ks_list(hal_ks_t *ks,
  * support a simplistic form of wear leveling in flash-based keystores.
  *
  * Key names are kept in a separate array, indexed by block number.
+ * Key names here are a composite of the key's UUID and a "chunk"
+ * number; the latter allows storage of keys whose total size exceeds
+ * one block (whatever a block is).  For the moment we keep the UUID
+ * and the chunk number in a single array, which may provide (very)
+ * slightly better performance due to reference locality in SDRAM, but
+ * this may change if we need to reclaim the space wasted by structure
+ * size rounding.
  *
- * The all-ones UUID, which (by definition) cannot be a valid key
+ * The all-zeros UUID, which (by definition) cannot be a valid key
  * UUID, is reserved for the (non-key) block used to stash PINs and
  * other small data which aren't really part of the keystore proper
  * but are kept with it because the keystore is the flash we have.
- *
- * At the moment, this design leaves no room for "continuation" blocks
- * (additional blocks for keys so large that they won't fit in a
- * single flash sub-sector, or whatever).  Not sure we need that, but
- * if we do, adding it would be fairly simple: change the keyname
- * array to be an array of two-element structures, the first of which
- * is the name UUID, the second of which is the offset within the
- * series of blocks sharing that name (usually just one block, so the
- * offset would usually just be zero).  Implement that if and when we
- * need it.
  *
  * Note that this API deliberately says nothing about how the keys
  * themselves are stored, that's up to the keystore driver.  This
@@ -606,10 +603,15 @@ static inline hal_error_t hal_ks_list(hal_ks_t *ks,
  */
 
 typedef struct {
+  hal_uuid_t name;              /* Key name */
+  uint8_t chunk;                /* Key chunk number */
+} hal_ks_name_t;
+
+typedef struct {
   unsigned size;                /* Array length */
   unsigned used;                /* How many blocks are in use */
   uint16_t *index;              /* Index/freelist array */
-  hal_uuid_t *names;            /* Keyname array */
+  hal_ks_name_t *names;         /* Keyname array */
 } hal_ks_index_t;
 
 /*
@@ -629,21 +631,37 @@ extern hal_error_t hal_ks_index_setup(hal_ks_index_t *ksi);
  */
 extern hal_error_t hal_ks_index_find(hal_ks_index_t *ksi,
                                      const hal_uuid_t * const name,
-                                     unsigned *blockno);
+                                     const unsigned chunk,
+                                     unsigned *blockno,
+                                     int *hint);
+
+/*
+ * Find all the blocks in a key, return the block numbers.
+ */
+extern hal_error_t hal_ks_index_find_range(hal_ks_index_t *ksi,
+                                           const hal_uuid_t * const name,
+                                           const unsigned max_blocks,
+                                           unsigned *n_blocks,
+                                           unsigned *blocknos,
+                                           int *hint);
 
 /*
  * Add a key block, return its block number.
  */
 extern hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
                                     const hal_uuid_t * const name,
-                                    unsigned *blockno);
+                                    const unsigned chunk,
+                                    unsigned *blockno,
+                                    int *hint);
 
 /*
  * Delete a key block, returns its block number (driver may need it).
  */
 extern hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
                                        const hal_uuid_t * const name,
-                                       unsigned *blockno);
+                                       const unsigned chunk,
+                                       unsigned *blockno,
+                                       int *hint);
 
 /*
  * Replace a key block with a new one, return new block number.
@@ -653,7 +671,9 @@ extern hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
 
 extern hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
                                         const hal_uuid_t * const name,
-                                        unsigned *blockno);
+                                        const unsigned chunk,
+                                        unsigned *blockno,
+                                        int *hint);
 
 /*
  * RPC lowest-level send and receive routines. These are blocking, and

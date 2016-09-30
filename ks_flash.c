@@ -60,8 +60,8 @@
 typedef enum {
   BLOCK_TYPE_ERASED  = 0xFF, /* Pristine erased block (candidate for reuse) */
   BLOCK_TYPE_ZEROED  = 0x00, /* Zeroed block (recently used) */
-  BLOCK_TYPE_KEYBLK  = 0x55, /* Block contains key material */
-  BLOCK_TYPE_PINBLK  = 0xAA, /* Block contains PINs */
+  BLOCK_TYPE_KEY     = 0x55, /* Block contains key material */
+  BLOCK_TYPE_PIN     = 0xAA, /* Block contains PINs */
   BLOCK_TYPE_UNKNOWN = -1,   /* Internal code for "I have no clue what this is" */
 } flash_block_type_t;
 
@@ -325,8 +325,8 @@ static hal_error_t block_read(const unsigned blockno, flash_block_t *block)
   case BLOCK_TYPE_ERASED:
   case BLOCK_TYPE_ZEROED:
     return HAL_OK;
-  case BLOCK_TYPE_KEYBLK:
-  case BLOCK_TYPE_PINBLK:
+  case BLOCK_TYPE_KEY:
+  case BLOCK_TYPE_PIN:
     break;
   default:
     return HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE;
@@ -474,8 +474,8 @@ static hal_error_t block_write(const unsigned blockno, flash_block_t *block)
     return err;
 
   switch (block_get_type(block)) {
-  case BLOCK_TYPE_KEYBLK:
-  case BLOCK_TYPE_PINBLK:
+  case BLOCK_TYPE_KEY:
+  case BLOCK_TYPE_PIN:
     block->header.crc = calculate_block_crc(block);
     break;
   default:
@@ -490,9 +490,16 @@ static hal_error_t block_write(const unsigned blockno, flash_block_t *block)
 }
 
 /*
- * Initialize keystore.  This includes some tricky bits that attempt
- * to preserve the free list ordering across reboots, to improve our
- * simplistic attempt at wear leveling.
+ * Forward reference.
+ */
+
+static hal_error_t fetch_pin_block(unsigned *b, flash_block_t **block);
+
+/*
+ * Initialize keystore.  This includes various tricky bits, some of
+ * which attempt to preserve the free list ordering across reboots, to
+ * improve our simplistic attempt at wear leveling, others attempt to
+ * recover from unclean shutdown.
  */
 
 static hal_error_t ks_init(const hal_ks_driver_t * const driver)
@@ -531,7 +538,6 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
   flash_block_status_t block_status[NUM_FLASH_BLOCKS];
   flash_block_t *block = cache_pick_lru();
   int first_erased = -1;
-  int saw_pins = 0;
   hal_error_t err;
   uint16_t n = 0;
 
@@ -558,7 +564,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
     else
       return err;
 
-    if (block_types[i] == BLOCK_TYPE_KEYBLK || block_types[i] == BLOCK_TYPE_PINBLK)
+    if (block_types[i] == BLOCK_TYPE_KEY || block_types[i] == BLOCK_TYPE_PIN)
       block_status[i] = block_get_status(block);
     else
       block_status[i] = BLOCK_STATUS_UNKNOWN;
@@ -571,32 +577,17 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
       first_erased = i;
 
     /*
-     * If it is or was a key block, remember its name.
-     * PIN blocks get the all-zeros UUID for ks_index purposes.
+     * If it's a valid data block, include it in the index.  We remove
+     * tombstones (if any) below, for now it's easiest to include them
+     * in the index, so we can look them up by name if we must.
      */
 
-    if (block_types[i] == BLOCK_TYPE_KEYBLK)
-      db.ksi.names[i] = block->key.name;
-
-    /*
-     * If it is or was a PIN block, remember the PINs, but don't
-     * overwrite PINs from a current PIN block with PINs from a
-     * deprecated PIN block.
-     */
-
-    if (block_types[i] == BLOCK_TYPE_PINBLK && (!saw_pins || block_status[i] == BLOCK_STATUS_LIVE)) {
-      db.wheel_pin = block->pin.wheel_pin;
-      db.so_pin    = block->pin.so_pin;
-      db.user_pin  = block->pin.user_pin;
-      saw_pins = 1;
+    if (block_types[i] == BLOCK_TYPE_KEY || block_types[i] == BLOCK_TYPE_PIN) {
+      db.ksi.names[i].name = block_types[i] == BLOCK_TYPE_KEY ? block->key.name : pin_uuid;
+      db.ksi.names[i].chunk = block->header.this_chunk;
+      db.ksi.index[n++] = i;
     }
 
-    /*
-     * If it's a current block, include it in the index.
-     */
-
-    if (block_status[i] == BLOCK_STATUS_LIVE)
-      db.ksi.index[n++] = i;
   }
 
   db.ksi.used = n;
@@ -604,12 +595,12 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
   assert(db.ksi.used <= db.ksi.size);
 
   /*
-   * At this point we've built the (unsorted) index from all the
-   * current blocks.  Now we need to insert free, deprecated, and
-   * unrecognized blocks into the free list in our preferred order.
-   * There's probably a more efficient way to do this, but this is
-   * just integer comparisons in a fairly small data set, so all of
-   * these loops should be pretty fast.
+   * At this point we've built the (unsorted) index from all the valid
+   * blocks.  Now we need to insert free and unrecognized blocks into
+   * the free list in our preferred order.  It's possible that there's
+   * a better way to do this than linear scan, but this is just
+   * integer comparisons in a fairly small data set, so it's probably
+   * not worth trying to optimize.
    */
 
   if (n < db.ksi.size)
@@ -629,29 +620,45 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
 
   if (n < db.ksi.size)
     for (int i = 0; i < NUM_FLASH_BLOCKS; i++)
-      if (block_status[i] == BLOCK_STATUS_TOMBSTONE)
-        db.ksi.index[n++] = i;
-
-  if (n < db.ksi.size)
-    for (int i = 0; i < NUM_FLASH_BLOCKS; i++)
       if (block_types[i] == BLOCK_TYPE_UNKNOWN)
         db.ksi.index[n++] = i;
 
   assert(n == db.ksi.size);
 
   /*
-   * Initialize the ks_index stuff.
+   * Initialize the index.
    */
 
   if ((err = hal_ks_index_setup(&db.ksi)) != HAL_OK)
     return err;
 
   /*
-   * Deal with deprecated blocks.  These are tombstones left behind
-   * when something bad happened while we updating a block.  If write
-   * of the updated block completed, we have nothing to do other than
-   * cleaning up the tombstone, but if the write didn't complete, we
-   * need to resurrect the data from the tombstone.
+   * Deal with tombstones.  These are blocks left behind when
+   * something bad (like a power failure) happened while we updating.
+   * The sequence of operations while updating is designed so that,
+   * barring a bug or a hardware failure, we should never lose data.
+   *
+   * For any tombstone we find, we start by looking for all the blocks
+   * with a matching UUID, then see what valid sequences we can
+   * construct from what we found.
+   *
+   * If we can construct a valid sequence of live blocks, the complete
+   * update was written out, and we just need to zero the tombstones.
+   *
+   * Otherwise, if we can construct a complete sequence of tombstone
+   * blocks, the update failed before it was completely written, so we
+   * have to zero the incomplete sequence of live blocks then restore
+   * from the tombstones.
+   *
+   * Otherwise, if the live and tombstone blocks taken together form a
+   * valid sequence, the update failed while deprecating the old live
+   * blocks, and the update itself was not written, so we need to
+   * restore the tombstones and leave the live blocks alone.
+   *
+   * If none of the above applies, we don't understand what happened,
+   * which is a symptom of either a bug or a hardware failure more
+   * serious than simple loss of power or reboot at an inconvenient
+   * time, so we error out to avoid accidental loss of data.
    */
 
   for (int i = 0; i < NUM_FLASH_BLOCKS; i++) {
@@ -659,56 +666,138 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
     if (block_status[i] != BLOCK_STATUS_TOMBSTONE)
       continue;
 
-    err = hal_ks_index_find(&db.ksi, &db.ksi.names[i], NULL);
+    hal_uuid_t name = db.ksi.names[i].name;
+    unsigned n_blocks;
+    int where = -1;
 
-    if (err != HAL_OK && err != HAL_ERROR_KEY_NOT_FOUND)
+    if ((err = hal_ks_index_find_range(&db.ksi, &name, 0, &n_blocks, NULL, &where)) != HAL_OK)
       return err;
 
-    unsigned b = ~0;
-
-    if (err == HAL_ERROR_KEY_NOT_FOUND) {
-
-      /*
-       * Block did not exist, need to resurrect it.
-       */
-
-      hal_uuid_t name = db.ksi.names[i]; /* Paranoia */
-
-      if ((err = block_read(i, block)) != HAL_OK)
-        return err;
-
-      block->header.block_status = BLOCK_STATUS_LIVE;
-
-      if ((err = hal_ks_index_add(&db.ksi, &name, &b)) != HAL_OK ||
-          (err = block_write(b, block))                != HAL_OK)
-        return err;
-
-      if (block_types[i] == BLOCK_TYPE_PINBLK)
-        saw_pins = 1;
+    while (where > 0 && !hal_uuid_cmp(&name, &db.ksi.names[db.ksi.index[where - 1]].name)) {
+      where--;
+      n_blocks++;
     }
 
-    /*
-     * Done with the tombstone, zero it.
-     */
+    int live_ok = 1, tomb_ok = 1, join_ok = 1;
+    unsigned n_live = 0, n_tomb = 0;
+    unsigned i_live = 0, i_tomb = 0;
 
-    if ((unsigned) i != b && (err = block_zero(i)) != HAL_OK)
-      return err;
+    for (int j = 0; j < n_blocks; j++) {
+      unsigned b = db.ksi.index[where + j];
+      switch (block_status[b]) {
+      case BLOCK_STATUS_LIVE:           n_live++;       break;
+      case BLOCK_STATUS_TOMBSTONE:      n_tomb++;       break;
+      default:                          return HAL_ERROR_IMPOSSIBLE;
+      }
+    }
+
+    uint16_t live_blocks[n_live], tomb_blocks[n_tomb];
+
+    for (int j = 0; j < n_blocks; j++) {
+      unsigned b = db.ksi.index[where + j];
+
+      if ((err = block_read(b, block)) != HAL_OK)
+        return err;
+
+      join_ok &= block->header.this_chunk == j && block->header.total_chunks == n_blocks;
+
+      switch (block_status[b]) {
+      case BLOCK_STATUS_LIVE:
+        live_blocks[i_live] = b;
+        live_ok &= block->header.this_chunk == i_live++ && block->header.total_chunks == n_live;
+        break;
+      case BLOCK_STATUS_TOMBSTONE:
+        tomb_blocks[i_tomb] = b;
+        tomb_ok &= block->header.this_chunk == i_tomb++ && block->header.total_chunks == n_tomb;
+        break;
+      default:
+        return HAL_ERROR_IMPOSSIBLE;
+      }
+    }
+
+    if (!live_ok && !tomb_ok && !join_ok)
+      return HAL_ERROR_KEYSTORE_LOST_DATA;
+
+    if (live_ok) {
+      for (int j = 0; j < n_tomb; j++) {
+        const unsigned b = tomb_blocks[j];
+        if ((err = block_zero(b)) != HAL_OK)
+          return err;
+        block_types[b]  = BLOCK_TYPE_ZEROED;
+        block_status[b] = BLOCK_STATUS_UNKNOWN;
+      }
+    }
+
+    else if (tomb_ok) {
+      for (int j = 0; j < n_live; j++) {
+        const unsigned b = live_blocks[j];
+        if ((err = block_zero(b)) != HAL_OK)
+          return err;
+        block_types[b]  = BLOCK_TYPE_ZEROED;
+        block_status[b] = BLOCK_STATUS_UNKNOWN;
+      }
+    }
+
+    if (live_ok) {
+      memcpy(&db.ksi.index[where], live_blocks, n_live * sizeof(*db.ksi.index));
+      memmove(&db.ksi.index[where + n_live], &db.ksi.index[where + n_blocks],
+              (db.ksi.size - where - n_blocks) * sizeof(*db.ksi.index));
+      memcpy(&db.ksi.index[db.ksi.size - n_tomb], tomb_blocks, n_tomb * sizeof(*db.ksi.index));
+      db.ksi.used -= n_tomb;
+      n_blocks = n_live;
+    }
+
+    else if (tomb_ok) {
+      memcpy(&db.ksi.index[where], tomb_blocks, n_tomb * sizeof(*db.ksi.index));
+      memmove(&db.ksi.index[where + n_tomb], &db.ksi.index[where + n_blocks],
+              (db.ksi.size - where - n_blocks) * sizeof(*db.ksi.index));
+      memcpy(&db.ksi.index[db.ksi.size - n_live], live_blocks, n_live * sizeof(*db.ksi.index));
+      db.ksi.used -= n_live;
+      n_blocks = n_tomb;
+    }
+
+    for (int j = 0; j < n_blocks; j++) {
+      unsigned b1 = db.ksi.index[where + j];
+      if (block_status[b1] != BLOCK_STATUS_TOMBSTONE)
+        continue;
+      if ((err = block_read(b1, block)) != HAL_OK)
+        return err;
+      block->header.block_status = BLOCK_STATUS_LIVE;
+      int hint = where + j;
+      unsigned b2;
+      if ((err = hal_ks_index_replace(&db.ksi, &name, j, &b2, &hint)) != HAL_OK ||
+          (err = block_write(b2, block)) != HAL_OK)
+        return err;
+      block_status[b2] = BLOCK_STATUS_LIVE;
+      block_types[b1] = BLOCK_TYPE_ZEROED;
+    }
   }
 
-  /*
-   * If we didn't see a PIN block, create one, with the user and so
-   * PINs cleared and the wheel PIN set to the last-gasp value.  The
-   * last-gasp WHEEL PIN is a terrible answer, but we need some kind
-   * of bootstrapping mechanism when all else fails.  If you have a
-   * better suggestion, we'd love to hear it.
-   */
+  err = fetch_pin_block(NULL, &block);
 
-  if (!saw_pins) {
+  if (err == HAL_OK) {
+    db.wheel_pin = block->pin.wheel_pin;
+    db.so_pin    = block->pin.so_pin;
+    db.user_pin  = block->pin.user_pin;
+  }
+
+  else if (err != HAL_ERROR_KEY_NOT_FOUND)
+    return err;
+
+  else {
+    /*
+     * We found no PIN block, so create one, with the user and so PINs
+     * cleared and the wheel PIN set to the last-gasp value.  The
+     * last-gasp WHEEL PIN is a terrible answer, but we need some kind
+     * of bootstrapping mechanism when all else fails.  If you have a
+     * better suggestion, we'd love to hear it.
+     */
+
     unsigned b;
 
     memset(block, 0xFF, sizeof(*block));
 
-    block->header.block_type   = BLOCK_TYPE_PINBLK;
+    block->header.block_type   = BLOCK_TYPE_PIN;
     block->header.block_status = BLOCK_STATUS_LIVE;
     block->header.total_chunks = 1;
     block->header.this_chunk   = 0;
@@ -717,7 +806,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
     block->pin.so_pin    = db.so_pin;
     block->pin.user_pin  = db.user_pin;
 
-    if ((err = hal_ks_index_add(&db.ksi, &pin_uuid, &b)) != HAL_OK)
+    if ((err = hal_ks_index_add(&db.ksi, &pin_uuid, 0, &b, NULL)) != HAL_OK)
       return err;
 
     cache_mark_used(block, b);
@@ -802,14 +891,14 @@ static hal_error_t ks_store(hal_ks_t *ks,
   if (block == NULL)
     return HAL_ERROR_IMPOSSIBLE;
 
-  if ((err = hal_ks_index_add(&db.ksi, &slot->name, &b)) != HAL_OK)
+  if ((err = hal_ks_index_add(&db.ksi, &slot->name, 0, &b, NULL)) != HAL_OK)
     return err;
 
   cache_mark_used(block, b);
 
   memset(block, 0xFF, sizeof(*block));
 
-  block->header.block_type   = BLOCK_TYPE_KEYBLK;
+  block->header.block_type   = BLOCK_TYPE_KEY;
   block->header.block_status = BLOCK_STATUS_LIVE;
   block->header.total_chunks = 1;
   block->header.this_chunk   = 0;
@@ -831,7 +920,7 @@ static hal_error_t ks_store(hal_ks_t *ks,
 
   memset(block, 0, sizeof(*block));
   cache_release(block);
-  (void) hal_ks_index_delete(&db.ksi, &slot->name, NULL);
+  (void) hal_ks_index_delete(&db.ksi, &slot->name, 0, NULL, NULL);
   return err;
 }
 
@@ -846,11 +935,11 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
   hal_error_t err;
   unsigned b;
 
-  if ((err = hal_ks_index_find(&db.ksi, &slot->name, &b)) != HAL_OK ||
-      (err = block_read_cached(b, &block)) != HAL_OK)
+  if ((err = hal_ks_index_find(&db.ksi, &slot->name, 0, &b, NULL)) != HAL_OK ||
+      (err = block_read_cached(b, &block))                         != HAL_OK)
     return err;
 
-  if (block_get_type(block) != BLOCK_TYPE_KEYBLK)
+  if (block_get_type(block) != BLOCK_TYPE_KEY)
     return HAL_ERROR_KEY_NOT_FOUND;
 
   cache_mark_used(block, b);
@@ -896,7 +985,7 @@ static hal_error_t ks_delete(hal_ks_t *ks,
   hal_error_t err;
   unsigned b;
 
-  if ((err = hal_ks_index_delete(&db.ksi, &slot->name, &b)) != HAL_OK)
+  if ((err = hal_ks_index_delete(&db.ksi, &slot->name, 0, &b, NULL)) != HAL_OK)
     return err;
 
   cache_release(cache_find_block(b));
@@ -931,7 +1020,7 @@ static hal_error_t ks_list(hal_ks_t *ks,
     if ((err = block_read_cached(b, &block)) != HAL_OK)
       return err;
 
-    if (block_get_type(block) != BLOCK_TYPE_KEYBLK)
+    if (block_get_type(block) != BLOCK_TYPE_KEY || block->header.this_chunk > 0)
       continue;
 
     result[*result_len].type  = block->key.type;
@@ -982,23 +1071,29 @@ hal_error_t hal_get_pin(const hal_user_t user,
 }
 
 /*
- * Fetch PIN block.
+ * Fetch PIN block.  hint = 0 because we know that the all-zeros UUID
+ * should always sort to first slot in the index.
  */
 
 static hal_error_t fetch_pin_block(unsigned *b, flash_block_t **block)
 {
-  if (b == NULL || block == NULL)
+  if (block == NULL)
     return HAL_ERROR_IMPOSSIBLE;
 
   hal_error_t err;
+  int hint = 0;
+  unsigned b_;
 
-  if ((err = hal_ks_index_find(&db.ksi, &pin_uuid, b)) != HAL_OK ||
-      (err = block_read_cached(*b, block))             != HAL_OK)
+  if (b == NULL)
+    b = &b_;
+
+  if ((err = hal_ks_index_find(&db.ksi, &pin_uuid, 0, b, &hint)) != HAL_OK ||
+      (err = block_read_cached(*b, block))                       != HAL_OK)
     return err;
 
   cache_mark_used(*block, *b);
 
-  if (block_get_type(*block) != BLOCK_TYPE_PINBLK)
+  if (block_get_type(*block) != BLOCK_TYPE_PIN)
     return HAL_ERROR_IMPOSSIBLE;
 
   return HAL_OK;
@@ -1007,22 +1102,19 @@ static hal_error_t fetch_pin_block(unsigned *b, flash_block_t **block)
 /*
  * Update the PIN block.  This block should always be present, but we
  * have to dance a bit to make sure we write the new PIN block before
- * destroying the old one.
+ * destroying the old one.  hint = 0 because we know that the all-zeros
+ * UUID should always sort to first slot in the index.
  *
- * In theory we could simplify and speed this up a bit by taking
- * advantage of knowing that the PIN block is always db.ksi.index[0]
- * (because of the all-zeros UUID).  Maybe later.
- *
- * More generally, most of what happens here is part of updating any
- * block, not just a PIN block, so we'll probably want to refactor
- * once we get to the point where we need to update key blocks too.
+ * Most of what happens here is part of updating any block, not just a
+ * PIN block, so we'll probably want to refactor once we get to the
+ * point where we need to update key blocks too.
  */
 
 static hal_error_t update_pin_block(const unsigned b1,
                                     flash_block_t *block,
                                     const flash_pin_block_t * const new_data)
 {
-  if (block == NULL || new_data == NULL || block_get_type(block) != BLOCK_TYPE_PINBLK)
+  if (block == NULL || new_data == NULL || block_get_type(block) != BLOCK_TYPE_PIN)
     return HAL_ERROR_IMPOSSIBLE;
 
   if (db.ksi.used == db.ksi.size)
@@ -1052,9 +1144,10 @@ static hal_error_t update_pin_block(const unsigned b1,
   if ((err = block_write(b2, block)) != HAL_OK)
     return err;
 
+  int hint = 0;
   unsigned b3;
 
-  if ((err = hal_ks_index_replace(&db.ksi, &pin_uuid, &b3)) != HAL_OK)
+  if ((err = hal_ks_index_replace(&db.ksi, &pin_uuid, 0, &b3, &hint)) != HAL_OK)
     return err;
 
   if (b2 != b3)
