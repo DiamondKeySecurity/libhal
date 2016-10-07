@@ -338,6 +338,56 @@ hal_error_t hal_rpc_pkey_list(hal_pkey_info_t *result,
   return hal_rpc_pkey_dispatch->list(result, result_len, result_max, flags);
 }
 
+hal_error_t hal_rpc_pkey_match(const hal_key_type_t type,
+                               const hal_curve_name_t curve,
+                               const hal_key_flags_t flags,
+                               hal_rpc_pkey_attribute_t *attributes,
+                               const unsigned attributes_len,
+                               hal_uuid_t *result,
+                               unsigned *result_len,
+                               const unsigned result_max,
+                               hal_uuid_t *previous_uuid)
+{
+  if ((attributes == NULL && attributes_len > 0) || previous_uuid == NULL ||
+      result == NULL || result_len == NULL || result_max == 0)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (attributes != NULL)
+    for (int i = 0; i < attributes_len; i++)
+      if (attributes[i].value == NULL)
+        return HAL_ERROR_BAD_ARGUMENTS;
+
+  return hal_rpc_pkey_dispatch->match(type, curve, flags, attributes, attributes_len,
+                                      result, result_len, result_max, previous_uuid);
+}
+
+hal_error_t hal_rpc_pkey_set_attribute(const hal_pkey_handle_t pkey,
+                                       const uint32_t type,
+                                       const uint8_t * const value,
+                                       const size_t value_len)
+{
+  if (value == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+  return hal_rpc_pkey_dispatch->set_attribute(pkey, type, value, value_len);
+}
+
+hal_error_t hal_rpc_pkey_get_attribute(const hal_pkey_handle_t pkey,
+                                       const uint32_t type,
+                                       uint8_t *value,
+                                       size_t *value_len,
+                                       const size_t value_max)
+{
+  if (value == NULL || value_len == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+  return hal_rpc_pkey_dispatch->get_attribute(pkey, type, value, value_len, value_max);
+}
+
+hal_error_t hal_rpc_pkey_delete_attribute(const hal_pkey_handle_t pkey,
+                                          const uint32_t type)
+{
+  return hal_rpc_pkey_dispatch->delete_attribute(pkey, type);
+}
+
 /*
  * Local variables:
  * indent-tabs-mode: nil

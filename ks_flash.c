@@ -174,10 +174,9 @@ typedef struct {
 const static hal_uuid_t pin_uuid = {{0}};
 
 /*
- * The in-memory database almost certainly should be a pointer to
- * allocated SDRAM rather than compile-time data space.  Well,
- * the arrays should be, anyway, it might be reasonable to keep
- * the top level structure here.  Worry about that later.
+ * The in-memory database structure itself is small, but the arrays it
+ * points to are large enough that they come from SDRAM allocated at
+ * startup.
  */
 
 static db_t db;
@@ -201,7 +200,7 @@ static inline flash_block_status_t block_get_status(const flash_block_t * const 
 /*
  * Pick unused or least-recently-used slot in our in-memory cache.
  *
- * Updating lru values is caller's problem: if caller is using cache
+ * Updating lru values is caller's problem: if caller is using a cache
  * slot as a temporary buffer and there's no point in caching the
  * result, leave the lru values alone and the right thing will happen.
  */
@@ -432,7 +431,6 @@ static hal_error_t block_erase(const unsigned blockno)
 
 /*
  * Erase a flash block if it hasn't already been erased.
- * We have to disable fast read for this to work properly.
  * May not be necessary, trying to avoid unnecessary wear.
  *
  * Unclear whether there's any sane reason why this needs to be
@@ -1033,6 +1031,46 @@ static hal_error_t ks_list(hal_ks_t *ks,
   return HAL_OK;
 }
 
+static hal_error_t ks_match(hal_ks_t *ks,
+                            const hal_key_type_t type,
+                            const hal_curve_name_t curve,
+                            const hal_key_flags_t flags,
+                            hal_rpc_pkey_attribute_t *attributes,
+                            const unsigned attributes_len,
+                            hal_uuid_t *result,
+                            unsigned *result_len,
+                            const unsigned result_max,
+                            hal_uuid_t *previous_uuid)
+{
+#warning NIY
+}
+
+static  hal_error_t ks_set_attribute(hal_ks_t *ks,
+                                     hal_pkey_slot_t *slot,
+                                     const uint32_t type,
+                                     const uint8_t * const value,
+                                     const size_t value_len)
+{
+#warning NIY
+}
+
+static  hal_error_t ks_get_attribute(hal_ks_t *ks,
+                                     hal_pkey_slot_t *slot,
+                                     const uint32_t type,
+                                     uint8_t *value,
+                                     size_t *value_len,
+                                     const size_t value_max)
+{
+#warning NIY
+}
+
+static hal_error_t ks_delete_attribute(hal_ks_t *ks,
+                                       hal_pkey_slot_t *slot,
+                                       const uint32_t type)
+{
+#warning NIY
+}
+
 const hal_ks_driver_t hal_ks_token_driver[1] = {{
   ks_init,
   ks_shutdown,
@@ -1041,7 +1079,11 @@ const hal_ks_driver_t hal_ks_token_driver[1] = {{
   ks_store,
   ks_fetch,
   ks_delete,
-  ks_list
+  ks_list,
+  ks_match,
+  ks_set_attribute,
+  ks_get_attribute,
+  ks_delete_attribute
 }};
 
 /*

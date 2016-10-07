@@ -147,6 +147,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_BAD_CRC,          "Bad CRC in keystore")                          \
   DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE,   "Unsupported keystore block type")              \
   DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_LOST_DATA,        "Keystore appears to have lost data")           \
+  DEFINE_HAL_ERROR(HAL_ERROR_BAD_ATTRIBUTE_LENGTH,      "Bad attribute length")                         \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -735,6 +736,8 @@ extern size_t hal_rpc_pkey_get_public_key_len(const hal_pkey_handle_t pkey);
 extern hal_error_t hal_rpc_pkey_get_public_key(const hal_pkey_handle_t pkey,
                                                uint8_t *der, size_t *der_len, const size_t der_max);
 
+#warning Um, why do hal_rpc_pkey_sign() and hal_rpc_pkey_verify() take session arguments?
+
 extern hal_error_t hal_rpc_pkey_sign(const hal_session_handle_t session,
                                      const hal_pkey_handle_t pkey,
                                      const hal_hash_handle_t hash,
@@ -759,6 +762,36 @@ extern hal_error_t hal_rpc_pkey_list(hal_pkey_info_t *result,
                                      unsigned *result_len,
                                      const unsigned result_max,
                                      hal_key_flags_t flags);
+
+typedef struct {
+  uint32_t type;
+  size_t length;
+  const uint8_t *value;
+} hal_rpc_pkey_attribute_t;
+
+extern hal_error_t hal_rpc_pkey_match(const hal_key_type_t type,
+                                      const hal_curve_name_t curve,
+                                      const hal_key_flags_t flags,
+                                      hal_rpc_pkey_attribute_t *attributes,
+                                      const unsigned attributes_len,
+                                      hal_uuid_t *result,
+                                      unsigned *result_len,
+                                      const unsigned result_max,
+                                      hal_uuid_t *previous_uuid);
+
+extern hal_error_t hal_rpc_pkey_set_attribute(const hal_pkey_handle_t pkey,
+                                              const uint32_t type,
+                                              const uint8_t * const value,
+                                              const size_t value_len);
+
+extern hal_error_t hal_rpc_pkey_get_attribute(const hal_pkey_handle_t pkey,
+                                              const uint32_t type,
+                                              uint8_t *value,
+                                              size_t *value_len,
+                                              const size_t value_max);
+
+extern hal_error_t hal_rpc_pkey_delete_attribute(const hal_pkey_handle_t pkey,
+                                                 const uint32_t type);
 
 extern hal_error_t hal_rpc_client_init(void);
 

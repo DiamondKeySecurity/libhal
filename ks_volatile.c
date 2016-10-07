@@ -48,11 +48,9 @@
 #define HAL_STATIC_PKEY_STATE_BLOCKS 0
 #endif
 
-#ifndef HAL_STATIC_KS_VOLATILE_SLOTS
-#define HAL_STATIC_KS_VOLATILE_SLOTS HAL_STATIC_PKEY_STATE_BLOCKS
+#ifndef HAL_KS_VOLATILE_SLOTS
+#define HAL_KS_VOLATILE_SLOTS HAL_STATIC_PKEY_STATE_BLOCKS
 #endif
-
-#if HAL_STATIC_KS_VOLATILE_SLOTS > 0
 
 /*
  * In-memory keystore database.  This should also be usable for
@@ -70,9 +68,7 @@ typedef struct {
 
 typedef struct {
   hal_ks_index_t        ksi;
-  uint16_t              _index[HAL_STATIC_KS_VOLATILE_SLOTS];
-  hal_ks_name_t         _names[HAL_STATIC_KS_VOLATILE_SLOTS];
-  ks_key_t              keys[HAL_STATIC_KS_VOLATILE_SLOTS];
+  ks_key_t              *keys;
 } db_t;
 
 /*
@@ -87,7 +83,14 @@ typedef struct {
   db_t *db;                 /* Which memory-based keystore database */
 } ks_t;
 
-static db_t volatile_db;
+/*
+ * If we also supported mmap, there would be a separate definition for
+ * HAL_KS_MMAP_SLOTS above, and the bulk of the code would be under a
+ * conditional testing whether either HAL_KS_*_SLOTS were nonzero.
+ */
+
+#if HAL_KS_VOLATILE_SLOTS > 0
+
 static ks_t volatile_ks;
 
 static inline ks_t *ks_to_ksv(hal_ks_t *ks)
@@ -95,9 +98,39 @@ static inline ks_t *ks_to_ksv(hal_ks_t *ks)
   return (ks_t *) ks;
 }
 
-static hal_error_t ks_init(db_t *db)
+static inline void *gnaw(uint8_t **mem, size_t *len, const size_t size)
 {
-  assert(db != NULL);
+  if (mem == NULL || *mem == NULL || len == NULL || size > *len)
+    return NULL;
+  void *ret = *mem;
+  *mem += size;
+  *len -= size;
+  return ret;
+}
+
+static hal_error_t ks_init(const hal_ks_driver_t * const driver,
+                           ks_t *ksv,
+                           uint8_t *mem,
+                           size_t len)
+{
+  if (ksv == NULL || mem == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  memset(ksv, 0, sizeof(*ksv));
+  memset(mem, 0, len);
+
+  if ((ksv->db = gnaw(&mem, &len, sizeof(*ksv->db))) == NULL ||
+      (ksv->db->ksi.index = gnaw(&mem, &len,
+                                 sizeof(*ksv->db->ksi.index) * HAL_KS_VOLATILE_SLOTS)) == NULL ||
+      (ksv->db->ksi.names = gnaw(&mem, &len,
+                                 sizeof(*ksv->db->ksi.names) * HAL_KS_VOLATILE_SLOTS)) == NULL ||
+      (ksv->db->keys      = gnaw(&mem, &len,
+                                 sizeof(*ksv->db->keys)      * HAL_KS_VOLATILE_SLOTS)) == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  ksv->ks.driver     = driver;
+  ksv->db->ksi.size  = HAL_KS_VOLATILE_SLOTS;
+  ksv->db->ksi.used  = 0;
 
   /*
    * Set up keystore with empty index and full free list.
@@ -105,34 +138,31 @@ static hal_error_t ks_init(db_t *db)
    * just populate the free list in block numerical order.
    */
 
-  db->ksi.size  = HAL_STATIC_KS_VOLATILE_SLOTS;
-  db->ksi.used  = 0;
-  db->ksi.index = db->_index;
-  db->ksi.names = db->_names;
+  for (int i = 0; i < HAL_KS_VOLATILE_SLOTS; i++)
+    ksv->db->ksi.index[i] = i;
 
-  for (int i = 0; i < HAL_STATIC_KS_VOLATILE_SLOTS; i++)
-    db->_index[i] = i;
-
-  const hal_error_t err = hal_ks_index_setup(&db->ksi);
-
-  if (err != HAL_OK)
-    db->ksi.size = 0;           /* Mark uninitialized if setup failed */
-
-  return err;
+  return hal_ks_index_setup(&ksv->db->ksi);
 }
 
 static hal_error_t ks_volatile_init(const hal_ks_driver_t * const driver)
 {
-  volatile_ks.ks.driver = driver;
-  volatile_ks.db = &volatile_db;
-  return ks_init(volatile_ks.db);
+  const size_t len = (sizeof(*volatile_ks.db) +
+                      sizeof(*volatile_ks.db->ksi.index) * HAL_KS_VOLATILE_SLOTS +
+                      sizeof(*volatile_ks.db->ksi.names) * HAL_KS_VOLATILE_SLOTS +
+                      sizeof(*volatile_ks.db->keys)      * HAL_KS_VOLATILE_SLOTS);
+
+  uint8_t *mem = hal_allocate_static_memory(len);
+
+  if (mem == NULL)
+    return HAL_ERROR_ALLOCATION_FAILURE;
+
+  return ks_init(driver, &volatile_ks, mem, len);
 }
 
 static hal_error_t ks_volatile_shutdown(const hal_ks_driver_t * const driver)
 {
   if (volatile_ks.ks.driver != driver)
     return HAL_ERROR_KEYSTORE_ACCESS;
-  memset(&volatile_ks, 0, sizeof(volatile_ks));
   return HAL_OK;
 }
 
@@ -303,6 +333,50 @@ static hal_error_t ks_list(hal_ks_t *ks,
   return HAL_OK;
 }
 
+static hal_error_t ks_match(hal_ks_t *ks,
+                            const hal_key_type_t type,
+                            const hal_curve_name_t curve,
+                            const hal_key_flags_t flags,
+                            hal_rpc_pkey_attribute_t *attributes,
+                            const unsigned attributes_len,
+                            hal_uuid_t *result,
+                            unsigned *result_len,
+                            const unsigned result_max,
+                            hal_uuid_t *previous_uuid)
+{
+#warning NIY
+  return HAL_ERROR_IMPOSSIBLE;
+}
+
+static  hal_error_t ks_set_attribute(hal_ks_t *ks,
+                                     hal_pkey_slot_t *slot,
+                                     const uint32_t type,
+                                     const uint8_t * const value,
+                                     const size_t value_len)
+{
+#warning NIY
+  return HAL_ERROR_IMPOSSIBLE;
+}
+
+static  hal_error_t ks_get_attribute(hal_ks_t *ks,
+                                     hal_pkey_slot_t *slot,
+                                     const uint32_t type,
+                                     uint8_t *value,
+                                     size_t *value_len,
+                                     const size_t value_max)
+{
+#warning NIY
+  return HAL_ERROR_IMPOSSIBLE;
+}
+
+static hal_error_t ks_delete_attribute(hal_ks_t *ks,
+                                       hal_pkey_slot_t *slot,
+                                       const uint32_t type)
+{
+#warning NIY
+  return HAL_ERROR_IMPOSSIBLE;
+}
+
 const hal_ks_driver_t hal_ks_volatile_driver[1] = {{
   ks_volatile_init,
   ks_volatile_shutdown,
@@ -311,10 +385,14 @@ const hal_ks_driver_t hal_ks_volatile_driver[1] = {{
   ks_store,
   ks_fetch,
   ks_delete,
-  ks_list
+  ks_list,
+  ks_match,
+  ks_set_attribute,
+  ks_get_attribute,
+  ks_delete_attribute
 }};
 
-#endif /* HAL_STATIC_KS_VOLATILE_SLOTS > 0 */
+#endif /* HAL_KS_VOLATILE_SLOTS > 0 */
 
 /*
  * Local variables:
