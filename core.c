@@ -42,6 +42,13 @@
 #include "hal_internal.h"
 
 /*
+ * POSIX function whose declaration gets lost somewhere in the twisty
+ * corridors of glibc's "Feature Test Macro" system.
+ */
+
+extern size_t strnlen(const char *, size_t);
+
+/*
  * Structure of our internal database is private, in case we want to
  * change representation (array, tree, list of lists, whatever) at
  * some later date without having to change the public API.
