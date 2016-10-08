@@ -736,16 +736,12 @@ extern size_t hal_rpc_pkey_get_public_key_len(const hal_pkey_handle_t pkey);
 extern hal_error_t hal_rpc_pkey_get_public_key(const hal_pkey_handle_t pkey,
                                                uint8_t *der, size_t *der_len, const size_t der_max);
 
-#warning Um, why do hal_rpc_pkey_sign() and hal_rpc_pkey_verify() take session arguments?
-
-extern hal_error_t hal_rpc_pkey_sign(const hal_session_handle_t session,
-                                     const hal_pkey_handle_t pkey,
+extern hal_error_t hal_rpc_pkey_sign(const hal_pkey_handle_t pkey,
                                      const hal_hash_handle_t hash,
                                      const uint8_t * const input,  const size_t input_len,
                                      uint8_t * signature, size_t *signature_len, const size_t signature_max);
 
-extern hal_error_t hal_rpc_pkey_verify(const hal_session_handle_t session,
-                                       const hal_pkey_handle_t pkey,
+extern hal_error_t hal_rpc_pkey_verify(const hal_pkey_handle_t pkey,
                                        const hal_hash_handle_t hash,
                                        const uint8_t * const input, const size_t input_len,
                                        const uint8_t * const signature, const size_t signature_len);
@@ -758,7 +754,8 @@ typedef struct {
   /* ... */
 } hal_pkey_info_t;
 
-extern hal_error_t hal_rpc_pkey_list(hal_pkey_info_t *result,
+extern hal_error_t hal_rpc_pkey_list(const hal_session_handle_t session,
+                                     hal_pkey_info_t *result,
                                      unsigned *result_len,
                                      const unsigned result_max,
                                      hal_key_flags_t flags);
@@ -769,7 +766,8 @@ typedef struct {
   const uint8_t *value;
 } hal_rpc_pkey_attribute_t;
 
-extern hal_error_t hal_rpc_pkey_match(const hal_key_type_t type,
+extern hal_error_t hal_rpc_pkey_match(const hal_session_handle_t session,
+                                      const hal_key_type_t type,
                                       const hal_curve_name_t curve,
                                       const hal_key_flags_t flags,
                                       hal_rpc_pkey_attribute_t *attributes,

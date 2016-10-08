@@ -647,8 +647,7 @@ static hal_error_t pkey_local_sign_ecdsa(uint8_t *keybuf, const size_t keybuf_le
   return HAL_OK;
 }
 
-static hal_error_t pkey_local_sign(const hal_session_handle_t session,
-                                   const hal_pkey_handle_t pkey,
+static hal_error_t pkey_local_sign(const hal_pkey_handle_t pkey,
                                    const hal_hash_handle_t hash,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * signature, size_t *signature_len, const size_t signature_max)
@@ -794,8 +793,7 @@ static hal_error_t pkey_local_verify_ecdsa(uint8_t *keybuf, const size_t keybuf_
   return HAL_OK;
 }
 
-static hal_error_t pkey_local_verify(const hal_session_handle_t session,
-                                     const hal_pkey_handle_t pkey,
+static hal_error_t pkey_local_verify(const hal_pkey_handle_t pkey,
                                      const hal_hash_handle_t hash,
                                      const uint8_t * const input, const size_t input_len,
                                      const uint8_t * const signature, const size_t signature_len)
@@ -850,7 +848,8 @@ static hal_error_t pkey_local_verify(const hal_session_handle_t session,
  * List keys in the key store.
  */
 
-static hal_error_t pkey_local_list(hal_pkey_info_t *result,
+static hal_error_t pkey_local_list(const hal_session_handle_t session,
+                                   hal_pkey_info_t *result,
                                    unsigned *result_len,
                                    const unsigned result_max,
                                    hal_key_flags_t flags)
@@ -859,7 +858,7 @@ static hal_error_t pkey_local_list(hal_pkey_info_t *result,
   hal_error_t err;
 
   if ((err = ks_open_from_flags(&ks, flags)) == HAL_OK &&
-      (err = hal_ks_list(ks, result, result_len, result_max)) == HAL_OK)
+      (err = hal_ks_list(ks, session, result, result_len, result_max)) == HAL_OK)
     err = hal_ks_close(ks);
   else if (ks != NULL)
     (void) hal_ks_close(ks);
@@ -867,7 +866,8 @@ static hal_error_t pkey_local_list(hal_pkey_info_t *result,
   return err;
 }
 
-static hal_error_t pkey_local_match(const hal_key_type_t type,
+static hal_error_t pkey_local_match(const hal_session_handle_t session,
+                                    const hal_key_type_t type,
                                     const hal_curve_name_t curve,
                                     const hal_key_flags_t flags,
                                     hal_rpc_pkey_attribute_t *attributes,
@@ -881,7 +881,7 @@ static hal_error_t pkey_local_match(const hal_key_type_t type,
   hal_error_t err;
 
   if ((err = ks_open_from_flags(&ks, flags)) == HAL_OK &&
-      (err = hal_ks_match(ks, type, curve, flags, attributes, attributes_len,
+      (err = hal_ks_match(ks, session, type, curve, flags, attributes, attributes_len,
                           result, result_len, result_max, previous_uuid)) == HAL_OK)
     err = hal_ks_close(ks);
   else if (ks != NULL)

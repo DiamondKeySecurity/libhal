@@ -1043,6 +1043,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
                             hal_uuid_t *previous_uuid)
 {
 #warning NIY
+  return HAL_ERROR_IMPOSSIBLE;
 }
 
 static  hal_error_t ks_set_attribute(hal_ks_t *ks,
@@ -1052,6 +1053,7 @@ static  hal_error_t ks_set_attribute(hal_ks_t *ks,
                                      const size_t value_len)
 {
 #warning NIY
+  return HAL_ERROR_IMPOSSIBLE;
 }
 
 static  hal_error_t ks_get_attribute(hal_ks_t *ks,
@@ -1062,6 +1064,7 @@ static  hal_error_t ks_get_attribute(hal_ks_t *ks,
                                      const size_t value_max)
 {
 #warning NIY
+  return HAL_ERROR_IMPOSSIBLE;
 }
 
 static hal_error_t ks_delete_attribute(hal_ks_t *ks,
@@ -1069,6 +1072,7 @@ static hal_error_t ks_delete_attribute(hal_ks_t *ks,
                                        const uint32_t type)
 {
 #warning NIY
+  return HAL_ERROR_IMPOSSIBLE;
 }
 
 const hal_ks_driver_t hal_ks_token_driver[1] = {{

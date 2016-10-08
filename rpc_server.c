@@ -563,8 +563,7 @@ static hal_error_t pkey_get_public_key(const uint8_t **iptr, const uint8_t * con
 static hal_error_t pkey_sign(const uint8_t **iptr, const uint8_t * const ilimit,
                              uint8_t **optr, const uint8_t * const olimit)
 {
-    hal_client_handle_t client __attribute__((unused));
-    hal_session_handle_t session;
+    hal_client_handle_t client;
     hal_pkey_handle_t pkey;
     hal_hash_handle_t hash;
     const uint8_t *input;
@@ -575,7 +574,6 @@ static hal_error_t pkey_sign(const uint8_t **iptr, const uint8_t * const ilimit,
     hal_error_t ret;
 
     check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
-    check(hal_xdr_decode_int(iptr, ilimit, &session.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &hash.handle));
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &input, &input_len));
@@ -587,7 +585,7 @@ static hal_error_t pkey_sign(const uint8_t **iptr, const uint8_t * const ilimit,
     /* call the local function */
     /* get the data directly into the output buffer */
     *optr += 4;         /* reserve 4 bytes for length */
-    ret = hal_rpc_local_pkey_dispatch.sign(session, pkey, hash, input, input_len, *optr, &sig_len, sig_max);
+    ret = hal_rpc_local_pkey_dispatch.sign(pkey, hash, input, input_len, *optr, &sig_len, sig_max);
     *optr = optr_orig;
     if (ret == HAL_OK) {
         check(hal_xdr_encode_int(optr, olimit, sig_len));
@@ -599,8 +597,7 @@ static hal_error_t pkey_sign(const uint8_t **iptr, const uint8_t * const ilimit,
 static hal_error_t pkey_verify(const uint8_t **iptr, const uint8_t * const ilimit,
                                uint8_t **optr, const uint8_t * const olimit)
 {
-    hal_client_handle_t client __attribute__((unused));
-    hal_session_handle_t session;
+    hal_client_handle_t client;
     hal_pkey_handle_t pkey;
     hal_hash_handle_t hash;
     const uint8_t *input;
@@ -610,14 +607,13 @@ static hal_error_t pkey_verify(const uint8_t **iptr, const uint8_t * const ilimi
     hal_error_t ret;
 
     check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
-    check(hal_xdr_decode_int(iptr, ilimit, &session.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &hash.handle));
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &input, &input_len));
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &sig, &sig_len));
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.verify(session, pkey, hash, input, input_len, sig, sig_len);
+    ret = hal_rpc_local_pkey_dispatch.verify(pkey, hash, input, input_len, sig, sig_len);
 
     return ret;
 }
@@ -638,13 +634,15 @@ static hal_error_t hal_xdr_encode_pkey_info(uint8_t **optr, const uint8_t * cons
 static hal_error_t pkey_list(const uint8_t **iptr, const uint8_t * const ilimit,
                              uint8_t **optr, const uint8_t * const olimit)
 {
-    hal_client_handle_t client __attribute__((unused));
+    hal_client_handle_t client;
+    hal_session_handle_t session;
     uint8_t *optr_orig = *optr;
     uint32_t result_max;
     hal_key_flags_t flags;
     hal_error_t ret;
 
     check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
+    check(hal_xdr_decode_int(iptr, ilimit, &session.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &result_max));
     check(hal_xdr_decode_int(iptr, ilimit, &flags));
 
@@ -652,7 +650,7 @@ static hal_error_t pkey_list(const uint8_t **iptr, const uint8_t * const ilimit,
     unsigned result_len;
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.list(result, &result_len, result_max, flags);
+    ret = hal_rpc_local_pkey_dispatch.list(session, result, &result_len, result_max, flags);
 
     if (ret == HAL_OK) {
         check(hal_xdr_encode_int(optr, olimit, result_len));
@@ -667,19 +665,18 @@ static hal_error_t pkey_list(const uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-#warning Which RPC pkey functions take session looks kind of messed up
-// list() and match() probably should take session, sign() and verify() probably should not
-
 static hal_error_t pkey_match(const uint8_t **iptr, const uint8_t * const ilimit,
                               uint8_t **optr, const uint8_t * const olimit)
 {
     hal_client_handle_t client;
+    hal_session_handle_t session;
     uint32_t type, curve, attributes_len, result_max, previous_uuid_len;
     const uint8_t *previous_uuid_ptr;
     hal_key_flags_t flags;
     hal_error_t ret;
 
     check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
+    check(hal_xdr_decode_int(iptr, ilimit, &session.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &type));
     check(hal_xdr_decode_int(iptr, ilimit, &curve));
     check(hal_xdr_decode_int(iptr, ilimit, &flags));
@@ -704,7 +701,8 @@ static hal_error_t pkey_match(const uint8_t **iptr, const uint8_t * const ilimit
     hal_uuid_t result[result_max];
     unsigned result_len;
 
-    ret = hal_rpc_local_pkey_dispatch.match(type, curve, flags, attributes, attributes_len,
+    ret = hal_rpc_local_pkey_dispatch.match(session, type, curve, flags,
+                                            attributes, attributes_len,
                                             result, &result_len, result_max,
                                             (hal_uuid_t *) previous_uuid_ptr);
 

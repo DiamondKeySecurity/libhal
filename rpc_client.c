@@ -681,13 +681,12 @@ static hal_error_t pkey_remote_get_public_key(const hal_pkey_handle_t pkey,
   return rpc_ret;
 }
 
-static hal_error_t pkey_remote_sign(const hal_session_handle_t session,
-                                    const hal_pkey_handle_t pkey,
+static hal_error_t pkey_remote_sign(const hal_pkey_handle_t pkey,
                                     const hal_hash_handle_t hash,
-                                    const uint8_t * const input,  const size_t input_len,
+                                    const uint8_t * const input, const size_t input_len,
                                     uint8_t * signature, size_t *signature_len, const size_t signature_max)
 {
-  uint8_t outbuf[nargs(7) + pad(input_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t outbuf[nargs(6) + pad(input_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(4) + pad(signature_max)];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   uint32_t slen32 = signature_max;
@@ -696,7 +695,6 @@ static hal_error_t pkey_remote_sign(const hal_session_handle_t session,
 
   check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_SIGN));
   check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
-  check(hal_xdr_encode_int(&optr, olimit, session.handle));
   check(hal_xdr_encode_int(&optr, olimit, pkey.handle));
   check(hal_xdr_encode_int(&optr, olimit, hash.handle));
   check(hal_xdr_encode_buffer(&optr, olimit, input, input_len));
@@ -713,13 +711,12 @@ static hal_error_t pkey_remote_sign(const hal_session_handle_t session,
   return rpc_ret;
 }
 
-static hal_error_t pkey_remote_verify(const hal_session_handle_t session,
-                                      const hal_pkey_handle_t pkey,
+static hal_error_t pkey_remote_verify(const hal_pkey_handle_t pkey,
                                       const hal_hash_handle_t hash,
                                       const uint8_t * const input, const size_t input_len,
                                       const uint8_t * const signature, const size_t signature_len)
 {
-  uint8_t outbuf[nargs(7) + pad(input_len) + pad(signature_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t outbuf[nargs(6) + pad(input_len) + pad(signature_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(3)];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   hal_client_handle_t dummy_client = {0};
@@ -727,7 +724,6 @@ static hal_error_t pkey_remote_verify(const hal_session_handle_t session,
 
   check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_VERIFY));
   check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
-  check(hal_xdr_encode_int(&optr, olimit, session.handle));
   check(hal_xdr_encode_int(&optr, olimit, pkey.handle));
   check(hal_xdr_encode_int(&optr, olimit, hash.handle));
   check(hal_xdr_encode_buffer(&optr, olimit, input, input_len));
@@ -757,12 +753,13 @@ static hal_error_t hal_xdr_decode_pkey_info(const uint8_t **iptr, const uint8_t 
   return HAL_OK;
 }
 
-static hal_error_t pkey_remote_list(hal_pkey_info_t *result,
+static hal_error_t pkey_remote_list(const hal_session_handle_t session,
+                                    hal_pkey_info_t *result,
                                     unsigned *result_len,
                                     const unsigned result_max,
                                     hal_key_flags_t flags)
 {
-  uint8_t outbuf[nargs(4)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t outbuf[nargs(5)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(4) + pad(result_max * sizeof(hal_pkey_info_t))];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   uint32_t len;
@@ -771,6 +768,7 @@ static hal_error_t pkey_remote_list(hal_pkey_info_t *result,
 
   check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_LIST));
   check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
+  check(hal_xdr_encode_int(&optr, olimit, session.handle));
   check(hal_xdr_encode_int(&optr, olimit, result_max));
   check(hal_xdr_encode_int(&optr, olimit, flags));
   check(hal_rpc_send(outbuf, optr - outbuf));
@@ -791,7 +789,8 @@ static hal_error_t pkey_remote_list(hal_pkey_info_t *result,
   return rpc_ret;
 }
 
-static hal_error_t pkey_remote_match(const hal_key_type_t type,
+static hal_error_t pkey_remote_match(const hal_session_handle_t session,
+                                     const hal_key_type_t type,
                                      const hal_curve_name_t curve,
                                      const hal_key_flags_t flags,
                                      hal_rpc_pkey_attribute_t *attributes,
@@ -806,7 +805,7 @@ static hal_error_t pkey_remote_match(const hal_key_type_t type,
     for (int i = 0; i < attributes_len; i++)
       attributes_buffer_len += attributes[i].length;
 
-  uint8_t outbuf[nargs(8 + attributes_len * 2) + pad(attributes_buffer_len) + pad(sizeof(hal_uuid_t))];
+  uint8_t outbuf[nargs(9 + attributes_len * 2) + pad(attributes_buffer_len) + pad(sizeof(hal_uuid_t))];
   uint8_t *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(5) + pad(result_max * sizeof(hal_uuid_t)) + pad(sizeof(hal_uuid_t))];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
@@ -815,6 +814,7 @@ static hal_error_t pkey_remote_match(const hal_key_type_t type,
 
   check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_MATCH));
   check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
+  check(hal_xdr_encode_int(&optr, olimit, session.handle));
   check(hal_xdr_encode_int(&optr, olimit, type));
   check(hal_xdr_encode_int(&optr, olimit, curve));
   check(hal_xdr_encode_int(&optr, olimit, flags));
@@ -934,14 +934,13 @@ static hal_error_t pkey_remote_delete_attribute(const hal_pkey_handle_t pkey,
  * pull the digest from the hash context and send that to the HSM.
  */
 
-static hal_error_t pkey_mixed_sign(const hal_session_handle_t session,
-                                   const hal_pkey_handle_t pkey,
+static hal_error_t pkey_mixed_sign(const hal_pkey_handle_t pkey,
                                    const hal_hash_handle_t hash,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * signature, size_t *signature_len, const size_t signature_max)
 {
   if (input != NULL)
-    return hal_rpc_remote_pkey_dispatch.sign(session, pkey, hash, input, input_len,
+    return hal_rpc_remote_pkey_dispatch.sign(pkey, hash, input, input_len,
                                              signature, signature_len, signature_max);
 
   hal_digest_algorithm_t alg;
@@ -970,18 +969,17 @@ static hal_error_t pkey_mixed_sign(const hal_session_handle_t session,
 
   }
 
-  return hal_rpc_remote_pkey_dispatch.sign(session, pkey, hal_hash_handle_none, digest, digest_len,
+  return hal_rpc_remote_pkey_dispatch.sign(pkey, hal_hash_handle_none, digest, digest_len,
                                            signature, signature_len, signature_max);
 }
 
-static hal_error_t pkey_mixed_verify(const hal_session_handle_t session,
-                                     const hal_pkey_handle_t pkey,
+static hal_error_t pkey_mixed_verify(const hal_pkey_handle_t pkey,
                                      const hal_hash_handle_t hash,
                                      const uint8_t * const input, const size_t input_len,
                                      const uint8_t * const signature, const size_t signature_len)
 {
   if (input != NULL)
-    return hal_rpc_remote_pkey_dispatch.verify(session, pkey, hash, input, input_len,
+    return hal_rpc_remote_pkey_dispatch.verify(pkey, hash, input, input_len,
                                                signature, signature_len);
 
   hal_digest_algorithm_t alg;
@@ -1010,7 +1008,7 @@ static hal_error_t pkey_mixed_verify(const hal_session_handle_t session,
 
   }
 
-  return hal_rpc_remote_pkey_dispatch.verify(session, pkey, hal_hash_handle_none,
+  return hal_rpc_remote_pkey_dispatch.verify(pkey, hal_hash_handle_none,
                                              digest, digest_len, signature, signature_len);
 }
 
