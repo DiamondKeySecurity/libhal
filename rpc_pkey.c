@@ -55,7 +55,7 @@ static hal_pkey_slot_t pkey_handle[HAL_STATIC_PKEY_STATE_BLOCKS];
  * soon, to help identify use-after-free bugs in calling code.
  *
  * The high order bit of the pkey handle is left free for
- * HAL_PKEY_HANDLE_PROXIMATE_FLAG, which is used by the mixed-mode
+ * HAL_PKEY_HANDLE_TOKEN_FLAG, which is used by the mixed-mode
  * handlers to route calls to the appropriate destination.
  */
 
@@ -76,6 +76,7 @@ static inline hal_pkey_slot_t *alloc_slot(const hal_key_flags_t flags)
       continue;
     memset(&pkey_handle[i], 0, sizeof(pkey_handle[i]));
     pkey_handle[i].pkey_handle.handle = i | glop;
+    pkey_handle[i].hint = -1;
     return &pkey_handle[i];
   }
 #endif
@@ -848,7 +849,8 @@ static hal_error_t pkey_local_verify(const hal_pkey_handle_t pkey,
  * List keys in the key store.
  */
 
-static hal_error_t pkey_local_list(const hal_session_handle_t session,
+static hal_error_t pkey_local_list(const hal_client_handle_t client,
+                                   const hal_session_handle_t session,
                                    hal_pkey_info_t *result,
                                    unsigned *result_len,
                                    const unsigned result_max,
@@ -858,7 +860,7 @@ static hal_error_t pkey_local_list(const hal_session_handle_t session,
   hal_error_t err;
 
   if ((err = ks_open_from_flags(&ks, flags)) == HAL_OK &&
-      (err = hal_ks_list(ks, session, result, result_len, result_max)) == HAL_OK)
+      (err = hal_ks_list(ks, client, session, result, result_len, result_max)) == HAL_OK)
     err = hal_ks_close(ks);
   else if (ks != NULL)
     (void) hal_ks_close(ks);
@@ -866,7 +868,8 @@ static hal_error_t pkey_local_list(const hal_session_handle_t session,
   return err;
 }
 
-static hal_error_t pkey_local_match(const hal_session_handle_t session,
+static hal_error_t pkey_local_match(const hal_client_handle_t client,
+                                    const hal_session_handle_t session,
                                     const hal_key_type_t type,
                                     const hal_curve_name_t curve,
                                     const hal_key_flags_t flags,
@@ -881,7 +884,7 @@ static hal_error_t pkey_local_match(const hal_session_handle_t session,
   hal_error_t err;
 
   if ((err = ks_open_from_flags(&ks, flags)) == HAL_OK &&
-      (err = hal_ks_match(ks, session, type, curve, flags, attributes, attributes_len,
+      (err = hal_ks_match(ks, client, session, type, curve, flags, attributes, attributes_len,
                           result, result_len, result_max, previous_uuid)) == HAL_OK)
     err = hal_ks_close(ks);
   else if (ks != NULL)

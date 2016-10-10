@@ -61,6 +61,7 @@ typedef enum {
   BLOCK_TYPE_ERASED  = 0xFF, /* Pristine erased block (candidate for reuse) */
   BLOCK_TYPE_ZEROED  = 0x00, /* Zeroed block (recently used) */
   BLOCK_TYPE_KEY     = 0x55, /* Block contains key material */
+  BLOCK_TYPE_ATTR    = 0x66, /* Block contains key attributes (overflow from key block) */
   BLOCK_TYPE_PIN     = 0xAA, /* Block contains PINs */
   BLOCK_TYPE_UNKNOWN = -1,   /* Internal code for "I have no clue what this is" */
 } flash_block_type_t;
@@ -89,9 +90,7 @@ typedef struct {
 } flash_block_header_t;
 
 /*
- * We probably want some kind of TLV format for optional attributes
- * in key objects, and might want to put the DER key itself there to
- * save space.
+ * Key block.  Tail end of "der" field (after der_len) used for attributes.
  */
 
 typedef struct {
@@ -101,8 +100,26 @@ typedef struct {
   hal_curve_name_t      curve;
   hal_key_flags_t       flags;
   size_t                der_len;
-  uint8_t               der[HAL_KS_WRAPPED_KEYSIZE];
+  unsigned              attributes_len;
+  uint8_t               der[];  /* Must be last field -- C99 "flexible array member" */
 } flash_key_block_t;
+
+#define SIZEOF_FLASH_KEY_BLOCK_DER \
+  (KEYSTORE_SUBSECTOR_SIZE - offsetof(flash_key_block_t, der))
+
+/*
+ * Key attribute overflow block (attributes which don't fit in der field of key block).
+ */
+
+typedef struct {
+  flash_block_header_t  header;
+  hal_uuid_t            name;
+  unsigned              attributes_len;
+  uint8_t               attributes[]; /* Must be last field -- C99 "flexible array member" */
+} flash_attributes_block_t;
+
+#define SIZEOF_FLASH_ATTRIBUTE_BLOCK_ATTRIBUTES \
+  (KEYSTORE_SUBSECTOR_SIZE - offsetof(flash_attributes_block_t, attributes))
 
 /*
  * PIN block.  Also includes space for backing up the KEK when
@@ -127,10 +144,11 @@ typedef struct {
  */
 
 typedef union {
-  uint8_t               bytes[KEYSTORE_SUBSECTOR_SIZE];
-  flash_block_header_t  header;
-  flash_key_block_t     key;
-  flash_pin_block_t     pin;
+  uint8_t                       bytes[KEYSTORE_SUBSECTOR_SIZE];
+  flash_block_header_t          header;
+  flash_key_block_t             key;
+  flash_attributes_block_t      attr;
+  flash_pin_block_t             pin;
 } flash_block_t;
 
 /*
@@ -326,6 +344,7 @@ static hal_error_t block_read(const unsigned blockno, flash_block_t *block)
     return HAL_OK;
   case BLOCK_TYPE_KEY:
   case BLOCK_TYPE_PIN:
+  case BLOCK_TYPE_ATTR:
     break;
   default:
     return HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE;
@@ -474,6 +493,7 @@ static hal_error_t block_write(const unsigned blockno, flash_block_t *block)
   switch (block_get_type(block)) {
   case BLOCK_TYPE_KEY:
   case BLOCK_TYPE_PIN:
+  case BLOCK_TYPE_ATTR:
     block->header.crc = calculate_block_crc(block);
     break;
   default:
@@ -562,10 +582,15 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
     else
       return err;
 
-    if (block_types[i] == BLOCK_TYPE_KEY || block_types[i] == BLOCK_TYPE_PIN)
+    switch (block_types[i]) {
+    case BLOCK_TYPE_KEY:
+    case BLOCK_TYPE_PIN:
+    case BLOCK_TYPE_ATTR:
       block_status[i] = block_get_status(block);
-    else
+      break;
+    default:
       block_status[i] = BLOCK_STATUS_UNKNOWN;
+    }
 
     /*
      * First erased block we see is head of the free list.
@@ -580,12 +605,20 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
      * in the index, so we can look them up by name if we must.
      */
 
-    if (block_types[i] == BLOCK_TYPE_KEY || block_types[i] == BLOCK_TYPE_PIN) {
-      db.ksi.names[i].name = block_types[i] == BLOCK_TYPE_KEY ? block->key.name : pin_uuid;
+    const hal_uuid_t *uuid = NULL;
+
+    switch (block_types[i]) {
+    case BLOCK_TYPE_KEY:        uuid = &block->key.name;        break;
+    case BLOCK_TYPE_ATTR:       uuid = &block->attr.name;       break;
+    case BLOCK_TYPE_PIN:        uuid = &pin_uuid;               break;
+    default:                    /* Keep GCC happy */            break;
+    }
+
+    if (uuid != NULL) {
+      db.ksi.names[i].name = *uuid;
       db.ksi.names[i].chunk = block->header.this_chunk;
       db.ksi.index[n++] = i;
     }
-
   }
 
   db.ksi.used = n;
@@ -873,7 +906,7 @@ static inline int acceptable_key_type(const hal_key_type_t type)
 }
 
 static hal_error_t ks_store(hal_ks_t *ks,
-                            const hal_pkey_slot_t * const slot,
+                            hal_pkey_slot_t *slot,
                             const uint8_t * const der, const size_t der_len)
 {
   if (ks != &db.ks || slot == NULL || der == NULL || der_len == 0 || !acceptable_key_type(slot->type))
@@ -905,7 +938,7 @@ static hal_error_t ks_store(hal_ks_t *ks,
   k->type    = slot->type;
   k->curve   = slot->curve;
   k->flags   = slot->flags;
-  k->der_len = sizeof(k->der);
+  k->der_len = SIZEOF_FLASH_KEY_BLOCK_DER;
 
   if ((err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
     err = hal_aes_keywrap(NULL, kek, kek_len, der, der_len, k->der, &k->der_len);
@@ -975,7 +1008,7 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
 }
 
 static hal_error_t ks_delete(hal_ks_t *ks,
-                             const hal_pkey_slot_t * const slot)
+                             hal_pkey_slot_t *slot)
 {
   if (ks != &db.ks || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -996,6 +1029,8 @@ static hal_error_t ks_delete(hal_ks_t *ks,
 }
 
 static hal_error_t ks_list(hal_ks_t *ks,
+                           const hal_client_handle_t client,
+                           const hal_session_handle_t session,
                            hal_pkey_info_t *result,
                            unsigned *result_len,
                            const unsigned result_max)
@@ -1032,6 +1067,8 @@ static hal_error_t ks_list(hal_ks_t *ks,
 }
 
 static hal_error_t ks_match(hal_ks_t *ks,
+                            const hal_client_handle_t client,
+                            const hal_session_handle_t session,
                             const hal_key_type_t type,
                             const hal_curve_name_t curve,
                             const hal_key_flags_t flags,

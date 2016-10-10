@@ -235,13 +235,15 @@ typedef struct {
                          const uint8_t * const input, const size_t input_len,
                          const uint8_t * const signature, const size_t signature_len);
 
-  hal_error_t  (*list)(const hal_session_handle_t session,
+  hal_error_t  (*list)(const hal_client_handle_t client,
+                       const hal_session_handle_t session,
                        hal_pkey_info_t *result,
                        unsigned *result_len,
                        const unsigned result_max,
                        hal_key_flags_t flags);
 
-  hal_error_t (*match)(const hal_session_handle_t session,
+  hal_error_t (*match)(const hal_client_handle_t client,
+                       const hal_session_handle_t session,
                        const hal_key_type_t type,
                        const hal_curve_name_t curve,
                        const hal_key_flags_t flags,
@@ -438,18 +440,7 @@ typedef struct {
   hal_curve_name_t curve;
   hal_key_flags_t flags;
   hal_uuid_t name;
-
-  /*
-   * We used to stash a "hint" value here for the keystore driver to
-   * speed things up when we had multiple operations on the same key.
-   * Removed as premature optimization during keystore rewrite, but we
-   * may want to put something like this back once the new API has
-   * stablized.  If so, form would probably be a union containing
-   * keystore-driver-specific data, which everything else (including
-   * the pkey code) should treat as opaque: making it really opaque
-   * would complicate memory allocation and isn't worth it for an
-   * internal API.
-   */
+  int hint;
 
   /*
    * This might be where we'd stash a (hal_core_t *) pointing to a
@@ -480,7 +471,7 @@ struct hal_ks_driver {
   hal_error_t (*close)(hal_ks_t *ks);
 
   hal_error_t (*store)(hal_ks_t *ks,
-                       const hal_pkey_slot_t * const slot,
+                       hal_pkey_slot_t *slot,
 		       const uint8_t * const der,  const size_t der_len);
 
   hal_error_t (*fetch)(hal_ks_t *ks,
@@ -488,15 +479,17 @@ struct hal_ks_driver {
 		       uint8_t *der, size_t *der_len, const size_t der_max);
 
   hal_error_t (*delete)(hal_ks_t *ks,
-                        const hal_pkey_slot_t * const slot);
+                        hal_pkey_slot_t *slot);
 
   hal_error_t (*list)(hal_ks_t *ks,
+                      const hal_client_handle_t client,
                       const hal_session_handle_t session,
 		      hal_pkey_info_t *result,
 		      unsigned *result_len,
 		      const unsigned result_max);
 
   hal_error_t (*match)(hal_ks_t *ks,
+                       const hal_client_handle_t client,
                        const hal_session_handle_t session,
                        const hal_key_type_t type,
                        const hal_curve_name_t curve,
@@ -608,6 +601,7 @@ static inline hal_error_t hal_ks_delete(hal_ks_t *ks,
 }
 
 static inline hal_error_t hal_ks_list(hal_ks_t *ks,
+                                      const hal_client_handle_t client,
                                       const hal_session_handle_t session,
                                       hal_pkey_info_t *result,
                                       unsigned *result_len,
@@ -616,10 +610,11 @@ static inline hal_error_t hal_ks_list(hal_ks_t *ks,
   if (ks == NULL || ks->driver == NULL || ks->driver->list == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  return ks->driver->list(ks, session, result, result_len, result_max);
+  return ks->driver->list(ks, client, session, result, result_len, result_max);
 }
 
 static inline hal_error_t hal_ks_match(hal_ks_t *ks,
+                                       const hal_client_handle_t client,
                                        const hal_session_handle_t session,
                                        const hal_key_type_t type,
                                        const hal_curve_name_t curve,
@@ -634,7 +629,7 @@ static inline hal_error_t hal_ks_match(hal_ks_t *ks,
   if (ks == NULL || ks->driver == NULL || ks->driver->match == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  return ks->driver->match(ks, session, type, curve, flags, attributes, attributes_len,
+  return ks->driver->match(ks, client, session, type, curve, flags, attributes, attributes_len,
                            result, result_len, result_max, previous_uuid);
 }
 

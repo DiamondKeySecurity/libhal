@@ -326,7 +326,8 @@ hal_error_t hal_rpc_pkey_verify(const hal_pkey_handle_t pkey,
   return hal_rpc_pkey_dispatch->verify(pkey, hash, input, input_len, signature, signature_len);
 }
 
-hal_error_t hal_rpc_pkey_list(const hal_session_handle_t session,
+hal_error_t hal_rpc_pkey_list(const hal_client_handle_t client,
+                              const hal_session_handle_t session,
                               hal_pkey_info_t *result,
                               unsigned *result_len,
                               const unsigned result_max,
@@ -334,10 +335,11 @@ hal_error_t hal_rpc_pkey_list(const hal_session_handle_t session,
 {
   if (result == NULL || result_len == NULL || result_max == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
-  return hal_rpc_pkey_dispatch->list(session, result, result_len, result_max, flags);
+  return hal_rpc_pkey_dispatch->list(client, session, result, result_len, result_max, flags);
 }
 
-hal_error_t hal_rpc_pkey_match(const hal_session_handle_t session,
+hal_error_t hal_rpc_pkey_match(const hal_client_handle_t client,
+                               const hal_session_handle_t session,
                                const hal_key_type_t type,
                                const hal_curve_name_t curve,
                                const hal_key_flags_t flags,
@@ -357,7 +359,8 @@ hal_error_t hal_rpc_pkey_match(const hal_session_handle_t session,
       if (attributes[i].value == NULL)
         return HAL_ERROR_BAD_ARGUMENTS;
 
-  return hal_rpc_pkey_dispatch->match(session, type, curve, flags, attributes, attributes_len,
+  return hal_rpc_pkey_dispatch->match(client, session, type, curve, flags,
+                                      attributes, attributes_len,
                                       result, result_len, result_max, previous_uuid);
 }
 

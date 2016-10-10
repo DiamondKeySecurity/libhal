@@ -148,6 +148,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE,   "Unsupported keystore block type")              \
   DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_LOST_DATA,        "Keystore appears to have lost data")           \
   DEFINE_HAL_ERROR(HAL_ERROR_BAD_ATTRIBUTE_LENGTH,      "Bad attribute length")                         \
+  DEFINE_HAL_ERROR(HAL_ERROR_ATTRIBUTE_NOT_FOUND,       "Attribute not found")                          \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -754,7 +755,8 @@ typedef struct {
   /* ... */
 } hal_pkey_info_t;
 
-extern hal_error_t hal_rpc_pkey_list(const hal_session_handle_t session,
+extern hal_error_t hal_rpc_pkey_list(const hal_client_handle_t client,
+                                     const hal_session_handle_t session,
                                      hal_pkey_info_t *result,
                                      unsigned *result_len,
                                      const unsigned result_max,
@@ -766,7 +768,8 @@ typedef struct {
   const uint8_t *value;
 } hal_rpc_pkey_attribute_t;
 
-extern hal_error_t hal_rpc_pkey_match(const hal_session_handle_t session,
+extern hal_error_t hal_rpc_pkey_match(const hal_client_handle_t client,
+                                      const hal_session_handle_t session,
                                       const hal_key_type_t type,
                                       const hal_curve_name_t curve,
                                       const hal_key_flags_t flags,

@@ -753,7 +753,8 @@ static hal_error_t hal_xdr_decode_pkey_info(const uint8_t **iptr, const uint8_t 
   return HAL_OK;
 }
 
-static hal_error_t pkey_remote_list(const hal_session_handle_t session,
+static hal_error_t pkey_remote_list(const hal_client_handle_t client,
+                                    const hal_session_handle_t session,
                                     hal_pkey_info_t *result,
                                     unsigned *result_len,
                                     const unsigned result_max,
@@ -763,11 +764,10 @@ static hal_error_t pkey_remote_list(const hal_session_handle_t session,
   uint8_t inbuf[nargs(4) + pad(result_max * sizeof(hal_pkey_info_t))];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   uint32_t len;
-  hal_client_handle_t dummy_client = {0};
   hal_error_t ret, rpc_ret;
 
   check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_LIST));
-  check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
+  check(hal_xdr_encode_int(&optr, olimit, client.handle));
   check(hal_xdr_encode_int(&optr, olimit, session.handle));
   check(hal_xdr_encode_int(&optr, olimit, result_max));
   check(hal_xdr_encode_int(&optr, olimit, flags));
@@ -789,7 +789,8 @@ static hal_error_t pkey_remote_list(const hal_session_handle_t session,
   return rpc_ret;
 }
 
-static hal_error_t pkey_remote_match(const hal_session_handle_t session,
+static hal_error_t pkey_remote_match(const hal_client_handle_t client,
+                                     const hal_session_handle_t session,
                                      const hal_key_type_t type,
                                      const hal_curve_name_t curve,
                                      const hal_key_flags_t flags,
@@ -809,11 +810,10 @@ static hal_error_t pkey_remote_match(const hal_session_handle_t session,
   uint8_t *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(5) + pad(result_max * sizeof(hal_uuid_t)) + pad(sizeof(hal_uuid_t))];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
-  hal_client_handle_t dummy_client = {0};
   hal_error_t rpc_ret;
 
   check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_MATCH));
-  check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
+  check(hal_xdr_encode_int(&optr, olimit, client.handle));
   check(hal_xdr_encode_int(&optr, olimit, session.handle));
   check(hal_xdr_encode_int(&optr, olimit, type));
   check(hal_xdr_encode_int(&optr, olimit, curve));

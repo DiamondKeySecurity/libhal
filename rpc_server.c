@@ -650,7 +650,7 @@ static hal_error_t pkey_list(const uint8_t **iptr, const uint8_t * const ilimit,
     unsigned result_len;
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.list(session, result, &result_len, result_max, flags);
+    ret = hal_rpc_local_pkey_dispatch.list(client, session, result, &result_len, result_max, flags);
 
     if (ret == HAL_OK) {
         check(hal_xdr_encode_int(optr, olimit, result_len));
@@ -701,7 +701,7 @@ static hal_error_t pkey_match(const uint8_t **iptr, const uint8_t * const ilimit
     hal_uuid_t result[result_max];
     unsigned result_len;
 
-    ret = hal_rpc_local_pkey_dispatch.match(session, type, curve, flags,
+    ret = hal_rpc_local_pkey_dispatch.match(client, session, type, curve, flags,
                                             attributes, attributes_len,
                                             result, &result_len, result_max,
                                             (hal_uuid_t *) previous_uuid_ptr);
