@@ -202,6 +202,8 @@ hal_error_t hal_ks_index_find_range(hal_ks_index_t *ksi,
   int n = 0;
 
   for (int i = where; i < ksi->used && !hal_uuid_cmp(name, &ksi->names[ksi->index[i]].name); i++) {
+    if (n != ksi->names[ksi->index[i]].chunk)
+      return HAL_ERROR_IMPOSSIBLE;
     if (blocknos != NULL && n < max_blocks)
       blocknos[n] = ksi->index[i];
     n++;
@@ -230,7 +232,7 @@ hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   if (ksi->used == ksi->size)
-    return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
+    return HAL_ERROR_NO_KEY_INDEX_SLOTS;
 
   int where;
 
@@ -257,14 +259,6 @@ hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
 
   return HAL_OK;
 }
-
-/*
- * Should this be deleting the whole object instead of just one chunk?
- * Deferred for the moment as this is just an optimization.  blockno
- * would need to become an array, adding complexity.
- *
- * See how we end up using it, I guess.
- */
 
 hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
 				const hal_uuid_t * const name,
@@ -301,6 +295,58 @@ hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
   return HAL_OK;
 }
 
+hal_error_t hal_ks_index_delete_range(hal_ks_index_t *ksi,
+                                      const hal_uuid_t * const name,
+                                      const unsigned max_blocks,
+                                      unsigned *n_blocks,
+                                      unsigned *blocknos,
+                                      int *hint)
+{
+  if (ksi == NULL || ksi->index == NULL || ksi->names == NULL ||
+      ksi->size == 0 || ksi->used > ksi->size || name == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  int where;
+
+  if (ksi->used == 0 || !ks_find(ksi, name, 0, hint, &where))
+    return HAL_ERROR_KEY_NOT_FOUND;
+
+  int n = 0;
+
+  for (int i = where; i < ksi->used && !hal_uuid_cmp(name, &ksi->names[ksi->index[i]].name); i++) {
+    if (n != ksi->names[ksi->index[i]].chunk)
+      return HAL_ERROR_IMPOSSIBLE;
+    if (blocknos != NULL && n < max_blocks)
+      blocknos[n] = ksi->index[i];
+    n++;
+  }
+
+  if (n_blocks != NULL)
+    *n_blocks = n;
+
+  /*
+   * Free the blocks and stuff them at the end of the free list.
+   */
+
+  if (blocknos != NULL) {
+    if (n > max_blocks)
+      return HAL_ERROR_RESULT_TOO_LONG;
+    const size_t len = (ksi->size - where - n) * sizeof(*ksi->index);
+    memmove(&ksi->index[where], &ksi->index[where + n], len);
+    ksi->used -= n;
+    for (int i = 0; i < n; i++) {
+      ksi->index[ksi->size - n + i] = blocknos[i];
+      memset(&ksi->names[blocknos[i]], 0, sizeof(ksi->names[blocknos[i]]));
+    }
+    where = -1;
+  }
+
+  if (hint != NULL)
+    *hint = where;
+
+  return HAL_OK;
+}
+
 hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
                                  const hal_uuid_t * const name,
                                  const unsigned chunk,
@@ -312,7 +358,7 @@ hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   if (ksi->used == ksi->size)
-    return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
+    return HAL_ERROR_NO_KEY_INDEX_SLOTS;
 
   int where;
 

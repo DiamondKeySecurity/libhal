@@ -149,6 +149,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_LOST_DATA,        "Keystore appears to have lost data")           \
   DEFINE_HAL_ERROR(HAL_ERROR_BAD_ATTRIBUTE_LENGTH,      "Bad attribute length")                         \
   DEFINE_HAL_ERROR(HAL_ERROR_ATTRIBUTE_NOT_FOUND,       "Attribute not found")                          \
+  DEFINE_HAL_ERROR(HAL_ERROR_NO_KEY_INDEX_SLOTS,        "No key index slots available")                 \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */

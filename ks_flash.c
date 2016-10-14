@@ -396,19 +396,23 @@ static hal_error_t block_read_cached(const unsigned blockno, flash_block_t **blo
  * need to update the CRC for this, we just modify the first page.
  */
 
-static hal_error_t block_deprecate(const unsigned blockno, const flash_block_t * const block)
+static hal_error_t block_deprecate(const unsigned blockno)
 {
-  if (block == NULL || blockno >= NUM_FLASH_BLOCKS)
+  if (blockno >= NUM_FLASH_BLOCKS)
     return HAL_ERROR_IMPOSSIBLE;
 
   uint8_t page[KEYSTORE_PAGE_SIZE];
   flash_block_header_t *header = (void *) page;
+  uint32_t offset = block_offset(blockno);
 
-  memcpy(page, block->bytes, sizeof(page));
+  /* Sigh, magic numeric return codes */
+  if (keystore_read_data(offset, page, sizeof(page)) != 1)
+    return HAL_ERROR_KEYSTORE_ACCESS;
+
   header->block_status = BLOCK_STATUS_TOMBSTONE;
 
   /* Sigh, magic numeric return codes */
-  if (keystore_write_data(block_offset(blockno), page, sizeof(page)) != 1)
+  if (keystore_write_data(offset, page, sizeof(page)) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   return HAL_OK;
@@ -508,6 +512,35 @@ static hal_error_t block_write(const unsigned blockno, flash_block_t *block)
 }
 
 /*
+ * Update one flash block, including zombie jamboree.
+ */
+
+static hal_error_t block_update(const unsigned b1, flash_block_t *block,
+                                const hal_uuid_t * const uuid, const unsigned chunk, int *hint)
+{
+  if (block == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  if (db.ksi.used == db.ksi.size)
+    return HAL_ERROR_NO_KEY_INDEX_SLOTS;
+
+  cache_release(block);
+
+  hal_error_t err;
+  unsigned b2;
+
+  if ((err = block_deprecate(b1))                                       != HAL_OK ||
+      (err = hal_ks_index_replace(&db.ksi, uuid, chunk, &b2, hint))     != HAL_OK ||
+      (err = block_write(b2, block))                                    != HAL_OK ||
+      (err = block_zero(b1))                                            != HAL_OK)
+    return err;
+
+  cache_mark_used(block, b2);
+
+  return block_erase_maybe(db.ksi.index[db.ksi.used]);
+}
+
+/*
  * Forward reference.
  */
 
@@ -520,15 +553,25 @@ static hal_error_t fetch_pin_block(unsigned *b, flash_block_t **block);
  * recover from unclean shutdown.
  */
 
+static inline void *gnaw(uint8_t **mem, size_t *len, const size_t size)
+{
+  if (mem == NULL || *mem == NULL || len == NULL || size > *len)
+    return NULL;
+  void *ret = *mem;
+  *mem += size;
+  *len -= size;
+  return ret;
+}
+
 static hal_error_t ks_init(const hal_ks_driver_t * const driver)
 {
   /*
    * Initialize the in-memory database.
    */
 
-  const size_t len = (sizeof(*db.ksi.index) * NUM_FLASH_BLOCKS +
-                      sizeof(*db.ksi.names) * NUM_FLASH_BLOCKS +
-                      sizeof(*db.cache)     * KS_FLASH_CACHE_SIZE);
+  size_t len = (sizeof(*db.ksi.index) * NUM_FLASH_BLOCKS +
+                sizeof(*db.ksi.names) * NUM_FLASH_BLOCKS +
+                sizeof(*db.cache)     * KS_FLASH_CACHE_SIZE);
 
   uint8_t *mem = hal_allocate_static_memory(len);
 
@@ -538,10 +581,14 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
   memset(&db, 0, sizeof(db));
   memset(mem, 0, len);
 
+  db.ksi.index = gnaw(&mem, &len, sizeof(*db.ksi.index) * NUM_FLASH_BLOCKS);
+  db.ksi.names = gnaw(&mem, &len, sizeof(*db.ksi.names) * NUM_FLASH_BLOCKS);
+  db.cache     = gnaw(&mem, &len, sizeof(*db.cache)     * KS_FLASH_CACHE_SIZE);
   db.ksi.size  = NUM_FLASH_BLOCKS;
-  db.ksi.index = (void *) mem; mem += sizeof(*db.ksi.index) * NUM_FLASH_BLOCKS;
-  db.ksi.names = (void *) mem; mem += sizeof(*db.ksi.names) * NUM_FLASH_BLOCKS;
-  db.cache     = (void *) mem;
+  db.ksi.used  = 0;
+
+  if (db.ksi.index == NULL || db.ksi.names == NULL || db.cache == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
 
   for (int i = 0; i < KS_FLASH_CACHE_SIZE; i++)
     db.cache[i].blockno = ~0;
@@ -788,19 +835,19 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver)
     }
 
     for (int j = 0; j < n_blocks; j++) {
-      unsigned b1 = db.ksi.index[where + j];
+      int hint = where + j;
+      unsigned b1 = db.ksi.index[hint], b2;
       if (block_status[b1] != BLOCK_STATUS_TOMBSTONE)
         continue;
       if ((err = block_read(b1, block)) != HAL_OK)
         return err;
       block->header.block_status = BLOCK_STATUS_LIVE;
-      int hint = where + j;
-      unsigned b2;
       if ((err = hal_ks_index_replace(&db.ksi, &name, j, &b2, &hint)) != HAL_OK ||
           (err = block_write(b2, block)) != HAL_OK)
         return err;
+      block_types[b1]  = BLOCK_TYPE_ZEROED;
+      block_status[b1] = BLOCK_STATUS_UNKNOWN;
       block_status[b2] = BLOCK_STATUS_LIVE;
-      block_types[b1] = BLOCK_TYPE_ZEROED;
     }
   }
 
@@ -922,7 +969,7 @@ static hal_error_t ks_store(hal_ks_t *ks,
   if (block == NULL)
     return HAL_ERROR_IMPOSSIBLE;
 
-  if ((err = hal_ks_index_add(&db.ksi, &slot->name, 0, &b, NULL)) != HAL_OK)
+  if ((err = hal_ks_index_add(&db.ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
     return err;
 
   cache_mark_used(block, b);
@@ -951,7 +998,7 @@ static hal_error_t ks_store(hal_ks_t *ks,
 
   memset(block, 0, sizeof(*block));
   cache_release(block);
-  (void) hal_ks_index_delete(&db.ksi, &slot->name, 0, NULL, NULL);
+  (void) hal_ks_index_delete(&db.ksi, &slot->name, 0, NULL, &slot->hint);
   return err;
 }
 
@@ -966,8 +1013,8 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
   hal_error_t err;
   unsigned b;
 
-  if ((err = hal_ks_index_find(&db.ksi, &slot->name, 0, &b, NULL)) != HAL_OK ||
-      (err = block_read_cached(b, &block))                         != HAL_OK)
+  if ((err = hal_ks_index_find(&db.ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK ||
+      (err = block_read_cached(b, &block))                                != HAL_OK)
     return err;
 
   if (block_get_type(block) != BLOCK_TYPE_KEY)
@@ -1014,18 +1061,23 @@ static hal_error_t ks_delete(hal_ks_t *ks,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   hal_error_t err;
-  unsigned b;
+  unsigned n;
 
-  if ((err = hal_ks_index_delete(&db.ksi, &slot->name, 0, &b, NULL)) != HAL_OK)
+  if ((err = hal_ks_index_delete_range(&db.ksi, &slot->name, 0, &n, NULL, &slot->hint)) != HAL_OK)
     return err;
 
-  cache_release(cache_find_block(b));
+  unsigned b[n];
 
-  if ((err = block_zero(b)) != HAL_OK ||
-      (err = block_erase_maybe(db.ksi.index[db.ksi.used])) != HAL_OK)
+  if ((err = hal_ks_index_delete_range(&db.ksi, &slot->name, n, NULL, b, &slot->hint)) != HAL_OK)
     return err;
 
-  return HAL_OK;
+  for (int i = 0; i < n; i++) {
+    cache_release(cache_find_block(b[i]));
+    if ((err = block_zero(b[i])) != HAL_OK)
+      return err;
+  }
+
+  return block_erase_maybe(db.ksi.index[db.ksi.used]);
 }
 
 static hal_error_t ks_list(hal_ks_t *ks,
@@ -1066,6 +1118,32 @@ static hal_error_t ks_list(hal_ks_t *ks,
   return HAL_OK;
 }
 
+static inline hal_error_t locate_attributes(flash_block_t *block, const unsigned chunk,
+                                            uint8_t **bytes, size_t *bytes_len,
+                                            unsigned *attrs_len)
+{
+  if (block == NULL || bytes == NULL || bytes_len == NULL || attrs_len == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  if (chunk == 0) {
+    if (block_get_type(block) != BLOCK_TYPE_KEY)
+      return HAL_ERROR_KEY_NOT_FOUND;
+    *attrs_len = block->key.attributes_len;
+    *bytes = block->key.der + block->key.der_len;
+    *bytes_len = SIZEOF_FLASH_KEY_BLOCK_DER - block->key.der_len;
+  }
+
+  else {
+    if (block_get_type(block) != BLOCK_TYPE_ATTR)
+      return HAL_ERROR_KEY_NOT_FOUND;
+    *attrs_len = block->attr.attributes_len;
+    *bytes = block->attr.attributes;
+    *bytes_len = SIZEOF_FLASH_ATTRIBUTE_BLOCK_ATTRIBUTES;
+  }
+
+  return HAL_OK;
+}
+
 static hal_error_t ks_match(hal_ks_t *ks,
                             const hal_client_handle_t client,
                             const hal_session_handle_t session,
@@ -1079,8 +1157,88 @@ static hal_error_t ks_match(hal_ks_t *ks,
                             const unsigned result_max,
                             hal_uuid_t *previous_uuid)
 {
-#warning NIY
-  return HAL_ERROR_IMPOSSIBLE;
+  if (ks == NULL || attributes == NULL ||
+      result == NULL || result_len == NULL || previous_uuid == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  uint8_t need_attr[attributes_len > 0 ? attributes_len : 1];
+  flash_block_t *block;
+  int possible = 0;
+  hal_error_t err;
+  int i = -1;
+
+  *result_len = 0;
+
+  if ((err = hal_ks_index_find(&db.ksi, previous_uuid, 0, NULL, &i)) != HAL_OK)
+    return err;
+
+  while (*result_len < result_max) {
+
+    if (++i >= db.ksi.used)
+      return HAL_OK;
+
+    unsigned b = db.ksi.index[i];
+
+    if (db.ksi.names[b].chunk == 0)
+      possible = 1;
+
+    if (!possible)
+      continue;
+
+    if ((err = block_read_cached(b, &block)) != HAL_OK)
+      return err;
+
+    if (db.ksi.names[b].chunk == 0) {
+      memset(need_attr, 1, sizeof(need_attr));
+      possible = ((type == HAL_KEY_TYPE_NONE || type  == block->key.type) &&
+                  (curve == HAL_CURVE_NONE   || curve == block->key.curve));
+    }
+
+    if (!possible)
+      continue;
+
+    if (attributes_len > 0) {
+      uint8_t *bytes = NULL;
+      size_t bytes_len = 0;
+      unsigned attrs_len;
+
+      if ((err = locate_attributes(block, db.ksi.names[b].chunk,
+                                   &bytes, &bytes_len, &attrs_len)) != HAL_OK)
+        return err;
+
+      hal_rpc_pkey_attribute_t attrs[attrs_len];
+
+      if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, attrs_len, NULL)) != HAL_OK)
+        return err;
+
+      for (int j = 0; possible && j < attributes_len; j++) {
+
+        if (!need_attr[j])
+          continue;
+
+        for (hal_rpc_pkey_attribute_t *a = attrs; a < attrs + attrs_len; a++) {
+          if (a->type != attributes[j].type)
+            continue;
+          need_attr[j] = 0;
+          possible = (a->length == attributes[j].length &&
+                      !memcmp(a->value, attributes[j].value, a->length));
+          break;
+        }
+      }
+    }
+
+    if (!possible)
+      continue;
+
+    if (attributes_len > 0 && memchr(need_attr, 1, sizeof(need_attr)) != NULL)
+      continue;
+
+    *previous_uuid = result[*result_len] = db.ksi.names[b].name;
+    ++*result_len;
+    possible = 0;
+  }
+
+  return HAL_ERROR_RESULT_TOO_LONG;
 }
 
 static  hal_error_t ks_set_attribute(hal_ks_t *ks,
@@ -1089,8 +1247,148 @@ static  hal_error_t ks_set_attribute(hal_ks_t *ks,
                                      const uint8_t * const value,
                                      const size_t value_len)
 {
-#warning NIY
-  return HAL_ERROR_IMPOSSIBLE;
+  if (ks != &db.ks || slot == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  /*
+   * Try to add new attribute as a single-block update.
+   */
+
+  flash_block_t *block;
+  unsigned chunk = 0;
+  hal_error_t err;
+
+  do {
+    int hint = slot->hint + chunk;
+    unsigned b;
+
+    if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &b, &hint)) != HAL_OK ||
+        (err = block_read_cached(b, &block))                              != HAL_OK)
+      return err;
+
+    if (block->header.this_chunk != chunk)
+      return HAL_ERROR_IMPOSSIBLE;
+
+    if (chunk == 0)
+      slot->hint = hint;
+
+    uint8_t *bytes = NULL;
+    size_t bytes_len = 0;
+    unsigned attrs_len;
+
+    if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
+      return err;
+
+    cache_mark_used(block, b);
+
+    if (attrs_len == 0)
+      continue;
+
+    hal_rpc_pkey_attribute_t attrs[attrs_len + 1];
+    const unsigned old_attrs_len = attrs_len;
+    size_t total;
+
+    if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, attrs_len, &total)) != HAL_OK)
+      return err;
+
+    err = hal_ks_attribute_insert(bytes, bytes_len, attrs, &attrs_len, &total, type, value, value_len);
+
+    if (attrs_len != old_attrs_len && err != HAL_OK)
+      cache_release(block);
+
+    if (err == HAL_ERROR_RESULT_TOO_LONG)
+      continue;
+
+    if (err != HAL_OK)
+      return err;
+
+    return block_update(b, block, &slot->name, chunk, &hint);
+
+  } while (++chunk < block->header.total_chunks);
+
+  /*
+   * If we get here, we have to add a new block, which requires
+   * rewriting all the others to bump the total_blocks count.  We need
+   * to keep track of all the old chunks so we can zero them at the
+   * end, and because we can't zero them until we've written out the
+   * new chunks, we need enough free blocks for the entire new object.
+   */
+
+  const unsigned total_chunks = block->header.total_chunks;
+  unsigned b, blocks[total_chunks];
+
+  if (db.ksi.used + total_chunks + 1 > db.ksi.size)
+    return HAL_ERROR_NO_KEY_INDEX_SLOTS;
+
+  for (chunk = 0; chunk < total_chunks; chunk++) {
+    int hint = slot->hint + chunk;
+    if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &blocks[chunk], &hint)) != HAL_OK ||
+        (err = block_deprecate(blocks[chunk]))                                        != HAL_OK)
+      return err;
+  }
+
+  {
+    block = cache_pick_lru();
+
+    memset(block, 0xFF, sizeof(*block));
+
+    block->header.block_type   = BLOCK_TYPE_ATTR;
+    block->header.block_status = BLOCK_STATUS_LIVE;
+    block->header.total_chunks = total_chunks + 1;
+    block->header.this_chunk   = total_chunks;
+    block->attr.name = slot->name;
+    block->attr.attributes_len = 0;
+
+    hal_rpc_pkey_attribute_t attrs[1];
+    size_t total = SIZEOF_FLASH_ATTRIBUTE_BLOCK_ATTRIBUTES;
+
+    if ((err = hal_ks_attribute_insert(block->attr.attributes,
+                                       SIZEOF_FLASH_ATTRIBUTE_BLOCK_ATTRIBUTES,
+                                       attrs, &block->attr.attributes_len, &total,
+                                       type, value, value_len))                         != HAL_OK ||
+        (err = hal_ks_index_add(&db.ksi, &slot->name, total_chunks, &b, NULL))          != HAL_OK ||
+        (err = block_write(b, block))                                                   != HAL_OK)
+      return err;
+
+    cache_mark_used(block, b);
+  }
+
+  for (chunk = 0; chunk < total_chunks; chunk++) {
+    int hint = slot->hint + chunk;
+    if ((err = block_read_cached(blocks[chunk], &block)) != HAL_OK)
+      return err;
+    if (block->header.this_chunk != chunk)
+      return HAL_ERROR_IMPOSSIBLE;
+    block->header.block_status = BLOCK_STATUS_LIVE;
+    block->header.total_chunks = total_chunks + 1;
+
+    uint8_t *bytes = NULL;
+    size_t bytes_len = 0;
+    unsigned attrs_len;
+    size_t total;
+
+    if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
+      return err;
+
+    if (attrs_len > 0) {
+      hal_rpc_pkey_attribute_t attrs[attrs_len];
+      if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, attrs_len, &total)) != HAL_OK ||
+          (err = hal_ks_attribute_delete(bytes, bytes_len, attrs, &attrs_len, &total, type)) != HAL_OK)
+        return err;
+    }
+
+    unsigned b;
+
+    if ((err = hal_ks_index_replace(&db.ksi, &slot->name, chunk, &b, &hint))    != HAL_OK ||
+        (err = block_write(b, block))                                           != HAL_OK)
+      return err;
+  }
+
+  for (chunk = 0; chunk < total_chunks; chunk++)
+    if ((err = block_zero(blocks[chunk])) != HAL_OK)
+      return err;
+
+  return HAL_OK;
 }
 
 static  hal_error_t ks_get_attribute(hal_ks_t *ks,
@@ -1100,16 +1398,125 @@ static  hal_error_t ks_get_attribute(hal_ks_t *ks,
                                      size_t *value_len,
                                      const size_t value_max)
 {
-#warning NIY
-  return HAL_ERROR_IMPOSSIBLE;
+  if (ks != &db.ks || slot == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  flash_block_t *block;
+  hal_error_t err;
+  unsigned b;
+
+  hal_rpc_pkey_attribute_t a = {0, 0, NULL};
+  unsigned chunk = 0;
+
+  do {
+    int hint = slot->hint + chunk;
+
+    if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &b, &hint)) != HAL_OK ||
+        (err = block_read_cached(b, &block))                              != HAL_OK)
+      return err;
+
+    if (block->header.this_chunk != chunk)
+      return HAL_ERROR_IMPOSSIBLE;
+
+    if (chunk == 0)
+      slot->hint = hint;
+
+    uint8_t *bytes = NULL;
+    size_t bytes_len = 0;
+    unsigned attributes_len;
+
+    if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attributes_len)) != HAL_OK)
+      return err;
+
+    cache_mark_used(block, b);
+
+    hal_rpc_pkey_attribute_t attributes[attributes_len];
+
+    if ((err = hal_ks_attribute_scan(bytes, bytes_len, attributes, attributes_len, NULL)) != HAL_OK)
+      return err;
+
+    for (int i = 0; a.value == NULL && i < attributes_len; ++i)
+      if (attributes[i].type == type)
+        a = attributes[i];
+
+  } while (a.value == NULL && ++chunk < block->header.total_chunks);
+
+  if (a.value == NULL)
+    return HAL_ERROR_ATTRIBUTE_NOT_FOUND;
+
+  if (a.length > value_max && value != NULL)
+    return HAL_ERROR_RESULT_TOO_LONG;
+
+  if (value != NULL)
+    memcpy(value, a.value, a.length);
+
+  if (value_len != NULL)
+    *value_len = a.length;
+
+  return HAL_OK;
 }
 
 static hal_error_t ks_delete_attribute(hal_ks_t *ks,
                                        hal_pkey_slot_t *slot,
                                        const uint32_t type)
 {
-#warning NIY
-  return HAL_ERROR_IMPOSSIBLE;
+  /*
+   * For extra credit, we could handle attribute compaction here, but
+   * in practice we expect attribute deletion without deleting the
+   * entire object to be a rare enough event that it may not be worth
+   * it.  Certainly it's not a high priority, so later, if ever.
+   */
+
+  if (ks != &db.ks || slot == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  flash_block_t *block;
+  unsigned chunk = 0;
+
+  do {
+    int hint = slot->hint + chunk;
+    hal_error_t err;
+    unsigned b;
+
+    if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &b, &hint)) != HAL_OK ||
+        (err = block_read_cached(b, &block))                              != HAL_OK)
+      return err;
+
+    if (block->header.this_chunk != chunk)
+      return HAL_ERROR_IMPOSSIBLE;
+
+    if (chunk == 0)
+      slot->hint = hint;
+
+    uint8_t *bytes = NULL;
+    size_t bytes_len = 0;
+    unsigned attrs_len;
+
+    if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
+      return err;
+
+    cache_mark_used(block, b);
+
+    if (attrs_len == 0)
+      continue;
+
+    hal_rpc_pkey_attribute_t attrs[attrs_len];
+    const unsigned old_attrs_len = attrs_len;
+    size_t total;
+
+    if ((err = hal_ks_attribute_scan(  bytes, bytes_len, attrs,  attrs_len, &total))       != HAL_OK ||
+        (err = hal_ks_attribute_delete(bytes, bytes_len, attrs, &attrs_len, &total, type)) != HAL_OK)
+      return err;
+
+    if (attrs_len == old_attrs_len)
+      continue;
+
+    if ((err = block_update(b, block, &slot->name, chunk, &hint)) != HAL_OK)
+      return err;
+
+  } while (++chunk < block->header.total_chunks);
+
+  return HAL_OK;
 }
 
 const hal_ks_driver_t hal_ks_token_driver[1] = {{
@@ -1184,65 +1591,23 @@ static hal_error_t fetch_pin_block(unsigned *b, flash_block_t **block)
 
 /*
  * Update the PIN block.  This block should always be present, but we
- * have to dance a bit to make sure we write the new PIN block before
- * destroying the old one.  hint = 0 because we know that the all-zeros
- * UUID should always sort to first slot in the index.
- *
- * Most of what happens here is part of updating any block, not just a
- * PIN block, so we'll probably want to refactor once we get to the
- * point where we need to update key blocks too.
+ * have to do the zombie jamboree to make sure we write the new PIN
+ * block before destroying the old one.  hint = 0 because we know that
+ * the all-zeros UUID should always sort to first slot in the index.
  */
 
-static hal_error_t update_pin_block(const unsigned b1,
+static hal_error_t update_pin_block(const unsigned b,
                                     flash_block_t *block,
                                     const flash_pin_block_t * const new_data)
 {
   if (block == NULL || new_data == NULL || block_get_type(block) != BLOCK_TYPE_PIN)
     return HAL_ERROR_IMPOSSIBLE;
 
-  if (db.ksi.used == db.ksi.size)
-    return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
-
-  hal_error_t err = block_deprecate(b1, block);
-
-  cache_release(block);
-
-  if (err != HAL_OK)
-    return err;
-
-  /*
-   * At this point we're committed to an update, because the old flash
-   * block is now a tombstone and can't be reverted in place without
-   * risking data loss.  So the rest of this dance is to make sure
-   * that we don't destroy the tombstone unless we succeeed in writing
-   * the new block, so that we can attempt recovery on reboot.
-   */
-
-  unsigned b2 = db.ksi.index[db.ksi.used];
-
-  cache_mark_used(block, b2);
+  int hint = 0;
 
   block->pin = *new_data;
 
-  if ((err = block_write(b2, block)) != HAL_OK)
-    return err;
-
-  int hint = 0;
-  unsigned b3;
-
-  if ((err = hal_ks_index_replace(&db.ksi, &pin_uuid, 0, &b3, &hint)) != HAL_OK)
-    return err;
-
-  if (b2 != b3)
-    return HAL_ERROR_IMPOSSIBLE;
-
-  if ((err = block_zero(b1)) != HAL_OK)
-    return err;
-
-  if (db.ksi.used < db.ksi.size)
-    err = block_erase_maybe(db.ksi.index[db.ksi.used]);
-
-  return err;
+  return block_update(b, block, &pin_uuid, 0, &hint);
 }
 
 /*

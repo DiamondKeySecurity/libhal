@@ -111,18 +111,6 @@ hal_error_t hal_ks_attribute_scan(const uint8_t * const bytes, const size_t byte
   return HAL_OK;
 }
 
-/*
- * Given scan(), delete() and insert() should be relatively simple.
- *
- * delete() does a scan to find the attribute it wants to delete, and,
- * if found, uses memmove() to copy the rest down.
- *
- * insert() does a delete to get rid of old value, if any, then does
- * another scan, checks length what we want to insert against
- * total_len returned by the scan, and either appends the new
- * attribute or returns error code saying it couldn't.
- */
-
 hal_error_t hal_ks_attribute_delete(uint8_t *bytes, const size_t bytes_len,
                                     hal_rpc_pkey_attribute_t *attributes, unsigned *attributes_len,
                                     size_t *total_len,

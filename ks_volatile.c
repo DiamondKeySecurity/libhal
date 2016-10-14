@@ -106,6 +106,16 @@ static inline ks_t *ks_to_ksv(hal_ks_t *ks)
   return (ks_t *) ks;
 }
 
+static inline int key_visible_to_session(const ks_t * const ksv,
+                                         const hal_client_handle_t client,
+                                         const hal_session_handle_t session,
+                                         const ks_key_t * const k)
+{
+  return (!ksv->per_session || client.handle == HAL_HANDLE_NONE ||
+          (k->client.handle  == client.handle &&
+           k->session.handle == session.handle));
+}
+
 static inline void *gnaw(uint8_t **mem, size_t *len, const size_t size)
 {
   if (mem == NULL || *mem == NULL || len == NULL || size > *len)
@@ -128,19 +138,20 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver,
   memset(ksv, 0, sizeof(*ksv));
   memset(mem, 0, len);
 
-  if ((ksv->db = gnaw(&mem, &len, sizeof(*ksv->db))) == NULL ||
-      (ksv->db->ksi.index = gnaw(&mem, &len,
-                                 sizeof(*ksv->db->ksi.index) * HAL_KS_VOLATILE_SLOTS)) == NULL ||
-      (ksv->db->ksi.names = gnaw(&mem, &len,
-                                 sizeof(*ksv->db->ksi.names) * HAL_KS_VOLATILE_SLOTS)) == NULL ||
-      (ksv->db->keys      = gnaw(&mem, &len,
-                                 sizeof(*ksv->db->keys)      * HAL_KS_VOLATILE_SLOTS)) == NULL)
-    return HAL_ERROR_IMPOSSIBLE;
-
   ksv->ks.driver     = driver;
   ksv->per_session   = per_session;
+  ksv->db            = gnaw(&mem, &len, sizeof(*ksv->db));
+  ksv->db->ksi.index = gnaw(&mem, &len, sizeof(*ksv->db->ksi.index) * HAL_KS_VOLATILE_SLOTS);
+  ksv->db->ksi.names = gnaw(&mem, &len, sizeof(*ksv->db->ksi.names) * HAL_KS_VOLATILE_SLOTS);
+  ksv->db->keys      = gnaw(&mem, &len, sizeof(*ksv->db->keys)      * HAL_KS_VOLATILE_SLOTS);
   ksv->db->ksi.size  = HAL_KS_VOLATILE_SLOTS;
   ksv->db->ksi.used  = 0;
+
+  if (ksv->db            == NULL ||
+      ksv->db->ksi.index == NULL ||
+      ksv->db->ksi.names == NULL ||
+      ksv->db->keys      == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
 
   /*
    * Set up keystore with empty index and full free list.
@@ -228,11 +239,8 @@ static hal_error_t ks_store(hal_ks_t *ks,
   k.type    = slot->type;
   k.curve   = slot->curve;
   k.flags   = slot->flags;
-
-  if (ksv->per_session) {
-    k.client  = slot->client_handle;
-    k.session = slot->session_handle;
-  }
+  k.client  = slot->client_handle;
+  k.session = slot->session_handle;
 
   if ((err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
     err = hal_aes_keywrap(NULL, kek, kek_len, der, der_len, k.der, &k.der_len);
@@ -266,8 +274,7 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
 
   const ks_key_t * const k = &ksv->db->keys[b];
 
-  if (ksv->per_session && (k->client.handle  != slot->client_handle.handle ||
-                           k->session.handle != slot->session_handle.handle))
+  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k))
     return HAL_ERROR_KEY_NOT_FOUND;
 
   slot->type  = k->type;
@@ -316,8 +323,7 @@ static hal_error_t ks_delete(hal_ks_t *ks,
   if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
     return err;
 
-  if (ksv->per_session && (ksv->db->keys[b].client.handle  != slot->client_handle.handle ||
-                           ksv->db->keys[b].session.handle != slot->session_handle.handle))
+  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, &ksv->db->keys[b]))
     return HAL_ERROR_KEY_NOT_FOUND;
 
   if ((err = hal_ks_index_delete(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
@@ -350,8 +356,7 @@ static hal_error_t ks_list(hal_ks_t *ks,
     unsigned b = ksv->db->ksi.index[i];
     if (ksv->db->ksi.names[b].chunk > 0)
       continue;
-    if (ksv->per_session && (ksv->db->keys[b].client.handle  != client.handle ||
-                             ksv->db->keys[b].session.handle != session.handle))
+    if (!key_visible_to_session(ksv, client, session, &ksv->db->keys[b]))
       continue;
     result[i].name  = ksv->db->ksi.names[b].name;
     result[i].type  = ksv->db->keys[b].type;
@@ -410,8 +415,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
     if (curve != HAL_CURVE_NONE && curve != ksv->db->keys[b].curve)
       continue;
 
-    if (ksv->per_session && (ksv->db->keys[b].client.handle  != client.handle ||
-                             ksv->db->keys[b].session.handle != session.handle))
+    if (!key_visible_to_session(ksv, client, session, &ksv->db->keys[b]))
       continue;
 
     if (attributes_len > 0) {
@@ -443,7 +447,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
         continue;
     }
 
-    result[*result_len] = ksv->db->ksi.names[b].name;
+    *previous_uuid = result[*result_len] = ksv->db->ksi.names[b].name;
     ++*result_len;
   }
 
@@ -471,8 +475,7 @@ static  hal_error_t ks_set_attribute(hal_ks_t *ks,
 
   ks_key_t * const k = &ksv->db->keys[b];
 
-  if (ksv->per_session && (k->client.handle  != slot->client_handle.handle ||
-                           k->session.handle != slot->session_handle.handle))
+  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k))
     return HAL_ERROR_KEY_NOT_FOUND;
 
   hal_rpc_pkey_attribute_t attributes[k->attributes_len + 1];
@@ -511,8 +514,7 @@ static  hal_error_t ks_get_attribute(hal_ks_t *ks,
 
   const ks_key_t * const k = &ksv->db->keys[b];
 
-  if (ksv->per_session && (k->client.handle  != slot->client_handle.handle ||
-                           k->session.handle != slot->session_handle.handle))
+  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k))
     return HAL_ERROR_KEY_NOT_FOUND;
 
   if (k->attributes_len == 0)
@@ -561,8 +563,7 @@ static hal_error_t ks_delete_attribute(hal_ks_t *ks,
 
   ks_key_t * const k = &ksv->db->keys[b];
 
-  if (ksv->per_session && (k->client.handle  != slot->client_handle.handle ||
-                           k->session.handle != slot->session_handle.handle))
+  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k))
     return HAL_ERROR_KEY_NOT_FOUND;
 
   hal_rpc_pkey_attribute_t attributes[k->attributes_len + 1];

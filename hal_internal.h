@@ -769,6 +769,17 @@ extern hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
                                        int *hint);
 
 /*
+ * Delete all of blocks in a key, returning the block numbers.
+ */
+
+extern hal_error_t hal_ks_index_delete_range(hal_ks_index_t *ksi,
+                                             const hal_uuid_t * const name,
+                                             const unsigned max_blocks,
+                                             unsigned *n_blocks,
+                                             unsigned *blocknos,
+                                             int *hint);
+
+/*
  * Replace a key block with a new one, return new block number.
  * Name of block does not change.  This is an optimization of
  * a delete immediately followed by an add for the same name.
