@@ -141,7 +141,7 @@ static inline void ks_heapsort(hal_ks_index_t *ksi)
     const uint16_t tmp = ksi->index[i];
     ksi->index[i]      = ksi->index[0];
     ksi->index[0]      = tmp;
-    ks_heapsift(ksi, 0, i);
+    ks_heapsift(ksi, 0, i - 1);
   }
 }
 
