@@ -986,6 +986,7 @@ static hal_error_t ks_store(hal_ks_t *ks,
   k->curve   = slot->curve;
   k->flags   = slot->flags;
   k->der_len = SIZEOF_FLASH_KEY_BLOCK_DER;
+  k->attributes_len = 0;
 
   if ((err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
     err = hal_aes_keywrap(NULL, kek, kek_len, der, der_len, k->der, &k->der_len);
@@ -1120,7 +1121,7 @@ static hal_error_t ks_list(hal_ks_t *ks,
 
 static inline hal_error_t locate_attributes(flash_block_t *block, const unsigned chunk,
                                             uint8_t **bytes, size_t *bytes_len,
-                                            unsigned *attrs_len)
+                                            unsigned **attrs_len)
 {
   if (block == NULL || bytes == NULL || bytes_len == NULL || attrs_len == NULL)
     return HAL_ERROR_IMPOSSIBLE;
@@ -1128,7 +1129,7 @@ static inline hal_error_t locate_attributes(flash_block_t *block, const unsigned
   if (chunk == 0) {
     if (block_get_type(block) != BLOCK_TYPE_KEY)
       return HAL_ERROR_KEY_NOT_FOUND;
-    *attrs_len = block->key.attributes_len;
+    *attrs_len = &block->key.attributes_len;
     *bytes = block->key.der + block->key.der_len;
     *bytes_len = SIZEOF_FLASH_KEY_BLOCK_DER - block->key.der_len;
   }
@@ -1136,7 +1137,7 @@ static inline hal_error_t locate_attributes(flash_block_t *block, const unsigned
   else {
     if (block_get_type(block) != BLOCK_TYPE_ATTR)
       return HAL_ERROR_KEY_NOT_FOUND;
-    *attrs_len = block->attr.attributes_len;
+    *attrs_len = &block->attr.attributes_len;
     *bytes = block->attr.attributes;
     *bytes_len = SIZEOF_FLASH_ATTRIBUTE_BLOCK_ATTRIBUTES;
   }
@@ -1200,29 +1201,31 @@ static hal_error_t ks_match(hal_ks_t *ks,
     if (attributes_len > 0) {
       uint8_t *bytes = NULL;
       size_t bytes_len = 0;
-      unsigned attrs_len;
+      unsigned *attrs_len;
 
       if ((err = locate_attributes(block, db.ksi.names[b].chunk,
                                    &bytes, &bytes_len, &attrs_len)) != HAL_OK)
         return err;
 
-      hal_rpc_pkey_attribute_t attrs[attrs_len];
+      if (*attrs_len > 0) {
+        hal_rpc_pkey_attribute_t attrs[*attrs_len];
 
-      if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, attrs_len, NULL)) != HAL_OK)
-        return err;
+        if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, NULL)) != HAL_OK)
+          return err;
 
-      for (int j = 0; possible && j < attributes_len; j++) {
+        for (int j = 0; possible && j < attributes_len; j++) {
 
-        if (!need_attr[j])
-          continue;
-
-        for (hal_rpc_pkey_attribute_t *a = attrs; a < attrs + attrs_len; a++) {
-          if (a->type != attributes[j].type)
+          if (!need_attr[j])
             continue;
-          need_attr[j] = 0;
-          possible = (a->length == attributes[j].length &&
-                      !memcmp(a->value, attributes[j].value, a->length));
-          break;
+
+          for (hal_rpc_pkey_attribute_t *a = attrs; a < attrs + *attrs_len; a++) {
+            if (a->type != attributes[j].type)
+              continue;
+            need_attr[j] = 0;
+            possible = (a->length == attributes[j].length &&
+                        !memcmp(a->value, attributes[j].value, a->length));
+            break;
+          }
         }
       }
     }
@@ -1274,26 +1277,23 @@ static  hal_error_t ks_set_attribute(hal_ks_t *ks,
 
     uint8_t *bytes = NULL;
     size_t bytes_len = 0;
-    unsigned attrs_len;
+    unsigned *attrs_len;
 
     if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
       return err;
 
     cache_mark_used(block, b);
 
-    if (attrs_len == 0)
-      continue;
-
-    hal_rpc_pkey_attribute_t attrs[attrs_len + 1];
-    const unsigned old_attrs_len = attrs_len;
+    hal_rpc_pkey_attribute_t attrs[*attrs_len + 1];
+    const unsigned old_attrs_len = *attrs_len;
     size_t total;
 
-    if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, attrs_len, &total)) != HAL_OK)
+    if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, &total)) != HAL_OK)
       return err;
 
-    err = hal_ks_attribute_insert(bytes, bytes_len, attrs, &attrs_len, &total, type, value, value_len);
+    err = hal_ks_attribute_insert(bytes, bytes_len, attrs, attrs_len, &total, type, value, value_len);
 
-    if (attrs_len != old_attrs_len && err != HAL_OK)
+    if (*attrs_len != old_attrs_len && err != HAL_OK)
       cache_release(block);
 
     if (err == HAL_ERROR_RESULT_TOO_LONG)
@@ -1340,7 +1340,7 @@ static  hal_error_t ks_set_attribute(hal_ks_t *ks,
     block->attr.attributes_len = 0;
 
     hal_rpc_pkey_attribute_t attrs[1];
-    size_t total = SIZEOF_FLASH_ATTRIBUTE_BLOCK_ATTRIBUTES;
+    size_t total = 0;
 
     if ((err = hal_ks_attribute_insert(block->attr.attributes,
                                        SIZEOF_FLASH_ATTRIBUTE_BLOCK_ATTRIBUTES,
@@ -1364,16 +1364,16 @@ static  hal_error_t ks_set_attribute(hal_ks_t *ks,
 
     uint8_t *bytes = NULL;
     size_t bytes_len = 0;
-    unsigned attrs_len;
+    unsigned *attrs_len;
     size_t total;
 
     if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
       return err;
 
-    if (attrs_len > 0) {
-      hal_rpc_pkey_attribute_t attrs[attrs_len];
-      if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, attrs_len, &total)) != HAL_OK ||
-          (err = hal_ks_attribute_delete(bytes, bytes_len, attrs, &attrs_len, &total, type)) != HAL_OK)
+    if (*attrs_len > 0) {
+      hal_rpc_pkey_attribute_t attrs[*attrs_len];
+      if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, &total)) != HAL_OK ||
+          (err = hal_ks_attribute_delete(bytes, bytes_len, attrs, attrs_len, &total, type)) != HAL_OK)
         return err;
     }
 
@@ -1421,23 +1421,26 @@ static  hal_error_t ks_get_attribute(hal_ks_t *ks,
     if (chunk == 0)
       slot->hint = hint;
 
-    uint8_t *bytes = NULL;
-    size_t bytes_len = 0;
-    unsigned attributes_len;
-
-    if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attributes_len)) != HAL_OK)
-      return err;
-
     cache_mark_used(block, b);
 
-    hal_rpc_pkey_attribute_t attributes[attributes_len];
+    uint8_t *bytes = NULL;
+    size_t bytes_len = 0;
+    unsigned *attrs_len;
 
-    if ((err = hal_ks_attribute_scan(bytes, bytes_len, attributes, attributes_len, NULL)) != HAL_OK)
+    if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
       return err;
 
-    for (int i = 0; a.value == NULL && i < attributes_len; ++i)
-      if (attributes[i].type == type)
-        a = attributes[i];
+    if (*attrs_len == 0)
+      continue;
+
+    hal_rpc_pkey_attribute_t attrs[*attrs_len];
+
+    if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, NULL)) != HAL_OK)
+      return err;
+
+    for (int i = 0; a.value == NULL && i < *attrs_len; ++i)
+      if (attrs[i].type == type)
+        a = attrs[i];
 
   } while (a.value == NULL && ++chunk < block->header.total_chunks);
 
@@ -1490,25 +1493,25 @@ static hal_error_t ks_delete_attribute(hal_ks_t *ks,
 
     uint8_t *bytes = NULL;
     size_t bytes_len = 0;
-    unsigned attrs_len;
+    unsigned *attrs_len;
 
     if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
       return err;
 
     cache_mark_used(block, b);
 
-    if (attrs_len == 0)
+    if (*attrs_len == 0)
       continue;
 
-    hal_rpc_pkey_attribute_t attrs[attrs_len];
-    const unsigned old_attrs_len = attrs_len;
+    hal_rpc_pkey_attribute_t attrs[*attrs_len];
+    const unsigned old_attrs_len = *attrs_len;
     size_t total;
 
-    if ((err = hal_ks_attribute_scan(  bytes, bytes_len, attrs,  attrs_len, &total))       != HAL_OK ||
-        (err = hal_ks_attribute_delete(bytes, bytes_len, attrs, &attrs_len, &total, type)) != HAL_OK)
+    if ((err = hal_ks_attribute_scan(  bytes, bytes_len, attrs, *attrs_len, &total))       != HAL_OK ||
+        (err = hal_ks_attribute_delete(bytes, bytes_len, attrs,  attrs_len, &total, type)) != HAL_OK)
       return err;
 
-    if (attrs_len == old_attrs_len)
+    if (*attrs_len == old_attrs_len)
       continue;
 
     if ((err = block_update(b, block, &slot->name, chunk, &hint)) != HAL_OK)

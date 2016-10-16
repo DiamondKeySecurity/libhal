@@ -371,13 +371,17 @@ hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
    */
 
   const size_t len = (ksi->size - ksi->used - 1) * sizeof(*ksi->index);
-  const uint16_t b = ksi->index[ksi->used];
+  const uint16_t b1 = ksi->index[where];
+  const uint16_t b2 = ksi->index[ksi->used];
   memmove(&ksi->index[ksi->used], &ksi->index[ksi->used + 1], len);
-  ksi->index[ksi->size - 1] = ksi->index[where];
-  ksi->index[where] = b;
+  ksi->index[ksi->size - 1] = b1;
+  ksi->index[where] = b2;
+  ksi->names[b2].name = *name;
+  ksi->names[b2].chunk = chunk;
+  memset(&ksi->names[b1], 0, sizeof(ksi->names[b1]));
 
   if (blockno != NULL)
-    *blockno = b;
+    *blockno = b2;
 
   if (hint != NULL)
     *hint = where;
