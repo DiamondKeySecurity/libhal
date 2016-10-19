@@ -171,8 +171,7 @@ hal_error_t hal_ks_index_find(hal_ks_index_t *ksi,
 
   int where;
 
-  if (!ks_find(ksi, name, chunk, hint, &where))
-    return HAL_ERROR_KEY_NOT_FOUND;
+  int ok = ks_find(ksi, name, chunk, hint, &where);
 
   if (blockno != NULL)
     *blockno = ksi->index[where];
@@ -180,7 +179,7 @@ hal_error_t hal_ks_index_find(hal_ks_index_t *ksi,
   if (hint != NULL)
     *hint = where;
 
-  return HAL_OK;
+  return ok ? HAL_OK : HAL_ERROR_KEY_NOT_FOUND;
 }
 
 hal_error_t hal_ks_index_find_range(hal_ks_index_t *ksi,

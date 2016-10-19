@@ -1170,7 +1170,11 @@ static hal_error_t ks_match(hal_ks_t *ks,
 
   *result_len = 0;
 
-  if ((err = hal_ks_index_find(&db.ksi, previous_uuid, 0, NULL, &i)) != HAL_OK)
+  err = hal_ks_index_find(&db.ksi, previous_uuid, 0, NULL, &i);
+
+  if (err == HAL_ERROR_KEY_NOT_FOUND)
+    i--;
+  else if (err != HAL_OK)
     return err;
 
   while (*result_len < result_max) {
