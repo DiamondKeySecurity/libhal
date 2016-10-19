@@ -292,13 +292,14 @@ static hal_error_t hash_get_digest_algorithm_id(const hal_digest_algorithm_t alg
   hal_client_handle_t dummy_client = {0};
   hal_error_t rpc_ret;
 
-  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_HASH_GET_DIGEST_LEN));
+  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_HASH_GET_DIGEST_ALGORITHM_ID));
   check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
   check(hal_xdr_encode_int(&optr, olimit, alg));
   check(hal_xdr_encode_int(&optr, olimit, len_max));
   check(hal_rpc_send(outbuf, optr - outbuf));
 
-  check(read_matching_packet(RPC_FUNC_HASH_GET_DIGEST_LEN, inbuf, sizeof(inbuf), &iptr, &ilimit));
+  check(read_matching_packet(RPC_FUNC_HASH_GET_DIGEST_ALGORITHM_ID,
+                             inbuf, sizeof(inbuf), &iptr, &ilimit));
 
   check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
   if (rpc_ret == HAL_OK) {
