@@ -158,7 +158,7 @@ def_enum('''
 ''')
 
 def_enum('''
-    HAL_KEY_TYPE_NONE = 0,
+    HAL_KEY_TYPE_NONE,
     HAL_KEY_TYPE_RSA_PRIVATE,
     HAL_KEY_TYPE_RSA_PUBLIC,
     HAL_KEY_TYPE_EC_PRIVATE,
@@ -183,6 +183,17 @@ HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE     = (1 << 0)
 HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT      = (1 << 1)
 HAL_KEY_FLAG_USAGE_DATAENCIPHERMENT     = (1 << 2)
 HAL_KEY_FLAG_TOKEN                      = (1 << 3)
+
+
+class Attribute(object):
+
+    def __init__(self, type, value):
+        self.type  = type
+        self.value = value
+
+    def xdr_packer(self, packer):
+        packer.pack_uint(self.type)
+        packer.pack_bytes(self.value)
 
 
 def cached_property(func):
@@ -280,7 +291,7 @@ class PKey(Handle):
 
 class HSM(object):
 
-    debug = True
+    debug = False
 
     def _raise_if_error(self, status):
         if status != 0:
@@ -352,7 +363,9 @@ class HSM(object):
 
     def _pack(self, packer, args):
         for arg in args:
-            if isinstance(arg, (int, long, Handle)):
+            if hasattr(arg, "xdr_packer"):
+                arg.xdr_packer(packer)
+            elif isinstance(arg, (int, long, Handle)):
                 packer.pack_uint(arg)
             elif isinstance(arg, str):
                 packer.pack_bytes(arg)
