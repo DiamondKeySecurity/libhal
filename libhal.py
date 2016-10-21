@@ -123,10 +123,21 @@ class Enum(int):
     def __repr__(self):
         return "<Enum:{0.__class__.__name__} {0._name}:{0:d}>".format(self)
 
+    _counter = 0
+
     @classmethod
     def define(cls, names):
-        cls.index = tuple(cls(name, i) for i, name in enumerate(names.translate(None, ",").split()))
-        globals().update((symbol._name, symbol) for symbol in cls.index)
+        symbols = []
+        for name in names.translate(None, "{}").split(","):
+            if "=" in name:
+                name, sep, expr = name.partition("=")
+                cls._counter = eval(expr.strip())
+            if not isinstance(cls._counter, int):
+                raise TypeError
+            symbols.append(cls(name.strip(), cls._counter))
+            cls._counter += 1
+        cls.index = dict((int(symbol),  symbol) for symbol in symbols)
+        globals().update((symbol._name, symbol) for symbol in symbols)
 
     def xdr_packer(self, packer):
         packer.pack_uint(self)
@@ -135,7 +146,7 @@ class Enum(int):
 class RPCFunc(Enum): pass
 
 RPCFunc.define('''
-    RPC_FUNC_GET_VERSION,
+    RPC_FUNC_GET_VERSION = 0,
     RPC_FUNC_GET_RANDOM,
     RPC_FUNC_SET_PIN,
     RPC_FUNC_LOGIN,
@@ -587,29 +598,29 @@ if __name__ == "__main__":
 
     hsm = HSM()
 
-    print hex(hsm.get_version())
+    print "Version:", hex(hsm.get_version())
 
-    print hexstr(hsm.get_random(16))
+    print "Random:", hexstr(hsm.get_random(16))
 
     h = hsm.hash_initialize(hal_digest_algorithm_sha256)
     h.update("Hi, Mom")
-    print hexstr(h.finalize())
+    print "Hash:", hexstr(h.finalize())
 
     h = hsm.hash_initialize(hal_digest_algorithm_sha256, key = "secret")
     h.update("Hi, Dad")
-    print hexstr(h.finalize())
+    print "HMAC:", hexstr(h.finalize())
 
     k = hsm.pkey_generate_ec(HAL_CURVE_P256)
-    print "{0.uuid} {0.key_type} {0.key_flags} {1}".format(k, hexstr(k.public_key))
+    print "PKey: {0.uuid} {0.key_type} {0.key_flags} {1}".format(k, hexstr(k.public_key))
     hsm.pkey_close(k)
 
     for flags in (0, HAL_KEY_FLAG_TOKEN):
         for t, c, f, u in hsm.pkey_list(flags = flags):
-            print u, t, c, f
+            print "List:", u, t, c, f
 
     for f in (HAL_KEY_FLAG_TOKEN, 0):
         for u in hsm.pkey_match(flags = f):
-            print u
+            print "Match:", u
 
     k = hsm.pkey_find(k.uuid)
     hsm.pkey_delete(k)
