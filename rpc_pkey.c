@@ -101,17 +101,60 @@ static inline hal_pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
   return NULL;
 }
 
-#warning Still need access control on pkey objects based on current login state
 /*
- * This would be simple, except for PKCS #11 non-token objects (CKA_TOKEN = CK_FALSE).
- * Need to check detailed PKCS #11 rules, but, from memory, we may be supposed to allow
- * access to non-token objects even when not logged in.  Maybe.  Rules are complex.
+ * Access rules are a bit complicated, mostly due to PKCS #11.
  *
- * I think the libhal translation of this resolves around HAL_KEY_FLAG_TOKEN.
- * For token objects, we insist on being logged in properly; for non-token
- * objects, we do whatever silly thing PKCS #11 wants us to do, probably
- * defaulting to requiring login if PKCS #11 gives us a choice.
+ * The simple, obvious rule would be that one must be logged in as
+ * HAL_USER_NORMAL to create, see, use, or delete a key, full stop.
+ *
+ * That's almost the rule that PKCS #11 follows for so-called
+ * "private" objects (CKA_PRIVATE = CK_TRUE), but PKCS #11 has a more
+ * model which not only allows wider visibility to "public" objects
+ * (CKA_PRIVATE = CK_FALSE) but also allows write access to "public
+ * session" (CKA_PRIVATE = CK_FALSE, CKA_TOKEN = CK_FALSE) objects
+ * regardless of login state.
+ *
+ * PKCS #11 also has a concept of read-only sessions, which we don't
+ * bother to implement at all on the HSM, since the PIN is required to
+ * be the same as for the corresponding read-write session, so this
+ * would just be additional compexity without adding any security on
+ * the HSM; the PKCS #11 library still has to support read-only
+ * sessions, but that's not our problem here.
+ *
+ * In general, non-PKCS #11 users of this API should probably never
+ * set HAL_KEY_FLAG_PUBLIC, in which case they'll get the simple rule.
+ *
+ * Note that keystore drivers may need to implement additional
+ * additional checks, eg, ks_volatile needs to enforce the rule that
+ * session objects are only visible to the client which created them
+ * (not the session, that would be too simple, thanks PKCS #11).  In
+ * practice, this should not be a serious problem, since such checks
+ * will likely only apply to existing objects.  The thing we really
+ * want to avoid is doing all the work to create a large key only to
+ * have the keystore driver reject access at the end, but since, by
+ * definition, that only occurs when creating new objects, the access
+ * decision doesn't depend on preexisting data, so the rules here
+ * should suffice.  That's the theory, anyway, if this is wrong we may
+ * need to refactor.
  */
+
+static inline hal_error_t check_readable(const hal_client_handle_t client,
+                                         const hal_key_flags_t flags)
+{
+  if ((flags & HAL_KEY_FLAG_PUBLIC) != 0)
+    return HAL_OK;
+
+  return hal_rpc_is_logged_in(client, HAL_USER_NORMAL);
+}
+
+static inline hal_error_t check_writable(const hal_client_handle_t client,
+                                         const hal_key_flags_t flags)
+{
+  if ((flags & (HAL_KEY_FLAG_TOKEN | HAL_KEY_FLAG_PUBLIC)) == HAL_KEY_FLAG_PUBLIC)
+    return HAL_OK;
+
+  return hal_rpc_is_logged_in(client, HAL_USER_NORMAL);
+}
 
 /*
  * Pad an octet string with PKCS #1.5 padding for use with RSA.
@@ -186,6 +229,9 @@ static hal_error_t pkey_local_load(const hal_client_handle_t client,
   hal_ks_t *ks = NULL;
   hal_error_t err;
 
+  if ((err = check_writable(client, flags)) != HAL_OK)
+    return err;
+
   if ((slot = alloc_slot(flags)) == NULL)
     return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
 
@@ -230,6 +276,9 @@ static hal_error_t pkey_local_find(const hal_client_handle_t client,
   hal_ks_t *ks = NULL;
   hal_error_t err;
 
+  if ((err = check_readable(client, flags)) != HAL_OK)
+    return err;
+
   if ((slot = alloc_slot(flags)) == NULL)
     return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
 
@@ -271,6 +320,9 @@ static hal_error_t pkey_local_generate_rsa(const hal_client_handle_t client,
   hal_pkey_slot_t *slot;
   hal_ks_t *ks = NULL;
   hal_error_t err;
+
+  if ((err = check_writable(client, flags)) != HAL_OK)
+    return err;
 
   if ((slot = alloc_slot(flags)) == NULL)
     return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
@@ -332,6 +384,9 @@ static hal_error_t pkey_local_generate_ec(const hal_client_handle_t client,
   hal_pkey_slot_t *slot;
   hal_ks_t *ks = NULL;
   hal_error_t err;
+
+  if ((err = check_writable(client, flags)) != HAL_OK)
+    return err;
 
   if ((slot = alloc_slot(flags)) == NULL)
     return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
@@ -402,6 +457,9 @@ static hal_error_t pkey_local_delete(const hal_pkey_handle_t pkey)
 
   hal_ks_t *ks = NULL;
   hal_error_t err;
+
+  if ((err = check_writable(slot->client_handle, slot->flags)) != HAL_OK)
+    return err;
 
   if ((err = ks_open_from_flags(&ks, slot->flags)) == HAL_OK &&
       (err = hal_ks_delete(ks, slot)) == HAL_OK)
@@ -859,6 +917,9 @@ static hal_error_t pkey_local_list(const hal_client_handle_t client,
   hal_ks_t *ks = NULL;
   hal_error_t err;
 
+  if ((err = check_readable(client, flags)) != HAL_OK)
+    return err;
+
   if ((err = ks_open_from_flags(&ks, flags)) == HAL_OK &&
       (err = hal_ks_list(ks, client, session, result, result_len, result_max)) == HAL_OK)
     err = hal_ks_close(ks);
@@ -883,6 +944,9 @@ static hal_error_t pkey_local_match(const hal_client_handle_t client,
   hal_ks_t *ks = NULL;
   hal_error_t err;
 
+  if ((err = check_readable(client, flags)) != HAL_OK)
+    return err;
+
   if ((err = ks_open_from_flags(&ks, flags)) == HAL_OK &&
       (err = hal_ks_match(ks, client, session, type, curve, flags, attributes, attributes_len,
                           result, result_len, result_max, previous_uuid)) == HAL_OK)
@@ -905,6 +969,9 @@ static hal_error_t pkey_local_set_attribute(const hal_pkey_handle_t pkey,
 
   hal_ks_t *ks = NULL;
   hal_error_t err;
+
+  if ((err = check_writable(slot->client_handle, slot->flags)) != HAL_OK)
+    return err;
 
   if ((err = ks_open_from_flags(&ks, slot->flags)) == HAL_OK &&
       (err = hal_ks_set_attribute(ks, slot, type, value, value_len)) == HAL_OK)
@@ -948,6 +1015,9 @@ static hal_error_t pkey_local_delete_attribute(const hal_pkey_handle_t pkey,
 
   hal_ks_t *ks = NULL;
   hal_error_t err;
+
+  if ((err = check_writable(slot->client_handle, slot->flags)) != HAL_OK)
+    return err;
 
   if ((err = ks_open_from_flags(&ks, slot->flags)) == HAL_OK &&
       (err = hal_ks_delete_attribute(ks, slot, type)) == HAL_OK)

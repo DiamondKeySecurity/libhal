@@ -224,7 +224,7 @@ HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE     = (1 << 0)
 HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT      = (1 << 1)
 HAL_KEY_FLAG_USAGE_DATAENCIPHERMENT     = (1 << 2)
 HAL_KEY_FLAG_TOKEN                      = (1 << 3)
-
+HAL_KEY_FLAG_PUBLIC                     = (1 << 4)
 
 class Attribute(object):
 
@@ -590,10 +590,17 @@ class HSM(object):
 
 if __name__ == "__main__":
 
+    import argparse
+
     def hexstr(s):
         return "".join("{:02x}".format(ord(c)) for c in s)
 
-    hsm = HSM()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--device", default = os.getenv("CRYPTECH_RPC_CLIENT_SERIAL_DEVICE", "/dev/ttyUSB0"))
+    parser.add_argument("--pin", default = "fnord")
+    args = parser.parse_args()
+
+    hsm = HSM(device = args.device)
 
     print "Version:", hex(hsm.get_version())
 
@@ -607,6 +614,10 @@ if __name__ == "__main__":
     h.update("Hi, Dad")
     print "HMAC:", hexstr(h.finalize())
 
+    print "Logging in"
+    hsm.login(HAL_USER_NORMAL, args.pin)
+
+    print "Generating key"
     k = hsm.pkey_generate_ec(HAL_CURVE_P256)
     print "PKey: {0.uuid} {0.key_type} {0.key_flags} {1}".format(k, hexstr(k.public_key))
     hsm.pkey_close(k)
@@ -621,3 +632,5 @@ if __name__ == "__main__":
 
     k = hsm.pkey_find(k.uuid)
     hsm.pkey_delete(k)
+
+    hsm.logout()

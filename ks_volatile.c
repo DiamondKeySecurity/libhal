@@ -106,14 +106,29 @@ static inline ks_t *ks_to_ksv(hal_ks_t *ks)
   return (ks_t *) ks;
 }
 
+/*
+ * Check whether the current session can see a particular key.  One
+ * might expect this to be based on whether the session matches, and
+ * indeed it would be in a sane world, but in the world of PKCS #11,
+ * keys belong to sessions, are visible to other sessions, and may
+ * even be modifiable by other sessions, but softly and silently
+ * vanish away when the original creating session is destroyed.
+ *
+ * In our terms, this means that visibility of session objects is
+ * determined only by the client handle, so taking the session handle
+ * as an argument here isn't really necessary, but we've flipflopped
+ * on that enough times that at least for now I'd prefer to leave the
+ * session handle here and not have to revise all the RPC calls again.
+ * Remove it at some later date and redo the RPC calls if we manage to
+ * avoid revising this yet again.
+ */
+
 static inline int key_visible_to_session(const ks_t * const ksv,
                                          const hal_client_handle_t client,
                                          const hal_session_handle_t session,
                                          const ks_key_t * const k)
 {
-  return (!ksv->per_session || client.handle == HAL_HANDLE_NONE ||
-          (k->client.handle  == client.handle &&
-           k->session.handle == session.handle));
+  return !ksv->per_session || client.handle == HAL_HANDLE_NONE || k->client.handle  == client.handle;
 }
 
 static inline void *gnaw(uint8_t **mem, size_t *len, const size_t size)

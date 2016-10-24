@@ -692,6 +692,7 @@ typedef uint32_t hal_key_flags_t;
 #define	HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT      (1 << 1)
 #define	HAL_KEY_FLAG_USAGE_DATAENCIPHERMENT	(1 << 2)
 #define	HAL_KEY_FLAG_TOKEN                      (1 << 3)
+#define HAL_KEY_FLAG_PUBLIC                     (1 << 4)
 
 extern hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
                                      const hal_session_handle_t session,
