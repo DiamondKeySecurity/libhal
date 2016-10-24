@@ -252,7 +252,7 @@ typedef struct {
                        hal_uuid_t *result,
                        unsigned *result_len,
                        const unsigned result_max,
-                       hal_uuid_t *previous_uuid);
+                       const hal_uuid_t * const previous_uuid);
 
   hal_error_t (*set_attribute)(const hal_pkey_handle_t pkey,
                                const uint32_t type,
@@ -499,7 +499,7 @@ struct hal_ks_driver {
                        hal_uuid_t *result,
                        unsigned *result_len,
                        const unsigned result_max,
-                       hal_uuid_t *previous_uuid);
+                       const hal_uuid_t * const previous_uuid);
 
   hal_error_t (*set_attribute)(hal_ks_t *ks,
                                hal_pkey_slot_t *slot,
@@ -624,7 +624,7 @@ static inline hal_error_t hal_ks_match(hal_ks_t *ks,
                                        hal_uuid_t *result,
                                        unsigned *result_len,
                                        const unsigned result_max,
-                                       hal_uuid_t *previous_uuid)
+                                       const hal_uuid_t * const previous_uuid)
 {
   if (ks == NULL || ks->driver == NULL || ks->driver->match == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;

@@ -779,7 +779,7 @@ extern hal_error_t hal_rpc_pkey_match(const hal_client_handle_t client,
                                       hal_uuid_t *result,
                                       unsigned *result_len,
                                       const unsigned result_max,
-                                      hal_uuid_t *previous_uuid);
+                                      const hal_uuid_t * const previous_uuid);
 
 extern hal_error_t hal_rpc_pkey_set_attribute(const hal_pkey_handle_t pkey,
                                               const uint32_t type,

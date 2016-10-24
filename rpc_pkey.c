@@ -878,7 +878,7 @@ static hal_error_t pkey_local_match(const hal_client_handle_t client,
                                     hal_uuid_t *result,
                                     unsigned *result_len,
                                     const unsigned result_max,
-                                    hal_uuid_t *previous_uuid)
+                                    const hal_uuid_t * const previous_uuid)
 {
   hal_ks_t *ks = NULL;
   hal_error_t err;

@@ -101,6 +101,16 @@ static hal_error_t read_matching_packet(const rpc_func_num_t expected_func,
 
 /*
  * RPC calls.
+ *
+ * In reading these, it helps to know that every call takes a minimum
+ * of two arguments (function code and client handle, even if the
+ * latter is just a dummy), and that every call returns a minimum of
+ * three values (function code, client handle, and return status).
+ * This may seem a bit redundant, but There Are Reasons:
+ * read_matching_packet() wants to make sure the result we're getting
+ * is from the function we thought we called, and having the client
+ * handle always present in a known place vastly simplifies the task
+ * of the client-side MUX daemon.
  */
 
 static hal_error_t get_version(uint32_t *version)
@@ -800,7 +810,7 @@ static hal_error_t pkey_remote_match(const hal_client_handle_t client,
                                      hal_uuid_t *result,
                                      unsigned *result_len,
                                      const unsigned result_max,
-                                     hal_uuid_t *previous_uuid)
+                                     const hal_uuid_t * const previous_uuid)
 {
   size_t attributes_buffer_len = 0;
   if (attributes != NULL)
@@ -809,7 +819,7 @@ static hal_error_t pkey_remote_match(const hal_client_handle_t client,
 
   uint8_t outbuf[nargs(9 + attributes_len * 2) + pad(attributes_buffer_len) + pad(sizeof(hal_uuid_t))];
   uint8_t *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(5) + pad(result_max * sizeof(hal_uuid_t)) + pad(sizeof(hal_uuid_t))];
+  uint8_t inbuf[nargs(4) + pad(result_max * sizeof(hal_uuid_t))];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -842,9 +852,6 @@ static hal_error_t pkey_remote_match(const hal_client_handle_t client,
       if (uuid_len != sizeof(result[i].uuid))
         return HAL_ERROR_KEY_NAME_TOO_LONG;
     }
-    check(hal_xdr_decode_buffer(&iptr, ilimit, previous_uuid->uuid, &uuid_len));
-    if (uuid_len != sizeof(previous_uuid->uuid))
-      return HAL_ERROR_KEY_NAME_TOO_LONG;
     *result_len = array_len;
   }
   return rpc_ret;

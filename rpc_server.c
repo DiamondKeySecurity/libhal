@@ -672,7 +672,6 @@ static hal_error_t pkey_match(const uint8_t **iptr, const uint8_t * const ilimit
     hal_session_handle_t session;
     uint32_t type, curve, attributes_len, result_max, previous_uuid_len;
     const uint8_t *previous_uuid_ptr;
-    hal_uuid_t previous_uuid;
     hal_key_flags_t flags;
     hal_error_t ret;
 
@@ -696,10 +695,10 @@ static hal_error_t pkey_match(const uint8_t **iptr, const uint8_t * const ilimit
     check(hal_xdr_decode_int(iptr, ilimit, &result_max));
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &previous_uuid_ptr, &previous_uuid_len));
 
-    if (previous_uuid_len != sizeof(previous_uuid.uuid))
+    if (previous_uuid_len != sizeof(hal_uuid_t))
         return HAL_ERROR_KEY_NAME_TOO_LONG;
 
-    memcpy(previous_uuid.uuid, previous_uuid_ptr, sizeof(previous_uuid.uuid));
+    const hal_uuid_t * const previous_uuid = (const void *) previous_uuid_ptr;
 
     hal_uuid_t result[result_max];
     unsigned result_len;
@@ -707,7 +706,7 @@ static hal_error_t pkey_match(const uint8_t **iptr, const uint8_t * const ilimit
     ret = hal_rpc_local_pkey_dispatch.match(client, session, type, curve, flags,
                                             attributes, attributes_len,
                                             result, &result_len, result_max,
-                                            &previous_uuid);
+                                            previous_uuid);
 
     if (ret == HAL_OK) {
         uint8_t *optr_orig = *optr;
@@ -715,9 +714,6 @@ static hal_error_t pkey_match(const uint8_t **iptr, const uint8_t * const ilimit
         for (int i = 0; ret == HAL_OK && i < result_len; ++i)
             ret = hal_xdr_encode_buffer(optr, olimit, result[i].uuid,
                                         sizeof(result[i].uuid));
-        if (ret == HAL_OK)
-            ret = hal_xdr_encode_buffer(optr, olimit, previous_uuid.uuid,
-                                        sizeof(previous_uuid.uuid));
         if (ret != HAL_OK)
             *optr = optr_orig;
     }

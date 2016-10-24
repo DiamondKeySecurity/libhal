@@ -571,11 +571,8 @@ class HSM(object):
                    previous_uuid = UUID(int = 0), length = 512, client = 0, session = 0):
         with self.rpc(RPC_FUNC_PKEY_MATCH, session, type, curve, flags,
                       attributes, length, previous_uuid, client = client) as r:
-            x = tuple(UUID(bytes = r.unpack_bytes())
-                      for i in xrange(r.unpack_uint()))
-            y = UUID(bytes = r.unpack_bytes())
-            assert len(x) == 0 or y == x[-1]
-            return x
+            return tuple(UUID(bytes = r.unpack_bytes())
+                         for i in xrange(r.unpack_uint()))
 
     def pkey_set_attribute(self, pkey, attr_type, attr_value = None):
         if attr_value is None and isinstance(attr_type, Attribute):

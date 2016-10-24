@@ -348,7 +348,7 @@ hal_error_t hal_rpc_pkey_match(const hal_client_handle_t client,
                                hal_uuid_t *result,
                                unsigned *result_len,
                                const unsigned result_max,
-                               hal_uuid_t *previous_uuid)
+                               const hal_uuid_t * const previous_uuid)
 {
   if ((attributes == NULL && attributes_len > 0) || previous_uuid == NULL ||
       result == NULL || result_len == NULL || result_max == 0)

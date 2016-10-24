@@ -1156,7 +1156,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
                             hal_uuid_t *result,
                             unsigned *result_len,
                             const unsigned result_max,
-                            hal_uuid_t *previous_uuid)
+                            const hal_uuid_t * const previous_uuid)
 {
   if (ks == NULL || attributes == NULL ||
       result == NULL || result_len == NULL || previous_uuid == NULL)
@@ -1240,7 +1240,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
     if (attributes_len > 0 && memchr(need_attr, 1, sizeof(need_attr)) != NULL)
       continue;
 
-    *previous_uuid = result[*result_len] = db.ksi.names[b].name;
+    result[*result_len] = db.ksi.names[b].name;
     ++*result_len;
     possible = 0;
   }
