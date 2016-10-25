@@ -157,12 +157,12 @@ static inline void free_handle(handle_slot_t *slot)
 static inline const hal_hash_descriptor_t *alg_to_descriptor(const hal_digest_algorithm_t alg)
 {
   switch (alg) {
-  case hal_digest_algorithm_sha1:       return hal_hash_sha1;
-  case hal_digest_algorithm_sha256:     return hal_hash_sha256;
-  case hal_digest_algorithm_sha512_224: return hal_hash_sha512_224;
-  case hal_digest_algorithm_sha512_256: return hal_hash_sha512_256;
-  case hal_digest_algorithm_sha384:     return hal_hash_sha384;
-  case hal_digest_algorithm_sha512:     return hal_hash_sha512;
+  case HAL_DIGEST_ALGORITHM_SHA1:       return hal_hash_sha1;
+  case HAL_DIGEST_ALGORITHM_SHA256:     return hal_hash_sha256;
+  case HAL_DIGEST_ALGORITHM_SHA512_224: return hal_hash_sha512_224;
+  case HAL_DIGEST_ALGORITHM_SHA512_256: return hal_hash_sha512_256;
+  case HAL_DIGEST_ALGORITHM_SHA384:     return hal_hash_sha384;
+  case HAL_DIGEST_ALGORITHM_SHA512:     return hal_hash_sha512;
   default:                              return NULL;
   }
 }

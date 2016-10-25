@@ -656,52 +656,52 @@ int main (int argc, char *argv[])
 
   ok &= hal_rpc_client_init();
 
-  ok &= test_hash(hal_digest_algorithm_sha1,   nist_512_single, sha1_single_digest, "SHA-1 single block");
-  ok &= test_hash(hal_digest_algorithm_sha1,   nist_512_double, sha1_double_digest, "SHA-1 double block");
+  ok &= test_hash(HAL_DIGEST_ALGORITHM_SHA1,   nist_512_single, sha1_single_digest, "SHA-1 single block");
+  ok &= test_hash(HAL_DIGEST_ALGORITHM_SHA1,   nist_512_double, sha1_double_digest, "SHA-1 double block");
 
-  ok &= test_hash(hal_digest_algorithm_sha256, nist_512_single, sha256_single_digest, "SHA-256 single block");
-  ok &= test_hash(hal_digest_algorithm_sha256, nist_512_double, sha256_double_digest, "SHA-256 double block");
+  ok &= test_hash(HAL_DIGEST_ALGORITHM_SHA256, nist_512_single, sha256_single_digest, "SHA-256 single block");
+  ok &= test_hash(HAL_DIGEST_ALGORITHM_SHA256, nist_512_double, sha256_double_digest, "SHA-256 double block");
 
-  ok &= test_hash(hal_digest_algorithm_sha512_224, nist_1024_single, sha512_224_single_digest, "SHA-512/224 single block");
-  ok &= test_hash(hal_digest_algorithm_sha512_224, nist_1024_double, sha512_224_double_digest, "SHA-512/224 double block");
+  ok &= test_hash(HAL_DIGEST_ALGORITHM_SHA512_224, nist_1024_single, sha512_224_single_digest, "SHA-512/224 single block");
+  ok &= test_hash(HAL_DIGEST_ALGORITHM_SHA512_224, nist_1024_double, sha512_224_double_digest, "SHA-512/224 double block");
 
-  ok &= test_hash(hal_digest_algorithm_sha512_256, nist_1024_single, sha512_256_single_digest, "SHA-512/256 single block");
-  ok &= test_hash(hal_digest_algorithm_sha512_256, nist_1024_double, sha512_256_double_digest, "SHA-512/256 double block");
+  ok &= test_hash(HAL_DIGEST_ALGORITHM_SHA512_256, nist_1024_single, sha512_256_single_digest, "SHA-512/256 single block");
+  ok &= test_hash(HAL_DIGEST_ALGORITHM_SHA512_256, nist_1024_double, sha512_256_double_digest, "SHA-512/256 double block");
 
-  ok &= test_hash(hal_digest_algorithm_sha384, nist_1024_single, sha384_single_digest, "SHA-384 single block");
-  ok &= test_hash(hal_digest_algorithm_sha384, nist_1024_double, sha384_double_digest, "SHA-384 double block");
+  ok &= test_hash(HAL_DIGEST_ALGORITHM_SHA384, nist_1024_single, sha384_single_digest, "SHA-384 single block");
+  ok &= test_hash(HAL_DIGEST_ALGORITHM_SHA384, nist_1024_double, sha384_double_digest, "SHA-384 double block");
 
-  ok &= test_hash(hal_digest_algorithm_sha512, nist_1024_single, sha512_single_digest, "SHA-512 single block");
-  ok &= test_hash(hal_digest_algorithm_sha512, nist_1024_double, sha512_double_digest, "SHA-512 double block");
+  ok &= test_hash(HAL_DIGEST_ALGORITHM_SHA512, nist_1024_single, sha512_single_digest, "SHA-512 single block");
+  ok &= test_hash(HAL_DIGEST_ALGORITHM_SHA512, nist_1024_double, sha512_double_digest, "SHA-512 double block");
 
-  ok &= test_hmac(hal_digest_algorithm_sha1, hmac_sha1_tc_1_key, hmac_sha1_tc_1_data, hmac_sha1_tc_1_result_sha1, "HMAC-SHA-1 test case 1");
-  ok &= test_hmac(hal_digest_algorithm_sha1, hmac_sha1_tc_2_key, hmac_sha1_tc_2_data, hmac_sha1_tc_2_result_sha1, "HMAC-SHA-1 test case 2");
-  ok &= test_hmac(hal_digest_algorithm_sha1, hmac_sha1_tc_3_key, hmac_sha1_tc_3_data, hmac_sha1_tc_3_result_sha1, "HMAC-SHA-1 test case 3");
-  ok &= test_hmac(hal_digest_algorithm_sha1, hmac_sha1_tc_4_key, hmac_sha1_tc_4_data, hmac_sha1_tc_4_result_sha1, "HMAC-SHA-1 test case 4");
-  ok &= test_hmac(hal_digest_algorithm_sha1, hmac_sha1_tc_5_key, hmac_sha1_tc_5_data, hmac_sha1_tc_5_result_sha1, "HMAC-SHA-1 test case 5");
-  ok &= test_hmac(hal_digest_algorithm_sha1, hmac_sha1_tc_6_key, hmac_sha1_tc_6_data, hmac_sha1_tc_6_result_sha1, "HMAC-SHA-1 test case 6");
-  ok &= test_hmac(hal_digest_algorithm_sha1, hmac_sha1_tc_7_key, hmac_sha1_tc_7_data, hmac_sha1_tc_7_result_sha1, "HMAC-SHA-1 test case 7");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA1, hmac_sha1_tc_1_key, hmac_sha1_tc_1_data, hmac_sha1_tc_1_result_sha1, "HMAC-SHA-1 test case 1");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA1, hmac_sha1_tc_2_key, hmac_sha1_tc_2_data, hmac_sha1_tc_2_result_sha1, "HMAC-SHA-1 test case 2");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA1, hmac_sha1_tc_3_key, hmac_sha1_tc_3_data, hmac_sha1_tc_3_result_sha1, "HMAC-SHA-1 test case 3");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA1, hmac_sha1_tc_4_key, hmac_sha1_tc_4_data, hmac_sha1_tc_4_result_sha1, "HMAC-SHA-1 test case 4");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA1, hmac_sha1_tc_5_key, hmac_sha1_tc_5_data, hmac_sha1_tc_5_result_sha1, "HMAC-SHA-1 test case 5");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA1, hmac_sha1_tc_6_key, hmac_sha1_tc_6_data, hmac_sha1_tc_6_result_sha1, "HMAC-SHA-1 test case 6");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA1, hmac_sha1_tc_7_key, hmac_sha1_tc_7_data, hmac_sha1_tc_7_result_sha1, "HMAC-SHA-1 test case 7");
 
-  ok &= test_hmac(hal_digest_algorithm_sha256, hmac_sha2_tc_1_key, hmac_sha2_tc_1_data, hmac_sha2_tc_1_result_sha256, "HMAC-SHA-256 test case 1");
-  ok &= test_hmac(hal_digest_algorithm_sha256, hmac_sha2_tc_2_key, hmac_sha2_tc_2_data, hmac_sha2_tc_2_result_sha256, "HMAC-SHA-256 test case 2");
-  ok &= test_hmac(hal_digest_algorithm_sha256, hmac_sha2_tc_3_key, hmac_sha2_tc_3_data, hmac_sha2_tc_3_result_sha256, "HMAC-SHA-256 test case 3");
-  ok &= test_hmac(hal_digest_algorithm_sha256, hmac_sha2_tc_4_key, hmac_sha2_tc_4_data, hmac_sha2_tc_4_result_sha256, "HMAC-SHA-256 test case 4");
-  ok &= test_hmac(hal_digest_algorithm_sha256, hmac_sha2_tc_6_key, hmac_sha2_tc_6_data, hmac_sha2_tc_6_result_sha256, "HMAC-SHA-256 test case 6");
-  ok &= test_hmac(hal_digest_algorithm_sha256, hmac_sha2_tc_7_key, hmac_sha2_tc_7_data, hmac_sha2_tc_7_result_sha256, "HMAC-SHA-256 test case 7");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA256, hmac_sha2_tc_1_key, hmac_sha2_tc_1_data, hmac_sha2_tc_1_result_sha256, "HMAC-SHA-256 test case 1");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA256, hmac_sha2_tc_2_key, hmac_sha2_tc_2_data, hmac_sha2_tc_2_result_sha256, "HMAC-SHA-256 test case 2");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA256, hmac_sha2_tc_3_key, hmac_sha2_tc_3_data, hmac_sha2_tc_3_result_sha256, "HMAC-SHA-256 test case 3");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA256, hmac_sha2_tc_4_key, hmac_sha2_tc_4_data, hmac_sha2_tc_4_result_sha256, "HMAC-SHA-256 test case 4");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA256, hmac_sha2_tc_6_key, hmac_sha2_tc_6_data, hmac_sha2_tc_6_result_sha256, "HMAC-SHA-256 test case 6");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA256, hmac_sha2_tc_7_key, hmac_sha2_tc_7_data, hmac_sha2_tc_7_result_sha256, "HMAC-SHA-256 test case 7");
 
-  ok &= test_hmac(hal_digest_algorithm_sha384, hmac_sha2_tc_1_key, hmac_sha2_tc_1_data, hmac_sha2_tc_1_result_sha384, "HMAC-SHA-384 test case 1");
-  ok &= test_hmac(hal_digest_algorithm_sha384, hmac_sha2_tc_2_key, hmac_sha2_tc_2_data, hmac_sha2_tc_2_result_sha384, "HMAC-SHA-384 test case 2");
-  ok &= test_hmac(hal_digest_algorithm_sha384, hmac_sha2_tc_3_key, hmac_sha2_tc_3_data, hmac_sha2_tc_3_result_sha384, "HMAC-SHA-384 test case 3");
-  ok &= test_hmac(hal_digest_algorithm_sha384, hmac_sha2_tc_4_key, hmac_sha2_tc_4_data, hmac_sha2_tc_4_result_sha384, "HMAC-SHA-384 test case 4");
-  ok &= test_hmac(hal_digest_algorithm_sha384, hmac_sha2_tc_6_key, hmac_sha2_tc_6_data, hmac_sha2_tc_6_result_sha384, "HMAC-SHA-384 test case 6");
-  ok &= test_hmac(hal_digest_algorithm_sha384, hmac_sha2_tc_7_key, hmac_sha2_tc_7_data, hmac_sha2_tc_7_result_sha384, "HMAC-SHA-384 test case 7");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA384, hmac_sha2_tc_1_key, hmac_sha2_tc_1_data, hmac_sha2_tc_1_result_sha384, "HMAC-SHA-384 test case 1");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA384, hmac_sha2_tc_2_key, hmac_sha2_tc_2_data, hmac_sha2_tc_2_result_sha384, "HMAC-SHA-384 test case 2");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA384, hmac_sha2_tc_3_key, hmac_sha2_tc_3_data, hmac_sha2_tc_3_result_sha384, "HMAC-SHA-384 test case 3");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA384, hmac_sha2_tc_4_key, hmac_sha2_tc_4_data, hmac_sha2_tc_4_result_sha384, "HMAC-SHA-384 test case 4");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA384, hmac_sha2_tc_6_key, hmac_sha2_tc_6_data, hmac_sha2_tc_6_result_sha384, "HMAC-SHA-384 test case 6");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA384, hmac_sha2_tc_7_key, hmac_sha2_tc_7_data, hmac_sha2_tc_7_result_sha384, "HMAC-SHA-384 test case 7");
 
-  ok &= test_hmac(hal_digest_algorithm_sha512, hmac_sha2_tc_1_key, hmac_sha2_tc_1_data, hmac_sha2_tc_1_result_sha512, "HMAC-SHA-512 test case 1");
-  ok &= test_hmac(hal_digest_algorithm_sha512, hmac_sha2_tc_2_key, hmac_sha2_tc_2_data, hmac_sha2_tc_2_result_sha512, "HMAC-SHA-512 test case 2");
-  ok &= test_hmac(hal_digest_algorithm_sha512, hmac_sha2_tc_3_key, hmac_sha2_tc_3_data, hmac_sha2_tc_3_result_sha512, "HMAC-SHA-512 test case 3");
-  ok &= test_hmac(hal_digest_algorithm_sha512, hmac_sha2_tc_4_key, hmac_sha2_tc_4_data, hmac_sha2_tc_4_result_sha512, "HMAC-SHA-512 test case 4");
-  ok &= test_hmac(hal_digest_algorithm_sha512, hmac_sha2_tc_6_key, hmac_sha2_tc_6_data, hmac_sha2_tc_6_result_sha512, "HMAC-SHA-512 test case 6");
-  ok &= test_hmac(hal_digest_algorithm_sha512, hmac_sha2_tc_7_key, hmac_sha2_tc_7_data, hmac_sha2_tc_7_result_sha512, "HMAC-SHA-512 test case 7");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA512, hmac_sha2_tc_1_key, hmac_sha2_tc_1_data, hmac_sha2_tc_1_result_sha512, "HMAC-SHA-512 test case 1");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA512, hmac_sha2_tc_2_key, hmac_sha2_tc_2_data, hmac_sha2_tc_2_result_sha512, "HMAC-SHA-512 test case 2");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA512, hmac_sha2_tc_3_key, hmac_sha2_tc_3_data, hmac_sha2_tc_3_result_sha512, "HMAC-SHA-512 test case 3");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA512, hmac_sha2_tc_4_key, hmac_sha2_tc_4_data, hmac_sha2_tc_4_result_sha512, "HMAC-SHA-512 test case 4");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA512, hmac_sha2_tc_6_key, hmac_sha2_tc_6_data, hmac_sha2_tc_6_result_sha512, "HMAC-SHA-512 test case 6");
+  ok &= test_hmac(HAL_DIGEST_ALGORITHM_SHA512, hmac_sha2_tc_7_key, hmac_sha2_tc_7_data, hmac_sha2_tc_7_result_sha512, "HMAC-SHA-512 test case 7");
 
   ok &= hal_rpc_client_close();
 

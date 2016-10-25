@@ -108,7 +108,7 @@ int main (int argc, char *argv[])
         expected = NULL;
 
     check(hal_rpc_client_init());
-    check(hal_rpc_hash_initialize(client, session, &hash, hal_digest_algorithm_sha256, NULL, 0));
+    check(hal_rpc_hash_initialize(client, session, &hash, HAL_DIGEST_ALGORITHM_SHA256, NULL, 0));
 
     for (int i = 0; i < iterations; ++i) {
         check(hal_rpc_hash_update(hash, block, sizeof(block)));

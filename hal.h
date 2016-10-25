@@ -253,14 +253,14 @@ typedef struct hal_hash_driver hal_hash_driver_t;
  */
 
 typedef enum {
-  hal_digest_algorithm_none,
-  hal_digest_algorithm_sha1,
-  hal_digest_algorithm_sha224,
-  hal_digest_algorithm_sha256,
-  hal_digest_algorithm_sha512_224,
-  hal_digest_algorithm_sha512_256,
-  hal_digest_algorithm_sha384,
-  hal_digest_algorithm_sha512
+  HAL_DIGEST_ALGORITHM_NONE,
+  HAL_DIGEST_ALGORITHM_SHA1,
+  HAL_DIGEST_ALGORITHM_SHA224,
+  HAL_DIGEST_ALGORITHM_SHA256,
+  HAL_DIGEST_ALGORITHM_SHA512_224,
+  HAL_DIGEST_ALGORITHM_SHA512_256,
+  HAL_DIGEST_ALGORITHM_SHA384,
+  HAL_DIGEST_ALGORITHM_SHA512
 } hal_digest_algorithm_t;
 
 typedef struct {

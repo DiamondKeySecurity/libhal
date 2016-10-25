@@ -191,7 +191,7 @@ static const uint8_t
  */
 
 const hal_hash_descriptor_t hal_hash_sha1[1] = {{
-  hal_digest_algorithm_sha1,
+  HAL_DIGEST_ALGORITHM_SHA1,
   SHA1_BLOCK_LEN, SHA1_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha1, sizeof(dalgid_sha1),
@@ -199,7 +199,7 @@ const hal_hash_descriptor_t hal_hash_sha1[1] = {{
 }};
 
 const hal_hash_descriptor_t hal_hash_sha224[1] = {{
-  hal_digest_algorithm_sha256,
+  HAL_DIGEST_ALGORITHM_SHA256,
   SHA256_BLOCK_LEN, SHA224_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha224, sizeof(dalgid_sha224),
@@ -207,7 +207,7 @@ const hal_hash_descriptor_t hal_hash_sha224[1] = {{
 }};
 
 const hal_hash_descriptor_t hal_hash_sha256[1] = {{
-  hal_digest_algorithm_sha256,
+  HAL_DIGEST_ALGORITHM_SHA256,
   SHA256_BLOCK_LEN, SHA256_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha256, sizeof(dalgid_sha256),
@@ -215,7 +215,7 @@ const hal_hash_descriptor_t hal_hash_sha256[1] = {{
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512_224[1] = {{
-  hal_digest_algorithm_sha512_224,
+  HAL_DIGEST_ALGORITHM_SHA512_224,
   SHA512_BLOCK_LEN, SHA512_224_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha512_224, sizeof(dalgid_sha512_224),
@@ -223,7 +223,7 @@ const hal_hash_descriptor_t hal_hash_sha512_224[1] = {{
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512_256[1] = {{
-  hal_digest_algorithm_sha512_256,
+  HAL_DIGEST_ALGORITHM_SHA512_256,
   SHA512_BLOCK_LEN, SHA512_256_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha512_256, sizeof(dalgid_sha512_256),
@@ -231,7 +231,7 @@ const hal_hash_descriptor_t hal_hash_sha512_256[1] = {{
 }};
 
 const hal_hash_descriptor_t hal_hash_sha384[1] = {{
-  hal_digest_algorithm_sha384,
+  HAL_DIGEST_ALGORITHM_SHA384,
   SHA512_BLOCK_LEN, SHA384_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha384, sizeof(dalgid_sha384),
@@ -239,7 +239,7 @@ const hal_hash_descriptor_t hal_hash_sha384[1] = {{
 }};
 
 const hal_hash_descriptor_t hal_hash_sha512[1] = {{
-  hal_digest_algorithm_sha512,
+  HAL_DIGEST_ALGORITHM_SHA512,
   SHA512_BLOCK_LEN, SHA512_DIGEST_LEN,
   sizeof(hal_hash_state_t), sizeof(hal_hmac_state_t),
   dalgid_sha512, sizeof(dalgid_sha512),

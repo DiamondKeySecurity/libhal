@@ -182,14 +182,14 @@ RPCFunc.define('''
 class HALDigestAlgorithm(Enum): pass
 
 HALDigestAlgorithm.define('''
-    hal_digest_algorithm_none,
-    hal_digest_algorithm_sha1,
-    hal_digest_algorithm_sha224,
-    hal_digest_algorithm_sha256,
-    hal_digest_algorithm_sha512_224,
-    hal_digest_algorithm_sha512_256,
-    hal_digest_algorithm_sha384,
-    hal_digest_algorithm_sha512
+    HAL_DIGEST_ALGORITHM_NONE,
+    HAL_DIGEST_ALGORITHM_SHA1,
+    HAL_DIGEST_ALGORITHM_SHA224,
+    HAL_DIGEST_ALGORITHM_SHA256,
+    HAL_DIGEST_ALGORITHM_SHA512_224,
+    HAL_DIGEST_ALGORITHM_SHA512_256,
+    HAL_DIGEST_ALGORITHM_SHA384,
+    HAL_DIGEST_ALGORITHM_SHA512
 ''')
 
 class HALKeyType(Enum): pass
@@ -606,11 +606,11 @@ if __name__ == "__main__":
 
     print "Random:", hexstr(hsm.get_random(16))
 
-    h = hsm.hash_initialize(hal_digest_algorithm_sha256)
+    h = hsm.hash_initialize(HAL_DIGEST_ALGORITHM_SHA256)
     h.update("Hi, Mom")
     print "Hash:", hexstr(h.finalize())
 
-    h = hsm.hash_initialize(hal_digest_algorithm_sha256, key = "secret")
+    h = hsm.hash_initialize(HAL_DIGEST_ALGORITHM_SHA256, key = "secret")
     h.update("Hi, Dad")
     print "HMAC:", hexstr(h.finalize())
 
