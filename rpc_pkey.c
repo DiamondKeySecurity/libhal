@@ -656,7 +656,7 @@ static hal_error_t pkey_local_sign_rsa(uint8_t *keybuf, const size_t keybuf_len,
   if (*signature_len > signature_max)
     return HAL_ERROR_RESULT_TOO_LONG;
 
-  if (input == NULL) {
+  if (input == NULL || input_len == 0) {
     if ((err = hal_rpc_pkcs1_construct_digestinfo(hash, signature, &input_len, *signature_len)) != HAL_OK)
       return err;
     input = signature;
@@ -684,7 +684,7 @@ static hal_error_t pkey_local_sign_ecdsa(uint8_t *keybuf, const size_t keybuf_le
   if ((err = hal_ecdsa_private_key_from_der(&key, keybuf, keybuf_len, der, der_len)) != HAL_OK)
     return err;
 
-  if (input == NULL) {
+  if (input == NULL || input_len == 0) {
     hal_digest_algorithm_t alg;
 
     if ((err = hal_rpc_hash_get_algorithm(hash, &alg))          != HAL_OK ||
@@ -788,7 +788,7 @@ static hal_error_t pkey_local_verify_rsa(uint8_t *keybuf, const size_t keybuf_le
   if (err != HAL_OK)
     return err;
 
-  if (input == NULL) {
+  if (input == NULL || input_len == 0) {
     if ((err = hal_rpc_pkcs1_construct_digestinfo(hash, expected, &input_len, sizeof(expected))) != HAL_OK)
       return err;
     input = expected;
@@ -835,7 +835,7 @@ static hal_error_t pkey_local_verify_ecdsa(uint8_t *keybuf, const size_t keybuf_
   if (err != HAL_OK)
     return err;
 
-  if (input == NULL) {
+  if (input == NULL || input_len == 0) {
     hal_digest_algorithm_t alg;
 
     if ((err = hal_rpc_hash_get_algorithm(hash, &alg))              != HAL_OK ||
