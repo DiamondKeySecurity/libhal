@@ -294,6 +294,40 @@ class Digest(Handle):
         return self.hsm.hash_get_digest_length(self.algorithm)
 
 
+class LocalDigest(object):
+    """
+    Implements same interface as Digest class, but using PyCrypto, to
+    support mixed-mode PKey operations.  This only supports algorithms
+    that PyCrypto supports, so no SHA512/224 or SHA512/256, sorry.
+    """
+
+    def __init__(self, hsm, handle, algorithm, key):
+        from Crypto.Hash import HMAC, SHA, SHA224, SHA256, SHA384, SHA512
+        self.hsm       = hsm
+        self.handle    = handle
+        self.algorithm = algorithm
+        try:
+            h = self._algorithms[algorithm]
+        except AttributeError:
+            self._algorithms = {
+                HAL_DIGEST_ALGORITHM_SHA1   : SHA.SHA1Hash,
+                HAL_DIGEST_ALGORITHM_SHA224 : SHA224.SHA224Hash,
+                HAL_DIGEST_ALGORITHM_SHA256 : SHA256.SHA256Hash,
+                HAL_DIGEST_ALGORITHM_SHA384 : SHA384.SHA384Hash,
+                HAL_DIGEST_ALGORITHM_SHA512 : SHA512.SHA512Hash
+            }
+            h = self._algorithms[algorithm]
+        self.digest_length = h.digest_size
+        self.algorithm_id  = chr(0x30) + chr(2 + len(h.oid)) + h.oid
+        self._context = HMAC.HMAC(key = key, digestmod = h) if key else h()
+
+    def update(self, data):
+        self._context.update(data)
+
+    def finalize(self, length = None):
+        return self._context.digest()
+
+
 class PKey(Handle):
 
     def __init__(self, hsm, handle, uuid):
@@ -324,10 +358,10 @@ class PKey(Handle):
         return self.hsm.pkey_get_public_key(self, self.public_key_len)
 
     def sign(self, hash = 0, data = "", length = 1024):
-        return self.hsm.pkey_sign(self, hash, data, length)
+        return self.hsm.pkey_sign(self, hash = hash, data = data, length = length)
 
     def verify(self, hash = 0, data = "", signature = None):
-        self.hsm.pkey_verify(self, hash, data, signature)
+        self.hsm.pkey_verify(self, hash = hash, data = data, signature = signature)
 
     def set_attribute(self, attr_type, attr_value = None):
         self.hsm.pkey_set_attribute(self, attr_type, attr_value)
@@ -341,7 +375,8 @@ class PKey(Handle):
 
 class HSM(object):
 
-    debug = False
+    debug      = False
+    mixed_mode = False
 
     _send_delay = 0             # 0.1
 
@@ -463,25 +498,25 @@ class HSM(object):
         with self.rpc(RPC_FUNC_GET_RANDOM, n) as r:
             return r.unpack_bytes()
 
-    def set_pin(self, user, pin):
-        with self.rpc(RPC_FUNC_SET_PIN, user, pin):
+    def set_pin(self, user, pin, client = 0):
+        with self.rpc(RPC_FUNC_SET_PIN, user, pin, client = client):
             return
 
-    def login(self, user, pin):
-        with self.rpc(RPC_FUNC_LOGIN, user, pin):
+    def login(self, user, pin, client = 0):
+        with self.rpc(RPC_FUNC_LOGIN, user, pin, client = client):
             return
 
-    def logout(self):
-        with self.rpc(RPC_FUNC_LOGOUT):
+    def logout(self, client = 0):
+        with self.rpc(RPC_FUNC_LOGOUT, client = client):
             return
 
     def logout_all(self):
         with self.rpc(RPC_FUNC_LOGOUT_ALL):
             return
 
-    def is_logged_in(self, user):
-        with self.rpc(RPC_FUNC_IS_LOGGED_IN, user) as r:
-            return r.unpack_bool()
+    def is_logged_in(self, user, client = 0):
+        with self.rpc(RPC_FUNC_IS_LOGGED_IN, user, client = client):
+            return
 
     def hash_get_digest_length(self, alg):
         with self.rpc(RPC_FUNC_HASH_GET_DIGEST_LEN, alg) as r:
@@ -495,9 +530,14 @@ class HSM(object):
         with self.rpc(RPC_FUNC_HASH_GET_ALGORITHM, handle) as r:
             return HALDigestAlgorithm.index[r.unpack_uint()]
 
-    def hash_initialize(self, alg, key = "", client = 0, session = 0):
-        with self.rpc(RPC_FUNC_HASH_INITIALIZE, session, alg, key, client = client) as r:
-            return Digest(self, r.unpack_uint(), alg)
+    def hash_initialize(self, alg, key = "", client = 0, session = 0, mixed_mode = None):
+        if mixed_mode is None:
+            mixed_mode = self.mixed_mode
+        if mixed_mode:
+            return LocalDigest(self, 0, alg, key)
+        else:
+            with self.rpc(RPC_FUNC_HASH_INITIALIZE, session, alg, key, client = client) as r:
+                return Digest(self, r.unpack_uint(), alg)
 
     def hash_update(self, handle, data):
         with self.rpc(RPC_FUNC_HASH_UPDATE, handle, data):
@@ -552,10 +592,16 @@ class HSM(object):
             return r.unpack_bytes()
 
     def pkey_sign(self, pkey, hash = 0, data = "", length = 1024):
+        assert not hash or not data
+        if isinstance(hash, LocalDigest):
+            hash, data = 0, hash.finalize()
         with self.rpc(RPC_FUNC_PKEY_SIGN, pkey, hash, data, length) as r:
             return r.unpack_bytes()
 
     def pkey_verify(self, pkey, hash = 0, data = "", signature = None):
+        assert not hash or not data
+        if isinstance(hash, LocalDigest):
+            hash, data = 0, hash.finalize()
         with self.rpc(RPC_FUNC_PKEY_VERIFY, pkey, hash, data, signature):
             return
 
