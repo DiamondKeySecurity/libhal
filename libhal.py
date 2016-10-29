@@ -327,6 +327,14 @@ class LocalDigest(object):
     def finalize(self, length = None):
         return self._context.digest()
 
+    def finalize_padded(self, pkey):
+        if pkey.key_type not in (HAL_KEY_TYPE_RSA_PRIVATE, HAL_KEY_TYPE_RSA_PUBLIC):
+            return self.finalize()
+        # PKCS #1.5 requires the digest to be wrapped up in an ASN.1 DigestInfo object.
+        from Crypto.Util.asn1 import DerSequence, DerNull, DerOctetString
+        return DerSequence([DerSequence([self._context.oid, DerNull().encode()]).encode(),
+                            DerOctetString(self.finalize()).encode()]).encode()
+
 
 class PKey(Handle):
 
@@ -557,7 +565,7 @@ class HSM(object):
         with self.rpc(RPC_FUNC_PKEY_FIND, session, uuid, flags, client = client) as r:
             return PKey(self, r.unpack_uint(), uuid)
 
-    def pkey_generate_rsa(self, keylen, exponent, flags = 0, client = 0, session = 0):
+    def pkey_generate_rsa(self, keylen, exponent = "\x01\x00\x01", flags = 0, client = 0, session = 0):
         with self.rpc(RPC_FUNC_PKEY_GENERATE_RSA, session, keylen, exponent, flags, client = client) as r:
             return PKey(self, r.unpack_uint(), UUID(bytes = r.unpack_bytes()))
 
@@ -594,14 +602,14 @@ class HSM(object):
     def pkey_sign(self, pkey, hash = 0, data = "", length = 1024):
         assert not hash or not data
         if isinstance(hash, LocalDigest):
-            hash, data = 0, hash.finalize()
+            hash, data = 0, hash.finalize_padded(pkey)
         with self.rpc(RPC_FUNC_PKEY_SIGN, pkey, hash, data, length) as r:
             return r.unpack_bytes()
 
     def pkey_verify(self, pkey, hash = 0, data = "", signature = None):
         assert not hash or not data
         if isinstance(hash, LocalDigest):
-            hash, data = 0, hash.finalize()
+            hash, data = 0, hash.finalize_padded(pkey)
         with self.rpc(RPC_FUNC_PKEY_VERIFY, pkey, hash, data, signature):
             return
 
