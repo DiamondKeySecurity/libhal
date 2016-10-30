@@ -1,12 +1,41 @@
 #!/usr/bin/env python
 
+# Copyright (c) 2016, NORDUnet A/S
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met:
+# - Redistributions of source code must retain the above copyright notice,
+#   this list of conditions and the following disclaimer.
+#
+# - Redistributions in binary form must reproduce the above copyright
+#   notice, this list of conditions and the following disclaimer in the
+#   documentation and/or other materials provided with the distribution.
+#
+# - Neither the name of the NORDUnet nor the names of its contributors may
+#   be used to endorse or promote products derived from this software
+#   without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+# IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+# TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+# TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+# LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+# NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 """
 LibHAL unit tests, using libhal.py and the Python unit_test framework.
 """
 
-# If you think that some of these tests look like the ones in
-# sw/pkcs11/unit-tests.py, you're right: a lot of it is the same tests
-# performed on the same HSM, just via a different API.
+# There's some overlap between these tests and the PKCS #11 unit tests,
+# because in many cases we're testing the same functionality, just via
+# different APIs.
 
 import unittest
 import datetime
@@ -28,6 +57,8 @@ except ImportError:
 
 try:
     from ecdsa.keys             import SigningKey as ECDSA_SigningKey, VerifyingKey as ECDSA_VerifyingKey
+    from ecdsa.ellipticcurve    import Point
+    from ecdsa.curves           import NIST256p, NIST384p, NIST521p
     if not pycrypto_loaded:
         from hashlib            import sha256 as SHA256, sha384 as SHA384, sha512 as SHA512
     ecdsa_loaded = True
@@ -188,9 +219,9 @@ class TestDigest(TestCase):
 # access check semantics).  Defer for now.
 
 
-class TestPKeyGen(TestCase):
+class TestCaseLoggedIn(TestCase):
     """
-    Tests involving key generation.
+    Abstract class to handle login for PKey tests.
     """
 
     @classmethod
@@ -200,6 +231,12 @@ class TestPKeyGen(TestCase):
     @classmethod
     def tearDownClass(cls):
         hsm.logout()
+
+
+class TestPKeyGen(TestCaseLoggedIn):
+    """
+    Tests involving key generation.
+    """
 
     def sign_verify(self, hashalg, k1, k2):
         h = hsm.hash_initialize(hashalg)
@@ -249,19 +286,15 @@ class TestPKeyGen(TestCase):
         "Generate/sign/verify with RSA-4096-SHA-512"
         self.gen_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA512, 4096)
 
+    def test_gen_unsupported_length(self):
+        "Key length not multiple of 32 bits"
+        with self.assertRaises(HAL_ERROR_BAD_ARGUMENTS):
+            hsm.pkey_generate_rsa(1028).delete()
 
-class TestPKeyHashing(TestCase):
+class TestPKeyHashing(TestCaseLoggedIn):
     """
     Tests involving various ways of doing the hashing for public key operations.
     """
-
-    @classmethod
-    def setUpClass(cls):
-        hsm.login(HAL_USER_NORMAL, args.user_pin)
-
-    @classmethod
-    def tearDownClass(cls):
-        hsm.logout()
 
     def load_sign_verify_rsa(self, alg, keylen, method):
         k1 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PRIVATE, HAL_CURVE_NONE,
@@ -404,314 +437,67 @@ class TestPKeyHashing(TestCase):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, HAL_CURVE_P521, self.sign_verify_local_local)
 
 
+class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
+    """
+    ECDSA verification tests based on Suite B Implementer's Guide to FIPS 186-3.
+    """
 
-if False:
-  class Wombat(TestCase):
-
-    oid_p256 = "".join(chr(i) for i in (0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07))
-    oid_p384 = "".join(chr(i) for i in (0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x22))
-    oid_p521 = "".join(chr(i) for i in (0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x23))
-
-    def test_gen_sign_verify_ecdsa_p384_sha384(self):
-        "Generate/sign/verify with ECDSA-P384-SHA-384"
-        #if not args.all_tests: self.skipTest("SHA-384 not available in current build")
-        public_key, private_key = hsm.C_GenerateKeyPair(self.session, CKM_EC_KEY_PAIR_GEN,
-                                                        CKA_ID = "EC-P384", CKA_EC_PARAMS = self.oid_p384,
-                                                        CKA_SIGN = True, CKA_VERIFY = True, CKA_TOKEN = True)
-        self.assertIsKeypair(public_key, private_key)
-        hamster = "Your mother was a hamster"
-        hsm.C_SignInit(self.session, CKM_ECDSA_SHA384, private_key)
-        sig = hsm.C_Sign(self.session, hamster)
-        self.assertIsInstance(sig, str)
-        hsm.C_VerifyInit(self.session, CKM_ECDSA_SHA384, public_key)
-        hsm.C_Verify(self.session, hamster, sig)
-
-    def test_gen_sign_verify_ecdsa_p521_sha512(self):
-        "Generate/sign/verify with ECDSA-P521-SHA-512"
-        #if not args.all_tests: self.skipTest("SHA-512 not available in current build")
-        public_key, private_key = hsm.C_GenerateKeyPair(self.session, CKM_EC_KEY_PAIR_GEN,
-                                                        CKA_ID = "EC-P521", CKA_EC_PARAMS = self.oid_p521,
-                                                        CKA_SIGN = True, CKA_VERIFY = True, CKA_TOKEN = True)
-        self.assertIsKeypair(public_key, private_key)
-        hamster = "Your mother was a hamster"
-        hsm.C_SignInit(self.session, CKM_ECDSA_SHA512, private_key)
-        sig = hsm.C_Sign(self.session, hamster)
-        self.assertIsInstance(sig, str)
-        hsm.C_VerifyInit(self.session, CKM_ECDSA_SHA512, public_key)
-        hsm.C_Verify(self.session, hamster, sig)
-
-    def test_gen_sign_verify_rsa_1024(self):
-        "Generate/sign/verify with RSA-1024-SHA-512"
-        "RSA 1024-bit generate/sign/verify test"
-        public_key, private_key = hsm.C_GenerateKeyPair(
-            self.session, CKM_RSA_PKCS_KEY_PAIR_GEN, CKA_MODULUS_BITS = 1024,
-            CKA_ID = "RSA-1024", CKA_SIGN = True, CKA_VERIFY = True, CKA_TOKEN = True)
-        self.assertIsKeypair(public_key, private_key)
-        hamster = "Your mother was a hamster"
-        hsm.C_SignInit(self.session, CKM_SHA512_RSA_PKCS, private_key)
-        sig = hsm.C_Sign(self.session, hamster)
-        self.assertIsInstance(sig, str)
-        hsm.C_VerifyInit(self.session, CKM_SHA512_RSA_PKCS, public_key)
-        hsm.C_Verify(self.session, hamster, sig)
-
-    def test_gen_sign_verify_rsa_2048(self):
-        "Generate/sign/verify with RSA-2048-SHA-512"
-        #if not args.all_tests: self.skipTest("RSA key generation is still painfully slow")
-        public_key, private_key = hsm.C_GenerateKeyPair(
-            self.session, CKM_RSA_PKCS_KEY_PAIR_GEN, CKA_MODULUS_BITS = 2048,
-            CKA_ID = "RSA-2048", CKA_SIGN = True, CKA_VERIFY = True, CKA_TOKEN = True)
-        self.assertIsKeypair(public_key, private_key)
-        hamster = "Your mother was a hamster"
-        hsm.C_SignInit(self.session, CKM_SHA512_RSA_PKCS, private_key)
-        sig = hsm.C_Sign(self.session, hamster)
-        self.assertIsInstance(sig, str)
-        hsm.C_VerifyInit(self.session, CKM_SHA512_RSA_PKCS, public_key)
-        hsm.C_Verify(self.session, hamster, sig)
-
-    @staticmethod
-    def _build_ecpoint(x, y):
-        bytes_per_coordinate = (max(x.bit_length(), y.bit_length()) + 15) / 16
-        value = chr(0x04) + ("%0*x%0*x" % (bytes_per_coordinate, x, bytes_per_coordinate, y)).decode("hex")
-        if len(value) < 128:
-            length = chr(len(value))
-        else:
-            n = len(value).bit_length()
-            length = chr((n + 7) / 8) + ("%0*x" % ((n + 15) / 16, len(value))).decode("hex")
-        tag = chr(0x04)
-        return tag + length + value
-
-    def test_canned_ecdsa_p256_verify(self):
-        "EC-P-256 verification test from Suite B Implementer's Guide to FIPS 186-3"
-        Q = self._build_ecpoint(0x8101ece47464a6ead70cf69a6e2bd3d88691a3262d22cba4f7635eaff26680a8,
-                                0xd8a12ba61d599235f67d9cb4d58f1783d3ca43e78f0a5abaa624079936c0c3a9)
+    def test_suite_b_p256_verify(self):
+        Q = Point(NIST256p.curve,
+                  0x8101ece47464a6ead70cf69a6e2bd3d88691a3262d22cba4f7635eaff26680a8,
+                  0xd8a12ba61d599235f67d9cb4d58f1783d3ca43e78f0a5abaa624079936c0c3a9)
+        k = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC, HAL_CURVE_P256,
+                          ECDSA_VerifyingKey.from_public_point(Q, NIST256p, SHA256).to_der())
+        self.addCleanup(k.delete)
         H = "7c3e883ddc8bd688f96eac5e9324222c8f30f9d6bb59e9c5f020bd39ba2b8377".decode("hex")
         r = "7214bc9647160bbd39ff2f80533f5dc6ddd70ddf86bb815661e805d5d4e6f27c".decode("hex")
         s = "7d1ff961980f961bdaa3233b6209f4013317d3e3f9e1493592dbeaa1af2bc367".decode("hex")
-        handle = hsm.C_CreateObject(
-          session           = self.session,
-          CKA_CLASS         = CKO_PUBLIC_KEY,
-          CKA_KEY_TYPE      = CKK_EC,
-          CKA_LABEL         = "EC-P-256 test case from \"Suite B Implementer's Guide to FIPS 186-3\"",
-          CKA_ID            = "EC-P-256",
-          CKA_VERIFY        = True,
-          CKA_EC_POINT      = Q,
-          CKA_EC_PARAMS     = self.oid_p256)
-        hsm.C_VerifyInit(self.session, CKM_ECDSA, handle)
-        hsm.C_Verify(self.session, H, r + s)
+        k.verify(signature = r + s, data = H)
 
-    def test_canned_ecdsa_p384_verify(self):
-        "EC-P-384 verification test from Suite B Implementer's Guide to FIPS 186-3"
-        Q = self._build_ecpoint(0x1fbac8eebd0cbf35640b39efe0808dd774debff20a2a329e91713baf7d7f3c3e81546d883730bee7e48678f857b02ca0,
-                                0xeb213103bd68ce343365a8a4c3d4555fa385f5330203bdd76ffad1f3affb95751c132007e1b240353cb0a4cf1693bdf9)
+    def test_suite_b__p384_verify(self):
+        Q = Point(NIST384p.curve,
+                  0x1fbac8eebd0cbf35640b39efe0808dd774debff20a2a329e91713baf7d7f3c3e81546d883730bee7e48678f857b02ca0,
+                  0xeb213103bd68ce343365a8a4c3d4555fa385f5330203bdd76ffad1f3affb95751c132007e1b240353cb0a4cf1693bdf9)
+        k = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC, HAL_CURVE_P384,
+                          ECDSA_VerifyingKey.from_public_point(Q, NIST384p, SHA384).to_der())
+        self.addCleanup(k.delete)
         H = "b9210c9d7e20897ab86597266a9d5077e8db1b06f7220ed6ee75bd8b45db37891f8ba5550304004159f4453dc5b3f5a1".decode("hex")
         r = "a0c27ec893092dea1e1bd2ccfed3cf945c8134ed0c9f81311a0f4a05942db8dbed8dd59f267471d5462aa14fe72de856".decode("hex")
         s = "20ab3f45b74f10b6e11f96a2c8eb694d206b9dda86d3c7e331c26b22c987b7537726577667adadf168ebbe803794a402".decode("hex")
-        handle = hsm.C_CreateObject(
-          session           = self.session,
-          CKA_CLASS         = CKO_PUBLIC_KEY,
-          CKA_KEY_TYPE      = CKK_EC,
-          CKA_LABEL         = "EC-P-384 test case from \"Suite B Implementer's Guide to FIPS 186-3\"",
-          CKA_ID            = "EC-P-384",
-          CKA_VERIFY        = True,
-          CKA_EC_POINT      = Q,
-          CKA_EC_PARAMS     = self.oid_p384)
-        hsm.C_VerifyInit(self.session, CKM_ECDSA, handle)
-        hsm.C_Verify(self.session, H, r + s)
-
-    def test_gen_sign_verify_reload_ecdsa_p256_sha256(self):
-        "Generate/sign/verify/destroy/reload/verify with ECDSA-P256-SHA-256"
-        public_key, private_key = hsm.C_GenerateKeyPair(self.session, CKM_EC_KEY_PAIR_GEN,
-                                                        public_CKA_TOKEN = False, private_CKA_TOKEN = True,
-                                                        CKA_ID = "EC-P256", CKA_EC_PARAMS = self.oid_p256,
-                                                        CKA_SIGN = True, CKA_VERIFY = True)
-        self.assertIsKeypair(public_key, private_key)
-        hamster = "Your mother was a hamster"
-        hsm.C_SignInit(self.session, CKM_ECDSA_SHA256, private_key)
-        sig = hsm.C_Sign(self.session, hamster)
-        self.assertIsInstance(sig, str)
-        hsm.C_VerifyInit(self.session, CKM_ECDSA_SHA256, public_key)
-        hsm.C_Verify(self.session, hamster, sig)
-
-        a = hsm.C_GetAttributeValue(self.session, public_key,
-                                    CKA_CLASS, CKA_KEY_TYPE, CKA_VERIFY, CKA_TOKEN,
-                                    CKA_EC_PARAMS, CKA_EC_POINT)
-
-        for handle in hsm.FindObjects(self.session):
-            hsm.C_DestroyObject(self.session, handle)
-        hsm.C_CloseAllSessions(args.slot)
-        self.session = hsm.C_OpenSession(args.slot)
-        hsm.C_Login(self.session, CKU_USER, args.user_pin)
-
-        o = hsm.C_CreateObject(self.session, a)
-        hsm.C_VerifyInit(self.session, CKM_ECDSA_SHA256, o)
-        hsm.C_Verify(self.session, hamster, sig)
-
-    def _extract_rsa_public_key(self, handle):
-        a = hsm.C_GetAttributeValue(self.session, handle, CKA_MODULUS, CKA_PUBLIC_EXPONENT)
-        return RSA.construct((a[CKA_MODULUS], a[CKA_PUBLIC_EXPONENT]))
-
-    def assertRawRSASignatureMatches(self, handle, plain, sig):
-        pubkey = self._extract_rsa_public_key(handle)
-        result = pubkey.encrypt(sig, 0)[0]
-        prefix = "\x00\x01" if False else "\x01" # XXX
-        expect = prefix + "\xff" * (len(result) - len(plain) - len(prefix) - 1) + "\x00" + plain
-        self.assertEqual(result, expect)
-
-    def test_gen_sign_verify_tralala_rsa_1024(self):
-        "Generate/sign/verify with RSA-1024 (no hashing, message to be signed not a hash at all)"
-        tralala = "tralala-en-hopsasa"
-        public_key, private_key = hsm.C_GenerateKeyPair(
-            self.session, CKM_RSA_PKCS_KEY_PAIR_GEN, CKA_MODULUS_BITS = 1024,
-            CKA_ID = "RSA-1024", CKA_SIGN = True, CKA_VERIFY = True, CKA_TOKEN = True)
-        self.assertIsKeypair(public_key, private_key)
-        hsm.C_SignInit(self.session, CKM_RSA_PKCS, private_key)
-        sig = hsm.C_Sign(self.session, tralala)
-        self.assertIsInstance(sig, str)
-        self.assertRawRSASignatureMatches(public_key, tralala, sig)
-        hsm.C_VerifyInit(self.session, CKM_RSA_PKCS, public_key)
-        hsm.C_Verify(self.session, tralala, sig)
-
-    def test_gen_sign_verify_tralala_rsa_3416(self):
-        "Generate/sign/verify with RSA-3416 (no hashing, message to be signed not a hash at all)"
-        if not args.all_tests:
-            self.skipTest("Key length not a multiple of 32, so expected to fail (very slowly)")
-        tralala = "tralala-en-hopsasa"
-        public_key, private_key = hsm.C_GenerateKeyPair(
-            self.session, CKM_RSA_PKCS_KEY_PAIR_GEN, CKA_MODULUS_BITS = 3416,
-            CKA_ID = "RSA-3416", CKA_SIGN = True, CKA_VERIFY = True, CKA_TOKEN = True)
-        self.assertIsKeypair(public_key, private_key)
-        hsm.C_SignInit(self.session, CKM_RSA_PKCS, private_key)
-        sig = hsm.C_Sign(self.session, tralala)
-        self.assertIsInstance(sig, str)
-        self.assertRawRSASignatureMatches(public_key, tralala, sig)
-        hsm.C_VerifyInit(self.session, CKM_RSA_PKCS, public_key)
-        hsm.C_Verify(self.session, tralala, sig)
-
-    def _load_rsa_keypair(self, pem, cka_id = None):
-        k = RSA.importKey(pem)
-        public = dict(
-            CKA_TOKEN = True, CKA_CLASS = CKO_PUBLIC_KEY, CKA_KEY_TYPE = CKK_RSA, CKA_VERIFY = True,
-            CKA_MODULUS         = k.n,
-            CKA_PUBLIC_EXPONENT = k.e)
-        private = dict(
-            CKA_TOKEN = True, CKA_CLASS = CKO_PRIVATE_KEY, CKA_KEY_TYPE = CKK_RSA, CKA_SIGN = True,
-            CKA_MODULUS         = k.n,
-            CKA_PUBLIC_EXPONENT = k.e,
-            CKA_PRIVATE_EXPONENT= k.d,
-            CKA_PRIME_1         = k.p,
-            CKA_PRIME_2         = k.q,
-            CKA_COEFFICIENT     = inverse(k.q, k.p),
-            CKA_EXPONENT_1      = k.d % (k.p - 1),
-            CKA_EXPONENT_2      = k.d % (k.q - 1))
-        if cka_id is not None:
-            public[CKA_ID] = private[CKA_ID] = cka_id
-        public_key  = hsm.C_CreateObject(self.session, public)
-        private_key = hsm.C_CreateObject(self.session, private)
-        self.assertIsKeypair(public_key, private_key)
-        return public_key, private_key
-
-    @unittest.skipUnless(pycrypto_loaded, "requires PyCrypto")
-    def test_load_sign_verify_rsa_1024(self):
-        "Load/sign/verify with RSA-1024-SHA-512 and externally-supplied key"
-        public_key, private_key = self._load_rsa_keypair(rsa_1024_pem, "RSA-1024")
-        hamster = "Your mother was a hamster"
-        hsm.C_SignInit(self.session, CKM_SHA512_RSA_PKCS, private_key)
-        sig = hsm.C_Sign(self.session, hamster)
-        self.assertIsInstance(sig, str)
-        hsm.C_VerifyInit(self.session, CKM_SHA512_RSA_PKCS, public_key)
-        hsm.C_Verify(self.session, hamster, sig)
-
-    @unittest.skipUnless(pycrypto_loaded, "requires PyCrypto")
-    def test_load_sign_verify_rsa_2048(self):
-        "Load/sign/verify with RSA-2048-SHA-512 and externally-supplied key"
-        public_key, private_key = self._load_rsa_keypair(rsa_2048_pem, "RSA-2048")
-        hamster = "Your mother was a hamster"
-        hsm.C_SignInit(self.session, CKM_SHA512_RSA_PKCS, private_key)
-        sig = hsm.C_Sign(self.session, hamster)
-        self.assertIsInstance(sig, str)
-        hsm.C_VerifyInit(self.session, CKM_SHA512_RSA_PKCS, public_key)
-        hsm.C_Verify(self.session, hamster, sig)
-
-    @unittest.skipUnless(pycrypto_loaded, "requires PyCrypto")
-    def test_load_sign_verify_rsa_3416(self):
-        "Load/sign/verify with RSA-3416-SHA-512 and externally-supplied key"
-        if not args.all_tests:
-            self.skipTest("Key length not a multiple of 32, so expected to fail (fairly quickly)")
-        public_key, private_key = self._load_rsa_keypair(rsa_3416_pem, "RSA-3416")
-        hamster = "Your mother was a hamster"
-        hsm.C_SignInit(self.session, CKM_SHA512_RSA_PKCS, private_key)
-        sig = hsm.C_Sign(self.session, hamster)
-        self.assertIsInstance(sig, str)
-        hsm.C_VerifyInit(self.session, CKM_SHA512_RSA_PKCS, public_key)
-        hsm.C_Verify(self.session, hamster, sig)
-
-    def test_gen_sign_verify_rsa_3416(self):
-        "Generate/sign/verify with RSA-3416-SHA-512"
-        if not args.all_tests:
-            self.skipTest("Key length not a multiple of 32, so expected to fail (very slowly)")
-        public_key, private_key = hsm.C_GenerateKeyPair(
-            self.session, CKM_RSA_PKCS_KEY_PAIR_GEN, CKA_MODULUS_BITS = 3416,
-            CKA_ID = "RSA-3416", CKA_SIGN = True, CKA_VERIFY = True, CKA_TOKEN = True)
-        self.assertIsKeypair(public_key, private_key)
-        hamster = "Your mother was a hamster"
-        hsm.C_SignInit(self.session, CKM_SHA512_RSA_PKCS, private_key)
-        sig = hsm.C_Sign(self.session, hamster)
-        self.assertIsInstance(sig, str)
-        hsm.C_VerifyInit(self.session, CKM_SHA512_RSA_PKCS, public_key)
-        hsm.C_Verify(self.session, hamster, sig)
-
-    def test_gen_rsa_1028(self):
-        "Test that C_GenerateKeyPair() rejects key length not multiple of 8 bits"
-        with self.assertRaises(CKR_ATTRIBUTE_VALUE_INVALID):
-            hsm.C_GenerateKeyPair(
-                self.session, CKM_RSA_PKCS_KEY_PAIR_GEN, CKA_MODULUS_BITS = 1028,
-                CKA_ID = "RSA-1028", CKA_SIGN = True, CKA_VERIFY = True, CKA_TOKEN = True)
-
-    def test_gen_sign_verify_rsa_1032(self):
-        "Generate/sign/verify with RSA-1032-SHA-512 (sic)"
-        public_key, private_key = hsm.C_GenerateKeyPair(
-            self.session, CKM_RSA_PKCS_KEY_PAIR_GEN, CKA_MODULUS_BITS = 1032,
-            CKA_ID = "RSA-1032", CKA_SIGN = True, CKA_VERIFY = True, CKA_TOKEN = True)
-        self.assertIsKeypair(public_key, private_key)
-        hamster = "Your mother was a hamster"
-        hsm.C_SignInit(self.session, CKM_SHA512_RSA_PKCS, private_key)
-        sig = hsm.C_Sign(self.session, hamster)
-        self.assertIsInstance(sig, str)
-        hsm.C_VerifyInit(self.session, CKM_SHA512_RSA_PKCS, public_key)
-        hsm.C_Verify(self.session, hamster, sig)
-
-    @unittest.skipUnless(pycrypto_loaded, "requires PyCrypto")
-    def test_load_sign_verify_rsa_1024_with_rpki_data(self):
-        "Load/sign/verify with RSA-1024-SHA-256, externally-supplied key"
-        public_key, private_key = self._load_rsa_keypair(rsa_1024_pem, "RSA-1024")
-        tbs = '''
-            31 6B 30 1A 06 09 2A 86 48 86 F7 0D 01 09 03 31
-            0D 06 0B 2A 86 48 86 F7 0D 01 09 10 01 1A 30 1C
-            06 09 2A 86 48 86 F7 0D 01 09 05 31 0F 17 0D 31
-            36 30 37 31 36 30 39 35 32 35 37 5A 30 2F 06 09
-            2A 86 48 86 F7 0D 01 09 04 31 22 04 20 11 A2 E6
-            0F 1F 86 AF 45 25 4D 8F E1 1F C9 EA B3 83 4A 41
-            17 C1 42 B7 43 AD 51 5E F5 A2 F8 E3 25
-        '''
-        tbs = "".join(chr(int(i, 16)) for i in tbs.split())
-        hsm.C_SignInit(self.session, CKM_SHA256_RSA_PKCS, private_key)
-        hsm.C_SignUpdate(self.session, tbs)
-        sig = hsm.C_SignFinal(self.session)
-        self.assertIsInstance(sig, str)
-        hsm.C_VerifyInit(self.session, CKM_SHA256_RSA_PKCS, public_key)
-        hsm.C_Verify(self.session, tbs, sig)
-        verifier = PKCS1_v1_5.new(RSA.importKey(rsa_1024_pem))
-        digest = SHA256(tbs)
-        self.assertTrue(verifier.verify(digest, sig))
-        hsm.C_SignInit(self.session, CKM_SHA256_RSA_PKCS, private_key)
-        self.assertEqual(sig, hsm.C_Sign(self.session, tbs))
-        hsm.C_VerifyInit(self.session, CKM_SHA256_RSA_PKCS, public_key)
-        hsm.C_VerifyUpdate(self.session, tbs)
-        hsm.C_VerifyFinal(self.session, sig)
+        k.verify(signature = r + s, data = H)
 
 
-# Keys for preload tests, here rather than inline because they're
-# bulky.
+# Entire classes of tests still missing:
+#
+# * pkey attribute functions
+#
+# * pkey list and match functions
+#
+# Preloaded keys should suffice for all of these.
+
+if False:
+  class TestPKeyListMatch(TestCaseLoggedIn):
+
+    def test_pkey_list(self):
+        for flags in (0, HAL_KEY_FLAG_TOKEN):
+            hsm.pkey_list(flags = flags)
+
+    def test_pkey_match(self):
+        for f in (HAL_KEY_FLAG_TOKEN, 0):
+            hsm.pkey_match(flags = f)
+
+if False:
+  class TestPKeyAttribute(TestCaseLoggedIn):
+    pass
+
+
+# Keys for preload tests, here at the end because they're large.  For
+# the moment, we use PKCS #1.5 format for RSA and secg format for
+# ECDSA, because those are the formats that everything (including our
+# own ASN.1 code) supports.  Arguably, we should be using PKCS #8 to
+# get a single, consistent, self-identifying private key format, but
+# we're not there yet and it's not particularly urgent given
+# widespread availablity of conversion tools (eg, "openssl pkcs8").
 
 static_keys = {}
 
