@@ -54,7 +54,7 @@ static hal_error_t get_version(const uint8_t **iptr, const uint8_t * const ilimi
     check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
 
     /* call the local function */
-    ret = hal_rpc_local_misc_dispatch.get_version(&version);
+    ret = hal_rpc_get_version(&version);
 
     if (ret == HAL_OK)
         check(hal_xdr_encode_int(optr, olimit, version));
@@ -78,7 +78,7 @@ static hal_error_t get_random(const uint8_t **iptr, const uint8_t * const ilimit
     /* call the local function */
     /* get the data directly into the output buffer */
     check(hal_xdr_encode_int(optr, olimit, length));
-    ret = hal_rpc_local_misc_dispatch.get_random(*optr, (size_t)length);
+    ret = hal_rpc_get_random(*optr, (size_t)length);
     if (ret == HAL_OK)
         *optr += pad(length);
     else
@@ -102,7 +102,7 @@ static hal_error_t set_pin(const uint8_t **iptr, const uint8_t * const ilimit,
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &pin, &pin_len));
 
     /* call the local function */
-    ret = hal_rpc_local_misc_dispatch.set_pin(client, user, (const char * const)pin, pin_len);
+    ret = hal_rpc_set_pin(client, user, (const char * const)pin, pin_len);
 
     return ret;
 }
@@ -121,7 +121,7 @@ static hal_error_t login(const uint8_t **iptr, const uint8_t * const ilimit,
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &pin, &pin_len));
 
     /* call the local function */
-    ret = hal_rpc_local_misc_dispatch.login(client, user, (const char * const)pin, pin_len);
+    ret = hal_rpc_login(client, user, (const char * const)pin, pin_len);
 
     return ret;
 }
@@ -135,7 +135,7 @@ static hal_error_t logout(const uint8_t **iptr, const uint8_t * const ilimit,
     check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
 
     /* call the local function */
-    ret = hal_rpc_local_misc_dispatch.logout(client);
+    ret = hal_rpc_logout(client);
 
     return ret;
 }
@@ -149,7 +149,7 @@ static hal_error_t logout_all(const uint8_t **iptr, const uint8_t * const ilimit
     check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
 
     /* call the local function */
-    ret = hal_rpc_local_misc_dispatch.logout_all();
+    ret = hal_rpc_logout_all();
 
     return ret;
 }
@@ -165,7 +165,7 @@ static hal_error_t is_logged_in(const uint8_t **iptr, const uint8_t * const ilim
     check(hal_xdr_decode_int(iptr, ilimit, &user));
 
     /* call the local function */
-    ret = hal_rpc_local_misc_dispatch.is_logged_in(client, user);
+    ret = hal_rpc_is_logged_in(client, user);
 
     return ret;
 }
@@ -182,7 +182,7 @@ static hal_error_t hash_get_digest_len(const uint8_t **iptr, const uint8_t * con
     check(hal_xdr_decode_int(iptr, ilimit, &alg));
 
     /* call the local function */
-    ret = hal_rpc_local_hash_dispatch.get_digest_length(alg, &length);
+    ret = hal_rpc_hash_get_digest_length(alg, &length);
 
     if (ret == HAL_OK)
         check(hal_xdr_encode_int(optr, olimit, length));
@@ -210,7 +210,7 @@ static hal_error_t hash_get_digest_algorithm_id(const uint8_t **iptr, const uint
     /* call the local function */
     /* get the data directly into the output buffer */
     *optr += 4;         /* reserve 4 bytes for length */
-    ret = hal_rpc_local_hash_dispatch.get_digest_algorithm_id(alg, *optr, &len, (size_t)len_max);
+    ret = hal_rpc_hash_get_digest_algorithm_id(alg, *optr, &len, (size_t)len_max);
     if (ret == HAL_OK) {
         *optr = optr_orig;
         check(hal_xdr_encode_int(optr, olimit, len));
@@ -235,7 +235,7 @@ static hal_error_t hash_get_algorithm(const uint8_t **iptr, const uint8_t * cons
     check(hal_xdr_decode_int(iptr, ilimit, &hash.handle));
 
     /* call the local function */
-    ret = hal_rpc_local_hash_dispatch.get_algorithm(hash, &alg);
+    ret = hal_rpc_hash_get_algorithm(hash, &alg);
 
     if (ret == HAL_OK)
         check(hal_xdr_encode_int(optr, olimit, alg));
@@ -260,7 +260,7 @@ static hal_error_t hash_initialize(const uint8_t **iptr, const uint8_t * const i
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &key, &key_len));
 
     /* call the local function */
-    ret = hal_rpc_local_hash_dispatch.initialize(client, session, &hash, (hal_digest_algorithm_t)alg, key, (size_t)key_len);
+    ret = hal_rpc_hash_initialize(client, session, &hash, (hal_digest_algorithm_t)alg, key, (size_t)key_len);
 
     if (ret == HAL_OK)
         check(hal_xdr_encode_int(optr, olimit, hash.handle));
@@ -282,7 +282,7 @@ static hal_error_t hash_update(const uint8_t **iptr, const uint8_t * const ilimi
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &data, &length));
 
     /* call the local function */
-    ret = hal_rpc_local_hash_dispatch.update(hash, data, (size_t)length);
+    ret = hal_rpc_hash_update(hash, data, (size_t)length);
 
     return ret;
 }
@@ -305,7 +305,7 @@ static hal_error_t hash_finalize(const uint8_t **iptr, const uint8_t * const ili
     /* call the local function */
     /* get the data directly into the output buffer */
     check(hal_xdr_encode_int(optr, olimit, length));
-    ret = hal_rpc_local_hash_dispatch.finalize(hash, *optr, (size_t)length);
+    ret = hal_rpc_hash_finalize(hash, *optr, (size_t)length);
     if (ret == HAL_OK)
         *optr += pad(length);
     else
@@ -336,7 +336,7 @@ static hal_error_t pkey_load(const uint8_t **iptr, const uint8_t * const ilimit,
     check(hal_xdr_decode_int(iptr, ilimit, &flags));
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.load(client, session, &pkey, type, curve, &name, der, der_len, flags);
+    ret = hal_rpc_pkey_load(client, session, &pkey, type, curve, &name, der, der_len, flags);
 
     if (ret == HAL_OK) {
         uint8_t *optr_orig = *optr;
@@ -368,7 +368,7 @@ static hal_error_t pkey_find(const uint8_t **iptr, const uint8_t * const ilimit,
         return HAL_ERROR_KEY_NAME_TOO_LONG;
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.find(client, session, &pkey, (const hal_uuid_t *) name_ptr, flags);
+    ret = hal_rpc_pkey_find(client, session, &pkey, (const hal_uuid_t *) name_ptr, flags);
 
     if (ret == HAL_OK)
         check(hal_xdr_encode_int(optr, olimit, pkey.handle));
@@ -396,7 +396,7 @@ static hal_error_t pkey_generate_rsa(const uint8_t **iptr, const uint8_t * const
     check(hal_xdr_decode_int(iptr, ilimit, &flags));
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.generate_rsa(client, session, &pkey, &name, key_len, exp, exp_len, flags);
+    ret = hal_rpc_pkey_generate_rsa(client, session, &pkey, &name, key_len, exp, exp_len, flags);
 
     if (ret == HAL_OK) {
         uint8_t *optr_orig = *optr;
@@ -425,7 +425,7 @@ static hal_error_t pkey_generate_ec(const uint8_t **iptr, const uint8_t * const 
     check(hal_xdr_decode_int(iptr, ilimit, &flags));
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.generate_ec(client, session, &pkey, &name, curve, flags);
+    ret = hal_rpc_pkey_generate_ec(client, session, &pkey, &name, curve, flags);
 
     if (ret == HAL_OK) {
         uint8_t *optr_orig = *optr;
@@ -448,7 +448,7 @@ static hal_error_t pkey_close(const uint8_t **iptr, const uint8_t * const ilimit
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.close(pkey);
+    ret = hal_rpc_pkey_close(pkey);
 
     return ret;
 }
@@ -464,7 +464,7 @@ static hal_error_t pkey_delete(const uint8_t **iptr, const uint8_t * const ilimi
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.delete(pkey);
+    ret = hal_rpc_pkey_delete(pkey);
 
     return ret;
 }
@@ -481,7 +481,7 @@ static hal_error_t pkey_get_key_type(const uint8_t **iptr, const uint8_t * const
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.get_key_type(pkey, &type);
+    ret = hal_rpc_pkey_get_key_type(pkey, &type);
 
     if (ret == HAL_OK)
         check(hal_xdr_encode_int(optr, olimit, type));
@@ -501,7 +501,7 @@ static hal_error_t pkey_get_key_flags(const uint8_t **iptr, const uint8_t * cons
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.get_key_flags(pkey, &flags);
+    ret = hal_rpc_pkey_get_key_flags(pkey, &flags);
 
     if (ret == HAL_OK)
         check(hal_xdr_encode_int(optr, olimit, flags));
@@ -520,7 +520,7 @@ static hal_error_t pkey_get_public_key_len(const uint8_t **iptr, const uint8_t *
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
 
     /* call the local function */
-    len = hal_rpc_local_pkey_dispatch.get_public_key_len(pkey);
+    len = hal_rpc_pkey_get_public_key_len(pkey);
 
     check(hal_xdr_encode_int(optr, olimit, len));
 
@@ -547,7 +547,7 @@ static hal_error_t pkey_get_public_key(const uint8_t **iptr, const uint8_t * con
     /* call the local function */
     /* get the data directly into the output buffer */
     *optr += 4;         /* reserve 4 bytes for length */
-    ret = hal_rpc_local_pkey_dispatch.get_public_key(pkey, *optr, &len, len_max);
+    ret = hal_rpc_pkey_get_public_key(pkey, *optr, &len, len_max);
     if (ret == HAL_OK) {
         *optr = optr_orig;
         check(hal_xdr_encode_int(optr, olimit, len));
@@ -585,7 +585,7 @@ static hal_error_t pkey_sign(const uint8_t **iptr, const uint8_t * const ilimit,
     /* call the local function */
     /* get the data directly into the output buffer */
     *optr += 4;         /* reserve 4 bytes for length */
-    ret = hal_rpc_local_pkey_dispatch.sign(pkey, hash, input, input_len, *optr, &sig_len, sig_max);
+    ret = hal_rpc_pkey_sign(pkey, hash, input, input_len, *optr, &sig_len, sig_max);
     *optr = optr_orig;
     if (ret == HAL_OK) {
         check(hal_xdr_encode_int(optr, olimit, sig_len));
@@ -613,7 +613,7 @@ static hal_error_t pkey_verify(const uint8_t **iptr, const uint8_t * const ilimi
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &sig, &sig_len));
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.verify(pkey, hash, input, input_len, sig, sig_len);
+    ret = hal_rpc_pkey_verify(pkey, hash, input, input_len, sig, sig_len);
 
     return ret;
 }
@@ -650,7 +650,7 @@ static hal_error_t pkey_list(const uint8_t **iptr, const uint8_t * const ilimit,
     unsigned result_len;
 
     /* call the local function */
-    ret = hal_rpc_local_pkey_dispatch.list(client, session, result, &result_len, result_max, flags);
+    ret = hal_rpc_pkey_list(client, session, result, &result_len, result_max, flags);
 
     if (ret == HAL_OK) {
         check(hal_xdr_encode_int(optr, olimit, result_len));
@@ -703,10 +703,10 @@ static hal_error_t pkey_match(const uint8_t **iptr, const uint8_t * const ilimit
     hal_uuid_t result[result_max];
     unsigned result_len;
 
-    ret = hal_rpc_local_pkey_dispatch.match(client, session, type, curve, flags,
-                                            attributes, attributes_len,
-                                            result, &result_len, result_max,
-                                            previous_uuid);
+    ret = hal_rpc_pkey_match(client, session, type, curve, flags,
+                             attributes, attributes_len,
+                             result, &result_len, result_max,
+                             previous_uuid);
 
     if (ret == HAL_OK) {
         uint8_t *optr_orig = *optr;
@@ -736,7 +736,7 @@ static hal_error_t pkey_set_attribute(const uint8_t **iptr, const uint8_t * cons
     check(hal_xdr_decode_int(iptr, ilimit, &type));
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &value, &value_len));
 
-    ret = hal_rpc_local_pkey_dispatch.set_attribute(pkey, type, value, value_len);
+    ret = hal_rpc_pkey_set_attribute(pkey, type, value, value_len);
 
     return ret;
 }
@@ -760,7 +760,7 @@ static hal_error_t pkey_get_attribute(const uint8_t **iptr, const uint8_t * cons
         return HAL_ERROR_RPC_PACKET_OVERFLOW;
 
     *optr += 4;
-    ret = hal_rpc_local_pkey_dispatch.get_attribute(pkey, type, *optr, &value_len, value_max);
+    ret = hal_rpc_pkey_get_attribute(pkey, type, *optr, &value_len, value_max);
 
     if (ret == HAL_OK) {
         *optr = optr_orig;
@@ -786,7 +786,7 @@ static hal_error_t pkey_delete_attribute(const uint8_t **iptr, const uint8_t * c
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &type));
 
-    ret = hal_rpc_local_pkey_dispatch.delete_attribute(pkey, type);
+    ret = hal_rpc_pkey_delete_attribute(pkey, type);
 
     return ret;
 }
