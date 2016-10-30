@@ -437,6 +437,74 @@ class TestPKeyHashing(TestCaseLoggedIn):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, HAL_CURVE_P521, self.sign_verify_local_local)
 
 
+class TestPKeyRSAInterop(TestCaseLoggedIn):
+
+    @staticmethod
+    def h(alg, text):
+        h = hsm.hash_initialize(alg, mixed_mode = True)
+        h.update(text)
+        return h
+
+    def load_sign_verify_rsa(self, alg, pyhash, keylen):
+        hamster = "Your mother was a hamster"
+        sk = static_keys[HAL_KEY_TYPE_RSA_PRIVATE, keylen]
+        vk = static_keys[HAL_KEY_TYPE_RSA_PUBLIC,  keylen]
+        k1 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PRIVATE, HAL_CURVE_NONE, sk.exportKey("DER"))
+        self.addCleanup(k1.delete)
+        k2 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PUBLIC,  HAL_CURVE_NONE, vk.exportKey("DER"))
+        self.addCleanup(k2.delete)
+        sk = PKCS1_v1_5.PKCS115_SigScheme(sk)
+        vk = PKCS1_v1_5.PKCS115_SigScheme(vk)
+        sig1 = k1.sign(hash = self.h(alg, hamster))
+        sig2 = sk.sign(pyhash(hamster))
+        self.assertEqual(sig1, sig2)
+        k1.verify(signature = sig2, hash = self.h(alg, hamster))
+        k2.verify(signature = sig2, hash = self.h(alg, hamster))
+        sk.verify(pyhash(hamster), sig1)
+        vk.verify(pyhash(hamster), sig1)
+
+    def test_interop_rsa_1024_sha256(self):
+        self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA256, SHA256, 1024)
+
+    def test_interop_rsa_2048_sha384(self):
+        self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA384, SHA384, 2048)
+
+    def test_interop_rsa_4096_sha512(self):
+        self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA512, SHA512, 4096)
+
+
+class TestPKeyECDSAInterop(TestCaseLoggedIn):
+
+    @staticmethod
+    def h(alg, text):
+        h = hsm.hash_initialize(alg, mixed_mode = True)
+        h.update(text)
+        return h
+
+    def load_sign_verify_ecdsa(self, alg, curve):
+        hamster = "Your mother was a hamster"
+        sk = static_keys[HAL_KEY_TYPE_EC_PRIVATE, curve]
+        vk = static_keys[HAL_KEY_TYPE_EC_PUBLIC,  curve]
+        k1 = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, curve, sk.to_der())
+        self.addCleanup(k1.delete)
+        k2 = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC,  curve, vk.to_der())
+        self.addCleanup(k2.delete)
+        sig1 = k1.sign(hash = self.h(alg, hamster))
+        sig2 = sk.sign(hamster)
+        k1.verify(signature = sig2, hash = self.h(alg, hamster))
+        k2.verify(signature = sig2, hash = self.h(alg, hamster))
+        vk.verify(sig1, hamster)
+
+    def test_interop_ecdsa_p256_sha256(self):
+        self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA256, HAL_CURVE_P256)
+
+    def test_interop_ecdsa_p384_sha384(self):
+        self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA384, HAL_CURVE_P384)
+
+    def test_interop_ecdsa_p521_sha512(self):
+        self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, HAL_CURVE_P521)
+
+
 class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
     """
     ECDSA verification tests based on Suite B Implementer's Guide to FIPS 186-3.
