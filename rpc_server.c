@@ -489,6 +489,26 @@ static hal_error_t pkey_get_key_type(const uint8_t **iptr, const uint8_t * const
     return ret;
 }
 
+static hal_error_t pkey_get_key_curve(const uint8_t **iptr, const uint8_t * const ilimit,
+                                     uint8_t **optr, const uint8_t * const olimit)
+{
+    hal_client_handle_t client;
+    hal_pkey_handle_t pkey;
+    hal_curve_name_t curve;
+    hal_error_t ret;
+
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
+    check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
+
+    /* call the local function */
+    ret = hal_rpc_pkey_get_key_curve(pkey, &curve);
+
+    if (ret == HAL_OK)
+        check(hal_xdr_encode_int(optr, olimit, curve));
+
+    return ret;
+}
+
 static hal_error_t pkey_get_key_flags(const uint8_t **iptr, const uint8_t * const ilimit,
                                       uint8_t **optr, const uint8_t * const olimit)
 {
@@ -801,105 +821,114 @@ hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ile
     uint32_t rpc_func_num;
     uint32_t client_handle;
     hal_error_t ret;
+    hal_error_t (*handler)(const uint8_t **iptr, const uint8_t * const ilimit,
+                           uint8_t **optr, const uint8_t * const olimit) = NULL;
 
     check(hal_xdr_decode_int(&iptr, ilimit, &rpc_func_num));
     check(hal_xdr_decode_int(&iptr, ilimit, &client_handle));
     check(hal_xdr_undecode_int(&iptr));
+
     switch (rpc_func_num) {
     case RPC_FUNC_GET_VERSION:
-        ret = get_version(&iptr, ilimit, &optr, olimit);
+        handler = get_version;
         break;
     case RPC_FUNC_GET_RANDOM:
-        ret = get_random(&iptr, ilimit, &optr, olimit);
+        handler = get_random;
         break;
     case RPC_FUNC_SET_PIN:
-        ret = set_pin(&iptr, ilimit, &optr, olimit);
+        handler = set_pin;
         break;
     case RPC_FUNC_LOGIN:
-        ret = login(&iptr, ilimit, &optr, olimit);
+        handler = login;
         break;
     case RPC_FUNC_LOGOUT:
-        ret = logout(&iptr, ilimit, &optr, olimit);
+        handler = logout;
         break;
     case RPC_FUNC_LOGOUT_ALL:
-        ret = logout_all(&iptr, ilimit, &optr, olimit);
+        handler = logout_all;
         break;
     case RPC_FUNC_IS_LOGGED_IN:
-        ret = is_logged_in(&iptr, ilimit, &optr, olimit);
+        handler = is_logged_in;
         break;
     case RPC_FUNC_HASH_GET_DIGEST_LEN:
-        ret = hash_get_digest_len(&iptr, ilimit, &optr, olimit);
+        handler = hash_get_digest_len;
         break;
     case RPC_FUNC_HASH_GET_DIGEST_ALGORITHM_ID:
-        ret = hash_get_digest_algorithm_id(&iptr, ilimit, &optr, olimit);
+        handler = hash_get_digest_algorithm_id;
         break;
     case RPC_FUNC_HASH_GET_ALGORITHM:
-        ret = hash_get_algorithm(&iptr, ilimit, &optr, olimit);
+        handler = hash_get_algorithm;
         break;
     case RPC_FUNC_HASH_INITIALIZE:
-        ret = hash_initialize(&iptr, ilimit, &optr, olimit);
+        handler = hash_initialize;
         break;
     case RPC_FUNC_HASH_UPDATE:
-        ret = hash_update(&iptr, ilimit, &optr, olimit);
+        handler = hash_update;
         break;
     case RPC_FUNC_HASH_FINALIZE:
-        ret = hash_finalize(&iptr, ilimit, &optr, olimit);
+        handler = hash_finalize;
         break;
     case RPC_FUNC_PKEY_LOAD:
-        ret = pkey_load(&iptr, ilimit, &optr, olimit);
+        handler = pkey_load;
         break;
     case RPC_FUNC_PKEY_FIND:
-        ret = pkey_find(&iptr, ilimit, &optr, olimit);
+        handler = pkey_find;
         break;
     case RPC_FUNC_PKEY_GENERATE_RSA:
-        ret = pkey_generate_rsa(&iptr, ilimit, &optr, olimit);
+        handler = pkey_generate_rsa;
         break;
     case RPC_FUNC_PKEY_GENERATE_EC:
-        ret = pkey_generate_ec(&iptr, ilimit, &optr, olimit);
+        handler = pkey_generate_ec;
         break;
     case RPC_FUNC_PKEY_CLOSE:
-        ret = pkey_close(&iptr, ilimit, &optr, olimit);
+        handler = pkey_close;
         break;
     case RPC_FUNC_PKEY_DELETE:
-        ret = pkey_delete(&iptr, ilimit, &optr, olimit);
+        handler = pkey_delete;
         break;
     case RPC_FUNC_PKEY_GET_KEY_TYPE:
-        ret = pkey_get_key_type(&iptr, ilimit, &optr, olimit);
+        handler = pkey_get_key_type;
+        break;
+    case RPC_FUNC_PKEY_GET_KEY_CURVE:
+        handler = pkey_get_key_curve;
         break;
     case RPC_FUNC_PKEY_GET_KEY_FLAGS:
-        ret = pkey_get_key_flags(&iptr, ilimit, &optr, olimit);
+        handler = pkey_get_key_flags;
         break;
     case RPC_FUNC_PKEY_GET_PUBLIC_KEY_LEN:
-        ret = pkey_get_public_key_len(&iptr, ilimit, &optr, olimit);
+        handler = pkey_get_public_key_len;
         break;
     case RPC_FUNC_PKEY_GET_PUBLIC_KEY:
-        ret = pkey_get_public_key(&iptr, ilimit, &optr, olimit);
+        handler = pkey_get_public_key;
         break;
     case RPC_FUNC_PKEY_SIGN:
-        ret = pkey_sign(&iptr, ilimit, &optr, olimit);
+        handler = pkey_sign;
         break;
     case RPC_FUNC_PKEY_VERIFY:
-        ret = pkey_verify(&iptr, ilimit, &optr, olimit);
+        handler = pkey_verify;
         break;
     case RPC_FUNC_PKEY_LIST:
-        ret = pkey_list(&iptr, ilimit, &optr, olimit);
+        handler = pkey_list;
         break;
     case RPC_FUNC_PKEY_MATCH:
-        ret = pkey_match(&iptr, ilimit, &optr, olimit);
+        handler = pkey_match;
         break;
     case RPC_FUNC_PKEY_SET_ATTRIBUTE:
-        ret = pkey_set_attribute(&iptr, ilimit, &optr, olimit);
+        handler = pkey_set_attribute;
         break;
     case RPC_FUNC_PKEY_GET_ATTRIBUTE:
-        ret = pkey_get_attribute(&iptr, ilimit, &optr, olimit);
+        handler = pkey_get_attribute;
         break;
     case RPC_FUNC_PKEY_DELETE_ATTRIBUTE:
-        ret = pkey_delete_attribute(&iptr, ilimit, &optr, olimit);
-        break;
-    default:
-        ret = HAL_ERROR_RPC_BAD_FUNCTION;
+        handler = pkey_delete_attribute;
         break;
     }
+
+    if (handler)
+        ret = handler(&iptr, ilimit, &optr, olimit);
+    else
+        ret = HAL_ERROR_RPC_BAD_FUNCTION;
+
     /* Encode opcode, client ID, and response code at the beginning of the payload */
     *olen = optr - obuf;
     optr = obuf;

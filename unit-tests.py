@@ -536,15 +536,33 @@ class TestPKeyList(TestCaseLoggedIn):
     def test_ks_list_token(self):
         self.ks_list(HAL_KEY_FLAG_TOKEN)
 
-    def ks_match(self, flags):
-        for i in xrange(3):
-            self.load_keys(flags)
-        for uuid in hsm.pkey_match(flags = flags):
+    def ks_print(self, flags, **kwargs):
+        kwargs.update(flags = flags)
+        for uuid in hsm.pkey_match(**kwargs):
             with hsm.pkey_find(uuid, flags) as k:
-                print "{0.uuid} {0.key_type} {0.key_flags}".format(k)
+                print "{0.uuid}  0x{0.key_flags:02x}  {0.key_curve}  {0.key_type}".format(k)
+
+    def ks_match(self, flags):
+        self.load_keys(flags)
+        self.load_keys(flags)
+        print
+        print "All:"
+        self.ks_print(flags = flags)
+        print
+        for keytype in set(HALKeyType.index.itervalues()) - {HAL_KEY_TYPE_NONE}:
+            print "Type:", keytype
+            self.ks_print(flags = flags, type = keytype)
+            print
+        for curve in set(HALCurve.index.itervalues()) - {HAL_CURVE_NONE}:
+            print "Curve:", curve
+            self.ks_print(flags = flags, curve = curve)
+            print
 
     def test_ks_match_token(self):
         self.ks_match(HAL_KEY_FLAG_TOKEN)
+
+    def test_ks_match_volatile(self):
+        self.ks_match(0)
 
 class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
     """

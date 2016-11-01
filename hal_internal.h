@@ -215,7 +215,10 @@ typedef struct {
   hal_error_t  (*delete)(const hal_pkey_handle_t pkey);
 
   hal_error_t  (*get_key_type)(const hal_pkey_handle_t pkey,
-                               hal_key_type_t *key_type);
+                               hal_key_type_t *type);
+
+  hal_error_t  (*get_key_curve)(const hal_pkey_handle_t pkey,
+                                hal_curve_name_t *curve);
 
   hal_error_t  (*get_key_flags)(const hal_pkey_handle_t pkey,
                                 hal_key_flags_t *flags);
@@ -915,6 +918,7 @@ typedef enum {
     RPC_FUNC_PKEY_SET_ATTRIBUTE,
     RPC_FUNC_PKEY_GET_ATTRIBUTE,
     RPC_FUNC_PKEY_DELETE_ATTRIBUTE,
+    RPC_FUNC_PKEY_GET_KEY_CURVE,
 } rpc_func_num_t;
 
 #define RPC_VERSION 0x01010000          /* 1.1.0.0 */

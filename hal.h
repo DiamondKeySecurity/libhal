@@ -736,6 +736,9 @@ extern hal_error_t hal_rpc_pkey_delete(const hal_pkey_handle_t pkey);
 extern hal_error_t hal_rpc_pkey_get_key_type(const hal_pkey_handle_t pkey,
                                              hal_key_type_t *type);
 
+extern hal_error_t hal_rpc_pkey_get_key_curve(const hal_pkey_handle_t pkey,
+                                              hal_curve_name_t *curve);
+
 extern hal_error_t hal_rpc_pkey_get_key_flags(const hal_pkey_handle_t pkey,
                                               hal_key_flags_t *flags);
 

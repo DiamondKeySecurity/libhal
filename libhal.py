@@ -182,6 +182,7 @@ RPCFunc.define('''
     RPC_FUNC_PKEY_SET_ATTRIBUTE,
     RPC_FUNC_PKEY_GET_ATTRIBUTE,
     RPC_FUNC_PKEY_DELETE_ATTRIBUTE,
+    RPC_FUNC_PKEY_GET_KEY_CURVE,
 ''')
 
 class HALDigestAlgorithm(Enum): pass
@@ -366,6 +367,10 @@ class PKey(Handle):
     @cached_property
     def key_type(self):
         return self.hsm.pkey_get_key_type(self)
+
+    @cached_property
+    def key_curve(self):
+        return self.hsm.pkey_get_key_curve(self)
 
     @cached_property
     def key_flags(self):
@@ -598,6 +603,10 @@ class HSM(object):
     def pkey_get_key_type(self, pkey):
         with self.rpc(RPC_FUNC_PKEY_GET_KEY_TYPE, pkey) as r:
             return HALKeyType.index[r.unpack_uint()]
+
+    def pkey_get_key_curve(self, pkey):
+        with self.rpc(RPC_FUNC_PKEY_GET_KEY_CURVE, pkey) as r:
+            return HALCurve.index[r.unpack_uint()]
 
     def pkey_get_key_flags(self, pkey):
         with self.rpc(RPC_FUNC_PKEY_GET_KEY_FLAGS, pkey) as r:

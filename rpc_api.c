@@ -283,6 +283,14 @@ hal_error_t hal_rpc_pkey_get_key_type(const hal_pkey_handle_t pkey,
   return hal_rpc_pkey_dispatch->get_key_type(pkey, type);
 }
 
+hal_error_t hal_rpc_pkey_get_key_curve(const hal_pkey_handle_t pkey,
+                                       hal_curve_name_t *curve)
+{
+  if (curve == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+  return hal_rpc_pkey_dispatch->get_key_curve(pkey, curve);
+}
+
 hal_error_t hal_rpc_pkey_get_key_flags(const hal_pkey_handle_t pkey,
                                        hal_key_flags_t *flags)
 {

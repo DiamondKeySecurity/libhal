@@ -494,6 +494,26 @@ static hal_error_t pkey_local_get_key_type(const hal_pkey_handle_t pkey,
 }
 
 /*
+ * Get curve of key associated with handle.
+ */
+
+static hal_error_t pkey_local_get_key_curve(const hal_pkey_handle_t pkey,
+                                           hal_curve_name_t *curve)
+{
+  if (curve == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  hal_pkey_slot_t *slot = find_handle(pkey);
+
+  if (slot == NULL)
+    return HAL_ERROR_KEY_NOT_FOUND;
+
+  *curve = slot->curve;
+
+  return HAL_OK;
+}
+
+/*
  * Get flags of key associated with handle.
  */
 
@@ -1036,6 +1056,7 @@ const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch = {
   pkey_local_close,
   pkey_local_delete,
   pkey_local_get_key_type,
+  pkey_local_get_key_curve,
   pkey_local_get_key_flags,
   pkey_local_get_public_key_len,
   pkey_local_get_public_key,

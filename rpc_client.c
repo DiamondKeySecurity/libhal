@@ -616,6 +616,31 @@ static hal_error_t pkey_remote_get_key_type(const hal_pkey_handle_t pkey,
   return rpc_ret;
 }
 
+static hal_error_t pkey_remote_get_key_curve(const hal_pkey_handle_t pkey,
+                                             hal_curve_name_t *curve)
+{
+  uint8_t outbuf[nargs(3)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t inbuf[nargs(4)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint32_t curve32;
+  hal_client_handle_t dummy_client = {0};
+  hal_error_t rpc_ret;
+
+  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_GET_KEY_CURVE));
+  check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
+  check(hal_xdr_encode_int(&optr, olimit, pkey.handle));
+  check(hal_rpc_send(outbuf, optr - outbuf));
+
+  check(read_matching_packet(RPC_FUNC_PKEY_GET_KEY_CURVE, inbuf, sizeof(inbuf), &iptr, &ilimit));
+
+  check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
+  if (rpc_ret == HAL_OK) {
+    check(hal_xdr_decode_int(&iptr, ilimit, &type32));
+    *curve = (hal_curve_name_t)curve32;
+  }
+  return rpc_ret;
+}
+
 static hal_error_t pkey_remote_get_key_flags(const hal_pkey_handle_t pkey,
                                              hal_key_flags_t *flags)
 {
@@ -1053,6 +1078,7 @@ const hal_rpc_pkey_dispatch_t hal_rpc_remote_pkey_dispatch = {
   pkey_remote_close,
   pkey_remote_delete,
   pkey_remote_get_key_type,
+  pkey_remote_get_key_curve,
   pkey_remote_get_key_flags,
   pkey_remote_get_public_key_len,
   pkey_remote_get_public_key,
@@ -1074,6 +1100,7 @@ const hal_rpc_pkey_dispatch_t hal_rpc_mixed_pkey_dispatch = {
   pkey_remote_close,
   pkey_remote_delete,
   pkey_remote_get_key_type,
+  pkey_remote_get_key_curve,
   pkey_remote_get_key_flags,
   pkey_remote_get_public_key_len,
   pkey_remote_get_public_key,
