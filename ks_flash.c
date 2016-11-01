@@ -46,34 +46,6 @@
 #include "stm-keystore.h"
 #undef HAL_OK
 
-#if 1 /* XXX Begin temporary debugging kludge */
-#warning Temporary debugging kludge, remove this
-
-/*
- * Chasing what might be a race condition, except it's a bit too
- * predictable.  Debugger breakpoint or 0.1 second delay is enough to
- * hide it, so need something simple.  So try a simple ring buffer
- * logging block numbers and actions.
- */
-
-static unsigned debug_ring_counter = 0;
-
-static struct {
-  char code;                    /* One letter code describing action */
-  unsigned blockno;             /* Block number */
-  unsigned counter;             /* value of debug_ring_counter when logged */
-} debug_ring_log_buffer[64];
-
-static inline void debug_ring_log_event(const char code, const unsigned blockno)
-{
-  const unsigned i = debug_ring_counter % (sizeof(debug_ring_log_buffer)/sizeof(*debug_ring_log_buffer));
-  debug_ring_log_buffer[i].code    = code;
-  debug_ring_log_buffer[i].blockno = blockno;
-  debug_ring_log_buffer[i].counter = debug_ring_counter++;
-}
-
-#endif /* XXX End temporary debugging kludge */
-
 /*
  * Known block states.
  *
@@ -360,8 +332,6 @@ static hal_error_t block_read(const unsigned blockno, flash_block_t *block)
   if (block == NULL || blockno >= NUM_FLASH_BLOCKS || sizeof(*block) != KEYSTORE_SUBSECTOR_SIZE)
     return HAL_ERROR_IMPOSSIBLE;
 
-  debug_ring_log_event('r', blockno); /* XXX */
-
   /* Sigh, magic numeric return codes */
   if (keystore_read_data(block_offset(blockno),
                          block->bytes,
@@ -388,8 +358,6 @@ static hal_error_t block_read(const unsigned blockno, flash_block_t *block)
     return HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE;
   }
 
-  debug_ring_log_event('R', blockno); /* XXX */
-
   /* Sigh, magic numeric return codes */
   if (keystore_read_data(block_offset(blockno) + KEYSTORE_PAGE_SIZE,
                          block->bytes + KEYSTORE_PAGE_SIZE,
@@ -412,8 +380,6 @@ static hal_error_t block_read_cached(const unsigned blockno, flash_block_t **blo
 {
   if (block == NULL)
     return HAL_ERROR_IMPOSSIBLE;
-
-  debug_ring_log_event('c', blockno); /* XXX */
 
   if ((*block = cache_find_block(blockno)) != NULL)
     return HAL_OK;
@@ -439,15 +405,11 @@ static hal_error_t block_deprecate(const unsigned blockno)
   flash_block_header_t *header = (void *) page;
   uint32_t offset = block_offset(blockno);
 
-  debug_ring_log_event('d', blockno); /* XXX */
-
   /* Sigh, magic numeric return codes */
   if (keystore_read_data(offset, page, sizeof(page)) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   header->block_status = BLOCK_STATUS_TOMBSTONE;
-
-  debug_ring_log_event('D', blockno); /* XXX */
 
   /* Sigh, magic numeric return codes */
   if (keystore_write_data(offset, page, sizeof(page)) != 1)
@@ -467,8 +429,6 @@ static hal_error_t block_zero(const unsigned blockno)
 
   uint8_t page[KEYSTORE_PAGE_SIZE] = {0};
 
-  debug_ring_log_event('z', blockno); /* XXX */
-
   /* Sigh, magic numeric return codes */
   if (keystore_write_data(block_offset(blockno), page, sizeof(page)) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
@@ -484,8 +444,6 @@ static hal_error_t block_erase(const unsigned blockno)
 {
   if (blockno >= NUM_FLASH_BLOCKS)
     return HAL_ERROR_IMPOSSIBLE;
-
-  debug_ring_log_event('e', blockno); /* XXX */
 
   /* Sigh, magic numeric return codes */
   if (keystore_erase_subsectors(blockno, blockno) != 1)
@@ -508,8 +466,6 @@ static hal_error_t block_erase_maybe(const unsigned blockno)
 {
   if (blockno >= NUM_FLASH_BLOCKS)
     return HAL_ERROR_IMPOSSIBLE;
-
-  debug_ring_log_event('m', blockno); /* XXX */
 
   uint8_t mask = 0xFF;
 
@@ -548,8 +504,6 @@ static hal_error_t block_write(const unsigned blockno, flash_block_t *block)
     break;
   }
 
-  debug_ring_log_event('w', blockno); /* XXX */
-
   /* Sigh, magic numeric return codes */
   if (keystore_write_data(block_offset(blockno), block->bytes, sizeof(*block)) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
@@ -569,8 +523,6 @@ static hal_error_t block_update(const unsigned b1, flash_block_t *block,
 
   if (db.ksi.used == db.ksi.size)
     return HAL_ERROR_NO_KEY_INDEX_SLOTS;
-
-  debug_ring_log_event('u', b1); /* XXX */
 
   cache_release(block);
 
