@@ -145,6 +145,43 @@ static inline void ks_heapsort(hal_ks_index_t *ksi)
   }
 }
 
+#define fsck(_ksi) \
+  do { hal_error_t _err = hal_ks_index_fsck(_ksi); if (_err != HAL_OK) return _err; } while (0)
+
+
+hal_error_t hal_ks_index_fsck(hal_ks_index_t *ksi)
+{
+  if (ksi == NULL || ksi->index == NULL || ksi->names == NULL ||
+      ksi->size == 0 || ksi->used > ksi->size)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  int cur, prev = -1;
+
+  for (cur = 0; cur < ksi->used; cur++) {
+
+    const int cmp = (prev < 0 ? -1 : hal_uuid_cmp(&ksi->names[ksi->index[prev]].name,
+                                                  &ksi->names[ksi->index[cur]].name));
+
+    const uint8_t cur_chunk = ksi->names[ksi->index[cur]].chunk;
+
+    const uint8_t prev_chunk = (prev < 0 ? 0 : ksi->names[ksi->index[prev]].chunk);
+
+    if (cmp > 0)
+      return HAL_ERROR_KSI_INDEX_UUID_MISORDERED;
+
+    if (cur_chunk > 0 && cmp != 0)
+      return HAL_ERROR_KSI_INDEX_CHUNK_ORPHANED;
+
+    if (cur_chunk > 0 && prev_chunk + 1 < cur_chunk)
+      return HAL_ERROR_KSI_INDEX_CHUNK_MISSING;
+
+    if (cur_chunk > 0 && prev_chunk + 1 > cur_chunk)
+      return HAL_ERROR_KSI_INDEX_CHUNK_OVERLAPS;
+  }
+
+  return HAL_OK;
+}
+
 hal_error_t hal_ks_index_setup(hal_ks_index_t *ksi)
 {
   if (ksi == NULL || ksi->index == NULL || ksi->names == NULL ||
@@ -156,6 +193,13 @@ hal_error_t hal_ks_index_setup(hal_ks_index_t *ksi)
    */
 
   ks_heapsort(ksi);
+
+  /*
+   * One might think we should fsck here, but errors in the index
+   * at this point probably relate to errors in the supplied data,
+   * which only the driver knows how to clean up.
+   */
+
   return HAL_OK;
 }
 
@@ -170,6 +214,8 @@ hal_error_t hal_ks_index_find(hal_ks_index_t *ksi,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   int where;
+
+  fsck(ksi);
 
   int ok = ks_find(ksi, name, chunk, hint, &where);
 
@@ -194,6 +240,8 @@ hal_error_t hal_ks_index_find_range(hal_ks_index_t *ksi,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   int where;
+
+  fsck(ksi);
 
   if (!ks_find(ksi, name, 0, hint, &where))
     return HAL_ERROR_KEY_NOT_FOUND;
@@ -235,6 +283,8 @@ hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
 
   int where;
 
+  fsck(ksi);
+
   if (ks_find(ksi, name, chunk, hint, &where))
     return HAL_ERROR_KEY_NAME_IN_USE;
 
@@ -256,6 +306,8 @@ hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
   if (hint != NULL)
     *hint = where;
 
+  fsck(ksi);
+
   return HAL_OK;
 }
 
@@ -270,6 +322,8 @@ hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   int where;
+
+  fsck(ksi);
 
   if (ksi->used == 0 || !ks_find(ksi, name, chunk, hint, &where))
     return HAL_ERROR_KEY_NOT_FOUND;
@@ -291,6 +345,8 @@ hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
   if (hint != NULL)
     *hint = where;
 
+  fsck(ksi);
+
   return HAL_OK;
 }
 
@@ -306,6 +362,8 @@ hal_error_t hal_ks_index_delete_range(hal_ks_index_t *ksi,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   int where;
+
+  fsck(ksi);
 
   if (ksi->used == 0 || !ks_find(ksi, name, 0, hint, &where))
     return HAL_ERROR_KEY_NOT_FOUND;
@@ -343,6 +401,8 @@ hal_error_t hal_ks_index_delete_range(hal_ks_index_t *ksi,
   if (hint != NULL)
     *hint = where;
 
+  fsck(ksi);
+
   return HAL_OK;
 }
 
@@ -360,6 +420,8 @@ hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
     return HAL_ERROR_NO_KEY_INDEX_SLOTS;
 
   int where;
+
+  fsck(ksi);
 
   if (ksi->used == 0 || !ks_find(ksi, name, chunk, hint, &where))
     return HAL_ERROR_KEY_NOT_FOUND;
@@ -384,6 +446,8 @@ hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
 
   if (hint != NULL)
     *hint = where;
+
+  fsck(ksi);
 
   return HAL_OK;
 }

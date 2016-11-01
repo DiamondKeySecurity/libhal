@@ -792,6 +792,13 @@ extern hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
                                         int *hint);
 
 /*
+ * Check the index for errors.  At least for the moment, this just
+ * reports errors, it doesn't attempt to fix them.
+ */
+
+extern hal_error_t hal_ks_index_fsck(hal_ks_index_t *ksi);
+
+/*
  * Keystore attribute utilities, for use by keystore drivers.
  *
  * Basic model here is probably to replace the "der" block in a key

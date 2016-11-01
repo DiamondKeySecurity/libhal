@@ -44,16 +44,12 @@
 
 #define KEK_LENGTH (bitsToBytes(256))
 
-#ifndef HAL_STATIC_PKEY_STATE_BLOCKS
-#define HAL_STATIC_PKEY_STATE_BLOCKS 0
+#ifndef STATIC_KS_VOLATILE_SLOTS
+#define STATIC_KS_VOLATILE_SLOTS HAL_STATIC_PKEY_STATE_BLOCKS
 #endif
 
-#ifndef HAL_KS_VOLATILE_SLOTS
-#define HAL_KS_VOLATILE_SLOTS HAL_STATIC_PKEY_STATE_BLOCKS
-#endif
-
-#ifndef HAL_KS_VOLATILE_ATTRIBUTE_SPACE
-#define HAL_KS_VOLATILE_ATTRIBUTE_SPACE 4096
+#ifndef STATIC_KS_VOLATILE_ATTRIBUTE_SPACE
+#define STATIC_KS_VOLATILE_ATTRIBUTE_SPACE 4096
 #endif
 
 /*
@@ -70,7 +66,7 @@ typedef struct {
   hal_session_handle_t  session;
   size_t                der_len;
   unsigned              attributes_len;
-  uint8_t               der[HAL_KS_WRAPPED_KEYSIZE + HAL_KS_VOLATILE_ATTRIBUTE_SPACE];
+  uint8_t               der[HAL_KS_WRAPPED_KEYSIZE + STATIC_KS_VOLATILE_ATTRIBUTE_SPACE];
 } ks_key_t;
 
 typedef struct {
@@ -97,7 +93,7 @@ typedef struct {
  * conditional testing whether either HAL_KS_*_SLOTS were nonzero.
  */
 
-#if HAL_KS_VOLATILE_SLOTS > 0
+#if STATIC_KS_VOLATILE_SLOTS > 0
 
 static ks_t volatile_ks;
 
@@ -156,10 +152,10 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver,
   ksv->ks.driver     = driver;
   ksv->per_session   = per_session;
   ksv->db            = gnaw(&mem, &len, sizeof(*ksv->db));
-  ksv->db->ksi.index = gnaw(&mem, &len, sizeof(*ksv->db->ksi.index) * HAL_KS_VOLATILE_SLOTS);
-  ksv->db->ksi.names = gnaw(&mem, &len, sizeof(*ksv->db->ksi.names) * HAL_KS_VOLATILE_SLOTS);
-  ksv->db->keys      = gnaw(&mem, &len, sizeof(*ksv->db->keys)      * HAL_KS_VOLATILE_SLOTS);
-  ksv->db->ksi.size  = HAL_KS_VOLATILE_SLOTS;
+  ksv->db->ksi.index = gnaw(&mem, &len, sizeof(*ksv->db->ksi.index) * STATIC_KS_VOLATILE_SLOTS);
+  ksv->db->ksi.names = gnaw(&mem, &len, sizeof(*ksv->db->ksi.names) * STATIC_KS_VOLATILE_SLOTS);
+  ksv->db->keys      = gnaw(&mem, &len, sizeof(*ksv->db->keys)      * STATIC_KS_VOLATILE_SLOTS);
+  ksv->db->ksi.size  = STATIC_KS_VOLATILE_SLOTS;
   ksv->db->ksi.used  = 0;
 
   if (ksv->db            == NULL ||
@@ -174,7 +170,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver,
    * just populate the free list in block numerical order.
    */
 
-  for (int i = 0; i < HAL_KS_VOLATILE_SLOTS; i++)
+  for (int i = 0; i < STATIC_KS_VOLATILE_SLOTS; i++)
     ksv->db->ksi.index[i] = i;
 
   return hal_ks_index_setup(&ksv->db->ksi);
@@ -183,9 +179,9 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver,
 static hal_error_t ks_volatile_init(const hal_ks_driver_t * const driver)
 {
   const size_t len = (sizeof(*volatile_ks.db) +
-                      sizeof(*volatile_ks.db->ksi.index) * HAL_KS_VOLATILE_SLOTS +
-                      sizeof(*volatile_ks.db->ksi.names) * HAL_KS_VOLATILE_SLOTS +
-                      sizeof(*volatile_ks.db->keys)      * HAL_KS_VOLATILE_SLOTS);
+                      sizeof(*volatile_ks.db->ksi.index) * STATIC_KS_VOLATILE_SLOTS +
+                      sizeof(*volatile_ks.db->ksi.names) * STATIC_KS_VOLATILE_SLOTS +
+                      sizeof(*volatile_ks.db->keys)      * STATIC_KS_VOLATILE_SLOTS);
 
   uint8_t *mem = hal_allocate_static_memory(len);
 
@@ -613,7 +609,7 @@ const hal_ks_driver_t hal_ks_volatile_driver[1] = {{
   ks_delete_attribute
 }};
 
-#endif /* HAL_KS_VOLATILE_SLOTS > 0 */
+#endif /* STATIC_KS_VOLATILE_SLOTS > 0 */
 
 /*
  * Local variables:

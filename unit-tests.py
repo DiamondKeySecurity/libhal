@@ -96,13 +96,13 @@ hsm  = None
 
 pin_map = { HAL_USER_NORMAL : "user_pin", HAL_USER_SO : "so_pin", HAL_USER_WHEEL : "wheel_pin" }
 
+
 def setUpModule():
     global hsm
     hsm = HSM()
 
-
 def tearDownModule():
-    hsm.logout_all()
+    hsm.logout()
     #hsm.close()
 
 
@@ -158,12 +158,12 @@ class TestPIN(TestCase):
     """
 
     def setUp(self):
-        hsm.logout_all()
+        hsm.logout()
         super(TestPIN, self).setUp()
 
     def tearDown(self):
         super(TestPIN, self).tearDown()
-        hsm.logout_all()
+        hsm.logout()
 
     def test_is_logged_in(self):
         "Test whether is_logged_in() returns correct exception when not logged in"
@@ -505,6 +505,55 @@ class TestPKeyECDSAInterop(TestCaseLoggedIn):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, HAL_CURVE_P521)
 
 
+class TestPKeyList(TestCaseLoggedIn):
+    """
+    Tests involving PKey list and match functions.
+    """
+
+    # Some kind of race condition, don't understand it yet, but
+    # without the sleep, the flash keystore code occasionally reads
+    # zeroed pages immediately after a deletion (which itself zeros
+    # pages, which is suspicious, but I haven't spotted a problem
+    # there yet), with the sleep it doesn't.  Worrisome.
+
+    kludge_around_race_condition = False
+
+    def cleanup(self):
+        for uuid, flags in self.keys:
+            if self.kludge_around_race_condition and (flags & HAL_KEY_FLAG_TOKEN) != 0:
+                from time import sleep
+                sleep(0.1)
+            hsm.pkey_find(uuid, flags = flags).delete()
+
+    def load_keys(self, flags):
+        self.keys = []
+        self.addCleanup(self.cleanup)
+
+        for keytype, curve in static_keys:
+            obj = static_keys[keytype, curve]
+            if keytype in (HAL_KEY_TYPE_RSA_PRIVATE, HAL_KEY_TYPE_RSA_PUBLIC):
+                curve = HAL_CURVE_NONE
+                der   = obj.exportKey("DER")
+            elif keytype in (HAL_KEY_TYPE_EC_PRIVATE, HAL_KEY_TYPE_EC_PUBLIC):
+                der   = obj.to_der()
+            else:
+                raise ValueError
+            k = hsm.pkey_load(keytype, curve, der, flags)
+            self.keys.append((k.uuid, flags))
+            k.close()
+
+    def ks_list(self, flags):
+        self.load_keys(flags)
+        hsm.pkey_list(flags = flags)
+        hsm.pkey_match(flags = flags)
+
+    def test_ks_list_volatile(self):
+        self.ks_list(0)
+
+    def test_ks_list_token(self):
+        self.ks_list(HAL_KEY_FLAG_TOKEN)
+
+
 class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
     """
     ECDSA verification tests based on Suite B Implementer's Guide to FIPS 186-3.
@@ -540,6 +589,8 @@ class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
 # * pkey attribute functions
 #
 # * pkey list and match functions
+#
+# * token vs session key tests
 #
 # Preloaded keys should suffice for all of these.
 

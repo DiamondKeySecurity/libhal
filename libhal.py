@@ -107,6 +107,11 @@ HALError.define(HAL_ERROR_KEYSTORE_LOST_DATA        = "Keystore appears to have 
 HALError.define(HAL_ERROR_BAD_ATTRIBUTE_LENGTH      = "Bad attribute length")
 HALError.define(HAL_ERROR_ATTRIBUTE_NOT_FOUND       = "Attribute not found")
 HALError.define(HAL_ERROR_NO_KEY_INDEX_SLOTS        = "No key index slots available")
+HALError.define(HAL_ERROR_KSI_INDEX_UUID_MISORDERED = "Key index UUID misordered")
+HALError.define(HAL_ERROR_KSI_INDEX_CHUNK_ORPHANED  = "Key index chunk orphaned")
+HALError.define(HAL_ERROR_KSI_INDEX_CHUNK_MISSING   = "Key index chunk missing")
+HALError.define(HAL_ERROR_KSI_INDEX_CHUNK_OVERLAPS  = "Key index chunk overlaps")
+HALError.define(HAL_ERROR_KEYSTORE_WRONG_BLOCK_TYPE = "Wrong block type in keystore")
 
 
 class Enum(int):
