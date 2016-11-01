@@ -1183,10 +1183,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
   else if (err != HAL_OK)
     return err;
 
-  while (*result_len < result_max) {
-
-    if (++i >= db.ksi.used)
-      return HAL_OK;
+  while (*result_len < result_max && ++i < db.ksi.used) {
 
     unsigned b = db.ksi.index[i];
 
@@ -1251,7 +1248,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
     possible = 0;
   }
 
-  return HAL_ERROR_RESULT_TOO_LONG;
+  return HAL_OK;
 }
 
 static  hal_error_t ks_set_attribute(hal_ks_t *ks,
