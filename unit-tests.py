@@ -510,25 +510,7 @@ class TestPKeyList(TestCaseLoggedIn):
     Tests involving PKey list and match functions.
     """
 
-    # Some kind of race condition, don't understand it yet, but
-    # without the sleep, the flash keystore code occasionally reads
-    # zeroed pages immediately after a deletion (which itself zeros
-    # pages, which is suspicious, but I haven't spotted a problem
-    # there yet), with the sleep it doesn't.  Worrisome.
-
-    kludge_around_race_condition = False
-
-    def cleanup(self):
-        for uuid, flags in self.keys:
-            if self.kludge_around_race_condition and (flags & HAL_KEY_FLAG_TOKEN) != 0:
-                from time import sleep
-                sleep(0.1)
-            hsm.pkey_find(uuid, flags = flags).delete()
-
     def load_keys(self, flags):
-        self.keys = []
-        self.addCleanup(self.cleanup)
-
         for keytype, curve in static_keys:
             obj = static_keys[keytype, curve]
             if keytype in (HAL_KEY_TYPE_RSA_PRIVATE, HAL_KEY_TYPE_RSA_PUBLIC):
@@ -539,7 +521,8 @@ class TestPKeyList(TestCaseLoggedIn):
             else:
                 raise ValueError
             k = hsm.pkey_load(keytype, curve, der, flags)
-            self.keys.append((k.uuid, flags))
+            self.addCleanup(lambda uuid: hsm.pkey_find(uuid, flags = flags).delete(),
+                            k.uuid)
             k.close()
 
     def ks_list(self, flags):
@@ -553,35 +536,49 @@ class TestPKeyList(TestCaseLoggedIn):
     def test_ks_list_token(self):
         self.ks_list(HAL_KEY_FLAG_TOKEN)
 
+    def ks_match(self, flags):
+        for i in xrange(3):
+            self.load_keys(flags)
+        for uuid in hsm.pkey_match(flags = flags):
+            with hsm.pkey_find(uuid, flags) as k:
+                print "{0.uuid} {0.key_type} {0.key_flags}".format(k)
+
+    def test_ks_match_token(self):
+        self.ks_match(HAL_KEY_FLAG_TOKEN)
 
 class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
     """
     ECDSA verification tests based on Suite B Implementer's Guide to FIPS 186-3.
     """
 
-    def test_suite_b_p256_verify(self):
-        Q = Point(NIST256p.curve,
-                  0x8101ece47464a6ead70cf69a6e2bd3d88691a3262d22cba4f7635eaff26680a8,
-                  0xd8a12ba61d599235f67d9cb4d58f1783d3ca43e78f0a5abaa624079936c0c3a9)
-        k = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC, HAL_CURVE_P256,
-                          ECDSA_VerifyingKey.from_public_point(Q, NIST256p, SHA256).to_der())
+    def verify(self, Qx, Qy, H, r, s, hal_curve, py_curve, py_hash):
+        Q = ECDSA_VerifyingKey.from_public_point(Point(py_curve.curve, Qx, Qy),
+                                                 py_curve, py_hash).to_der()
+        k  = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC, hal_curve, Q)
         self.addCleanup(k.delete)
-        H = "7c3e883ddc8bd688f96eac5e9324222c8f30f9d6bb59e9c5f020bd39ba2b8377".decode("hex")
-        r = "7214bc9647160bbd39ff2f80533f5dc6ddd70ddf86bb815661e805d5d4e6f27c".decode("hex")
-        s = "7d1ff961980f961bdaa3233b6209f4013317d3e3f9e1493592dbeaa1af2bc367".decode("hex")
-        k.verify(signature = r + s, data = H)
+        k.verify(signature = (r + s).decode("hex"), data = H.decode("hex"))
+
+    def test_suite_b_p256_verify(self):
+        self.verify(
+            Qx = 0x8101ece47464a6ead70cf69a6e2bd3d88691a3262d22cba4f7635eaff26680a8,
+            Qy = 0xd8a12ba61d599235f67d9cb4d58f1783d3ca43e78f0a5abaa624079936c0c3a9,
+            H  = "7c3e883ddc8bd688f96eac5e9324222c8f30f9d6bb59e9c5f020bd39ba2b8377",
+            r  = "7214bc9647160bbd39ff2f80533f5dc6ddd70ddf86bb815661e805d5d4e6f27c",
+            s  = "7d1ff961980f961bdaa3233b6209f4013317d3e3f9e1493592dbeaa1af2bc367",
+            hal_curve = HAL_CURVE_P256,
+            py_curve  = NIST256p,
+            py_hash   = SHA256)
 
     def test_suite_b__p384_verify(self):
-        Q = Point(NIST384p.curve,
-                  0x1fbac8eebd0cbf35640b39efe0808dd774debff20a2a329e91713baf7d7f3c3e81546d883730bee7e48678f857b02ca0,
-                  0xeb213103bd68ce343365a8a4c3d4555fa385f5330203bdd76ffad1f3affb95751c132007e1b240353cb0a4cf1693bdf9)
-        k = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC, HAL_CURVE_P384,
-                          ECDSA_VerifyingKey.from_public_point(Q, NIST384p, SHA384).to_der())
-        self.addCleanup(k.delete)
-        H = "b9210c9d7e20897ab86597266a9d5077e8db1b06f7220ed6ee75bd8b45db37891f8ba5550304004159f4453dc5b3f5a1".decode("hex")
-        r = "a0c27ec893092dea1e1bd2ccfed3cf945c8134ed0c9f81311a0f4a05942db8dbed8dd59f267471d5462aa14fe72de856".decode("hex")
-        s = "20ab3f45b74f10b6e11f96a2c8eb694d206b9dda86d3c7e331c26b22c987b7537726577667adadf168ebbe803794a402".decode("hex")
-        k.verify(signature = r + s, data = H)
+        self.verify(
+            Qx = 0x1fbac8eebd0cbf35640b39efe0808dd774debff20a2a329e91713baf7d7f3c3e81546d883730bee7e48678f857b02ca0,
+            Qy = 0xeb213103bd68ce343365a8a4c3d4555fa385f5330203bdd76ffad1f3affb95751c132007e1b240353cb0a4cf1693bdf9,
+            H  = "b9210c9d7e20897ab86597266a9d5077e8db1b06f7220ed6ee75bd8b45db37891f8ba5550304004159f4453dc5b3f5a1",
+            r  = "a0c27ec893092dea1e1bd2ccfed3cf945c8134ed0c9f81311a0f4a05942db8dbed8dd59f267471d5462aa14fe72de856",
+            s  = "20ab3f45b74f10b6e11f96a2c8eb694d206b9dda86d3c7e331c26b22c987b7537726577667adadf168ebbe803794a402",
+            hal_curve = HAL_CURVE_P384,
+            py_curve  = NIST384p,
+            py_hash   = SHA384)
 
 
 # Entire classes of tests still missing:

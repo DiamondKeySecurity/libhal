@@ -151,7 +151,7 @@ class Enum(int):
 class RPCFunc(Enum): pass
 
 RPCFunc.define('''
-    RPC_FUNC_GET_VERSION = 0,
+    RPC_FUNC_GET_VERSION,
     RPC_FUNC_GET_RANDOM,
     RPC_FUNC_SET_PIN,
     RPC_FUNC_LOGIN,
@@ -344,15 +344,24 @@ class LocalDigest(object):
 class PKey(Handle):
 
     def __init__(self, hsm, handle, uuid):
-        self.hsm    = hsm
-        self.handle = handle
-        self.uuid   = uuid
+        self.hsm     = hsm
+        self.handle  = handle
+        self.uuid    = uuid
+        self.deleted = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not self.deleted:
+            self.close()
 
     def close(self):
         self.hsm.pkey_close(self)
 
     def delete(self):
         self.hsm.pkey_delete(self)
+        self.deleted = True
 
     @cached_property
     def key_type(self):
@@ -627,11 +636,16 @@ class HSM(object):
                          for i in xrange(r.unpack_uint()))
 
     def pkey_match(self, type = 0, curve = 0, flags = 0, attributes = (),
-                   previous_uuid = UUID(int = 0), length = 512, client = 0, session = 0):
-        with self.rpc(RPC_FUNC_PKEY_MATCH, session, type, curve, flags,
-                      attributes, length, previous_uuid, client = client) as r:
-            return tuple(UUID(bytes = r.unpack_bytes())
-                         for i in xrange(r.unpack_uint()))
+                   length = 64, client = 0, session = 0):
+        u = UUID(int = 0)
+        n = length
+        while n == length:
+            with self.rpc(RPC_FUNC_PKEY_MATCH, session, type, curve, flags,
+                          attributes, length, u, client = client) as r:
+                n = r.unpack_uint()
+                for i in xrange(n):
+                    u = UUID(bytes = r.unpack_bytes())
+                    yield u
 
     def pkey_set_attribute(self, pkey, attr_type, attr_value = None):
         if attr_value is None and isinstance(attr_type, Attribute):
