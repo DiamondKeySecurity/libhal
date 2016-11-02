@@ -238,6 +238,10 @@ class Attribute(object):
         self.type  = type
         self.value = value
 
+    def __repr__(self):
+        #return "<Attribute {} {}>".format(self.type, "".join("{:02x}".format(ord(v)) for v in self.value))
+        return "<Attribute {} {}>".format(self.type, self.value)
+
     def xdr_packer(self, packer):
         packer.pack_uint(self.type)
         packer.pack_bytes(self.value)
@@ -476,32 +480,31 @@ class HSM(object):
             else:
                 msg.append(c)
 
+    _pack_builtin = (((int, long),   "_pack_uint"),
+                     (str,           "_pack_bytes"),
+                     ((list, tuple), "_pack_array"))
+
     def _pack(self, packer, args):
         for arg in args:
             if hasattr(arg, "xdr_packer"):
                 arg.xdr_packer(packer)
             else:
                 try:
-                    func = getattr(self, "_pack_" + type(arg).__name__)
-                except AttributeError:
+                    method = tuple(meth for cls, meth in self._pack_builtin if isinstance(arg, cls))[0]
+                except IndexError:
                     raise RuntimeError("Don't know how to pack {!r} ({!r})".format(arg, type(arg)))
                 else:
-                    func(packer, arg)
+                    getattr(self, method)(packer, arg)
 
-    @staticmethod
-    def _pack_int(packer, arg):
+    def _pack_uint(self, packer, arg):
         packer.pack_uint(arg)
 
-    @staticmethod
-    def _pack_str(packer, arg):
+    def _pack_bytes(self, packer, arg):
         packer.pack_bytes(arg)
 
-    def _pack_tuple(self, packer, arg):
+    def _pack_array(self, packer, arg):
         packer.pack_uint(len(arg))
         self._pack(packer, arg)
-
-    _pack_long = _pack_int
-    _pack_list = _pack_tuple
 
     @contextlib.contextmanager
     def rpc(self, code, *args, **kwargs):
@@ -662,8 +665,8 @@ class HSM(object):
         with self.rpc(RPC_FUNC_PKEY_SET_ATTRIBUTE, pkey, attr_type, attr_value):
             return
 
-    def pkey_get_attribute(self, pkey, attr_type):
-        with self.rpc(RPC_FUNC_PKEY_GET_ATTRIBUTE, pkey, attr_type) as r:
+    def pkey_get_attribute(self, pkey, attr_type, value_max = 1024):
+        with self.rpc(RPC_FUNC_PKEY_GET_ATTRIBUTE, pkey, attr_type, value_max) as r:
             return Attribute(attr_type, r.unpack_bytes())
 
     def pkey_delete_attribute(self, pkey, attr_type):
