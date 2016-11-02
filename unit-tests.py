@@ -513,6 +513,7 @@ class TestPKeyList(TestCaseLoggedIn):
     def load_keys(self, flags):
         for keytype, curve in static_keys:
             obj = static_keys[keytype, curve]
+            atr = (str(keytype), str(curve))
             if keytype in (HAL_KEY_TYPE_RSA_PRIVATE, HAL_KEY_TYPE_RSA_PUBLIC):
                 curve = HAL_CURVE_NONE
                 der   = obj.exportKey("DER")
@@ -523,6 +524,8 @@ class TestPKeyList(TestCaseLoggedIn):
             k = hsm.pkey_load(keytype, curve, der, flags)
             self.addCleanup(lambda uuid: hsm.pkey_find(uuid, flags = flags).delete(),
                             k.uuid)
+            for i, a in enumerate(atr):
+                k.set_attribute(i, a)
             k.close()
 
     def ks_list(self, flags):
@@ -540,7 +543,8 @@ class TestPKeyList(TestCaseLoggedIn):
         kwargs.update(flags = flags)
         for uuid in hsm.pkey_match(**kwargs):
             with hsm.pkey_find(uuid, flags) as k:
-                print "{0.uuid}  0x{0.key_flags:02x}  {0.key_curve}  {0.key_type}".format(k)
+                print "{k.uuid} 0x{k.key_flags:02x}  {k.key_curve}  {k.key_type}  {a[0]}  {a[1]}".format(
+                    k = k, a = [k.get_attribute(i) for i in xrange(2)])
 
     def ks_match(self, flags):
         self.load_keys(flags)
@@ -556,6 +560,10 @@ class TestPKeyList(TestCaseLoggedIn):
         for curve in set(HALCurve.index.itervalues()) - {HAL_CURVE_NONE}:
             print "Curve:", curve
             self.ks_print(flags = flags, curve = curve)
+            print
+        for keylen in sorted(set(kl for kt, kl in static_keys if not isinstance(kl, Enum))):
+            print "Keylen:", keylen
+            self.ks_print(flags = flags, attributes = [Attribute(1, str(keylen))])
             print
 
     def test_ks_match_token(self):
