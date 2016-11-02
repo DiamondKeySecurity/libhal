@@ -539,32 +539,42 @@ class TestPKeyList(TestCaseLoggedIn):
     def test_ks_list_token(self):
         self.ks_list(HAL_KEY_FLAG_TOKEN)
 
+    verbose = False
+
+    def blather(self, line = ""):
+        if self.verbose:
+            print line
+
     def ks_print(self, flags, **kwargs):
         kwargs.update(flags = flags)
         for uuid in hsm.pkey_match(**kwargs):
             with hsm.pkey_find(uuid, flags) as k:
-                print "{k.uuid} 0x{k.key_flags:02x}  {k.key_curve}  {k.key_type}  {a[0]}  {a[1]}".format(
+                line = "{k.uuid} 0x{k.key_flags:02x}  {k.key_curve}  {k.key_type}  {a[0]}  {a[1]}".format(
                     k = k, a = [k.get_attribute(i) for i in xrange(2)])
+            self.blather(line)
 
     def ks_match(self, flags):
         self.load_keys(flags)
         self.load_keys(flags)
-        print
-        print "All:"
+        self.blather()
+        self.blather("All:")
         self.ks_print(flags = flags)
-        print
+        self.blather()
         for keytype in set(HALKeyType.index.itervalues()) - {HAL_KEY_TYPE_NONE}:
-            print "Type:", keytype
+            self.blather("Type: {}".format(keytype))
             self.ks_print(flags = flags, type = keytype)
-            print
+            self.blather()
         for curve in set(HALCurve.index.itervalues()) - {HAL_CURVE_NONE}:
-            print "Curve:", curve
+            self.blather("Curve: {}".format(curve))
             self.ks_print(flags = flags, curve = curve)
-            print
+            self.blather()
         for keylen in sorted(set(kl for kt, kl in static_keys if not isinstance(kl, Enum))):
-            print "Keylen:", keylen
-            self.ks_print(flags = flags, attributes = [Attribute(1, str(keylen))])
-            print
+            self.blather("Keylen: {}".format(keylen))
+            self.ks_print(flags = flags, attributes = {1 : str(keylen)})
+            self.blather()
+        self.blather("Keylen 2048 RSA public keys:")
+        self.ks_print(flags = flags, type = HAL_KEY_TYPE_RSA_PUBLIC, attributes = {1 : "2048"})
+        self.blather()
 
     def test_ks_match_token(self):
         self.ks_match(HAL_KEY_FLAG_TOKEN)
