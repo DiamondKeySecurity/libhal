@@ -480,21 +480,22 @@ class HSM(object):
             else:
                 msg.append(c)
 
-    _pack_builtin = (((int, long),   "_pack_uint"),
-                     (str,           "_pack_bytes"),
-                     ((list, tuple), "_pack_array"))
+    _pack_builtin = (((int, long),        "_pack_uint"),
+                     (str,                "_pack_bytes"),
+                     ((list, tuple, set), "_pack_array"),
+                     (dict,               "_pack_items"))
 
-    def _pack(self, packer, args):
+    def _pack_arg(self, packer, arg):
+        if hasattr(arg, "xdr_packer"):
+            return arg.xdr_packer(packer)
+        for cls, method in self._pack_builtin:
+            if isinstance(arg, cls):
+                return getattr(self, method)(packer, arg)
+        raise RuntimeError("Don't know how to pack {!r} ({!r})".format(arg, type(arg)))
+
+    def _pack_args(self, packer, args):
         for arg in args:
-            if hasattr(arg, "xdr_packer"):
-                arg.xdr_packer(packer)
-            else:
-                try:
-                    method = tuple(meth for cls, meth in self._pack_builtin if isinstance(arg, cls))[0]
-                except IndexError:
-                    raise RuntimeError("Don't know how to pack {!r} ({!r})".format(arg, type(arg)))
-                else:
-                    getattr(self, method)(packer, arg)
+            self._pack_arg(packer, arg)
 
     def _pack_uint(self, packer, arg):
         packer.pack_uint(arg)
@@ -504,7 +505,13 @@ class HSM(object):
 
     def _pack_array(self, packer, arg):
         packer.pack_uint(len(arg))
-        self._pack(packer, arg)
+        self._pack_args(packer, arg)
+
+    def _pack_items(self, packer, arg):
+        packer.pack_uint(len(arg))
+        for name, value in arg.iteritems():
+            self._pack_arg(packer, name)
+            self._pack_arg(packer, value)
 
     @contextlib.contextmanager
     def rpc(self, code, *args, **kwargs):
@@ -512,7 +519,7 @@ class HSM(object):
         packer = xdrlib.Packer()
         packer.pack_uint(code)
         packer.pack_uint(client)
-        self._pack(packer, args)
+        self._pack_args(packer, args)
         self._send(packer)
         unpacker = self._recv(code)
         client = unpacker.unpack_uint()
@@ -641,11 +648,13 @@ class HSM(object):
 
     def pkey_list(self, flags = 0, client = 0, session = 0, length = 512):
         with self.rpc(RPC_FUNC_PKEY_LIST, session, length, flags, client = client) as r:
-            return tuple((HALKeyType.index[r.unpack_uint()],
-                          HALCurve.index[r.unpack_uint()],
-                          r.unpack_uint(),
-                          UUID(bytes = r.unpack_bytes()))
-                         for i in xrange(r.unpack_uint()))
+            n = r.unpack_uint()
+            for i in xrange(n):
+                key_type  = HALKeyType.index[r.unpack_uint()]
+                key_curve = HALCurve.index[r.unpack_uint()]
+                key_flags = r.unpack_uint()
+                key_name  = UUID(bytes = r.unpack_bytes())
+                yield key_type, key_curve, key_flags, key_name
 
     def pkey_match(self, type = 0, curve = 0, flags = 0, attributes = (),
                    length = 64, client = 0, session = 0):
