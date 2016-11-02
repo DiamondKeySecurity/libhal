@@ -232,20 +232,6 @@ HAL_KEY_FLAG_USAGE_DATAENCIPHERMENT     = (1 << 2)
 HAL_KEY_FLAG_TOKEN                      = (1 << 3)
 HAL_KEY_FLAG_PUBLIC                     = (1 << 4)
 
-class Attribute(object):
-
-    def __init__(self, type, value):
-        self.type  = type
-        self.value = value
-
-    def __repr__(self):
-        #return "<Attribute {} {}>".format(self.type, "".join("{:02x}".format(ord(v)) for v in self.value))
-        return "<Attribute {} {}>".format(self.type, self.value)
-
-    def xdr_packer(self, packer):
-        packer.pack_uint(self.type)
-        packer.pack_bytes(self.value)
-
 
 class UUID(uuid.UUID):
 
@@ -676,7 +662,7 @@ class HSM(object):
 
     def pkey_get_attribute(self, pkey, attr_type, value_max = 1024):
         with self.rpc(RPC_FUNC_PKEY_GET_ATTRIBUTE, pkey, attr_type, value_max) as r:
-            return Attribute(attr_type, r.unpack_bytes())
+            return r.unpack_bytes()
 
     def pkey_delete_attribute(self, pkey, attr_type):
         with self.rpc(RPC_FUNC_PKEY_DELETE_ATTRIBUTE, pkey, attr_type):
