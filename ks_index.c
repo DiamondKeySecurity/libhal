@@ -49,7 +49,7 @@ static inline int ks_name_cmp(const hal_ks_name_t * const name1, const hal_ks_na
   int cmp = hal_uuid_cmp(&name1->name, &name2->name);
 
   if (cmp == 0)
-    cmp = ((int) name2->chunk) - ((int) name1->chunk);
+    cmp = ((int) name1->chunk) - ((int) name2->chunk);
 
   return cmp;
 }
@@ -155,16 +155,13 @@ hal_error_t hal_ks_index_fsck(hal_ks_index_t *ksi)
       ksi->size == 0 || ksi->used > ksi->size)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  int cur, prev = -1;
+  for (int i = 0; i < ksi->used; i++) {
 
-  for (cur = 0; cur < ksi->used; cur++) {
+    const int cmp = i == 0 ? -1 : hal_uuid_cmp(&ksi->names[ksi->index[i - 1]].name,
+                                               &ksi->names[ksi->index[i    ]].name);
 
-    const int cmp = (prev < 0 ? -1 : hal_uuid_cmp(&ksi->names[ksi->index[prev]].name,
-                                                  &ksi->names[ksi->index[cur]].name));
-
-    const uint8_t cur_chunk = ksi->names[ksi->index[cur]].chunk;
-
-    const uint8_t prev_chunk = (prev < 0 ? 0 : ksi->names[ksi->index[prev]].chunk);
+    const uint8_t prev_chunk = i == 0 ? 0 : ksi->names[ksi->index[i - 1]].chunk;
+    const uint8_t cur_chunk  =              ksi->names[ksi->index[i    ]].chunk;
 
     if (cmp > 0)
       return HAL_ERROR_KSI_INDEX_UUID_MISORDERED;
