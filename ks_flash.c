@@ -1327,6 +1327,10 @@ static  hal_error_t ks_set_attribute(hal_ks_t *ks,
   if (db.ksi.used + total_chunks + 1 > db.ksi.size)
     return HAL_ERROR_NO_KEY_INDEX_SLOTS;
 
+  /*
+   * Phase 1: Deprecate all the old chunks, remember where the were.
+   */
+
   for (chunk = 0; chunk < total_chunks; chunk++) {
     int hint = slot->hint + chunk;
     if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &blocks[chunk], &hint)) != HAL_OK ||
@@ -1334,31 +1338,9 @@ static  hal_error_t ks_set_attribute(hal_ks_t *ks,
       return err;
   }
 
-  {
-    block = cache_pick_lru();
-
-    memset(block, 0xFF, sizeof(*block));
-
-    block->header.block_type   = BLOCK_TYPE_ATTR;
-    block->header.block_status = BLOCK_STATUS_LIVE;
-    block->header.total_chunks = total_chunks + 1;
-    block->header.this_chunk   = total_chunks;
-    block->attr.name = slot->name;
-    block->attr.attributes_len = 0;
-
-    hal_rpc_pkey_attribute_t attrs[1];
-    size_t total = 0;
-
-    if ((err = hal_ks_attribute_insert(block->attr.attributes,
-                                       SIZEOF_FLASH_ATTRIBUTE_BLOCK_ATTRIBUTES,
-                                       attrs, &block->attr.attributes_len, &total,
-                                       type, value, value_len))                         != HAL_OK ||
-        (err = hal_ks_index_add(&db.ksi, &slot->name, total_chunks, &b, NULL))          != HAL_OK ||
-        (err = block_write(b, block))                                                   != HAL_OK)
-      return err;
-
-    cache_mark_used(block, b);
-  }
+  /*
+   * Phase 2: Rewrite all the existing chunks with the new total_chunks value.
+   */
 
   for (chunk = 0; chunk < total_chunks; chunk++) {
     int hint = slot->hint + chunk;
@@ -1390,6 +1372,40 @@ static  hal_error_t ks_set_attribute(hal_ks_t *ks,
         (err = block_write(b, block))                                           != HAL_OK)
       return err;
   }
+
+  /*
+   * Phase 3: Write the new chunk.
+   */
+
+  {
+    block = cache_pick_lru();
+
+    memset(block, 0xFF, sizeof(*block));
+
+    block->header.block_type   = BLOCK_TYPE_ATTR;
+    block->header.block_status = BLOCK_STATUS_LIVE;
+    block->header.total_chunks = total_chunks + 1;
+    block->header.this_chunk   = total_chunks;
+    block->attr.name = slot->name;
+    block->attr.attributes_len = 0;
+
+    hal_rpc_pkey_attribute_t attrs[1];
+    size_t total = 0;
+
+    if ((err = hal_ks_attribute_insert(block->attr.attributes,
+                                       SIZEOF_FLASH_ATTRIBUTE_BLOCK_ATTRIBUTES,
+                                       attrs, &block->attr.attributes_len, &total,
+                                       type, value, value_len))                         != HAL_OK ||
+        (err = hal_ks_index_add(&db.ksi, &slot->name, total_chunks, &b, NULL))          != HAL_OK ||
+        (err = block_write(b, block))                                                   != HAL_OK)
+      return err;
+
+    cache_mark_used(block, b);
+  }
+
+  /*
+   * Phase 4: Zero the old chunks we deprecated in phase 1.
+   */
 
   for (chunk = 0; chunk < total_chunks; chunk++)
     if ((err = block_zero(blocks[chunk])) != HAL_OK)
