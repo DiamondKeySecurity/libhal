@@ -73,7 +73,6 @@ def log(msg):
 
 
 def main():
-    preload_public_keys()
     from sys import argv
     global args
     args = parse_arguments(argv[1:])
@@ -298,19 +297,19 @@ class TestPKeyHashing(TestCaseLoggedIn):
 
     def load_sign_verify_rsa(self, alg, keylen, method):
         k1 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PRIVATE, HAL_CURVE_NONE,
-                           static_keys[HAL_KEY_TYPE_RSA_PRIVATE, keylen].exportKey("DER"))
+                           PreloadedKey.db[HAL_KEY_TYPE_RSA_PRIVATE, keylen].der)
         self.addCleanup(k1.delete)
         k2 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PUBLIC, HAL_CURVE_NONE,
-                           static_keys[HAL_KEY_TYPE_RSA_PUBLIC, keylen].exportKey("DER"))
+                           PreloadedKey.db[HAL_KEY_TYPE_RSA_PUBLIC, keylen].der)
         self.addCleanup(k2.delete)
         method(alg, k1, k2)
 
     def load_sign_verify_ecdsa(self, alg, curve, method):
         k1 = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, curve,
-                           static_keys[HAL_KEY_TYPE_EC_PRIVATE, curve].to_der())
+                           PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, curve].der)
         self.addCleanup(k1.delete)
         k2 = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC, curve,
-                           static_keys[HAL_KEY_TYPE_EC_PUBLIC, curve].to_der())
+                           PreloadedKey.db[HAL_KEY_TYPE_EC_PUBLIC, curve].der)
         self.addCleanup(k2.delete)
         method(alg, k1, k2)
 
@@ -437,6 +436,7 @@ class TestPKeyHashing(TestCaseLoggedIn):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, HAL_CURVE_P521, self.sign_verify_local_local)
 
 
+@unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
 class TestPKeyRSAInterop(TestCaseLoggedIn):
 
     @staticmethod
@@ -447,21 +447,19 @@ class TestPKeyRSAInterop(TestCaseLoggedIn):
 
     def load_sign_verify_rsa(self, alg, pyhash, keylen):
         hamster = "Your mother was a hamster"
-        sk = static_keys[HAL_KEY_TYPE_RSA_PRIVATE, keylen]
-        vk = static_keys[HAL_KEY_TYPE_RSA_PUBLIC,  keylen]
-        k1 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PRIVATE, HAL_CURVE_NONE, sk.exportKey("DER"))
+        sk = PreloadedKey.db[HAL_KEY_TYPE_RSA_PRIVATE, keylen]
+        vk = PreloadedKey.db[HAL_KEY_TYPE_RSA_PUBLIC,  keylen]
+        k1 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PRIVATE, HAL_CURVE_NONE, sk.der)
         self.addCleanup(k1.delete)
-        k2 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PUBLIC,  HAL_CURVE_NONE, vk.exportKey("DER"))
+        k2 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PUBLIC,  HAL_CURVE_NONE, vk.der)
         self.addCleanup(k2.delete)
-        sk = PKCS1_v1_5.PKCS115_SigScheme(sk)
-        vk = PKCS1_v1_5.PKCS115_SigScheme(vk)
         sig1 = k1.sign(hash = self.h(alg, hamster))
-        sig2 = sk.sign(pyhash(hamster))
+        sig2 = sk.sign(hamster, pyhash)
         self.assertEqual(sig1, sig2)
         k1.verify(signature = sig2, hash = self.h(alg, hamster))
         k2.verify(signature = sig2, hash = self.h(alg, hamster))
-        sk.verify(pyhash(hamster), sig1)
-        vk.verify(pyhash(hamster), sig1)
+        sk.verify(hamster, pyhash, sig1)
+        vk.verify(hamster, pyhash, sig1)
 
     def test_interop_rsa_1024_sha256(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA256, SHA256, 1024)
@@ -473,6 +471,7 @@ class TestPKeyRSAInterop(TestCaseLoggedIn):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA512, SHA512, 4096)
 
 
+@unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
 class TestPKeyECDSAInterop(TestCaseLoggedIn):
 
     @staticmethod
@@ -481,28 +480,28 @@ class TestPKeyECDSAInterop(TestCaseLoggedIn):
         h.update(text)
         return h
 
-    def load_sign_verify_ecdsa(self, alg, curve):
+    def load_sign_verify_ecdsa(self, alg, pyhash, curve):
         hamster = "Your mother was a hamster"
-        sk = static_keys[HAL_KEY_TYPE_EC_PRIVATE, curve]
-        vk = static_keys[HAL_KEY_TYPE_EC_PUBLIC,  curve]
-        k1 = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, curve, sk.to_der())
+        sk = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, curve]
+        vk = PreloadedKey.db[HAL_KEY_TYPE_EC_PUBLIC,  curve]
+        k1 = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, curve, sk.der)
         self.addCleanup(k1.delete)
-        k2 = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC,  curve, vk.to_der())
+        k2 = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC,  curve, vk.der)
         self.addCleanup(k2.delete)
         sig1 = k1.sign(hash = self.h(alg, hamster))
-        sig2 = sk.sign(hamster)
+        sig2 = sk.sign(hamster, pyhash)
         k1.verify(signature = sig2, hash = self.h(alg, hamster))
         k2.verify(signature = sig2, hash = self.h(alg, hamster))
-        vk.verify(sig1, hamster)
+        vk.verify(hamster, pyhash, sig1)
 
     def test_interop_ecdsa_p256_sha256(self):
-        self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA256, HAL_CURVE_P256)
+        self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA256, SHA256, HAL_CURVE_P256)
 
     def test_interop_ecdsa_p384_sha384(self):
-        self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA384, HAL_CURVE_P384)
+        self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA384, SHA384, HAL_CURVE_P384)
 
     def test_interop_ecdsa_p521_sha512(self):
-        self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, HAL_CURVE_P521)
+        self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, SHA512, HAL_CURVE_P521)
 
 
 class TestPKeyList(TestCaseLoggedIn):
@@ -511,22 +510,12 @@ class TestPKeyList(TestCaseLoggedIn):
     """
 
     def load_keys(self, flags):
-        for keytype, curve in static_keys:
-            obj = static_keys[keytype, curve]
-            atr = (str(keytype), str(curve))
-            if keytype in (HAL_KEY_TYPE_RSA_PRIVATE, HAL_KEY_TYPE_RSA_PUBLIC):
-                curve = HAL_CURVE_NONE
-                der   = obj.exportKey("DER")
-            elif keytype in (HAL_KEY_TYPE_EC_PRIVATE, HAL_KEY_TYPE_EC_PUBLIC):
-                der   = obj.to_der()
-            else:
-                raise ValueError
-            k = hsm.pkey_load(keytype, curve, der, flags)
-            self.addCleanup(lambda uuid: hsm.pkey_find(uuid, flags = flags).delete(),
-                            k.uuid)
-            for i, a in enumerate(atr):
-                k.set_attribute(i, a)
-            k.close()
+        for obj in PreloadedKey.db.itervalues():
+            with hsm.pkey_load(obj.keytype, obj.curve, obj.der, flags) as k:
+                self.addCleanup(lambda uuid: hsm.pkey_find(uuid, flags = flags).delete(),
+                                k.uuid)
+                for i, a in enumerate((str(obj.keytype), str(obj.fn2))):
+                    k.set_attribute(i, a)
 
     def ks_list(self, flags):
         self.load_keys(flags)
@@ -549,7 +538,7 @@ class TestPKeyList(TestCaseLoggedIn):
         tags = []
         for i in xrange(2):
             self.load_keys(flags)
-            tags.extend(static_keys)
+            tags.extend(PreloadedKey.db)
 
         uuids = set()
         for n, k in self.match(flags = flags):
@@ -588,6 +577,29 @@ class TestPKeyList(TestCaseLoggedIn):
     def test_ks_match_volatile(self):
         self.ks_match(0)
 
+
+class TestPKeyAttribute(TestCaseLoggedIn):
+    """
+    Attribute creation/lookup/deletion tests.
+    """
+
+    def load_and_fill(self, flags, n_keys = 1, n_attrs = 2):
+        for i in xrange(n_keys):
+            for obj in PreloadedKey.db.itervalues():
+                with hsm.pkey_load(obj.keytype, obj.curve, obj.der, flags) as k:
+                    self.addCleanup(lambda uuid: hsm.pkey_find(uuid, flags = flags).delete(),
+                                    k.uuid)
+                    for j in xrange(n_attrs):
+                        k.set_attribute(j, "Attribute {}".format(j))
+
+    def test_attribute_bloat_volatile(self):
+        self.load_and_fill(0, n_attrs = 192)
+
+    def test_attribute_bloat_token(self):
+        self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 128)
+
+
+@unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
 class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
     """
     ECDSA verification tests based on Suite B Implementer's Guide to FIPS 186-3.
@@ -633,34 +645,66 @@ class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
 #
 # Preloaded keys should suffice for all of these.
 
-if False:
-  class TestPKeyListMatch(TestCaseLoggedIn):
-
-    def test_pkey_list(self):
-        for flags in (0, HAL_KEY_FLAG_TOKEN):
-            hsm.pkey_list(flags = flags)
-
-    def test_pkey_match(self):
-        for f in (HAL_KEY_FLAG_TOKEN, 0):
-            hsm.pkey_match(flags = f)
-
-if False:
-  class TestPKeyAttribute(TestCaseLoggedIn):
-    pass
 
 
-# Keys for preload tests, here at the end because they're large.  For
-# the moment, we use PKCS #1.5 format for RSA and secg format for
-# ECDSA, because those are the formats that everything (including our
-# own ASN.1 code) supports.  Arguably, we should be using PKCS #8 to
-# get a single, consistent, self-identifying private key format, but
-# we're not there yet and it's not particularly urgent given
-# widespread availablity of conversion tools (eg, "openssl pkcs8").
+class PreloadedKey(object):
+    """
+    Keys for preload tests, here at the end because they're large.
+    For the moment, we use PKCS #1.5 format for RSA and secg format
+    for ECDSA, because those are the formats that everything
+    (including our own ASN.1 code) supports.  Arguably, we should be
+    using PKCS #8 to get a single, consistent, self-identifying
+    private key format, but we're not there yet and it's not
+    particularly urgent given widespread availablity of conversion
+    tools (eg, "openssl pkcs8").
+    """
 
-static_keys = {}
+    db = {}
+
+    def __init__(self, keytype, fn2, obj, der, keylen = None, curve = HAL_CURVE_NONE):
+        self.keytype = keytype
+        self.fn2     = fn2
+        self.obj     = obj
+        self.der     = der
+        self.keylen  = keylen
+        self.curve   = curve
+        self.db[keytype, fn2] = self
+
+class PreloadedRSAKey(PreloadedKey):
+
+    @classmethod
+    def importKey(cls, keylen, pem):
+        if pycrypto_loaded:
+            k1 = RSA.importKey(pem)
+            k2 = k1.publickey()
+            cls(HAL_KEY_TYPE_RSA_PRIVATE, keylen, k1, k1.exportKey("DER"), keylen = keylen)
+            cls(HAL_KEY_TYPE_RSA_PUBLIC,  keylen, k2, k2.exportKey("DER"), keylen = keylen)
+
+    def sign(self, text, hash):
+        return PKCS1_v1_5.PKCS115_SigScheme(self.obj).sign(hash(text))
+
+    def verify(self, text, hash, signature):
+        return PKCS1_v1_5.PKCS115_SigScheme(self.obj).verify(hash(text), signature)
+
+class PreloadedECKey(PreloadedKey):
+
+    @classmethod
+    def importKey(cls, curve, pem):
+        if ecdsa_loaded:
+            k1 = ECDSA_SigningKey.from_pem(pem)
+            k2 = k1.get_verifying_key()
+            cls(HAL_KEY_TYPE_EC_PRIVATE, curve, k1, k1.to_der(), curve = curve)
+            cls(HAL_KEY_TYPE_EC_PUBLIC,  curve, k2, k2.to_der(), curve = curve)
+
+    def sign(self, text, hash):
+        return self.obj.sign(text, hashfunc = hash)
+
+    def verify(self, text, hash, signature):
+        return self.obj.verify(signature, text, hashfunc = hash)
+
 
 # openssl genrsa 1024
-if pycrypto_loaded: static_keys[HAL_KEY_TYPE_RSA_PRIVATE, 1024] = RSA.importKey('''\
+PreloadedRSAKey.importKey(1024, '''\
 -----BEGIN RSA PRIVATE KEY-----
 MIICXQIBAAKBgQC95QlDOvlQhdCe/a7eIoX9SGPVfXfA8/62ilnF+NcwLrhxkr2R
 4EVQB65+9AbxqM8Hqol6fhZzmDs48cl2tOFGJpE8iMhiFm4i6SGl2RXYaG0xi+lJ
@@ -679,7 +723,7 @@ lsTSiPyQjc4dQQJxFduvWHLx28bx+l7FTav7FaKntCJo
 ''')
 
 # openssl genrsa 2048
-if pycrypto_loaded: static_keys[HAL_KEY_TYPE_RSA_PRIVATE, 2048] = RSA.importKey('''\
+PreloadedRSAKey.importKey(2048, '''\
 -----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAsbvq6syhDXD/OMVAuLoMceGQLUIiezfShVqFfyMqADjqhFRW
 Wbonn0XV9ZkypU4Ib9n6PtLATNaefhpsUlI4s+20YTlQ7GiwJ9p97/N1o1u060ja
@@ -710,7 +754,7 @@ EQfc0UFoFHyc3mYEKR4zHheqQG5OFBN89LqG3S+O69vc1qwCvNKL+Q==
 ''')
 
 # openssl genrsa 4096
-if pycrypto_loaded: static_keys[HAL_KEY_TYPE_RSA_PRIVATE, 4096] = RSA.importKey('''\
+PreloadedRSAKey.importKey(4096, '''\
 -----BEGIN RSA PRIVATE KEY-----
 MIIJKAIBAAKCAgEAzWpYSQt+DrUNI+EJT/ko92wM2POfFnmm3Kc34nmuK6sez0DJ
 r9Vib9R5K46RNgqcUdAodjU6cy3/MZA53SqP7RwR/LQtWmK2a+T4iey2vQZ0iCDA
@@ -765,26 +809,26 @@ dQYLBHIPcw6e0FdL3nTs44BpAqcK28N5eWbe/KaZ3EA0lHRmyOQ++WgU6jo=
 ''')
 
 # openssl ecparam -genkey -name prime256v1 | openssl ec
-if ecdsa_loaded: static_keys[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256] = ECDSA_SigningKey.from_pem('''\
+PreloadedECKey.importKey(HAL_CURVE_P256, '''\
 -----BEGIN EC PRIVATE KEY-----
 MHcCAQEEIPBrVhD1iFF2e8wPkPf4N1038iR8xPgku/CVOT8lcSztoAoGCCqGSM49
 AwEHoUQDQgAE3mB5BmN5Fa4fV74LsDWIpBUxktPqYGJ6WOBrjPs1HWkNU7JHO3qY
 9yy+CXFSPb89GWQgb5wLtNPn4QYMj+KRTA==
 -----END EC PRIVATE KEY-----
-''', SHA256)
+''')
 
 # openssl ecparam -genkey -name secp384r1 | openssl ec
-if ecdsa_loaded: static_keys[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P384] = ECDSA_SigningKey.from_pem('''\
+PreloadedECKey.importKey(HAL_CURVE_P384, '''\
 -----BEGIN EC PRIVATE KEY-----
 MIGkAgEBBDCVGo35Hbrf3Iys7mWRIm5yjg+6vPIgzbp2jCbDyszBo+wTxmQambG4
 g8yocp4wM6+gBwYFK4EEACKhZANiAATYwa+M8T8jsNHKmMZTvPPflUIfrjuZZo1D
 3kkkmN4r6cTNctjaeRdAfD0X40l4yPnGIP9ParuKVVl1y0TdQ7BS3g/Gj/LP33HD
 ESP8gFDIKFCWSDX0uhmy+HsGsPwgNoY=
 -----END EC PRIVATE KEY-----
-''', SHA384)
+''')
 
 # openssl ecparam -genkey -name secp521r1 | openssl ec
-if ecdsa_loaded: static_keys[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P521] = ECDSA_SigningKey.from_pem('''\
+PreloadedECKey.importKey(HAL_CURVE_P521, '''\
 -----BEGIN EC PRIVATE KEY-----
 MIHcAgEBBEIBtf+LKhJNQEJRFQ2cGQPcviwfp9IKSnD5EFTqAPtv7/+t2FtmdHHP
 /fWIlZ7jcC5N9dWy6bKGu3+FqwgZAYLpsqigBwYFK4EEACOhgYkDgYYABADdfcUe
@@ -792,19 +836,7 @@ P0oAZQ5308v5ijcg4hePvhvVi+QKcrwmE9kirXCFoYN1tzPmXZmw8lNJenrbwaNz
 opJR84LBHnomGPogAQGF0aRk0jE8w1j1oMfrrzV6vCWnkh7pyzsDnrLU1HrkWeqw
 ihzwMzYJgFzToDH+fCh7nrBFZZZ9P9gPYMlSM5UMeA==
 -----END EC PRIVATE KEY-----
-''', SHA512)
-
-# Public key objects corresponding to the private key objects above.
-
-def preload_public_keys():
-    for keytag, k in static_keys.items():
-        keytype, len_or_curve = keytag
-        if keytype == HAL_KEY_TYPE_RSA_PRIVATE:
-            static_keys[HAL_KEY_TYPE_RSA_PUBLIC, len_or_curve] = k.publickey()
-        elif keytype == HAL_KEY_TYPE_EC_PRIVATE:
-            static_keys[HAL_KEY_TYPE_EC_PUBLIC, len_or_curve] = k.get_verifying_key()
-        else:
-            raise TypeError
+''')
 
 
 if __name__ == "__main__":
