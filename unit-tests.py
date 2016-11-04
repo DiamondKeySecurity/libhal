@@ -512,8 +512,7 @@ class TestPKeyList(TestCaseLoggedIn):
     def load_keys(self, flags):
         for obj in PreloadedKey.db.itervalues():
             with hsm.pkey_load(obj.keytype, obj.curve, obj.der, flags) as k:
-                self.addCleanup(lambda uuid: hsm.pkey_find(uuid, flags = flags).delete(),
-                                k.uuid)
+                self.addCleanup(lambda uuid: hsm.pkey_find(uuid, flags = flags).delete(), k.uuid)
                 for i, a in enumerate((str(obj.keytype), str(obj.fn2))):
                     k.set_attribute(i, a)
 
@@ -583,20 +582,28 @@ class TestPKeyAttribute(TestCaseLoggedIn):
     Attribute creation/lookup/deletion tests.
     """
 
-    def load_and_fill(self, flags, n_keys = 1, n_attrs = 2):
+    def load_and_fill(self, flags, n_keys = 1, n_attrs = 2, n_fill = 0):
+        pinwheel = Pinwheel()
         for i in xrange(n_keys):
             for obj in PreloadedKey.db.itervalues():
                 with hsm.pkey_load(obj.keytype, obj.curve, obj.der, flags) as k:
-                    self.addCleanup(lambda uuid: hsm.pkey_find(uuid, flags = flags).delete(),
-                                    k.uuid)
+                    pinwheel()
+                    self.addCleanup(lambda uuid: hsm.pkey_find(uuid, flags = flags).delete(), k.uuid)
                     for j in xrange(n_attrs):
-                        k.set_attribute(j, "Attribute {}".format(j))
+                        k.set_attribute(j, "Attribute {}{}".format(j, "*" * n_fill))
+                        pinwheel()
 
-    def test_attribute_bloat_volatile(self):
+    def test_attribute_bloat_volatile_many(self):
         self.load_and_fill(0, n_attrs = 192)
 
-    def test_attribute_bloat_token(self):
+    def test_attribute_bloat_volatile_big(self):
+        self.load_and_fill(0, n_attrs = 6, n_fill = 512)
+
+    def test_attribute_bloat_token_many(self):
         self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 128)
+
+    def test_attribute_bloat_token_big(self):
+        self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 16, n_fill = 1024)
 
 
 @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
@@ -645,6 +652,28 @@ class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
 #
 # Preloaded keys should suffice for all of these.
 
+
+
+class Pinwheel(object):
+    """
+    Activity pinwheel, as needed.
+    """
+
+    def __init__(self):
+        self.pinwheel = tuple("\b\b{} ".format(c) for c in "-/|\\")
+        self.modulo   = len(self.pinwheel)
+        self.position = 0
+        if not args.quiet:
+            from sys import stdout
+            stdout.write(". ")
+            stdout.flush()
+
+    def __call__(self):
+        if not args.quiet:
+            from sys import stdout
+            stdout.write(self.pinwheel[self.position])
+            stdout.flush()
+            self.position = (self.position + 1) % self.modulo
 
 
 class PreloadedKey(object):
