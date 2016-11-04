@@ -614,6 +614,57 @@ class TestPKeyAttribute(TestCaseLoggedIn):
         self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 16, n_fill = 1024)
 
 
+class TestPKeyAttributeSpeedToken(TestCaseLoggedIn):
+    """
+    Attribute speed tests.
+    """
+
+    def setUp(self):
+        der = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256].der
+        self.k = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256, der, HAL_KEY_FLAG_TOKEN)
+        self.addCleanup(self.k.delete)
+        super(TestPKeyAttributeSpeedToken, self).setUp()
+
+    def set_attributes(self, n_attrs):
+        pinwheel = Pinwheel()
+        for i in xrange(n_attrs):
+            pinwheel()
+            self.k.set_attribute(i, "Attribute {}".format(i))
+
+    def test_set_1_attribute(self):
+        self.set_attributes(1)
+
+    def test_set_6_attributes(self):
+        self.set_attributes(6)
+
+    def test_set_12_attributes(self):
+        self.set_attributes(12)
+
+class TestPKeyAttributeSpeedVolatile(TestCaseLoggedIn):
+    """
+    Attribute speed tests.
+    """
+
+    def setUp(self):
+        der = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256].der
+        self.k = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256, der, 0)
+        self.addCleanup(self.k.delete)
+        super(TestPKeyAttributeSpeedVolatile, self).setUp()
+
+    def set_attributes(self, n_attrs):
+        for i in xrange(n_attrs):
+            self.k.set_attribute(i, "Attribute {}".format(i))
+
+    def test_set_1_attribute(self):
+        self.set_attributes(1)
+
+    def test_set_6_attributes(self):
+        self.set_attributes(6)
+
+    def test_set_12_attributes(self):
+        self.set_attributes(12)
+
+
 @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
 class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
     """
