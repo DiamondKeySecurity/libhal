@@ -1097,17 +1097,16 @@ static hal_error_t ks_list(hal_ks_t *ks,
   if (ks != &db.ks || result == NULL || result_len == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if (db.ksi.used > result_max)
-    return HAL_ERROR_RESULT_TOO_LONG;
-
   flash_block_t *block;
   hal_error_t err;
-  unsigned b;
 
   *result_len = 0;
 
   for (int i = 0; i < db.ksi.used; i++) {
-    b = db.ksi.index[i];
+    unsigned b = db.ksi.index[i];
+
+    if (*result_len >= result_max)
+      return HAL_ERROR_RESULT_TOO_LONG;
 
     if ((err = block_read_cached(b, &block)) != HAL_OK)
       return err;

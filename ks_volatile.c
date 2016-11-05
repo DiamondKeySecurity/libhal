@@ -360,22 +360,26 @@ static hal_error_t ks_list(hal_ks_t *ks,
   if (ksv->db == NULL)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
-  if (ksv->db->ksi.used > result_max)
-    return HAL_ERROR_RESULT_TOO_LONG;
+  *result_len = 0;
 
   for (int i = 0; i < ksv->db->ksi.used; i++) {
     unsigned b = ksv->db->ksi.index[i];
+
     if (ksv->db->ksi.names[b].chunk > 0)
       continue;
+
     if (!key_visible_to_session(ksv, client, session, &ksv->db->keys[b]))
       continue;
+
+    if (*result_len >= result_max)
+      return HAL_ERROR_RESULT_TOO_LONG;
+
     result[i].name  = ksv->db->ksi.names[b].name;
     result[i].type  = ksv->db->keys[b].type;
     result[i].curve = ksv->db->keys[b].curve;
     result[i].flags = ksv->db->keys[b].flags;
+    ++ *result_len;
   }
-
-  *result_len = ksv->db->ksi.used;
 
   return HAL_OK;
 }
