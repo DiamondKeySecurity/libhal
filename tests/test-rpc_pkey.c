@@ -56,16 +56,20 @@ static inline const char *ecdsa_curve_to_string(const hal_curve_name_t curve)
   }
 }
 
-static int test_attributes(const hal_pkey_handle_t pkey)
+static int test_attributes(const hal_pkey_handle_t pkey,
+                           const hal_uuid_t * const name,
+                           const hal_key_flags_t flags)
 {
   static const size_t sizes[] = { 32, 100, 260, 1000, 2000, 2048, 0 };
+  static const char format[] = "Test attribute %lu";
+
   hal_error_t err;
   size_t n;
 
   for (const size_t *size = sizes; *size; size++) {
     uint8_t buf_1[*size], buf_2[*size];
     memset(buf_1, 0x55, sizeof(buf_1));
-    snprintf((char *) buf_1, sizeof(buf_1), "Test attribute %lu", (unsigned long) *size);
+    snprintf((char *) buf_1, sizeof(buf_1), format, (unsigned long) *size);
 
     if ((err = hal_rpc_pkey_set_attribute(pkey, *size, buf_1, sizeof(buf_1))) != HAL_OK)
       lose("Could not set attribute %lu: %s\n",
@@ -88,7 +92,37 @@ static int test_attributes(const hal_pkey_handle_t pkey)
            (unsigned long) *size, hal_error_string(err));
   }
 
-#warning Still need something to test hal_rpc_pkey_match()
+  {
+    const hal_client_handle_t client = {HAL_HANDLE_NONE};
+    const hal_session_handle_t session = {HAL_HANDLE_NONE};
+    hal_uuid_t result[10], previous_uuid = {{0}};
+    unsigned result_len;
+
+    if ((err = hal_rpc_pkey_match(client, session, HAL_KEY_TYPE_NONE, HAL_CURVE_NONE, flags, NULL, 0,
+                                  result, &result_len, sizeof(result)/sizeof(*result), &previous_uuid)) != HAL_OK)
+      lose("Unrestricted match() failed: %s\n", hal_error_string(err));
+
+    if (result_len == 0)
+      lose("Unrestricted match found no results\n");
+
+    for (const size_t *size = sizes; *size; size++) {
+      uint8_t buf[*size];
+      memset(buf, 0x55, sizeof(buf));
+      snprintf((char *) buf, sizeof(buf), format, (unsigned long) *size);
+      hal_rpc_pkey_attribute_t attribute[1] = {{ *size, sizeof(buf), buf }};
+
+      if ((err = hal_rpc_pkey_match(client, session, HAL_KEY_TYPE_NONE, HAL_CURVE_NONE, flags,
+                                    attribute, sizeof(attribute)/sizeof(*attribute),
+                                    result, &result_len, sizeof(result)/sizeof(*result), &previous_uuid)) != HAL_OK)
+        lose("Restricted match() for attribute %lu failed: %s\n", (unsigned long) *size, hal_error_string(err));
+
+      if (result_len == 0)
+        lose("Restricted match for attribute %lu found no results\n", (unsigned long) *size);
+    }
+
+#warning More hal_rpc_pkey_match() testing here.
+
+  }
 
   return 1;
 
@@ -172,7 +206,7 @@ static int test_rsa_testvec(const rsa_tc_t * const tc, hal_key_flags_t flags)
                                    digestinfo, digestinfo_len, tc->s.val, tc->s.len)) != HAL_OK)
       lose("Could not verify: %s\n", hal_error_string(err));
 
-    if (!test_attributes(private_key) || !test_attributes(public_key))
+    if (!test_attributes(private_key, &private_name, flags) || !test_attributes(public_key, &public_name, flags))
       goto fail;
 
     if ((err = hal_rpc_pkey_delete(private_key)) != HAL_OK)
@@ -259,7 +293,7 @@ static int test_ecdsa_testvec(const ecdsa_tc_t * const tc, hal_key_flags_t flags
                                    tc->H, tc->H_len, sig, len)) != HAL_OK)
       lose("Could not verify own signature: %s\n", hal_error_string(err));
 
-    if (!test_attributes(private_key) || !test_attributes(public_key))
+    if (!test_attributes(private_key, &private_name, flags) || !test_attributes(public_key, &public_name, flags))
       goto fail;
 
     if ((err = hal_rpc_pkey_delete(private_key)) != HAL_OK)
@@ -336,7 +370,7 @@ static int test_rsa_generate(const rsa_tc_t * const tc, hal_key_flags_t flags)
                                    digestinfo, digestinfo_len, sig, len)) != HAL_OK)
       lose("Could not verify: %s\n", hal_error_string(err));
 
-    if (!test_attributes(private_key) || !test_attributes(public_key))
+    if (!test_attributes(private_key, &private_name, flags) || !test_attributes(public_key, &public_name, flags))
       goto fail;
 
     if ((err = hal_rpc_pkey_delete(private_key)) != HAL_OK)
@@ -404,7 +438,7 @@ static int test_ecdsa_generate(const ecdsa_tc_t * const tc, hal_key_flags_t flag
                                    tc->H, tc->H_len, sig, len)) != HAL_OK)
       lose("Could not verify own signature: %s\n", hal_error_string(err));
 
-    if (!test_attributes(private_key) || !test_attributes(public_key))
+    if (!test_attributes(private_key, &private_name, flags) || !test_attributes(public_key, &public_name, flags))
       goto fail;
 
     if ((err = hal_rpc_pkey_delete(private_key)) != HAL_OK)
