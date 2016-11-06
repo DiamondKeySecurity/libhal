@@ -635,7 +635,7 @@ static hal_error_t pkey_remote_get_key_curve(const hal_pkey_handle_t pkey,
 
   check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
   if (rpc_ret == HAL_OK) {
-    check(hal_xdr_decode_int(&iptr, ilimit, &type32));
+    check(hal_xdr_decode_int(&iptr, ilimit, &curve32));
     *curve = (hal_curve_name_t)curve32;
   }
   return rpc_ret;
@@ -840,9 +840,9 @@ static hal_error_t pkey_remote_match(const hal_client_handle_t client,
   size_t attributes_buffer_len = 0;
   if (attributes != NULL)
     for (int i = 0; i < attributes_len; i++)
-      attributes_buffer_len += attributes[i].length;
+      attributes_buffer_len += pad(attributes[i].length);
 
-  uint8_t outbuf[nargs(9 + attributes_len * 2) + pad(attributes_buffer_len) + pad(sizeof(hal_uuid_t))];
+  uint8_t outbuf[nargs(9 + attributes_len * 2) + attributes_buffer_len + pad(sizeof(hal_uuid_t))];
   uint8_t *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(4) + pad(result_max * sizeof(hal_uuid_t))];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
