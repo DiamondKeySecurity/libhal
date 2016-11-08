@@ -250,7 +250,7 @@ typedef struct {
                        const hal_key_type_t type,
                        const hal_curve_name_t curve,
                        const hal_key_flags_t flags,
-                       hal_rpc_pkey_attribute_t *attributes,
+                       const hal_rpc_pkey_attribute_t *attributes,
                        const unsigned attributes_len,
                        hal_uuid_t *result,
                        unsigned *result_len,
@@ -270,6 +270,21 @@ typedef struct {
 
   hal_error_t (*delete_attribute)(const hal_pkey_handle_t pkey,
                                   const uint32_t type);
+
+
+  hal_error_t (*set_attributes)(const hal_pkey_handle_t pkey,
+                                const hal_rpc_pkey_attribute_t *attributes,
+                                const unsigned attributes_len);
+
+  hal_error_t (*get_attributes)(const hal_pkey_handle_t pkey,
+                                hal_rpc_pkey_attribute_t *attributes,
+                                const unsigned attributes_len,
+                                uint8_t *attributes_buffer,
+                                const size_t attributes_buffer_len);
+
+  hal_error_t (*delete_attributes)(const hal_pkey_handle_t pkey,
+                                   const uint32_t *types,
+                                   const unsigned types_len);
 
 } hal_rpc_pkey_dispatch_t;
 
@@ -497,7 +512,7 @@ struct hal_ks_driver {
                        const hal_key_type_t type,
                        const hal_curve_name_t curve,
                        const hal_key_flags_t flags,
-                       hal_rpc_pkey_attribute_t *attributes,
+                       const hal_rpc_pkey_attribute_t *attributes,
                        const unsigned attributes_len,
                        hal_uuid_t *result,
                        unsigned *result_len,
@@ -520,6 +535,23 @@ struct hal_ks_driver {
   hal_error_t (*delete_attribute)(hal_ks_t *ks,
                                   hal_pkey_slot_t *slot,
                                   const uint32_t type);
+
+  hal_error_t (*set_attributes)(hal_ks_t *ks,
+                                hal_pkey_slot_t *slot,
+                                const hal_rpc_pkey_attribute_t *attributes,
+                                const unsigned attributes_len);
+
+  hal_error_t (*get_attributes)(hal_ks_t *ks,
+                                hal_pkey_slot_t *slot,
+                                hal_rpc_pkey_attribute_t *attributes,
+                                const unsigned attributes_len,
+                                uint8_t *attributes_buffer,
+                                const size_t attributes_buffer_len);
+
+  hal_error_t (*delete_attributes)(hal_ks_t *ks,
+                                   hal_pkey_slot_t *slot,
+                                   const uint32_t *types,
+                                   const unsigned types_len);
 
 };
 
@@ -622,7 +654,7 @@ static inline hal_error_t hal_ks_match(hal_ks_t *ks,
                                        const hal_key_type_t type,
                                        const hal_curve_name_t curve,
                                        const hal_key_flags_t flags,
-                                       hal_rpc_pkey_attribute_t *attributes,
+                                       const hal_rpc_pkey_attribute_t *attributes,
                                        const unsigned attributes_len,
                                        hal_uuid_t *result,
                                        unsigned *result_len,
@@ -649,11 +681,11 @@ static inline  hal_error_t hal_ks_set_attribute(hal_ks_t *ks,
 }
 
 static inline hal_error_t hal_ks_get_attribute(hal_ks_t *ks,
-                               hal_pkey_slot_t *slot,
-                               const uint32_t type,
-                               uint8_t *value,
-                               size_t *value_len,
-                               const size_t value_max)
+                                               hal_pkey_slot_t *slot,
+                                               const uint32_t type,
+                                               uint8_t *value,
+                                               size_t *value_len,
+                                               const size_t value_max)
 {
   if (ks == NULL || ks->driver == NULL || ks->driver->get_attribute == NULL || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -662,13 +694,57 @@ static inline hal_error_t hal_ks_get_attribute(hal_ks_t *ks,
 }
 
 static inline hal_error_t hal_ks_delete_attribute(hal_ks_t *ks,
-                                  hal_pkey_slot_t *slot,
-                                  const uint32_t type)
+                                                  hal_pkey_slot_t *slot,
+                                                  const uint32_t type)
 {
   if (ks == NULL || ks->driver == NULL || ks->driver->delete_attribute == NULL || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   return ks->driver->delete_attribute(ks, slot, type);
+}
+
+static inline  hal_error_t hal_ks_set_attributes(hal_ks_t *ks,
+                                                 hal_pkey_slot_t *slot,
+                                                 const hal_rpc_pkey_attribute_t *attributes,
+                                                 const unsigned attributes_len)
+{
+  if (ks == NULL || ks->driver == NULL || ks->driver->set_attributes == NULL || slot == NULL ||
+      attributes == NULL || attributes_len == 0)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  for (int i = 0; i < attributes_len; i++)
+    if (attributes[i].length == 0 || attributes[i].value == NULL)
+      return HAL_ERROR_BAD_ARGUMENTS;
+
+  return ks->driver->set_attributes(ks, slot, attributes, attributes_len);
+}
+
+static inline hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
+                                                hal_pkey_slot_t *slot,
+                                                hal_rpc_pkey_attribute_t *attributes,
+                                                const unsigned attributes_len,
+                                                uint8_t *attributes_buffer,
+                                                const size_t attributes_buffer_len)
+{
+  if (ks == NULL || ks->driver == NULL || ks->driver->get_attributes == NULL || slot == NULL ||
+      attributes == NULL || attributes_len == 0 ||
+      attributes_buffer == NULL || attributes_buffer_len == 0)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  return ks->driver->get_attributes(ks, slot, attributes, attributes_len,
+                                    attributes_buffer, attributes_buffer_len);
+}
+
+static inline hal_error_t hal_ks_delete_attributes(hal_ks_t *ks,
+                                                   hal_pkey_slot_t *slot,
+                                                   const uint32_t *types,
+                                                   const unsigned types_len)
+{
+  if (ks == NULL || ks->driver == NULL || ks->driver->delete_attributes == NULL || slot == NULL ||
+      types == NULL || types_len == 0)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  return ks->driver->delete_attributes(ks, slot, types, types_len);
 }
 
 /*
@@ -803,44 +879,6 @@ extern hal_error_t hal_ks_index_fsck(hal_ks_index_t *ksi);
 
 /*
  * Keystore attribute utilities, for use by keystore drivers.
- *
- * Basic model here is probably to replace the "der" block in a key
- * object with a byte array.  We could use padding to get alignment,
- * but it's probably easier just to do this DNS style, pulling a
- * 16-bit length and 32-bit attribute type out of the byte array
- * directly.  Well, maybe.  I guess if we cast the uint8_t* to a
- * structure pointer we could use the structure to pull out the header
- * fields, but that has portability issues, particulary if the
- * compiler gets tetchy about type punning.
- *
- * Unclear whether we should treat the key DER specially.  Might just
- * give it an attribute code of 0xFFFFFFFF and treat it same as
- * everything else, just always first for convenience.  This assumes
- * that PKCS #11 will never use 0xFFFFFFFF, which is a bit risky, but
- * maybe the code just treats it a little bit specially and knows to
- * skip over the key DER when looking for attributes, etc.
- *
- * We probably don't want to let attributes span block boundaries.  We
- * probably do want to attempt to fit a new attribute into the first
- * available space which can hold it.  In theory, taken together, this
- * means we will only have to update multiple blocks when required to
- * add a new block (in which case the max_blocks count changes).  Most
- * of this only applies to flash, for volatile we can use as much
- * memory as we like, although even there we might want smaller chunks
- * to avoid wasting huge tracts of space that don't end up being used.
- * But maybe that's just a configuration thing for the volatile
- * keystore(s).
- *
- * If we have to rewrite a block at all we might as well compact it,
- * so fragmentation in that sense is a non-issue.  Might need to
- * collapse blocks when deletion has freed up enough space, but that
- * might be something we handle directly in ks_flash rather than in
- * the ks_attribute code.
- *
- * We need some way of figuring out how many attributes there are.
- * Options are a marker (like the IPv4 END-OF-OPTIONS option) or a
- * count in the header.  Count is simpler and lets us pre-allocate
- * arrays so probably go with that.
  */
 
 extern hal_error_t hal_ks_attribute_scan(const uint8_t * const bytes,
@@ -919,6 +957,9 @@ typedef enum {
     RPC_FUNC_PKEY_GET_ATTRIBUTE,
     RPC_FUNC_PKEY_DELETE_ATTRIBUTE,
     RPC_FUNC_PKEY_GET_KEY_CURVE,
+    RPC_FUNC_PKEY_SET_ATTRIBUTES,
+    RPC_FUNC_PKEY_GET_ATTRIBUTES,
+    RPC_FUNC_PKEY_DELETE_ATTRIBUTES,
 } rpc_func_num_t;
 
 #define RPC_VERSION 0x01010000          /* 1.1.0.0 */

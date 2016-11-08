@@ -625,20 +625,33 @@ class TestPKeyAttributeWriteSpeedToken(TestCaseLoggedIn):
         self.addCleanup(self.k.delete)
         super(TestPKeyAttributeWriteSpeedToken, self).setUp()
 
-    def set_attributes(self, n_attrs):
+    def set_attributes_single(self, n_attrs):
         pinwheel = Pinwheel()
         for i in xrange(n_attrs):
             pinwheel()
             self.k.set_attribute(i, "Attribute {}".format(i))
 
-    def test_set_1_attribute(self):
-        self.set_attributes(1)
+    def set_attributes_bulk(self, n_attrs):
+        self.k.set_attributes(dict((i, "Attribute {}".format(i))
+                                   for i in xrange(n_attrs)))
 
-    def test_set_6_attributes(self):
-        self.set_attributes(6)
+    def test_set_1_attribute_single(self):
+        self.set_attributes_single(1)
 
-    def test_set_12_attributes(self):
-        self.set_attributes(12)
+    def test_set_6_attributes_single(self):
+        self.set_attributes_single(6)
+
+    def test_set_12_attributes_single(self):
+        self.set_attributes_single(12)
+
+    def test_set_1_attribute_bulk(self):
+        self.set_attributes_bulk(1)
+
+    def test_set_6_attributes_bulk(self):
+        self.set_attributes_bulk(6)
+
+    def test_set_12_attributes_bulk(self):
+        self.set_attributes_bulk(12)
 
 class TestPKeyAttributeWriteSpeedVolatile(TestCaseLoggedIn):
     """
@@ -651,19 +664,33 @@ class TestPKeyAttributeWriteSpeedVolatile(TestCaseLoggedIn):
         self.addCleanup(self.k.delete)
         super(TestPKeyAttributeWriteSpeedVolatile, self).setUp()
 
-    def set_attributes(self, n_attrs):
+    def set_attributes_single(self, n_attrs):
+        pinwheel = Pinwheel()
         for i in xrange(n_attrs):
+            pinwheel()
             self.k.set_attribute(i, "Attribute {}".format(i))
 
-    def test_set_1_attribute(self):
-        self.set_attributes(1)
+    def set_attributes_bulk(self, n_attrs):
+        self.k.set_attributes(dict((i, "Attribute {}".format(i))
+                                   for i in xrange(n_attrs)))
 
-    def test_set_6_attributes(self):
-        self.set_attributes(6)
+    def test_set_1_attribute_single(self):
+        self.set_attributes_single(1)
 
-    def test_set_12_attributes(self):
-        self.set_attributes(12)
+    def test_set_6_attributes_single(self):
+        self.set_attributes_single(6)
 
+    def test_set_12_attributes_single(self):
+        self.set_attributes_single(12)
+
+    def test_set_1_attribute_bulk(self):
+        self.set_attributes_bulk(1)
+
+    def test_set_6_attributes_bulk(self):
+        self.set_attributes_bulk(6)
+
+    def test_set_12_attributes_bulk(self):
+        self.set_attributes_bulk(12)
 
 class TestPKeyAttributeReadSpeedToken(TestCaseLoggedIn):
     """
@@ -674,23 +701,36 @@ class TestPKeyAttributeReadSpeedToken(TestCaseLoggedIn):
         der = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256].der
         self.k = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256, der, HAL_KEY_FLAG_TOKEN)
         self.addCleanup(self.k.delete)
-        self.k.set_attribute(0, "Attribute 0")
+        for i in xrange(12):
+            self.k.set_attribute(i, "Attribute {}".format(i))
         super(TestPKeyAttributeReadSpeedToken, self).setUp()
 
-    def get_attributes(self, n_attrs):
+    def get_attributes_single(self, n_attrs):
         pinwheel = Pinwheel()
         for i in xrange(n_attrs):
             pinwheel()
-            self.k.get_attribute(0)
+            self.k.get_attribute(i)
 
-    def test_get_1_attribute(self):
-        self.get_attributes(1)
+    def get_attributes_bulk(self, n_attrs):
+        self.k.get_attributes(range(n_attrs))
 
-    def test_get_6_attributes(self):
-        self.get_attributes(6)
+    def test_get_1_attribute_single(self):
+        self.get_attributes_single(1)
 
-    def test_get_12_attributes(self):
-        self.get_attributes(12)
+    def test_get_6_attributes_single(self):
+        self.get_attributes_single(6)
+
+    def test_get_12_attributes_single(self):
+        self.get_attributes_single(12)
+
+    def test_get_1_attribute_bulk(self):
+        self.get_attributes_bulk(1)
+
+    def test_get_6_attributes_bulk(self):
+        self.get_attributes_bulk(6)
+
+    def test_get_12_attributes_bulk(self):
+        self.get_attributes_bulk(12)
 
 class TestPKeyAttributeReadSpeedVolatile(TestCaseLoggedIn):
     """
@@ -701,24 +741,36 @@ class TestPKeyAttributeReadSpeedVolatile(TestCaseLoggedIn):
         der = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256].der
         self.k = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256, der, 0)
         self.addCleanup(self.k.delete)
-        self.k.set_attribute(0, "Attribute 0")
+        for i in xrange(12):
+            self.k.set_attribute(i, "Attribute {}".format(i))
         super(TestPKeyAttributeReadSpeedVolatile, self).setUp()
 
-    def get_attributes(self, n_attrs):
+    def get_attributes_single(self, n_attrs):
         pinwheel = Pinwheel()
         for i in xrange(n_attrs):
             pinwheel()
-            self.k.get_attribute(0)
+            self.k.get_attribute(i)
 
-    def test_get_1_attribute(self):
-        self.get_attributes(1)
+    def get_attributes_bulk(self, n_attrs):
+        self.k.get_attributes(range(n_attrs))
 
-    def test_get_6_attributes(self):
-        self.get_attributes(6)
+    def test_get_1_attribute_single(self):
+        self.get_attributes_single(1)
 
-    def test_get_12_attributes(self):
-        self.get_attributes(12)
+    def test_get_6_attributes_single(self):
+        self.get_attributes_single(6)
 
+    def test_get_12_attributes_single(self):
+        self.get_attributes_single(12)
+
+    def test_get_1_attribute_bulk(self):
+        self.get_attributes_bulk(1)
+
+    def test_get_6_attributes_bulk(self):
+        self.get_attributes_bulk(6)
+
+    def test_get_12_attributes_bulk(self):
+        self.get_attributes_bulk(12)
 
 
 @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")

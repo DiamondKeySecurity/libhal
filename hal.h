@@ -155,6 +155,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_KSI_INDEX_CHUNK_MISSING,   "Key index chunk missing")                      \
   DEFINE_HAL_ERROR(HAL_ERROR_KSI_INDEX_CHUNK_OVERLAPS,  "Key index chunk overlaps")                     \
   DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_WRONG_BLOCK_TYPE, "Wrong block type in keystore")                 \
+  DEFINE_HAL_ERROR(HAL_ERROR_RPC_PROTOCOL_ERROR,        "RPC protocol error")                           \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -783,7 +784,7 @@ extern hal_error_t hal_rpc_pkey_match(const hal_client_handle_t client,
                                       const hal_key_type_t type,
                                       const hal_curve_name_t curve,
                                       const hal_key_flags_t flags,
-                                      hal_rpc_pkey_attribute_t *attributes,
+                                      const hal_rpc_pkey_attribute_t *attributes,
                                       const unsigned attributes_len,
                                       hal_uuid_t *result,
                                       unsigned *result_len,
@@ -803,6 +804,20 @@ extern hal_error_t hal_rpc_pkey_get_attribute(const hal_pkey_handle_t pkey,
 
 extern hal_error_t hal_rpc_pkey_delete_attribute(const hal_pkey_handle_t pkey,
                                                  const uint32_t type);
+
+extern hal_error_t hal_rpc_pkey_set_attributes(const hal_pkey_handle_t pkey,
+                                               const hal_rpc_pkey_attribute_t *const attributes,
+                                               const unsigned attributes_len);
+
+extern hal_error_t hal_rpc_pkey_get_attributes(const hal_pkey_handle_t pkey,
+                                               hal_rpc_pkey_attribute_t *attributes,
+                                               const unsigned attributes_len,
+                                               uint8_t *attributes_buffer,
+                                               const size_t attributes_buffer_len);
+
+extern hal_error_t hal_rpc_pkey_delete_attributes(const hal_pkey_handle_t pkey,
+                                                  const uint32_t * const types,
+                                                  const unsigned types_len);
 
 extern hal_error_t hal_rpc_client_init(void);
 

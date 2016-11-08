@@ -112,6 +112,7 @@ HALError.define(HAL_ERROR_KSI_INDEX_CHUNK_ORPHANED  = "Key index chunk orphaned"
 HALError.define(HAL_ERROR_KSI_INDEX_CHUNK_MISSING   = "Key index chunk missing")
 HALError.define(HAL_ERROR_KSI_INDEX_CHUNK_OVERLAPS  = "Key index chunk overlaps")
 HALError.define(HAL_ERROR_KEYSTORE_WRONG_BLOCK_TYPE = "Wrong block type in keystore")
+HALError.define(HAL_ERROR_RPC_PROTOCOL_ERROR        = "RPC protocol error")
 
 
 class Enum(int):
@@ -183,6 +184,9 @@ RPCFunc.define('''
     RPC_FUNC_PKEY_GET_ATTRIBUTE,
     RPC_FUNC_PKEY_DELETE_ATTRIBUTE,
     RPC_FUNC_PKEY_GET_KEY_CURVE,
+    RPC_FUNC_PKEY_SET_ATTRIBUTES,
+    RPC_FUNC_PKEY_GET_ATTRIBUTES,
+    RPC_FUNC_PKEY_DELETE_ATTRIBUTES,
 ''')
 
 class HALDigestAlgorithm(Enum): pass
@@ -388,6 +392,15 @@ class PKey(Handle):
 
     def delete_attribute(self, attr_type):
         self.hsm.pkey_delete_attribute(self, attr_type)
+
+    def set_attributes(self, attributes):
+        self.hsm.pkey_set_attributes(self, attributes)
+
+    def get_attributes(self, attributes, attributes_buffer_len = 2048):
+        return self.hsm.pkey_get_attributes(self, attributes, attributes_buffer_len)
+
+    def delete_attributes(self, attributes):
+        self.hsm.pkey_delete_attributes(self, attributes)
 
 
 class HSM(object):
@@ -642,7 +655,7 @@ class HSM(object):
                 key_name  = UUID(bytes = r.unpack_bytes())
                 yield key_type, key_curve, key_flags, key_name
 
-    def pkey_match(self, type = 0, curve = 0, flags = 0, attributes = (),
+    def pkey_match(self, type = 0, curve = 0, flags = 0, attributes = {},
                    length = 64, client = 0, session = 0):
         u = UUID(int = 0)
         n = length
@@ -655,8 +668,6 @@ class HSM(object):
                     yield u
 
     def pkey_set_attribute(self, pkey, attr_type, attr_value = None):
-        if attr_value is None and isinstance(attr_type, Attribute):
-            attr_type, attr_value = attr_type.type, attr_type.attr_value
         with self.rpc(RPC_FUNC_PKEY_SET_ATTRIBUTE, pkey, attr_type, attr_value):
             return
 
@@ -666,4 +677,20 @@ class HSM(object):
 
     def pkey_delete_attribute(self, pkey, attr_type):
         with self.rpc(RPC_FUNC_PKEY_DELETE_ATTRIBUTE, pkey, attr_type):
+            return
+
+    def pkey_set_attributes(self, pkey, attributes):
+        with self.rpc(RPC_FUNC_PKEY_SET_ATTRIBUTES, pkey, attributes):
+            return
+
+    def pkey_get_attributes(self, pkey, attributes, attributes_buffer_len = 2048):
+        attributes = tuple(attributes)
+        with self.rpc(RPC_FUNC_PKEY_GET_ATTRIBUTES, pkey, attributes, attributes_buffer_len) as r:
+            n = r.unpack_uint()
+            if n != len(attributes):
+                raise HAL_ERROR_RPC_PROTOCOL_ERROR
+            return dict((r.unpack_uint(), r.unpack_bytes()) for i in xrange(n))
+
+    def pkey_delete_attributes(self, pkey, attributes):
+        with self.rpc(RPC_FUNC_PKEY_DELETE_ATTRIBUTES, pkey, attributes):
             return

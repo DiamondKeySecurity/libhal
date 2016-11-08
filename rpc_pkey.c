@@ -954,7 +954,7 @@ static hal_error_t pkey_local_match(const hal_client_handle_t client,
                                     const hal_key_type_t type,
                                     const hal_curve_name_t curve,
                                     const hal_key_flags_t flags,
-                                    hal_rpc_pkey_attribute_t *attributes,
+                                    const hal_rpc_pkey_attribute_t *attributes,
                                     const unsigned attributes_len,
                                     hal_uuid_t *result,
                                     unsigned *result_len,
@@ -1048,6 +1048,78 @@ static hal_error_t pkey_local_delete_attribute(const hal_pkey_handle_t pkey,
   return err;
 }
 
+static hal_error_t pkey_local_set_attributes(const hal_pkey_handle_t pkey,
+                                             const hal_rpc_pkey_attribute_t *attributes,
+                                             const unsigned attributes_len)
+{
+  hal_pkey_slot_t *slot = find_handle(pkey);
+
+  if (slot == NULL)
+    return HAL_ERROR_KEY_NOT_FOUND;
+
+  hal_ks_t *ks = NULL;
+  hal_error_t err;
+
+  if ((err = check_writable(slot->client_handle, slot->flags)) != HAL_OK)
+    return err;
+
+  if ((err = ks_open_from_flags(&ks, slot->flags)) == HAL_OK &&
+      (err = hal_ks_set_attributes(ks, slot, attributes, attributes_len)) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
+
+  return err;
+}
+
+static hal_error_t pkey_local_get_attributes(const hal_pkey_handle_t pkey,
+                                             hal_rpc_pkey_attribute_t *attributes,
+                                             const unsigned attributes_len,
+                                             uint8_t *attributes_buffer,
+                                             const size_t attributes_buffer_len)
+{
+  hal_pkey_slot_t *slot = find_handle(pkey);
+
+  if (slot == NULL)
+    return HAL_ERROR_KEY_NOT_FOUND;
+
+  hal_ks_t *ks = NULL;
+  hal_error_t err;
+
+  if ((err = ks_open_from_flags(&ks, slot->flags)) == HAL_OK &&
+      (err = hal_ks_get_attributes(ks, slot, attributes, attributes_len,
+                                   attributes_buffer, attributes_buffer_len)) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
+
+  return err;
+}
+
+static hal_error_t pkey_local_delete_attributes(const hal_pkey_handle_t pkey,
+                                                const uint32_t * const types,
+                                                const unsigned types_len)
+{
+  hal_pkey_slot_t *slot = find_handle(pkey);
+
+  if (slot == NULL)
+    return HAL_ERROR_KEY_NOT_FOUND;
+
+  hal_ks_t *ks = NULL;
+  hal_error_t err;
+
+  if ((err = check_writable(slot->client_handle, slot->flags)) != HAL_OK)
+    return err;
+
+  if ((err = ks_open_from_flags(&ks, slot->flags)) == HAL_OK &&
+      (err = hal_ks_delete_attributes(ks, slot, types, types_len)) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
+
+  return err;
+}
+
 const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch = {
   pkey_local_load,
   pkey_local_find,
@@ -1066,7 +1138,10 @@ const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch = {
   pkey_local_match,
   pkey_local_set_attribute,
   pkey_local_get_attribute,
-  pkey_local_delete_attribute
+  pkey_local_delete_attribute,
+  pkey_local_set_attributes,
+  pkey_local_get_attributes,
+  pkey_local_delete_attributes
 };
 
 /*

@@ -390,7 +390,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
                             const hal_key_type_t type,
                             const hal_curve_name_t curve,
                             const hal_key_flags_t flags,
-                            hal_rpc_pkey_attribute_t *attributes,
+                            const hal_rpc_pkey_attribute_t *attributes,
                             const unsigned attributes_len,
                             hal_uuid_t *result,
                             unsigned *result_len,
@@ -447,7 +447,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
                                        key_attrs, k->attributes_len, NULL)) != HAL_OK)
         return err;
 
-      for (hal_rpc_pkey_attribute_t *required = attributes;
+      for (const hal_rpc_pkey_attribute_t *required = attributes;
            ok && required < attributes + attributes_len; required++) {
 
         hal_rpc_pkey_attribute_t *present = key_attrs;
@@ -470,11 +470,11 @@ static hal_error_t ks_match(hal_ks_t *ks,
   return HAL_OK;
 }
 
-static  hal_error_t ks_set_attribute(hal_ks_t *ks,
-                                     hal_pkey_slot_t *slot,
-                                     const uint32_t type,
-                                     const uint8_t * const value,
-                                     const size_t value_len)
+static hal_error_t ks_set_attribute(hal_ks_t *ks,
+                                    hal_pkey_slot_t *slot,
+                                    const uint32_t type,
+                                    const uint8_t * const value,
+                                    const size_t value_len)
 {
   if (ks == NULL || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -508,12 +508,12 @@ static  hal_error_t ks_set_attribute(hal_ks_t *ks,
                                  type, value, value_len);
 }
 
-static  hal_error_t ks_get_attribute(hal_ks_t *ks,
-                                     hal_pkey_slot_t *slot,
-                                     const uint32_t type,
-                                     uint8_t *value,
-                                     size_t *value_len,
-                                     const size_t value_max)
+static hal_error_t ks_get_attribute(hal_ks_t *ks,
+                                    hal_pkey_slot_t *slot,
+                                    const uint32_t type,
+                                    uint8_t *value,
+                                    size_t *value_len,
+                                    const size_t value_max)
 {
   if (ks == NULL || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -595,6 +595,140 @@ static hal_error_t ks_delete_attribute(hal_ks_t *ks,
   return hal_ks_attribute_delete(bytes, bytes_len, attributes, &k->attributes_len, &total_len, type);
 }
 
+static hal_error_t ks_set_attributes(hal_ks_t *ks,
+                                     hal_pkey_slot_t *slot,
+                                     const hal_rpc_pkey_attribute_t *attributes,
+                                     const unsigned attributes_len)
+{
+  if (ks == NULL || slot == NULL || attributes == NULL || attributes_len == 0)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  ks_t *ksv = ks_to_ksv(ks);
+  hal_error_t err;
+  unsigned b;
+
+  if (ksv->db == NULL)
+    return HAL_ERROR_KEYSTORE_ACCESS;
+
+  if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
+    return err;
+
+  ks_key_t * const k = &ksv->db->keys[b];
+
+  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k))
+    return HAL_ERROR_KEY_NOT_FOUND;
+
+  hal_rpc_pkey_attribute_t attrs[k->attributes_len + attributes_len];
+  uint8_t *bytes = k->der + k->der_len;
+  size_t bytes_len = sizeof(k->der) - k->der_len;
+  size_t total_len;
+
+  if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, k->attributes_len, &total_len)) != HAL_OK)
+    return err;
+
+  for (const hal_rpc_pkey_attribute_t *a = attributes; a < attributes + attributes_len; a++)
+    if ((err =  hal_ks_attribute_insert(bytes, bytes_len, attrs, &k->attributes_len, &total_len,
+                                        a->type, a->value, a->length)) != HAL_OK)
+      return err;
+
+  return HAL_OK;
+}
+
+static hal_error_t ks_get_attributes(hal_ks_t *ks,
+                                     hal_pkey_slot_t *slot,
+                                     hal_rpc_pkey_attribute_t *attributes,
+                                     const unsigned attributes_len,
+                                     uint8_t *attributes_buffer,
+                                     const size_t attributes_buffer_len)
+{
+  if (ks == NULL || slot == NULL || attributes == NULL || attributes_len == 0 ||
+      attributes_buffer == NULL || attributes_buffer_len == 0)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  ks_t *ksv = ks_to_ksv(ks);
+  hal_error_t err;
+  unsigned b;
+
+  if (ksv->db == NULL)
+    return HAL_ERROR_KEYSTORE_ACCESS;
+
+  if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
+    return err;
+
+  const ks_key_t * const k = &ksv->db->keys[b];
+
+  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k))
+    return HAL_ERROR_KEY_NOT_FOUND;
+
+  if (k->attributes_len == 0)
+    return HAL_ERROR_ATTRIBUTE_NOT_FOUND;
+
+  hal_rpc_pkey_attribute_t attrs[k->attributes_len];
+
+  if ((err = hal_ks_attribute_scan(k->der + k->der_len, sizeof(k->der) - k->der_len,
+                                   attrs, k->attributes_len, NULL)) != HAL_OK)
+    return err;
+
+  uint8_t *abuf = attributes_buffer;
+
+  for (int i = 0; i < attributes_len; i++) {
+
+    int j = 0;
+    while (attrs[j].type != attributes[i].type)
+      if (++j >= k->attributes_len)
+        return HAL_ERROR_ATTRIBUTE_NOT_FOUND;
+
+    if (attrs[j].length > attributes_buffer + attributes_buffer_len - abuf)
+      return HAL_ERROR_RESULT_TOO_LONG;
+
+    memcpy(abuf, attrs[j].value, attrs[j].length);
+    attributes[i].value  = abuf;
+    attributes[i].length = attrs[j].length;
+    abuf += attrs[j].length;
+  }
+
+  return HAL_OK;
+}
+
+static hal_error_t ks_delete_attributes(hal_ks_t *ks,
+                                        hal_pkey_slot_t *slot,
+                                        const uint32_t *types,
+                                        const unsigned types_len)
+{
+  if (ks == NULL || slot == NULL || types == NULL || types_len == 0)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  ks_t *ksv = ks_to_ksv(ks);
+  hal_error_t err;
+  unsigned b;
+
+  if (ksv->db == NULL)
+    return HAL_ERROR_KEYSTORE_ACCESS;
+
+  if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
+    return err;
+
+  ks_key_t * const k = &ksv->db->keys[b];
+
+  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k))
+    return HAL_ERROR_KEY_NOT_FOUND;
+
+  hal_rpc_pkey_attribute_t attrs[k->attributes_len + 1];
+  uint8_t *bytes = k->der + k->der_len;
+  size_t bytes_len = sizeof(k->der) - k->der_len;
+  size_t total_len;
+
+  if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, k->attributes_len, &total_len)) != HAL_OK)
+    return err;
+
+  for (int i = 0; i < types_len; i++)
+    if ((err = hal_ks_attribute_delete(bytes, bytes_len, attrs, &k->attributes_len,
+                                       &total_len, types[i])) != HAL_OK)
+      return err;
+
+  return HAL_OK;
+}
+
 const hal_ks_driver_t hal_ks_volatile_driver[1] = {{
   ks_volatile_init,
   ks_volatile_shutdown,
@@ -607,7 +741,10 @@ const hal_ks_driver_t hal_ks_volatile_driver[1] = {{
   ks_match,
   ks_set_attribute,
   ks_get_attribute,
-  ks_delete_attribute
+  ks_delete_attribute,
+  ks_set_attributes,
+  ks_get_attributes,
+  ks_delete_attributes
 }};
 
 #endif /* STATIC_KS_VOLATILE_SLOTS > 0 */
