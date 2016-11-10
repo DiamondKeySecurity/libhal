@@ -44,12 +44,13 @@
  * issues, and doing it this way just isn't expensive enough to worry about.
  */
 
-#define HEADER_LEN      (4 + 2)
+const size_t hal_ks_attribute_header_size = 2 * sizeof(uint32_t);
 
 static inline hal_error_t read_header(const uint8_t * const bytes, const size_t bytes_len,
                                       uint32_t *attribute_type, size_t *attribute_len)
 {
-  if (bytes == NULL || bytes_len < HEADER_LEN || attribute_type == NULL || attribute_len == NULL)
+  if (bytes == NULL || bytes_len < hal_ks_attribute_header_size ||
+      attribute_type == NULL || attribute_len == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   *attribute_type = ((bytes[0] << 24) |
@@ -65,7 +66,7 @@ static inline hal_error_t read_header(const uint8_t * const bytes, const size_t 
 static inline hal_error_t write_header(uint8_t *bytes, const size_t bytes_len,
                                        const uint32_t attribute_type, const size_t attribute_len)
 {
-  if (bytes == NULL || bytes_len < HEADER_LEN)
+  if (bytes == NULL || bytes_len < hal_ks_attribute_header_size)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   bytes[0] = (attribute_type >> 24) & 0xFF;
@@ -94,7 +95,7 @@ hal_error_t hal_ks_attribute_scan(const uint8_t * const bytes, const size_t byte
     hal_error_t err = read_header(b, end - b, &type, &length);
     if (err != HAL_OK)
       return err;
-    b += HEADER_LEN;
+    b += hal_ks_attribute_header_size;
     if (attributes != NULL) {
       attributes[i].type   = type;
       attributes[i].length = length;
@@ -127,8 +128,8 @@ hal_error_t hal_ks_attribute_delete(uint8_t *bytes, const size_t bytes_len,
   if (i == *attributes_len)
     return HAL_OK;
 
-  const size_t delete_length = HEADER_LEN + attributes[i].length;
-  const size_t delete_offset = attributes[i].value - HEADER_LEN - bytes;
+  const size_t delete_length = hal_ks_attribute_header_size + attributes[i].length;
+  const size_t delete_offset = attributes[i].value - hal_ks_attribute_header_size - bytes;
 
   if (delete_offset + delete_length > *total_len)
     return HAL_ERROR_IMPOSSIBLE;
@@ -163,7 +164,7 @@ hal_error_t hal_ks_attribute_insert(uint8_t *bytes, const size_t bytes_len,
   if (err != HAL_OK)
     return err;
 
-  if (*total_len + HEADER_LEN + value_len > bytes_len)
+  if (*total_len + hal_ks_attribute_header_size + value_len > bytes_len)
     return HAL_ERROR_RESULT_TOO_LONG;
 
   uint8_t *b = bytes + *total_len;
@@ -171,11 +172,11 @@ hal_error_t hal_ks_attribute_insert(uint8_t *bytes, const size_t bytes_len,
   if ((err = write_header(b, bytes_len - *total_len, type, value_len)) != HAL_OK)
     return err;
 
-  b += HEADER_LEN;
+  b += hal_ks_attribute_header_size;
 
   memcpy(b, value, value_len);
 
-  *total_len += HEADER_LEN + value_len;
+  *total_len += hal_ks_attribute_header_size + value_len;
 
   attributes[*attributes_len].type   = type;
   attributes[*attributes_len].length = value_len;

@@ -701,18 +701,30 @@ class TestPKeyAttributeReadSpeedToken(TestCaseLoggedIn):
         der = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256].der
         self.k = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256, der, HAL_KEY_FLAG_TOKEN)
         self.addCleanup(self.k.delete)
-        for i in xrange(12):
-            self.k.set_attribute(i, "Attribute {}".format(i))
+        if False:
+            for i in xrange(12):
+                self.k.set_attribute(i, "Attribute {}".format(i))
+        else:
+            self.k.set_attributes(dict((i, "Attribute {}".format(i))
+                                       for i in xrange(12)))
         super(TestPKeyAttributeReadSpeedToken, self).setUp()
+
+    def verify_attributes(self, n_attrs, attributes):
+        expected = dict((i, "Attribute {}".format(i))
+                        for i in xrange(n_attrs))
+        self.assertEqual(attributes, expected)
 
     def get_attributes_single(self, n_attrs):
         pinwheel = Pinwheel()
+        attributes = {}
         for i in xrange(n_attrs):
             pinwheel()
-            self.k.get_attribute(i)
+            attributes[i] = self.k.get_attribute(i)
+        self.verify_attributes(n_attrs, attributes)
 
     def get_attributes_bulk(self, n_attrs):
-        self.k.get_attributes(range(n_attrs))
+        attributes = self.k.get_attributes(range(n_attrs))
+        self.verify_attributes(n_attrs, attributes)
 
     def test_get_1_attribute_single(self):
         self.get_attributes_single(1)
@@ -741,18 +753,30 @@ class TestPKeyAttributeReadSpeedVolatile(TestCaseLoggedIn):
         der = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256].der
         self.k = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256, der, 0)
         self.addCleanup(self.k.delete)
-        for i in xrange(12):
-            self.k.set_attribute(i, "Attribute {}".format(i))
+        if False:
+            for i in xrange(12):
+                self.k.set_attribute(i, "Attribute {}".format(i))
+        else:
+            self.k.set_attributes(dict((i, "Attribute {}".format(i))
+                                       for i in xrange(12)))
         super(TestPKeyAttributeReadSpeedVolatile, self).setUp()
+
+    def verify_attributes(self, n_attrs, attributes):
+        expected = dict((i, "Attribute {}".format(i))
+                        for i in xrange(n_attrs))
+        self.assertEqual(attributes, expected)
 
     def get_attributes_single(self, n_attrs):
         pinwheel = Pinwheel()
+        attributes = {}
         for i in xrange(n_attrs):
             pinwheel()
-            self.k.get_attribute(i)
+            attributes[i] = self.k.get_attribute(i)
+        self.verify_attributes(n_attrs, attributes)
 
     def get_attributes_bulk(self, n_attrs):
-        self.k.get_attributes(range(n_attrs))
+        attributes = self.k.get_attributes(range(n_attrs))
+        self.verify_attributes(n_attrs, attributes)
 
     def test_get_1_attribute_single(self):
         self.get_attributes_single(1)

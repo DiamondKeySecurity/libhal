@@ -575,16 +575,22 @@ extern const hal_ks_driver_t
 
 static inline hal_error_t hal_ks_init(const hal_ks_driver_t * const driver)
 {
-  if (driver == NULL || driver->init == NULL)
+  if (driver == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (driver->init == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   return driver->init(driver);
 }
 
 static inline hal_error_t hal_ks_shutdown(const hal_ks_driver_t * const driver)
 {
-  if (driver == NULL || driver->shutdown == NULL)
+  if (driver == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (driver->shutdown == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   return driver->shutdown(driver);
 }
@@ -592,16 +598,22 @@ static inline hal_error_t hal_ks_shutdown(const hal_ks_driver_t * const driver)
 static inline hal_error_t hal_ks_open(const hal_ks_driver_t * const driver,
 			       hal_ks_t **ks)
 {
-  if (driver == NULL || driver->open == NULL || ks == NULL)
+  if (driver == NULL || ks == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (driver->open == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   return driver->open(driver, ks);
 }
 
 static inline hal_error_t hal_ks_close(hal_ks_t *ks)
 {
-  if (ks == NULL || ks->driver == NULL || ks->driver->close == NULL)
+  if (ks == NULL || ks->driver == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ks->driver->close == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   return ks->driver->close(ks);
 }
@@ -610,8 +622,11 @@ static inline hal_error_t hal_ks_store(hal_ks_t *ks,
                                        hal_pkey_slot_t *slot,
                                        const uint8_t * const der,  const size_t der_len)
 {
-  if (ks == NULL || ks->driver == NULL || ks->driver->store == NULL || slot == NULL || der == NULL)
+  if (ks == NULL || ks->driver == NULL || slot == NULL || der == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ks->driver->store == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   return ks->driver->store(ks, slot, der, der_len);
 }
@@ -620,8 +635,11 @@ static inline hal_error_t hal_ks_fetch(hal_ks_t *ks,
                                        hal_pkey_slot_t *slot,
                                        uint8_t *der, size_t *der_len, const size_t der_max)
 {
-  if (ks == NULL || ks->driver == NULL || ks->driver->fetch == NULL || slot == NULL)
+  if (ks == NULL || ks->driver == NULL || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ks->driver->fetch == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   return ks->driver->fetch(ks, slot, der, der_len, der_max);
 }
@@ -629,8 +647,11 @@ static inline hal_error_t hal_ks_fetch(hal_ks_t *ks,
 static inline hal_error_t hal_ks_delete(hal_ks_t *ks,
                                         hal_pkey_slot_t *slot)
 {
-  if (ks == NULL || ks->driver == NULL || ks->driver->delete == NULL || slot == NULL)
+  if (ks == NULL || ks->driver == NULL || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ks->driver->delete == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   return ks->driver->delete(ks, slot);
 }
@@ -642,8 +663,11 @@ static inline hal_error_t hal_ks_list(hal_ks_t *ks,
                                       unsigned *result_len,
                                       const unsigned result_max)
 {
-  if (ks == NULL || ks->driver == NULL || ks->driver->list == NULL)
+  if (ks == NULL || ks->driver == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ks->driver->list == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   return ks->driver->list(ks, client, session, result, result_len, result_max);
 }
@@ -661,8 +685,11 @@ static inline hal_error_t hal_ks_match(hal_ks_t *ks,
                                        const unsigned result_max,
                                        const hal_uuid_t * const previous_uuid)
 {
-  if (ks == NULL || ks->driver == NULL || ks->driver->match == NULL)
+  if (ks == NULL || ks->driver == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ks->driver->match == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   return ks->driver->match(ks, client, session, type, curve, flags, attributes, attributes_len,
                            result, result_len, result_max, previous_uuid);
@@ -674,8 +701,11 @@ static inline  hal_error_t hal_ks_set_attribute(hal_ks_t *ks,
                                                 const uint8_t * const value,
                                                 const size_t value_len)
 {
-  if (ks == NULL || ks->driver == NULL || ks->driver->set_attribute == NULL || slot == NULL)
+  if (ks == NULL || ks->driver == NULL || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ks->driver->set_attribute == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   return ks->driver->set_attribute(ks, slot, type, value, value_len);
 }
@@ -687,8 +717,11 @@ static inline hal_error_t hal_ks_get_attribute(hal_ks_t *ks,
                                                size_t *value_len,
                                                const size_t value_max)
 {
-  if (ks == NULL || ks->driver == NULL || ks->driver->get_attribute == NULL || slot == NULL)
+  if (ks == NULL || ks->driver == NULL || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ks->driver->get_attribute == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   return ks->driver->get_attribute(ks, slot, type, value, value_len, value_max);
 }
@@ -697,8 +730,11 @@ static inline hal_error_t hal_ks_delete_attribute(hal_ks_t *ks,
                                                   hal_pkey_slot_t *slot,
                                                   const uint32_t type)
 {
-  if (ks == NULL || ks->driver == NULL || ks->driver->delete_attribute == NULL || slot == NULL)
+  if (ks == NULL || ks->driver == NULL || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ks->driver->delete_attribute == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   return ks->driver->delete_attribute(ks, slot, type);
 }
@@ -708,9 +744,12 @@ static inline  hal_error_t hal_ks_set_attributes(hal_ks_t *ks,
                                                  const hal_rpc_pkey_attribute_t *attributes,
                                                  const unsigned attributes_len)
 {
-  if (ks == NULL || ks->driver == NULL || ks->driver->set_attributes == NULL || slot == NULL ||
+  if (ks == NULL || ks->driver == NULL || slot == NULL ||
       attributes == NULL || attributes_len == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ks->driver->set_attributes == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   for (int i = 0; i < attributes_len; i++)
     if (attributes[i].length == 0 || attributes[i].value == NULL)
@@ -726,10 +765,13 @@ static inline hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
                                                 uint8_t *attributes_buffer,
                                                 const size_t attributes_buffer_len)
 {
-  if (ks == NULL || ks->driver == NULL || ks->driver->get_attributes == NULL || slot == NULL ||
+  if (ks == NULL || ks->driver == NULL || slot == NULL ||
       attributes == NULL || attributes_len == 0 ||
       attributes_buffer == NULL || attributes_buffer_len == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ks->driver->get_attributes == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   return ks->driver->get_attributes(ks, slot, attributes, attributes_len,
                                     attributes_buffer, attributes_buffer_len);
@@ -740,9 +782,12 @@ static inline hal_error_t hal_ks_delete_attributes(hal_ks_t *ks,
                                                    const uint32_t *types,
                                                    const unsigned types_len)
 {
-  if (ks == NULL || ks->driver == NULL || ks->driver->delete_attributes == NULL || slot == NULL ||
+  if (ks == NULL || ks->driver == NULL || slot == NULL ||
       types == NULL || types_len == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ks->driver->delete_attributes == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
 
   return ks->driver->delete_attributes(ks, slot, types, types_len);
 }
@@ -880,6 +925,8 @@ extern hal_error_t hal_ks_index_fsck(hal_ks_index_t *ksi);
 /*
  * Keystore attribute utilities, for use by keystore drivers.
  */
+
+extern const size_t hal_ks_attribute_header_size;
 
 extern hal_error_t hal_ks_attribute_scan(const uint8_t * const bytes,
                                          const size_t bytes_len,

@@ -315,7 +315,7 @@ static hal_crc32_t calculate_block_crc(const flash_block_t * const block)
  * Calculate block offset.
  */
 
-static uint32_t block_offset(const unsigned blockno)
+static inline uint32_t block_offset(const unsigned blockno)
 {
   return blockno * KEYSTORE_SUBSECTOR_SIZE;
 }
@@ -1544,6 +1544,458 @@ static hal_error_t ks_delete_attribute(hal_ks_t *ks,
   return HAL_OK;
 }
 
+static  hal_error_t ks_set_attributes(hal_ks_t *ks,
+                                      hal_pkey_slot_t *slot,
+                                      const hal_rpc_pkey_attribute_t *attributes,
+                                      const unsigned attributes_len)
+{
+#warning This function is much too long
+  // Probably needs to be broken up into multiple sub-functions, or at least
+  // into discrete blocks to scope most of the variables, but let's finish
+  // writing the icky version before polishing the chrome.
+
+  if (ks != &db.ks || slot == NULL || attributes == NULL || attributes_len == 0)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  /*
+   * Try to add new attribute as a single-block update.
+   */
+
+  unsigned updated_attributes_len = attributes_len;
+  flash_block_t *block;
+  unsigned chunk = 0;
+  hal_error_t err;
+  unsigned b;
+
+  do {
+    int hint = slot->hint + chunk;
+
+    if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &b, &hint)) != HAL_OK ||
+        (err = block_read_cached(b, &block))                              != HAL_OK)
+      return err;
+
+    if (block->header.this_chunk != chunk)
+      return HAL_ERROR_IMPOSSIBLE;
+
+    cache_mark_used(block, b);
+
+    if (chunk == 0)
+      slot->hint = hint;
+
+    uint8_t *bytes = NULL;
+    size_t bytes_len = 0;
+    unsigned *attrs_len;
+
+    if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
+      return err;
+
+    updated_attributes_len += *attrs_len;
+
+    hal_rpc_pkey_attribute_t attrs[*attrs_len + attributes_len];
+    size_t total;
+
+    if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, &total)) != HAL_OK)
+      return err;
+
+    for (int i = 0; err == HAL_OK && i < attributes_len; i++) {
+      if (attributes[i].length == 0)
+        err = hal_ks_attribute_delete(bytes, bytes_len, attrs, attrs_len, &total,
+                                      attributes[i].type);
+      else
+        err = hal_ks_attribute_insert(bytes, bytes_len, attrs, attrs_len, &total,
+                                      attributes[i].type,
+                                      attributes[i].value,
+                                      attributes[i].length);
+      if (err != HAL_OK)
+        cache_release(block);
+    }
+
+    if (err == HAL_ERROR_RESULT_TOO_LONG)
+      continue;
+
+    if (err != HAL_OK)
+      return err;
+
+    return block_update(b, block, &slot->name, chunk, &hint);
+
+  } while (++chunk < block->header.total_chunks);
+
+  /*
+   * If we get here, we have to add a new block, which requires
+   * rewriting all the others to bump the total_blocks count.  We need
+   * to keep track of all the old chunks so we can zero them at the
+   * end, and because we can't zero them until we've written out the
+   * new chunks, we need enough free blocks for the entire new object.
+   *
+   * Calculating all of this is extremely tedious, but flash writes
+   * are so much more expensive than anything else we do here that
+   * it's almost certainly worth it.
+   *
+   * We don't need the attribute values to compute the sizes, just the
+   * attribute sizes, so we scan all the existing blocks, build up a
+   * structure with the current attribute types and sizes, modify that
+   * according to our arguments, and compute the needed size.  Once we
+   * have that, we can start rewriting existing blocks.  We put all
+   * the new stuff at the end, which simplifies this slightly.
+   *
+   * In theory, this process never requires us to have more than two
+   * blocks in memory at the same time (source and destination when
+   * copying across chunk boundaries), but having enough cache buffers
+   * to keep the whole set in memory will almost certainly make this
+   * run faster.
+   */
+
+  hal_rpc_pkey_attribute_t updated_attributes[updated_attributes_len];
+  const unsigned total_chunks_old = block->header.total_chunks;
+  size_t bytes_available = 0;
+
+  updated_attributes_len = 0;
+
+  for (chunk = 0; chunk < total_chunks_old; chunk++) {
+    int hint = slot->hint + chunk;
+
+    if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &b, &hint)) != HAL_OK ||
+        (err = block_read_cached(b, &block))                              != HAL_OK)
+      return err;
+
+    if (block->header.this_chunk != chunk)
+      return HAL_ERROR_IMPOSSIBLE;
+
+    cache_mark_used(block, b);
+
+    uint8_t *bytes = NULL;
+    size_t bytes_len = 0;
+    unsigned *attrs_len;
+
+    if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
+      return err;
+
+    hal_rpc_pkey_attribute_t attrs[*attrs_len];
+    size_t total;
+
+    if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, &total)) != HAL_OK)
+      return err;
+
+    if (chunk == 0)
+      bytes_available = bytes_len;
+
+    for (int i = 0; i < *attrs_len; i++) {
+      if (updated_attributes_len >= sizeof(updated_attributes)/sizeof(*updated_attributes))
+        return HAL_ERROR_IMPOSSIBLE;
+      updated_attributes[updated_attributes_len].type = attrs[i].type;
+      updated_attributes[updated_attributes_len].length = attrs[i].length;
+      updated_attributes[updated_attributes_len].value = NULL;
+      updated_attributes_len++;
+    }
+  }
+
+  for (int i = 0; i < attributes_len; i++) {
+
+    for (int j = 0; j < updated_attributes_len; j++)
+      if (updated_attributes[j].type == attributes[i].type)
+        updated_attributes[j].length = 0;
+
+    if (updated_attributes_len >= sizeof(updated_attributes)/sizeof(*updated_attributes))
+      return HAL_ERROR_IMPOSSIBLE;
+    updated_attributes[updated_attributes_len].type   = attributes[i].type;
+    updated_attributes[updated_attributes_len].length = attributes[i].length;
+    updated_attributes[updated_attributes_len].value  = attributes[i].value;
+    updated_attributes_len++;
+  }
+
+  chunk = 0;
+
+  for (int i = 0; i < updated_attributes_len; i++) {
+
+    if (updated_attributes[i].length == 0) {
+      memmove(&updated_attributes[i], &updated_attributes[i + 1], updated_attributes_len - i - 1);
+      updated_attributes_len--;
+      i--;
+      continue;
+    }
+
+    const size_t needed = hal_ks_attribute_header_size + updated_attributes[i].length;
+
+    if (needed > bytes_available) {
+      bytes_available = SIZEOF_FLASH_ATTRIBUTE_BLOCK_ATTRIBUTES;
+      chunk++;
+    }
+
+    if (needed > bytes_available)
+      return HAL_ERROR_RESULT_TOO_LONG;
+
+    bytes_available -= needed;
+  }
+
+  const unsigned total_chunks_new = chunk + 1;
+
+  if (db.ksi.used + total_chunks_new > db.ksi.size)
+    return HAL_ERROR_NO_KEY_INDEX_SLOTS;
+
+  /*
+   * Phase 1: Deprecate all the old chunks, remember where they were.
+   */
+
+  unsigned old_blocks[total_chunks_old];
+
+  for (chunk = 0; chunk < total_chunks_old; chunk++) {
+    int hint = slot->hint + chunk;
+    if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &b, &hint)) != HAL_OK ||
+        (err = block_deprecate(b))                                        != HAL_OK)
+      return err;
+    old_blocks[chunk] = b;
+  }
+
+  /*
+   * Phase 2: Write new chunks, copying attributes from old chunks and attributes[]
+   * as needed.  This is tedious.
+   */
+
+  {
+    hal_rpc_pkey_attribute_t old_attrs[updated_attributes_len], new_attrs[updated_attributes_len];
+    unsigned                *old_attrs_len = NULL,             *new_attrs_len = NULL;
+    flash_block_t           *old_block     = NULL,             *new_block     = NULL;
+    uint8_t                 *old_bytes     = NULL,             *new_bytes     = NULL;
+    size_t                   old_bytes_len = 0,                 new_bytes_len = 0;
+    unsigned                 old_chunk     = 0,                 new_chunk     = 0;
+    size_t                   old_total     = 0,                 new_total     = 0;
+
+    int updated_attributes_i = 0, old_attrs_i = 0;
+
+    uint32_t       new_attr_type;
+    size_t         new_attr_length;
+    const uint8_t *new_attr_value;
+
+    while (updated_attributes_i < updated_attributes_len) {
+
+      if (old_chunk >= total_chunks_old || new_chunk >= total_chunks_new)
+        return HAL_ERROR_IMPOSSIBLE;
+
+      if (updated_attributes[updated_attributes_i].value != NULL) {
+        new_attr_type   = updated_attributes[updated_attributes_i].type;
+        new_attr_length = updated_attributes[updated_attributes_i].length;
+        new_attr_value  = updated_attributes[updated_attributes_i].value;
+      }
+
+      else {
+
+        if (old_block == NULL) {
+
+          if ((err = block_read_cached(old_blocks[old_chunk], &old_block)) != HAL_OK)
+            return err;
+
+          if (old_block->header.this_chunk != old_chunk)
+            return HAL_ERROR_IMPOSSIBLE;
+
+          if ((err = locate_attributes(old_block, old_chunk,
+                                       &old_bytes, &old_bytes_len, &old_attrs_len)) != HAL_OK ||
+              (err = hal_ks_attribute_scan(old_bytes, old_bytes_len,
+                                           old_attrs, *old_attrs_len, &old_total))  != HAL_OK)
+            return err;
+
+          old_attrs_i = 0;
+        }
+
+        while (old_attrs_i < *old_attrs_len &&
+               old_attrs[old_attrs_i].type != updated_attributes[updated_attributes_i].type)
+          old_attrs_i++;
+
+        if (old_attrs_i >= *old_attrs_len) {
+          old_chunk++;
+          old_block = NULL;
+          continue;
+        }
+
+        new_attr_type   = old_attrs[old_attrs_i].type;
+        new_attr_length = old_attrs[old_attrs_i].length;
+        new_attr_value  = old_attrs[old_attrs_i].value;
+      }
+
+      if (new_block == NULL) {
+
+        new_block = cache_pick_lru();
+        memset(new_block, 0xFF, sizeof(*new_block));
+
+        if (new_chunk == 0) {
+          flash_block_t *tmp_block;
+          if ((err = block_read_cached(old_blocks[0], &tmp_block)) != HAL_OK)
+            return err;
+          if (tmp_block->header.this_chunk != 0)
+            return HAL_ERROR_IMPOSSIBLE;
+          new_block->header.block_type   = BLOCK_TYPE_KEY;
+          new_block->key.name            = slot->name;
+          new_block->key.type            = tmp_block->key.type;
+          new_block->key.curve           = tmp_block->key.curve;
+          new_block->key.flags           = tmp_block->key.flags;
+          new_block->key.der_len         = tmp_block->key.der_len;
+          new_block->key.attributes_len  = 0;
+          memcpy(new_block->key.der, tmp_block->key.der, tmp_block->key.der_len);
+        }
+        else {
+          new_block->header.block_type   = BLOCK_TYPE_ATTR;
+          new_block->attr.name           = slot->name;
+          new_block->attr.attributes_len = 0;
+        }
+
+        new_block->header.block_status = BLOCK_STATUS_LIVE;
+        new_block->header.total_chunks = total_chunks_new;
+        new_block->header.this_chunk   = new_chunk;
+
+        if ((err = locate_attributes(new_block, new_chunk,
+                                     &new_bytes, &new_bytes_len, &new_attrs_len)) != HAL_OK)
+          return err;
+
+        new_total = 0;
+      }
+
+      err = hal_ks_attribute_insert(new_bytes, new_bytes_len, new_attrs, new_attrs_len, &new_total,
+                                    new_attr_type, new_attr_value, new_attr_length);
+
+      switch (err) {
+      case HAL_OK:
+        if (++updated_attributes_i >= updated_attributes_len)
+          continue;
+        break;
+      case HAL_ERROR_RESULT_TOO_LONG:
+        if (new_chunk == 0 || new_attrs_len > 0)
+          break;
+      default:
+        return err;
+      }
+
+      int hint = slot->hint + new_chunk;
+
+      if (new_chunk < total_chunks_old)
+        err = hal_ks_index_replace(&db.ksi, &slot->name, new_chunk, &b, &hint);
+      else
+        err = hal_ks_index_add(    &db.ksi, &slot->name, new_chunk, &b, &hint);
+
+      if (err != HAL_OK || (err = block_write(b, new_block)) != HAL_OK)
+        return err;
+
+      cache_mark_used(new_block, b);
+
+      new_block = NULL;
+      new_chunk++;
+    }
+  }
+
+  /*
+   * Phase 3: Zero the old chunks we deprecated in phase 1.
+   */
+
+  for (chunk = 0; chunk < total_chunks_old; chunk++)
+    if ((err = block_zero(old_blocks[chunk])) != HAL_OK)
+      return err;
+
+  return HAL_OK;
+}
+
+static  hal_error_t ks_get_attributes(hal_ks_t *ks,
+                                      hal_pkey_slot_t *slot,
+                                      hal_rpc_pkey_attribute_t *attributes,
+                                      const unsigned attributes_len,
+                                      uint8_t *attributes_buffer,
+                                      const size_t attributes_buffer_len)
+{
+  if (ks != &db.ks || slot == NULL || attributes == NULL || attributes_len == 0 ||
+      attributes_buffer == NULL || attributes_buffer_len == 0)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  for (int i = 0; i < attributes_len; i++) {
+    attributes[i].length = 0;
+    attributes[i].value  = NULL;
+  }
+
+  uint8_t *abuf = attributes_buffer;
+  flash_block_t *block = NULL;
+  unsigned chunk = 0;
+  unsigned found = 0;
+  hal_error_t err;
+  unsigned b;
+
+  do {
+    int hint = slot->hint + chunk;
+
+    if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &b, &hint)) != HAL_OK ||
+        (err = block_read_cached(b, &block))                              != HAL_OK)
+      return err;
+
+    if (block->header.this_chunk != chunk)
+      return HAL_ERROR_IMPOSSIBLE;
+
+    if (chunk == 0)
+      slot->hint = hint;
+
+    cache_mark_used(block, b);
+
+    uint8_t *bytes = NULL;
+    size_t bytes_len = 0;
+    unsigned *attrs_len;
+
+    if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
+      return err;
+
+    if (*attrs_len == 0)
+      continue;
+
+    hal_rpc_pkey_attribute_t attrs[*attrs_len];
+
+    if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, NULL)) != HAL_OK)
+      return err;
+
+    for (int i = 0; i < attributes_len; i++) {
+
+      if (attributes[i].value != NULL)
+        continue;
+
+      int j = 0;
+      while (j < *attrs_len && attrs[j].type != attributes[i].type)
+        j++;
+      if (j >= *attrs_len)
+        continue;
+
+      if (attrs[j].length > attributes_buffer + attributes_buffer_len - abuf)
+        return HAL_ERROR_RESULT_TOO_LONG;
+
+      memcpy(abuf, attrs[j].value, attrs[j].length);
+      attributes[i].value  = abuf;
+      attributes[i].length = attrs[j].length;
+      abuf += attrs[j].length;
+      found++;
+    }
+
+  } while (found < attributes_len && ++chunk < block->header.total_chunks);
+
+  if (found < attributes_len)
+    return HAL_ERROR_ATTRIBUTE_NOT_FOUND;
+
+  return HAL_OK;
+}
+
+static hal_error_t ks_delete_attributes(hal_ks_t *ks,
+                                        hal_pkey_slot_t *slot,
+                                        const uint32_t *types,
+                                        const unsigned types_len)
+{
+  // Most likely we will remove this function from the API entirely,
+  // but for now implement it in terms of ks_set_attributes() to keep
+  // all the horrid update logic in one place.
+
+  if (ks != &db.ks || slot == NULL || types == NULL || types_len == 0)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  hal_rpc_pkey_attribute_t attributes[types_len];
+
+  for (int i = 0; i < types_len; i++) {
+    attributes[i].type   = types[i];
+    attributes[i].length = 0;
+    attributes[i].value  = NULL;
+  }
+
+  return ks_set_attributes(ks, slot, attributes, types_len);
+}
+
 const hal_ks_driver_t hal_ks_token_driver[1] = {{
   ks_init,
   ks_shutdown,
@@ -1556,7 +2008,10 @@ const hal_ks_driver_t hal_ks_token_driver[1] = {{
   ks_match,
   ks_set_attribute,
   ks_get_attribute,
-  ks_delete_attribute
+  ks_delete_attribute,
+  ks_set_attributes,
+  ks_get_attributes,
+  ks_delete_attributes
 }};
 
 /*

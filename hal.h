@@ -156,6 +156,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_KSI_INDEX_CHUNK_OVERLAPS,  "Key index chunk overlaps")                     \
   DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_WRONG_BLOCK_TYPE, "Wrong block type in keystore")                 \
   DEFINE_HAL_ERROR(HAL_ERROR_RPC_PROTOCOL_ERROR,        "RPC protocol error")                           \
+  DEFINE_HAL_ERROR(HAL_ERROR_NOT_IMPLEMENTED,           "Not implemented")                              \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
