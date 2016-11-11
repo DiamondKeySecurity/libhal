@@ -792,20 +792,6 @@ extern hal_error_t hal_rpc_pkey_match(const hal_client_handle_t client,
                                       const unsigned result_max,
                                       const hal_uuid_t * const previous_uuid);
 
-extern hal_error_t hal_rpc_pkey_set_attribute(const hal_pkey_handle_t pkey,
-                                              const uint32_t type,
-                                              const uint8_t * const value,
-                                              const size_t value_len);
-
-extern hal_error_t hal_rpc_pkey_get_attribute(const hal_pkey_handle_t pkey,
-                                              const uint32_t type,
-                                              uint8_t *value,
-                                              size_t *value_len,
-                                              const size_t value_max);
-
-extern hal_error_t hal_rpc_pkey_delete_attribute(const hal_pkey_handle_t pkey,
-                                                 const uint32_t type);
-
 extern hal_error_t hal_rpc_pkey_set_attributes(const hal_pkey_handle_t pkey,
                                                const hal_rpc_pkey_attribute_t *const attributes,
                                                const unsigned attributes_len);
@@ -815,10 +801,6 @@ extern hal_error_t hal_rpc_pkey_get_attributes(const hal_pkey_handle_t pkey,
                                                const unsigned attributes_len,
                                                uint8_t *attributes_buffer,
                                                const size_t attributes_buffer_len);
-
-extern hal_error_t hal_rpc_pkey_delete_attributes(const hal_pkey_handle_t pkey,
-                                                  const uint32_t * const types,
-                                                  const unsigned types_len);
 
 extern hal_error_t hal_rpc_client_init(void);
 

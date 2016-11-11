@@ -138,13 +138,11 @@ class TestBasic(TestCase):
     """
 
     def test_get_version(self):
-        "Test whether get_version() works"
         version = hsm.get_version()
         # Might want to inspect the result here
         self.assertIsInstance(version, int)
 
     def test_get_random(self):
-        "Test whether get_random() works"
         length = 32
         random = hsm.get_random(length)
         self.assertIsInstance(random, str)
@@ -165,7 +163,6 @@ class TestPIN(TestCase):
         hsm.logout()
 
     def test_is_logged_in(self):
-        "Test whether is_logged_in() returns correct exception when not logged in"
         for user in pin_map:
             self.assertRaises(HAL_ERROR_FORBIDDEN, hsm.is_logged_in, user)
 
@@ -260,33 +257,26 @@ class TestPKeyGen(TestCaseLoggedIn):
         self.sign_verify(hashalg, k1, k2)
 
     def test_gen_sign_verify_ecdsa_p256_sha256(self):
-        "Generate/sign/verify with ECDSA-P256-SHA-256"
         self.gen_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA256, HAL_CURVE_P256)
 
     def test_gen_sign_verify_ecdsa_p384_sha384(self):
-        "Generate/sign/verify with ECDSA-P384-SHA-384"
         self.gen_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA384, HAL_CURVE_P384)
 
     def test_gen_sign_verify_ecdsa_p521_sha512(self):
-        "Generate/sign/verify with ECDSA-P521-SHA-512"
         self.gen_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, HAL_CURVE_P521)
 
     def test_gen_sign_verify_rsa_1024_p256_sha256(self):
-        "Generate/sign/verify with RSA-1024-SHA-256"
         self.gen_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA256, 1024)
 
     @unittest.skipUnless(args.all_tests, "Slow")
     def test_gen_sign_verify_rsa_2048_sha384(self):
-        "Generate/sign/verify with RSA-2048-SHA-384"
         self.gen_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA384, 2048)
 
     @unittest.skipUnless(args.all_tests, "Hideously slow")
     def test_gen_sign_verify_rsa_4096_sha512(self):
-        "Generate/sign/verify with RSA-4096-SHA-512"
         self.gen_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA512, 4096)
 
     def test_gen_unsupported_length(self):
-        "Key length not multiple of 32 bits"
         with self.assertRaises(HAL_ERROR_BAD_ARGUMENTS):
             hsm.pkey_generate_rsa(1028).delete()
 
@@ -515,8 +505,7 @@ class TestPKeyList(TestCaseLoggedIn):
             with hsm.pkey_load(obj.keytype, obj.curve, obj.der, flags) as k:
                 self.addCleanup(lambda uuid: hsm.pkey_find(uuid, flags = flags).delete(), k.uuid)
                 uuids.add(k.uuid)
-                for i, a in enumerate((str(obj.keytype), str(obj.fn2))):
-                    k.set_attribute(i, a)
+                k.set_attributes(dict((i, a) for i, a in enumerate((str(obj.keytype), str(obj.fn2)))))
         return uuids
 
     def ks_list(self, flags):
@@ -554,13 +543,13 @@ class TestPKeyList(TestCaseLoggedIn):
         for keytype in set(HALKeyType.index.itervalues()) - {HAL_KEY_TYPE_NONE}:
             for n, k in self.match(flags = flags, uuids = uuids, type = keytype):
                 self.assertEqual(k.key_type, keytype)
-                self.assertEqual(k.get_attribute(0), str(keytype))
+                self.assertEqual(k.get_attributes({0}).pop(0), str(keytype))
             self.assertEqual(n, sum(1 for t1, t2 in tags if t1 == keytype))
 
         for curve in set(HALCurve.index.itervalues()) - {HAL_CURVE_NONE}:
             for n, k in self.match(flags = flags, uuids = uuids, curve = curve):
                 self.assertEqual(k.key_curve, curve)
-                self.assertEqual(k.get_attribute(1), str(curve))
+                self.assertEqual(k.get_attributes({1}).pop(1), str(curve))
                 self.assertIn(k.key_type, (HAL_KEY_TYPE_EC_PUBLIC,
                                            HAL_KEY_TYPE_EC_PRIVATE))
             self.assertEqual(n, sum(1 for t1, t2 in tags if t2 == curve))
@@ -568,15 +557,17 @@ class TestPKeyList(TestCaseLoggedIn):
         for keylen in set(kl for kt, kl in tags if not isinstance(kl, Enum)):
             for n, k in self.match(flags = flags, uuids = uuids,
                                    attributes = {1 : str(keylen)}):
-                self.assertEqual(keylen, int(k.get_attribute(1)))
+                self.assertEqual(keylen, int(k.get_attributes({1}).pop(1)))
                 self.assertIn(k.key_type, (HAL_KEY_TYPE_RSA_PUBLIC,
                                            HAL_KEY_TYPE_RSA_PRIVATE))
-            self.assertEqual(n, sum(1 for t1, t2 in tags if not isinstance(t2, Enum) and  t2 == keylen))
+            self.assertEqual(n, sum(1 for t1, t2 in tags
+                                    if not isinstance(t2, Enum) and  t2 == keylen))
 
         for n, k in self.match(flags = flags, uuids = uuids,
                                type = HAL_KEY_TYPE_RSA_PUBLIC, attributes = {1 : "2048"}):
             self.assertEqual(k.key_type, HAL_KEY_TYPE_RSA_PUBLIC)
-        self.assertEqual(n, sum(1 for t1, t2 in tags if t1 == HAL_KEY_TYPE_RSA_PUBLIC and t2 == 2048))
+        self.assertEqual(n, sum(1 for t1, t2 in tags
+                                if t1 == HAL_KEY_TYPE_RSA_PUBLIC and t2 == 2048))
 
     def test_ks_match_token(self):
         self.ks_match(HAL_KEY_FLAG_TOKEN)
@@ -597,12 +588,12 @@ class TestPKeyAttribute(TestCaseLoggedIn):
                 with hsm.pkey_load(obj.keytype, obj.curve, obj.der, flags) as k:
                     pinwheel()
                     self.addCleanup(lambda uuid: hsm.pkey_find(uuid, flags = flags).delete(), k.uuid)
-                    for j in xrange(n_attrs):
-                        k.set_attribute(j, "Attribute {}{}".format(j, "*" * n_fill))
-                        pinwheel()
+                    k.set_attributes(dict((j, "Attribute {}{}".format(j, "*" * n_fill))
+                                          for j in xrange(n_attrs)))
+                    pinwheel()
 
     def test_attribute_bloat_volatile_many(self):
-        self.load_and_fill(0, n_attrs = 192)
+        self.load_and_fill(0, n_attrs = 128) # 192
 
     def test_attribute_bloat_volatile_big(self):
         self.load_and_fill(0, n_attrs = 6, n_fill = 512)
@@ -611,7 +602,7 @@ class TestPKeyAttribute(TestCaseLoggedIn):
         self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 128)
 
     def test_attribute_bloat_token_big(self):
-        self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 16, n_fill = 1024)
+        self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 4, n_fill = 512) # [16, 1024]
 
 
 class TestPKeyAttributeWriteSpeedToken(TestCaseLoggedIn):
@@ -625,33 +616,18 @@ class TestPKeyAttributeWriteSpeedToken(TestCaseLoggedIn):
         self.addCleanup(self.k.delete)
         super(TestPKeyAttributeWriteSpeedToken, self).setUp()
 
-    def set_attributes_single(self, n_attrs):
-        pinwheel = Pinwheel()
-        for i in xrange(n_attrs):
-            pinwheel()
-            self.k.set_attribute(i, "Attribute {}".format(i))
-
-    def set_attributes_bulk(self, n_attrs):
+    def set_attributes(self, n_attrs):
         self.k.set_attributes(dict((i, "Attribute {}".format(i))
                                    for i in xrange(n_attrs)))
 
-    def test_set_1_attribute_single(self):
-        self.set_attributes_single(1)
+    def test_set_1_attribute(self):
+        self.set_attributes(1)
 
-    def test_set_6_attributes_single(self):
-        self.set_attributes_single(6)
+    def test_set_6_attributes(self):
+        self.set_attributes(6)
 
-    def test_set_12_attributes_single(self):
-        self.set_attributes_single(12)
-
-    def test_set_1_attribute_bulk(self):
-        self.set_attributes_bulk(1)
-
-    def test_set_6_attributes_bulk(self):
-        self.set_attributes_bulk(6)
-
-    def test_set_12_attributes_bulk(self):
-        self.set_attributes_bulk(12)
+    def test_set_12_attributes(self):
+        self.set_attributes(12)
 
 class TestPKeyAttributeWriteSpeedVolatile(TestCaseLoggedIn):
     """
@@ -664,33 +640,18 @@ class TestPKeyAttributeWriteSpeedVolatile(TestCaseLoggedIn):
         self.addCleanup(self.k.delete)
         super(TestPKeyAttributeWriteSpeedVolatile, self).setUp()
 
-    def set_attributes_single(self, n_attrs):
-        pinwheel = Pinwheel()
-        for i in xrange(n_attrs):
-            pinwheel()
-            self.k.set_attribute(i, "Attribute {}".format(i))
-
-    def set_attributes_bulk(self, n_attrs):
+    def set_attributes(self, n_attrs):
         self.k.set_attributes(dict((i, "Attribute {}".format(i))
                                    for i in xrange(n_attrs)))
 
-    def test_set_1_attribute_single(self):
-        self.set_attributes_single(1)
+    def test_set_1_attribute(self):
+        self.set_attributes(1)
 
-    def test_set_6_attributes_single(self):
-        self.set_attributes_single(6)
+    def test_set_6_attributes(self):
+        self.set_attributes(6)
 
-    def test_set_12_attributes_single(self):
-        self.set_attributes_single(12)
-
-    def test_set_1_attribute_bulk(self):
-        self.set_attributes_bulk(1)
-
-    def test_set_6_attributes_bulk(self):
-        self.set_attributes_bulk(6)
-
-    def test_set_12_attributes_bulk(self):
-        self.set_attributes_bulk(12)
+    def test_set_12_attributes(self):
+        self.set_attributes(12)
 
 class TestPKeyAttributeReadSpeedToken(TestCaseLoggedIn):
     """
@@ -701,12 +662,8 @@ class TestPKeyAttributeReadSpeedToken(TestCaseLoggedIn):
         der = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256].der
         self.k = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256, der, HAL_KEY_FLAG_TOKEN)
         self.addCleanup(self.k.delete)
-        if False:
-            for i in xrange(12):
-                self.k.set_attribute(i, "Attribute {}".format(i))
-        else:
-            self.k.set_attributes(dict((i, "Attribute {}".format(i))
-                                       for i in xrange(12)))
+        self.k.set_attributes(dict((i, "Attribute {}".format(i))
+                                   for i in xrange(12)))
         super(TestPKeyAttributeReadSpeedToken, self).setUp()
 
     def verify_attributes(self, n_attrs, attributes):
@@ -714,35 +671,18 @@ class TestPKeyAttributeReadSpeedToken(TestCaseLoggedIn):
                         for i in xrange(n_attrs))
         self.assertEqual(attributes, expected)
 
-    def get_attributes_single(self, n_attrs):
-        pinwheel = Pinwheel()
-        attributes = {}
-        for i in xrange(n_attrs):
-            pinwheel()
-            attributes[i] = self.k.get_attribute(i)
-        self.verify_attributes(n_attrs, attributes)
-
-    def get_attributes_bulk(self, n_attrs):
+    def get_attributes(self, n_attrs):
         attributes = self.k.get_attributes(range(n_attrs))
         self.verify_attributes(n_attrs, attributes)
 
-    def test_get_1_attribute_single(self):
-        self.get_attributes_single(1)
+    def test_get_1_attribute(self):
+        self.get_attributes(1)
 
-    def test_get_6_attributes_single(self):
-        self.get_attributes_single(6)
+    def test_get_6_attributes(self):
+        self.get_attributes(6)
 
-    def test_get_12_attributes_single(self):
-        self.get_attributes_single(12)
-
-    def test_get_1_attribute_bulk(self):
-        self.get_attributes_bulk(1)
-
-    def test_get_6_attributes_bulk(self):
-        self.get_attributes_bulk(6)
-
-    def test_get_12_attributes_bulk(self):
-        self.get_attributes_bulk(12)
+    def test_get_12_attributes(self):
+        self.get_attributes(12)
 
 class TestPKeyAttributeReadSpeedVolatile(TestCaseLoggedIn):
     """
@@ -753,12 +693,8 @@ class TestPKeyAttributeReadSpeedVolatile(TestCaseLoggedIn):
         der = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256].der
         self.k = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256, der, 0)
         self.addCleanup(self.k.delete)
-        if False:
-            for i in xrange(12):
-                self.k.set_attribute(i, "Attribute {}".format(i))
-        else:
-            self.k.set_attributes(dict((i, "Attribute {}".format(i))
-                                       for i in xrange(12)))
+        self.k.set_attributes(dict((i, "Attribute {}".format(i))
+                                   for i in xrange(12)))
         super(TestPKeyAttributeReadSpeedVolatile, self).setUp()
 
     def verify_attributes(self, n_attrs, attributes):
@@ -766,35 +702,18 @@ class TestPKeyAttributeReadSpeedVolatile(TestCaseLoggedIn):
                         for i in xrange(n_attrs))
         self.assertEqual(attributes, expected)
 
-    def get_attributes_single(self, n_attrs):
-        pinwheel = Pinwheel()
-        attributes = {}
-        for i in xrange(n_attrs):
-            pinwheel()
-            attributes[i] = self.k.get_attribute(i)
-        self.verify_attributes(n_attrs, attributes)
-
-    def get_attributes_bulk(self, n_attrs):
+    def get_attributes(self, n_attrs):
         attributes = self.k.get_attributes(range(n_attrs))
         self.verify_attributes(n_attrs, attributes)
 
-    def test_get_1_attribute_single(self):
-        self.get_attributes_single(1)
+    def test_get_1_attribute(self):
+        self.get_attributes(1)
 
-    def test_get_6_attributes_single(self):
-        self.get_attributes_single(6)
+    def test_get_6_attributes(self):
+        self.get_attributes(6)
 
-    def test_get_12_attributes_single(self):
-        self.get_attributes_single(12)
-
-    def test_get_1_attribute_bulk(self):
-        self.get_attributes_bulk(1)
-
-    def test_get_6_attributes_bulk(self):
-        self.get_attributes_bulk(6)
-
-    def test_get_12_attributes_bulk(self):
-        self.get_attributes_bulk(12)
+    def test_get_12_attributes(self):
+        self.get_attributes(12)
 
 
 @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")

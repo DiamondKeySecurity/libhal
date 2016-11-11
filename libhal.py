@@ -179,15 +179,10 @@ RPCFunc.define('''
     RPC_FUNC_PKEY_SIGN,
     RPC_FUNC_PKEY_VERIFY,
     RPC_FUNC_PKEY_LIST,
-    RPC_FUNC_PKEY_RENAME,
     RPC_FUNC_PKEY_MATCH,
-    RPC_FUNC_PKEY_SET_ATTRIBUTE,
-    RPC_FUNC_PKEY_GET_ATTRIBUTE,
-    RPC_FUNC_PKEY_DELETE_ATTRIBUTE,
     RPC_FUNC_PKEY_GET_KEY_CURVE,
     RPC_FUNC_PKEY_SET_ATTRIBUTES,
     RPC_FUNC_PKEY_GET_ATTRIBUTES,
-    RPC_FUNC_PKEY_DELETE_ATTRIBUTES,
 ''')
 
 class HALDigestAlgorithm(Enum): pass
@@ -385,23 +380,11 @@ class PKey(Handle):
     def verify(self, hash = 0, data = "", signature = None):
         self.hsm.pkey_verify(self, hash = hash, data = data, signature = signature)
 
-    def set_attribute(self, attr_type, attr_value = None):
-        self.hsm.pkey_set_attribute(self, attr_type, attr_value)
-
-    def get_attribute(self, attr_type):
-        return self.hsm.pkey_get_attribute(self, attr_type)
-
-    def delete_attribute(self, attr_type):
-        self.hsm.pkey_delete_attribute(self, attr_type)
-
     def set_attributes(self, attributes):
         self.hsm.pkey_set_attributes(self, attributes)
 
     def get_attributes(self, attributes, attributes_buffer_len = 2048):
         return self.hsm.pkey_get_attributes(self, attributes, attributes_buffer_len)
-
-    def delete_attributes(self, attributes):
-        self.hsm.pkey_delete_attributes(self, attributes)
 
 
 class HSM(object):
@@ -668,18 +651,6 @@ class HSM(object):
                     u = UUID(bytes = r.unpack_bytes())
                     yield u
 
-    def pkey_set_attribute(self, pkey, attr_type, attr_value = None):
-        with self.rpc(RPC_FUNC_PKEY_SET_ATTRIBUTE, pkey, attr_type, attr_value):
-            return
-
-    def pkey_get_attribute(self, pkey, attr_type, value_max = 1024):
-        with self.rpc(RPC_FUNC_PKEY_GET_ATTRIBUTE, pkey, attr_type, value_max) as r:
-            return r.unpack_bytes()
-
-    def pkey_delete_attribute(self, pkey, attr_type):
-        with self.rpc(RPC_FUNC_PKEY_DELETE_ATTRIBUTE, pkey, attr_type):
-            return
-
     def pkey_set_attributes(self, pkey, attributes):
         with self.rpc(RPC_FUNC_PKEY_SET_ATTRIBUTES, pkey, attributes):
             return
@@ -691,7 +662,3 @@ class HSM(object):
             if n != len(attributes):
                 raise HAL_ERROR_RPC_PROTOCOL_ERROR
             return dict((r.unpack_uint(), r.unpack_bytes()) for i in xrange(n))
-
-    def pkey_delete_attributes(self, pkey, attributes):
-        with self.rpc(RPC_FUNC_PKEY_DELETE_ATTRIBUTES, pkey, attributes):
-            return

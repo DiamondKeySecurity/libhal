@@ -257,21 +257,6 @@ typedef struct {
                        const unsigned result_max,
                        const hal_uuid_t * const previous_uuid);
 
-  hal_error_t (*set_attribute)(const hal_pkey_handle_t pkey,
-                               const uint32_t type,
-                               const uint8_t * const value,
-                               const size_t value_len);
-
-  hal_error_t (*get_attribute)(const hal_pkey_handle_t pkey,
-                               const uint32_t type,
-                               uint8_t *value,
-                               size_t *value_len,
-                               const size_t value_max);
-
-  hal_error_t (*delete_attribute)(const hal_pkey_handle_t pkey,
-                                  const uint32_t type);
-
-
   hal_error_t (*set_attributes)(const hal_pkey_handle_t pkey,
                                 const hal_rpc_pkey_attribute_t *attributes,
                                 const unsigned attributes_len);
@@ -281,10 +266,6 @@ typedef struct {
                                 const unsigned attributes_len,
                                 uint8_t *attributes_buffer,
                                 const size_t attributes_buffer_len);
-
-  hal_error_t (*delete_attributes)(const hal_pkey_handle_t pkey,
-                                   const uint32_t *types,
-                                   const unsigned types_len);
 
 } hal_rpc_pkey_dispatch_t;
 
@@ -519,23 +500,6 @@ struct hal_ks_driver {
                        const unsigned result_max,
                        const hal_uuid_t * const previous_uuid);
 
-  hal_error_t (*set_attribute)(hal_ks_t *ks,
-                               hal_pkey_slot_t *slot,
-                               const uint32_t type,
-                               const uint8_t * const value,
-                               const size_t value_len);
-
-  hal_error_t (*get_attribute)(hal_ks_t *ks,
-                               hal_pkey_slot_t *slot,
-                               const uint32_t type,
-                               uint8_t *value,
-                               size_t *value_len,
-                               const size_t value_max);
-
-  hal_error_t (*delete_attribute)(hal_ks_t *ks,
-                                  hal_pkey_slot_t *slot,
-                                  const uint32_t type);
-
   hal_error_t (*set_attributes)(hal_ks_t *ks,
                                 hal_pkey_slot_t *slot,
                                 const hal_rpc_pkey_attribute_t *attributes,
@@ -547,11 +511,6 @@ struct hal_ks_driver {
                                 const unsigned attributes_len,
                                 uint8_t *attributes_buffer,
                                 const size_t attributes_buffer_len);
-
-  hal_error_t (*delete_attributes)(hal_ks_t *ks,
-                                   hal_pkey_slot_t *slot,
-                                   const uint32_t *types,
-                                   const unsigned types_len);
 
 };
 
@@ -695,50 +654,6 @@ static inline hal_error_t hal_ks_match(hal_ks_t *ks,
                            result, result_len, result_max, previous_uuid);
 }
 
-static inline  hal_error_t hal_ks_set_attribute(hal_ks_t *ks,
-                                                hal_pkey_slot_t *slot,
-                                                const uint32_t type,
-                                                const uint8_t * const value,
-                                                const size_t value_len)
-{
-  if (ks == NULL || ks->driver == NULL || slot == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (ks->driver->set_attribute == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return ks->driver->set_attribute(ks, slot, type, value, value_len);
-}
-
-static inline hal_error_t hal_ks_get_attribute(hal_ks_t *ks,
-                                               hal_pkey_slot_t *slot,
-                                               const uint32_t type,
-                                               uint8_t *value,
-                                               size_t *value_len,
-                                               const size_t value_max)
-{
-  if (ks == NULL || ks->driver == NULL || slot == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (ks->driver->get_attribute == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return ks->driver->get_attribute(ks, slot, type, value, value_len, value_max);
-}
-
-static inline hal_error_t hal_ks_delete_attribute(hal_ks_t *ks,
-                                                  hal_pkey_slot_t *slot,
-                                                  const uint32_t type)
-{
-  if (ks == NULL || ks->driver == NULL || slot == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (ks->driver->delete_attribute == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return ks->driver->delete_attribute(ks, slot, type);
-}
-
 static inline  hal_error_t hal_ks_set_attributes(hal_ks_t *ks,
                                                  hal_pkey_slot_t *slot,
                                                  const hal_rpc_pkey_attribute_t *attributes,
@@ -775,21 +690,6 @@ static inline hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
 
   return ks->driver->get_attributes(ks, slot, attributes, attributes_len,
                                     attributes_buffer, attributes_buffer_len);
-}
-
-static inline hal_error_t hal_ks_delete_attributes(hal_ks_t *ks,
-                                                   hal_pkey_slot_t *slot,
-                                                   const uint32_t *types,
-                                                   const unsigned types_len)
-{
-  if (ks == NULL || ks->driver == NULL || slot == NULL ||
-      types == NULL || types_len == 0)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (ks->driver->delete_attributes == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return ks->driver->delete_attributes(ks, slot, types, types_len);
 }
 
 /*
@@ -872,7 +772,8 @@ extern hal_error_t hal_ks_index_find_range(hal_ks_index_t *ksi,
                                            const unsigned max_blocks,
                                            unsigned *n_blocks,
                                            unsigned *blocknos,
-                                           int *hint);
+                                           int *hint,
+                                           const int strict);
 
 /*
  * Add a key block, return its block number.
@@ -972,7 +873,7 @@ extern hal_error_t hal_rpc_server_transport_close(void);
  */
 
 typedef enum {
-    RPC_FUNC_GET_VERSION = 0,
+    RPC_FUNC_GET_VERSION,
     RPC_FUNC_GET_RANDOM,
     RPC_FUNC_SET_PIN,
     RPC_FUNC_LOGIN,
@@ -998,15 +899,10 @@ typedef enum {
     RPC_FUNC_PKEY_SIGN,
     RPC_FUNC_PKEY_VERIFY,
     RPC_FUNC_PKEY_LIST,
-    RPC_FUNC_PKEY_RENAME,
     RPC_FUNC_PKEY_MATCH,
-    RPC_FUNC_PKEY_SET_ATTRIBUTE,
-    RPC_FUNC_PKEY_GET_ATTRIBUTE,
-    RPC_FUNC_PKEY_DELETE_ATTRIBUTE,
     RPC_FUNC_PKEY_GET_KEY_CURVE,
     RPC_FUNC_PKEY_SET_ATTRIBUTES,
     RPC_FUNC_PKEY_GET_ATTRIBUTES,
-    RPC_FUNC_PKEY_DELETE_ATTRIBUTES,
 } rpc_func_num_t;
 
 #define RPC_VERSION 0x01010000          /* 1.1.0.0 */

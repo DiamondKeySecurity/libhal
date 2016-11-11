@@ -883,82 +883,6 @@ static hal_error_t pkey_remote_match(const hal_client_handle_t client,
   return rpc_ret;
 }
 
-static hal_error_t pkey_remote_set_attribute(const hal_pkey_handle_t pkey,
-                                             const uint32_t type,
-                                             const uint8_t * const value,
-                                             const size_t value_len)
-{
-  uint8_t outbuf[nargs(5) + pad(value_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(3)];
-  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
-  hal_client_handle_t dummy_client = {0};
-  hal_error_t rpc_ret;
-
-  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_SET_ATTRIBUTE));
-  check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
-  check(hal_xdr_encode_int(&optr, olimit, pkey.handle));
-  check(hal_xdr_encode_int(&optr, olimit, type));
-  check(hal_xdr_encode_buffer(&optr, olimit, value, value_len));
-  check(hal_rpc_send(outbuf, optr - outbuf));
-
-  check(read_matching_packet(RPC_FUNC_PKEY_SET_ATTRIBUTE, inbuf, sizeof(inbuf), &iptr, &ilimit));
-
-  check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
-  return rpc_ret;
-}
-
-static hal_error_t pkey_remote_get_attribute(const hal_pkey_handle_t pkey,
-                                             const uint32_t type,
-                                             uint8_t *value,
-                                             size_t *value_len,
-                                             const size_t value_max)
-{
-  uint8_t outbuf[nargs(5)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(4) + pad(value_max)];
-  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
-  uint32_t vlen32 = value_max;
-  hal_client_handle_t dummy_client = {0};
-  hal_error_t rpc_ret;
-
-  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_GET_ATTRIBUTE));
-  check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
-  check(hal_xdr_encode_int(&optr, olimit, pkey.handle));
-  check(hal_xdr_encode_int(&optr, olimit, type));
-  check(hal_xdr_encode_int(&optr, olimit, vlen32));
-  check(hal_rpc_send(outbuf, optr - outbuf));
-
-  check(read_matching_packet(RPC_FUNC_PKEY_GET_ATTRIBUTE, inbuf, sizeof(inbuf), &iptr, &ilimit));
-
-  check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
-  if (rpc_ret == HAL_OK) {
-    check(hal_xdr_decode_buffer(&iptr, ilimit, value, &vlen32));
-    *value_len = (size_t) vlen32;
-  }
-
-  return rpc_ret;
-}
-
-static hal_error_t pkey_remote_delete_attribute(const hal_pkey_handle_t pkey,
-                                                const uint32_t type)
-{
-  uint8_t outbuf[nargs(4)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(3)];
-  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
-  hal_client_handle_t dummy_client = {0};
-  hal_error_t rpc_ret;
-
-  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_DELETE_ATTRIBUTE));
-  check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
-  check(hal_xdr_encode_int(&optr, olimit, pkey.handle));
-  check(hal_xdr_encode_int(&optr, olimit, type));
-  check(hal_rpc_send(outbuf, optr - outbuf));
-
-  check(read_matching_packet(RPC_FUNC_PKEY_DELETE_ATTRIBUTE, inbuf, sizeof(inbuf), &iptr, &ilimit));
-
-  check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
-  return rpc_ret;
-}
-
 static hal_error_t pkey_remote_set_attributes(const hal_pkey_handle_t pkey,
                                              const hal_rpc_pkey_attribute_t *attributes,
                                              const unsigned attributes_len)
@@ -1031,31 +955,6 @@ static hal_error_t pkey_remote_get_attributes(const hal_pkey_handle_t pkey,
       abuf += u32;
     }
   }
-  return rpc_ret;
-}
-
-static hal_error_t pkey_remote_delete_attributes(const hal_pkey_handle_t pkey,
-                                                 const uint32_t *types,
-                                                 const unsigned types_len)
-{
-  uint8_t outbuf[nargs(4 + types_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(3)];
-  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
-  hal_client_handle_t dummy_client = {0};
-  hal_error_t rpc_ret;
-
-  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_DELETE_ATTRIBUTES));
-  check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
-  check(hal_xdr_encode_int(&optr, olimit, pkey.handle));
-  check(hal_xdr_encode_int(&optr, olimit, types_len));
-  for (int i = 0; i < types_len; i++) {
-    check(hal_xdr_encode_int(&optr, olimit, types[i]));
-  }
-  check(hal_rpc_send(outbuf, optr - outbuf));
-
-  check(read_matching_packet(RPC_FUNC_PKEY_DELETE_ATTRIBUTES, inbuf, sizeof(inbuf), &iptr, &ilimit));
-
-  check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
   return rpc_ret;
 }
 
@@ -1187,12 +1086,8 @@ const hal_rpc_pkey_dispatch_t hal_rpc_remote_pkey_dispatch = {
   pkey_remote_verify,
   pkey_remote_list,
   pkey_remote_match,
-  pkey_remote_set_attribute,
-  pkey_remote_get_attribute,
-  pkey_remote_delete_attribute,
   pkey_remote_set_attributes,
-  pkey_remote_get_attributes,
-  pkey_remote_delete_attributes
+  pkey_remote_get_attributes
 };
 
 #if RPC_CLIENT == RPC_CLIENT_MIXED
@@ -1212,12 +1107,8 @@ const hal_rpc_pkey_dispatch_t hal_rpc_mixed_pkey_dispatch = {
   pkey_mixed_verify,
   pkey_remote_list,
   pkey_remote_match,
-  pkey_remote_set_attribute,
-  pkey_remote_get_attribute,
-  pkey_remote_delete_attribute,
   pkey_remote_set_attributes,
-  pkey_remote_get_attributes,
-  pkey_remote_delete_attributes
+  pkey_remote_get_attributes
 };
 #endif /* RPC_CLIENT == RPC_CLIENT_MIXED */
 

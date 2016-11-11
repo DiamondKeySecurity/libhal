@@ -230,7 +230,8 @@ hal_error_t hal_ks_index_find_range(hal_ks_index_t *ksi,
                                     const unsigned max_blocks,
                                     unsigned *n_blocks,
                                     unsigned *blocknos,
-                                    int *hint)
+                                    int *hint,
+                                    const int strict)
 {
   if (ksi == NULL || ksi->index == NULL || ksi->names == NULL ||
       ksi->size == 0 || ksi->used > ksi->size || name == NULL)
@@ -246,7 +247,7 @@ hal_error_t hal_ks_index_find_range(hal_ks_index_t *ksi,
   int n = 0;
 
   for (int i = where; i < ksi->used && !hal_uuid_cmp(name, &ksi->names[ksi->index[i]].name); i++) {
-    if (n != ksi->names[ksi->index[i]].chunk)
+    if (strict && n != ksi->names[ksi->index[i]].chunk)
       return HAL_ERROR_IMPOSSIBLE;
     if (blocknos != NULL && n < max_blocks)
       blocknos[n] = ksi->index[i];

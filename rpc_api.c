@@ -372,33 +372,6 @@ hal_error_t hal_rpc_pkey_match(const hal_client_handle_t client,
                                       result, result_len, result_max, previous_uuid);
 }
 
-hal_error_t hal_rpc_pkey_set_attribute(const hal_pkey_handle_t pkey,
-                                       const uint32_t type,
-                                       const uint8_t * const value,
-                                       const size_t value_len)
-{
-  if (value == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-  return hal_rpc_pkey_dispatch->set_attribute(pkey, type, value, value_len);
-}
-
-hal_error_t hal_rpc_pkey_get_attribute(const hal_pkey_handle_t pkey,
-                                       const uint32_t type,
-                                       uint8_t *value,
-                                       size_t *value_len,
-                                       const size_t value_max)
-{
-  if (value == NULL || value_len == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-  return hal_rpc_pkey_dispatch->get_attribute(pkey, type, value, value_len, value_max);
-}
-
-hal_error_t hal_rpc_pkey_delete_attribute(const hal_pkey_handle_t pkey,
-                                          const uint32_t type)
-{
-  return hal_rpc_pkey_dispatch->delete_attribute(pkey, type);
-}
-
 hal_error_t hal_rpc_pkey_set_attributes(const hal_pkey_handle_t pkey,
                                         const hal_rpc_pkey_attribute_t *attributes,
                                         const unsigned attributes_len)
@@ -418,15 +391,6 @@ hal_error_t hal_rpc_pkey_get_attributes(const hal_pkey_handle_t pkey,
     return HAL_ERROR_BAD_ARGUMENTS;
   return hal_rpc_pkey_dispatch->get_attributes(pkey, attributes, attributes_len,
                                                attributes_buffer, attributes_buffer_len);
-}
-
-hal_error_t hal_rpc_pkey_delete_attributes(const hal_pkey_handle_t pkey,
-                                           const uint32_t * const types,
-                                           const unsigned types_len)
-{
-  if (types == NULL || types_len == 0)
-    return HAL_ERROR_BAD_ARGUMENTS;
-  return hal_rpc_pkey_dispatch->delete_attributes(pkey, types, types_len);
 }
 
 /*

@@ -64,30 +64,33 @@ static int test_attributes(const hal_pkey_handle_t pkey,
   static const char format[] = "Test attribute %lu";
 
   hal_error_t err;
-  size_t n;
 
   for (const size_t *size = sizes; *size; size++) {
     uint8_t buf_1[*size], buf_2[*size];
     memset(buf_1, 0x55, sizeof(buf_1));
     snprintf((char *) buf_1, sizeof(buf_1), format, (unsigned long) *size);
+    hal_rpc_pkey_attribute_t attr_1[1] = {{ *size, sizeof(buf_1), buf_1 }};
+    hal_rpc_pkey_attribute_t attr_2[1] = {{ *size, 0, NULL }};
+    hal_rpc_pkey_attribute_t attr_3[1] = {{ *size, 0, NULL }};
 
-    if ((err = hal_rpc_pkey_set_attribute(pkey, *size, buf_1, sizeof(buf_1))) != HAL_OK)
+    if ((err = hal_rpc_pkey_set_attributes(pkey, attr_1, sizeof(attr_1)/sizeof(*attr_1))) != HAL_OK)
       lose("Could not set attribute %lu: %s\n",
            (unsigned long) *size, hal_error_string(err));
 
-    if ((err = hal_rpc_pkey_get_attribute(pkey, *size, buf_2, &n, sizeof(buf_2))) != HAL_OK)
+    if ((err = hal_rpc_pkey_get_attributes(pkey, attr_2, sizeof(attr_2)/sizeof(*attr_2),
+                                           buf_2, sizeof(buf_2))) != HAL_OK)
       lose("Could not get attribute %lu: %s\n",
            (unsigned long) *size, hal_error_string(err));
 
-    if (n != *size)
+    if (attr_2[0].length != *size)
       lose("Unexpected size returned for attribute %lu: %lu\n",
-           (unsigned long) *size, (unsigned long) n);
+           (unsigned long) *size, (unsigned long) attr_2[0].length);
 
-    if ((err = hal_rpc_pkey_delete_attribute(pkey, *size)) != HAL_OK)
+    if ((err = hal_rpc_pkey_set_attributes(pkey, attr_3, sizeof(attr_3)/sizeof(*attr_3))) != HAL_OK)
       lose("Could not delete attribute %lu: %s\n",
            (unsigned long) *size, hal_error_string(err));
 
-    if ((err = hal_rpc_pkey_set_attribute(pkey, *size, buf_1, sizeof(buf_1))) != HAL_OK)
+    if ((err = hal_rpc_pkey_set_attributes(pkey, attr_1, sizeof(attr_1)/sizeof(*attr_1))) != HAL_OK)
       lose("Could not (re)set attribute %lu: %s\n",
            (unsigned long) *size, hal_error_string(err));
   }
@@ -99,7 +102,8 @@ static int test_attributes(const hal_pkey_handle_t pkey,
     unsigned result_len;
 
     if ((err = hal_rpc_pkey_match(client, session, HAL_KEY_TYPE_NONE, HAL_CURVE_NONE, flags, NULL, 0,
-                                  result, &result_len, sizeof(result)/sizeof(*result), &previous_uuid)) != HAL_OK)
+                                  result, &result_len, sizeof(result)/sizeof(*result),
+                                  &previous_uuid)) != HAL_OK)
       lose("Unrestricted match() failed: %s\n", hal_error_string(err));
 
     if (result_len == 0)
@@ -113,8 +117,10 @@ static int test_attributes(const hal_pkey_handle_t pkey,
 
       if ((err = hal_rpc_pkey_match(client, session, HAL_KEY_TYPE_NONE, HAL_CURVE_NONE, flags,
                                     attribute, sizeof(attribute)/sizeof(*attribute),
-                                    result, &result_len, sizeof(result)/sizeof(*result), &previous_uuid)) != HAL_OK)
-        lose("Restricted match() for attribute %lu failed: %s\n", (unsigned long) *size, hal_error_string(err));
+                                    result, &result_len, sizeof(result)/sizeof(*result),
+                                    &previous_uuid)) != HAL_OK)
+        lose("Restricted match() for attribute %lu failed: %s\n",
+             (unsigned long) *size, hal_error_string(err));
 
       if (result_len == 0)
         lose("Restricted match for attribute %lu found no results\n", (unsigned long) *size);

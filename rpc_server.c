@@ -743,76 +743,6 @@ static hal_error_t pkey_match(const uint8_t **iptr, const uint8_t * const ilimit
     return ret;
 }
 
-static hal_error_t pkey_set_attribute(const uint8_t **iptr, const uint8_t * const ilimit,
-                                      uint8_t **optr, const uint8_t * const olimit)
-{
-    hal_client_handle_t client;
-    hal_pkey_handle_t pkey;
-    uint32_t type;
-    const uint8_t *value;
-    uint32_t value_len;
-    hal_error_t ret;
-
-    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
-    check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
-    check(hal_xdr_decode_int(iptr, ilimit, &type));
-    check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &value, &value_len));
-
-    ret = hal_rpc_pkey_set_attribute(pkey, type, value, value_len);
-
-    return ret;
-}
-
-static hal_error_t pkey_get_attribute(const uint8_t **iptr, const uint8_t * const ilimit,
-                                      uint8_t **optr, const uint8_t * const olimit)
-{
-    hal_client_handle_t client;
-    hal_pkey_handle_t pkey;
-    uint32_t type;
-    size_t value_len;
-    uint32_t value_max;
-    uint8_t *optr_orig = *optr;
-    hal_error_t ret;
-
-    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
-    check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
-    check(hal_xdr_decode_int(iptr, ilimit, &type));
-    check(hal_xdr_decode_int(iptr, ilimit, &value_max));
-    if (value_max > olimit - *optr - 4)
-        return HAL_ERROR_RPC_PACKET_OVERFLOW;
-
-    *optr += 4;
-    ret = hal_rpc_pkey_get_attribute(pkey, type, *optr, &value_len, value_max);
-
-    if (ret == HAL_OK) {
-        *optr = optr_orig;
-        check(hal_xdr_encode_int(optr, olimit, value_len));
-        *optr += pad(value_len);
-    }
-    else {
-        *optr = optr_orig;
-    }
-
-    return ret;
-}
-
-static hal_error_t pkey_delete_attribute(const uint8_t **iptr, const uint8_t * const ilimit,
-                                         uint8_t **optr, const uint8_t * const olimit)
-{
-    hal_client_handle_t client;
-    hal_pkey_handle_t pkey;
-    uint32_t type;
-    hal_error_t ret;
-
-    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
-    check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
-    check(hal_xdr_decode_int(iptr, ilimit, &type));
-
-    ret = hal_rpc_pkey_delete_attribute(pkey, type);
-
-    return ret;
-}
-
 static hal_error_t pkey_set_attributes(const uint8_t **iptr, const uint8_t * const ilimit,
                                        uint8_t **optr, const uint8_t * const olimit)
 {
@@ -882,29 +812,6 @@ static hal_error_t pkey_get_attributes(const uint8_t **iptr, const uint8_t * con
 
     if (ret != HAL_OK)
         *optr = optr_orig;
-
-    return ret;
-}
-
-static hal_error_t pkey_delete_attributes(const uint8_t **iptr, const uint8_t * const ilimit,
-                                          uint8_t **optr, const uint8_t * const olimit)
-{
-    hal_client_handle_t client;
-    hal_pkey_handle_t pkey;
-    uint32_t types_len;
-    hal_error_t ret;
-
-    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
-    check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
-    check(hal_xdr_decode_int(iptr, ilimit, &types_len));
-
-    uint32_t types[types_len > 0 ? types_len : 1];
-
-    for (int i = 0; i < types_len; i++) {
-        check(hal_xdr_decode_int(iptr, ilimit, &types[i]));
-    }
-
-    ret = hal_rpc_pkey_delete_attributes(pkey, types, types_len);
 
     return ret;
 }
@@ -1012,23 +919,11 @@ hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ile
     case RPC_FUNC_PKEY_MATCH:
         handler = pkey_match;
         break;
-    case RPC_FUNC_PKEY_SET_ATTRIBUTE:
-        handler = pkey_set_attribute;
-        break;
-    case RPC_FUNC_PKEY_GET_ATTRIBUTE:
-        handler = pkey_get_attribute;
-        break;
-    case RPC_FUNC_PKEY_DELETE_ATTRIBUTE:
-        handler = pkey_delete_attribute;
-        break;
     case RPC_FUNC_PKEY_SET_ATTRIBUTES:
         handler = pkey_set_attributes;
         break;
     case RPC_FUNC_PKEY_GET_ATTRIBUTES:
         handler = pkey_get_attributes;
-        break;
-    case RPC_FUNC_PKEY_DELETE_ATTRIBUTES:
-        handler = pkey_delete_attributes;
         break;
     }
 
