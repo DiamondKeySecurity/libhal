@@ -60,7 +60,7 @@ static int test_attributes(const hal_pkey_handle_t pkey,
                            const hal_uuid_t * const name,
                            const hal_key_flags_t flags)
 {
-  static const size_t sizes[] = { 32, 100, 260, 1000, 2000, 2048, 0 };
+  static const size_t sizes[] = { 32, 100, 260, 1000, 2000, 0 };
   static const char format[] = "Test attribute %lu";
 
   hal_error_t err;
@@ -471,9 +471,16 @@ static int test_ecdsa_generate(const ecdsa_tc_t * const tc, hal_key_flags_t flag
 
 int main (int argc, char *argv[])
 {
+  const hal_client_handle_t client = {HAL_HANDLE_NONE};
+  const char *pin = argc > 1 ? argv[1] : "fnord";
+  hal_error_t err;
   int ok = 1;
 
-  hal_rpc_client_init();
+  if ((err = hal_rpc_client_init()) != HAL_OK)
+    printf("Warning: Trouble initializing RPC client: %s\n", hal_error_string(err));
+
+  if ((err = hal_rpc_login(client, HAL_USER_NORMAL, pin, strlen(pin))) != HAL_OK)
+    printf("Warning: Trouble logging into HSM: %s\n", hal_error_string(err));
 
   for (int i = 0; i < (sizeof(rsa_tc)/sizeof(*rsa_tc)); i++)
     for (int j = 0; j < 2; j++)
@@ -491,8 +498,11 @@ int main (int argc, char *argv[])
     for (int j = 0; j < 2; j++)
       ok &= test_ecdsa_generate(&ecdsa_tc[i], j * HAL_KEY_FLAG_TOKEN);
 
+  if ((err = hal_rpc_logout(client)) != HAL_OK)
+    printf("Warning: Trouble logging out of HSM: %s\n", hal_error_string(err));
 
-  ok &= hal_rpc_client_close();
+  if ((err = hal_rpc_client_close()) != HAL_OK)
+    printf("Warning: Trouble shutting down RPC client: %s\n", hal_error_string(err));
 
   return !ok;
 }
