@@ -760,21 +760,6 @@ extern hal_error_t hal_rpc_pkey_verify(const hal_pkey_handle_t pkey,
                                        const uint8_t * const signature, const size_t signature_len);
 
 typedef struct {
-  hal_key_type_t type;
-  hal_curve_name_t curve;
-  hal_key_flags_t flags;
-  hal_uuid_t name;
-  /* ... */
-} hal_pkey_info_t;
-
-extern hal_error_t hal_rpc_pkey_list(const hal_client_handle_t client,
-                                     const hal_session_handle_t session,
-                                     hal_pkey_info_t *result,
-                                     unsigned *result_len,
-                                     const unsigned result_max,
-                                     hal_key_flags_t flags);
-
-typedef struct {
   uint32_t type;
   size_t length;
   const uint8_t *value;

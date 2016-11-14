@@ -772,59 +772,6 @@ static hal_error_t pkey_remote_verify(const hal_pkey_handle_t pkey,
   return rpc_ret;
 }
 
-static hal_error_t hal_xdr_decode_pkey_info(const uint8_t **iptr, const uint8_t * const ilimit,
-                                            hal_pkey_info_t *info)
-{
-  uint32_t u32;
-
-  check(hal_xdr_decode_int(iptr, ilimit, &u32)); info->type  = u32;
-  check(hal_xdr_decode_int(iptr, ilimit, &u32)); info->curve = u32;
-  check(hal_xdr_decode_int(iptr, ilimit, &u32)); info->flags = u32;
-
-  u32 = sizeof(info->name.uuid);
-  check(hal_xdr_decode_buffer(iptr, ilimit, info->name.uuid, &u32));
-  if (u32 != sizeof(info->name.uuid))
-    return HAL_ERROR_KEY_NAME_TOO_LONG;
-
-  return HAL_OK;
-}
-
-static hal_error_t pkey_remote_list(const hal_client_handle_t client,
-                                    const hal_session_handle_t session,
-                                    hal_pkey_info_t *result,
-                                    unsigned *result_len,
-                                    const unsigned result_max,
-                                    hal_key_flags_t flags)
-{
-  uint8_t outbuf[nargs(5)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(4) + pad(result_max * sizeof(hal_pkey_info_t))];
-  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
-  uint32_t len;
-  hal_error_t ret, rpc_ret;
-
-  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_LIST));
-  check(hal_xdr_encode_int(&optr, olimit, client.handle));
-  check(hal_xdr_encode_int(&optr, olimit, session.handle));
-  check(hal_xdr_encode_int(&optr, olimit, result_max));
-  check(hal_xdr_encode_int(&optr, olimit, flags));
-  check(hal_rpc_send(outbuf, optr - outbuf));
-
-  check(read_matching_packet(RPC_FUNC_PKEY_LIST, inbuf, sizeof(inbuf), &iptr, &ilimit));
-
-  check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
-  if (rpc_ret == HAL_OK) {
-    check(hal_xdr_decode_int(&iptr, ilimit, &len));
-    *result_len = len;
-    for (int i = 0; i < len; ++i) {
-      if ((ret = hal_xdr_decode_pkey_info(&iptr, ilimit, &result[i])) != HAL_OK) {
-        *result_len = 0;
-        return ret;
-      }
-    }
-  }
-  return rpc_ret;
-}
-
 static hal_error_t pkey_remote_match(const hal_client_handle_t client,
                                      const hal_session_handle_t session,
                                      const hal_key_type_t type,
@@ -1052,63 +999,61 @@ static hal_error_t pkey_mixed_verify(const hal_pkey_handle_t pkey,
  */
 
 const hal_rpc_misc_dispatch_t hal_rpc_remote_misc_dispatch = {
-  set_pin,
-  login,
-  logout,
-  logout_all,
-  is_logged_in,
-  get_random,
-  get_version
+  .set_pin                      = set_pin,
+  .login                        = login,
+  .logout                       = logout,
+  .logout_all                   = logout_all,
+  .is_logged_in                 = is_logged_in,
+  .get_random                   = get_random,
+  .get_version                  = get_version
 };
 
 const hal_rpc_hash_dispatch_t hal_rpc_remote_hash_dispatch = {
-  hash_get_digest_len,
-  hash_get_digest_algorithm_id,
-  hash_get_algorithm,
-  hash_initialize,
-  hash_update,
-  hash_finalize
+  .get_digest_length            = hash_get_digest_len,
+  .get_digest_algorithm_id      = hash_get_digest_algorithm_id,
+  .get_algorithm                = hash_get_algorithm,
+  .initialize                   = hash_initialize,
+  .update                       = hash_update,
+  .finalize                     = hash_finalize
 };
 
 const hal_rpc_pkey_dispatch_t hal_rpc_remote_pkey_dispatch = {
-  pkey_remote_load,
-  pkey_remote_open,
-  pkey_remote_generate_rsa,
-  pkey_remote_generate_ec,
-  pkey_remote_close,
-  pkey_remote_delete,
-  pkey_remote_get_key_type,
-  pkey_remote_get_key_curve,
-  pkey_remote_get_key_flags,
-  pkey_remote_get_public_key_len,
-  pkey_remote_get_public_key,
-  pkey_remote_sign,
-  pkey_remote_verify,
-  pkey_remote_list,
-  pkey_remote_match,
-  pkey_remote_set_attributes,
-  pkey_remote_get_attributes
+  .load                         = pkey_remote_load,
+  .open                         = pkey_remote_open,
+  .generate_rsa                 = pkey_remote_generate_rsa,
+  .generate_ec                  = pkey_remote_generate_ec,
+  .close                        = pkey_remote_close,
+  .delete                       = pkey_remote_delete,
+  .get_key_type                 = pkey_remote_get_key_type,
+  .get_key_curve                = pkey_remote_get_key_curve,
+  .get_key_flags                = pkey_remote_get_key_flags,
+  .get_public_key_len           = pkey_remote_get_public_key_len,
+  .get_public_key               = pkey_remote_get_public_key,
+  .sign                         = pkey_remote_sign,
+  .verify                       = pkey_remote_verify,
+  .match                        = pkey_remote_match,
+  .set_attributes               = pkey_remote_set_attributes,
+  .get_attributes               = pkey_remote_get_attributes
 };
 
 #if RPC_CLIENT == RPC_CLIENT_MIXED
 const hal_rpc_pkey_dispatch_t hal_rpc_mixed_pkey_dispatch = {
-  pkey_remote_load,
-  pkey_remote_open,
-  pkey_remote_generate_rsa,
-  pkey_remote_generate_ec,
-  pkey_remote_close,
-  pkey_remote_delete,
-  pkey_remote_get_key_type,
-  pkey_remote_get_key_curve,
-  pkey_remote_get_key_flags,
-  pkey_remote_get_public_key_len,
-  pkey_remote_get_public_key,
-  pkey_mixed_sign,
-  pkey_mixed_verify,
-  pkey_remote_list,
-  pkey_remote_match,
-  pkey_remote_set_attributes,
-  pkey_remote_get_attributes
+  .load                         = pkey_remote_load,
+  .open                         = pkey_remote_open,
+  .generate_rsa                 = pkey_remote_generate_rsa,
+  .generate_ec                  = pkey_remote_generate_ec,
+  .close                        = pkey_remote_close,
+  .delete                       = pkey_remote_delete,
+  .get_key_type                 = pkey_remote_get_key_type,
+  .get_key_curve                = pkey_remote_get_key_curve,
+  .get_key_flags                = pkey_remote_get_key_flags,
+  .get_public_key_len           = pkey_remote_get_public_key_len,
+  .get_public_key               = pkey_remote_get_public_key,
+  .sign                         = pkey_mixed_sign,
+  .verify                       = pkey_mixed_verify,
+  .match                        = pkey_remote_match,
+  .set_attributes               = pkey_remote_set_attributes,
+  .get_attributes               = pkey_remote_get_attributes
 };
 #endif /* RPC_CLIENT == RPC_CLIENT_MIXED */
 

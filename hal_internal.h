@@ -238,13 +238,6 @@ typedef struct {
                          const uint8_t * const input, const size_t input_len,
                          const uint8_t * const signature, const size_t signature_len);
 
-  hal_error_t  (*list)(const hal_client_handle_t client,
-                       const hal_session_handle_t session,
-                       hal_pkey_info_t *result,
-                       unsigned *result_len,
-                       const unsigned result_max,
-                       hal_key_flags_t flags);
-
   hal_error_t (*match)(const hal_client_handle_t client,
                        const hal_session_handle_t session,
                        const hal_key_type_t type,
@@ -480,13 +473,6 @@ struct hal_ks_driver {
   hal_error_t (*delete)(hal_ks_t *ks,
                         hal_pkey_slot_t *slot);
 
-  hal_error_t (*list)(hal_ks_t *ks,
-                      const hal_client_handle_t client,
-                      const hal_session_handle_t session,
-		      hal_pkey_info_t *result,
-		      unsigned *result_len,
-		      const unsigned result_max);
-
   hal_error_t (*match)(hal_ks_t *ks,
                        const hal_client_handle_t client,
                        const hal_session_handle_t session,
@@ -613,22 +599,6 @@ static inline hal_error_t hal_ks_delete(hal_ks_t *ks,
     return HAL_ERROR_NOT_IMPLEMENTED;
 
   return ks->driver->delete(ks, slot);
-}
-
-static inline hal_error_t hal_ks_list(hal_ks_t *ks,
-                                      const hal_client_handle_t client,
-                                      const hal_session_handle_t session,
-                                      hal_pkey_info_t *result,
-                                      unsigned *result_len,
-                                      const unsigned result_max)
-{
-  if (ks == NULL || ks->driver == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (ks->driver->list == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return ks->driver->list(ks, client, session, result, result_len, result_max);
 }
 
 static inline hal_error_t hal_ks_match(hal_ks_t *ks,
@@ -894,7 +864,6 @@ typedef enum {
     RPC_FUNC_PKEY_GET_PUBLIC_KEY,
     RPC_FUNC_PKEY_SIGN,
     RPC_FUNC_PKEY_VERIFY,
-    RPC_FUNC_PKEY_LIST,
     RPC_FUNC_PKEY_MATCH,
     RPC_FUNC_PKEY_GET_KEY_CURVE,
     RPC_FUNC_PKEY_SET_ATTRIBUTES,

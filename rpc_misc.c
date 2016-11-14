@@ -238,13 +238,13 @@ hal_error_t hal_set_pin_default_iterations(const hal_client_handle_t client,
 }
 
 const hal_rpc_misc_dispatch_t hal_rpc_local_misc_dispatch = {
-  set_pin,
-  login,
-  logout,
-  logout_all,
-  is_logged_in,
-  get_random,
-  get_version
+  .set_pin      = set_pin,
+  .login        = login,
+  .logout       = logout,
+  .logout_all   = logout_all,
+  .is_logged_in = is_logged_in,
+  .get_random   = get_random,
+  .get_version  = get_version
 };
 
 /*

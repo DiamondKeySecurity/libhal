@@ -508,17 +508,6 @@ class TestPKeyList(TestCaseLoggedIn):
                 k.set_attributes(dict((i, a) for i, a in enumerate((str(obj.keytype), str(obj.fn2)))))
         return uuids
 
-    def ks_list(self, flags):
-        uuids = self.load_keys(flags)
-        self.assertLessEqual(len(uuids), len(set(hsm.pkey_list(flags = flags))))
-        self.assertLessEqual(uuids, set(hsm.pkey_match(flags = flags)))
-
-    def test_ks_list_volatile(self):
-        self.ks_list(0)
-
-    def test_ks_list_token(self):
-        self.ks_list(HAL_KEY_FLAG_TOKEN)
-
     def match(self, flags, **kwargs):
         uuids = kwargs.pop("uuids", None)
         kwargs.update(flags = flags)

@@ -922,33 +922,6 @@ static hal_error_t pkey_local_verify(const hal_pkey_handle_t pkey,
   return err;
 }
 
-
-/*
- * List keys in the key store.
- */
-
-static hal_error_t pkey_local_list(const hal_client_handle_t client,
-                                   const hal_session_handle_t session,
-                                   hal_pkey_info_t *result,
-                                   unsigned *result_len,
-                                   const unsigned result_max,
-                                   hal_key_flags_t flags)
-{
-  hal_ks_t *ks = NULL;
-  hal_error_t err;
-
-  if ((err = check_readable(client, flags)) != HAL_OK)
-    return err;
-
-  if ((err = ks_open_from_flags(&ks, flags)) == HAL_OK &&
-      (err = hal_ks_list(ks, client, session, result, result_len, result_max)) == HAL_OK)
-    err = hal_ks_close(ks);
-  else if (ks != NULL)
-    (void) hal_ks_close(ks);
-
-  return err;
-}
-
 static hal_error_t pkey_local_match(const hal_client_handle_t client,
                                     const hal_session_handle_t session,
                                     const hal_key_type_t type,
@@ -1026,23 +999,22 @@ static hal_error_t pkey_local_get_attributes(const hal_pkey_handle_t pkey,
 }
 
 const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch = {
-  pkey_local_load,
-  pkey_local_open,
-  pkey_local_generate_rsa,
-  pkey_local_generate_ec,
-  pkey_local_close,
-  pkey_local_delete,
-  pkey_local_get_key_type,
-  pkey_local_get_key_curve,
-  pkey_local_get_key_flags,
-  pkey_local_get_public_key_len,
-  pkey_local_get_public_key,
-  pkey_local_sign,
-  pkey_local_verify,
-  pkey_local_list,
-  pkey_local_match,
-  pkey_local_set_attributes,
-  pkey_local_get_attributes
+  .load                 = pkey_local_load,
+  .open                 = pkey_local_open,
+  .generate_rsa         = pkey_local_generate_rsa,
+  .generate_ec          = pkey_local_generate_ec,
+  .close                = pkey_local_close,
+  .delete               = pkey_local_delete,
+  .get_key_type         = pkey_local_get_key_type,
+  .get_key_curve        = pkey_local_get_key_curve,
+  .get_key_flags        = pkey_local_get_key_flags,
+  .get_public_key_len   = pkey_local_get_public_key_len,
+  .get_public_key       = pkey_local_get_public_key,
+  .sign                 = pkey_local_sign,
+  .verify               = pkey_local_verify,
+  .match                = pkey_local_match,
+  .set_attributes       = pkey_local_set_attributes,
+  .get_attributes       = pkey_local_get_attributes
 };
 
 /*

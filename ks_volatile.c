@@ -345,45 +345,6 @@ static hal_error_t ks_delete(hal_ks_t *ks,
   return HAL_OK;
 }
 
-static hal_error_t ks_list(hal_ks_t *ks,
-                           hal_client_handle_t client,
-                           hal_session_handle_t session,
-                           hal_pkey_info_t *result,
-                           unsigned *result_len,
-                           const unsigned result_max)
-{
-  if (ks == NULL || result == NULL || result_len == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  ks_t *ksv = ks_to_ksv(ks);
-
-  if (ksv->db == NULL)
-    return HAL_ERROR_KEYSTORE_ACCESS;
-
-  *result_len = 0;
-
-  for (int i = 0; i < ksv->db->ksi.used; i++) {
-    unsigned b = ksv->db->ksi.index[i];
-
-    if (ksv->db->ksi.names[b].chunk > 0)
-      continue;
-
-    if (!key_visible_to_session(ksv, client, session, &ksv->db->keys[b]))
-      continue;
-
-    if (*result_len >= result_max)
-      return HAL_ERROR_RESULT_TOO_LONG;
-
-    result[i].name  = ksv->db->ksi.names[b].name;
-    result[i].type  = ksv->db->keys[b].type;
-    result[i].curve = ksv->db->keys[b].curve;
-    result[i].flags = ksv->db->keys[b].flags;
-    ++ *result_len;
-  }
-
-  return HAL_OK;
-}
-
 static hal_error_t ks_match(hal_ks_t *ks,
                             hal_client_handle_t client,
                             hal_session_handle_t session,
@@ -397,7 +358,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
                             const unsigned result_max,
                             const hal_uuid_t * const previous_uuid)
 {
-  if (ks == NULL || attributes == NULL ||
+  if (ks == NULL || (attributes == NULL && attributes_len > 0) ||
       result == NULL || result_len == NULL || previous_uuid == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
@@ -572,17 +533,16 @@ static hal_error_t ks_get_attributes(hal_ks_t *ks,
 }
 
 const hal_ks_driver_t hal_ks_volatile_driver[1] = {{
-  ks_volatile_init,
-  ks_volatile_shutdown,
-  ks_volatile_open,
-  ks_volatile_close,
-  ks_store,
-  ks_fetch,
-  ks_delete,
-  ks_list,
-  ks_match,
-  ks_set_attributes,
-  ks_get_attributes
+  .init                 = ks_volatile_init,
+  .shutdown             = ks_volatile_shutdown,
+  .open                 = ks_volatile_open,
+  .close                = ks_volatile_close,
+  .store                = ks_store,
+  .fetch                = ks_fetch,
+  .delete               = ks_delete,
+  .match                = ks_match,
+  .set_attributes       = ks_set_attributes,
+  .get_attributes       = ks_get_attributes
 }};
 
 #endif /* STATIC_KS_VOLATILE_SLOTS > 0 */

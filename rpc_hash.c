@@ -303,12 +303,12 @@ static hal_error_t finalize(const hal_hash_handle_t handle,
 }
 
 const hal_rpc_hash_dispatch_t hal_rpc_local_hash_dispatch = {
-  get_digest_length,
-  get_digest_algorithm_id,
-  get_algorithm,
-  initialize,
-  update,
-  finalize
+  .get_digest_length            = get_digest_length,
+  .get_digest_algorithm_id      = get_digest_algorithm_id,
+  .get_algorithm                = get_algorithm,
+  .initialize                   = initialize,
+  .update                       = update,
+  .finalize                     = finalize
 };
 
 /*

@@ -373,7 +373,7 @@ static hal_error_t block_read(const unsigned blockno, flash_block_t *block)
 /*
  * Read a block using the cache.  Marking the block as used is left
  * for the caller, so we can avoid blowing out the cache when we
- * perform a ks_list() operation.
+ * perform a ks_match() operation.
  */
 
 static hal_error_t block_read_cached(const unsigned blockno, flash_block_t **block)
@@ -1087,43 +1087,6 @@ static hal_error_t ks_delete(hal_ks_t *ks,
   return block_erase_maybe(db.ksi.index[db.ksi.used]);
 }
 
-static hal_error_t ks_list(hal_ks_t *ks,
-                           const hal_client_handle_t client,
-                           const hal_session_handle_t session,
-                           hal_pkey_info_t *result,
-                           unsigned *result_len,
-                           const unsigned result_max)
-{
-  if (ks != &db.ks || result == NULL || result_len == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  flash_block_t *block;
-  hal_error_t err;
-
-  *result_len = 0;
-
-  for (int i = 0; i < db.ksi.used; i++) {
-    unsigned b = db.ksi.index[i];
-
-    if (*result_len >= result_max)
-      return HAL_ERROR_RESULT_TOO_LONG;
-
-    if ((err = block_read_cached(b, &block)) != HAL_OK)
-      return err;
-
-    if (block_get_type(block) != BLOCK_TYPE_KEY || block->header.this_chunk > 0)
-      continue;
-
-    result[*result_len].type  = block->key.type;
-    result[*result_len].curve = block->key.curve;
-    result[*result_len].flags = block->key.flags;
-    result[*result_len].name  = block->key.name;
-    ++ *result_len;
-  }
-
-  return HAL_OK;
-}
-
 static inline hal_error_t locate_attributes(flash_block_t *block, const unsigned chunk,
                                             uint8_t **bytes, size_t *bytes_len,
                                             unsigned **attrs_len)
@@ -1163,7 +1126,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
                             const unsigned result_max,
                             const hal_uuid_t * const previous_uuid)
 {
-  if (ks == NULL || attributes == NULL ||
+  if (ks == NULL || (attributes == NULL && attributes_len > 0) ||
       result == NULL || result_len == NULL || previous_uuid == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
@@ -1681,17 +1644,16 @@ static  hal_error_t ks_get_attributes(hal_ks_t *ks,
 }
 
 const hal_ks_driver_t hal_ks_token_driver[1] = {{
-  ks_init,
-  ks_shutdown,
-  ks_open,
-  ks_close,
-  ks_store,
-  ks_fetch,
-  ks_delete,
-  ks_list,
-  ks_match,
-  ks_set_attributes,
-  ks_get_attributes
+  .init                 = ks_init,
+  .shutdown             = ks_shutdown,
+  .open                 = ks_open,
+  .close                = ks_close,
+  .store                = ks_store,
+  .fetch                = ks_fetch,
+  .delete               = ks_delete,
+  .match                = ks_match,
+  .set_attributes       = ks_set_attributes,
+  .get_attributes       = ks_get_attributes
 }};
 
 /*

@@ -178,7 +178,6 @@ RPCFunc.define('''
     RPC_FUNC_PKEY_GET_PUBLIC_KEY,
     RPC_FUNC_PKEY_SIGN,
     RPC_FUNC_PKEY_VERIFY,
-    RPC_FUNC_PKEY_LIST,
     RPC_FUNC_PKEY_MATCH,
     RPC_FUNC_PKEY_GET_KEY_CURVE,
     RPC_FUNC_PKEY_SET_ATTRIBUTES,
@@ -628,16 +627,6 @@ class HSM(object):
             hash, data = 0, hash.finalize_padded(pkey)
         with self.rpc(RPC_FUNC_PKEY_VERIFY, pkey, hash, data, signature):
             return
-
-    def pkey_list(self, flags = 0, client = 0, session = 0, length = 512):
-        with self.rpc(RPC_FUNC_PKEY_LIST, session, length, flags, client = client) as r:
-            n = r.unpack_uint()
-            for i in xrange(n):
-                key_type  = HALKeyType.index[r.unpack_uint()]
-                key_curve = HALCurve.index[r.unpack_uint()]
-                key_flags = r.unpack_uint()
-                key_name  = UUID(bytes = r.unpack_bytes())
-                yield key_type, key_curve, key_flags, key_name
 
     def pkey_match(self, type = 0, curve = 0, flags = 0, attributes = {},
                    length = 64, client = 0, session = 0):

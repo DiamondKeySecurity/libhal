@@ -640,53 +640,6 @@ static hal_error_t pkey_verify(const uint8_t **iptr, const uint8_t * const ilimi
     return ret;
 }
 
-static hal_error_t hal_xdr_encode_pkey_info(uint8_t **optr, const uint8_t * const olimit, const hal_pkey_info_t *info)
-{
-    uint8_t *optr_orig = *optr;
-    hal_error_t ret;
-
-    if ((ret = hal_xdr_encode_int(optr, olimit, info->type)) != HAL_OK ||
-        (ret = hal_xdr_encode_int(optr, olimit, info->curve)) != HAL_OK ||
-        (ret = hal_xdr_encode_int(optr, olimit, info->flags)) != HAL_OK ||
-        (ret = hal_xdr_encode_buffer(optr, olimit, info->name.uuid, sizeof(info->name.uuid))) != HAL_OK)
-        *optr = optr_orig;
-    return ret;
-}
-
-static hal_error_t pkey_list(const uint8_t **iptr, const uint8_t * const ilimit,
-                             uint8_t **optr, const uint8_t * const olimit)
-{
-    hal_client_handle_t client;
-    hal_session_handle_t session;
-    uint8_t *optr_orig = *optr;
-    uint32_t result_max;
-    hal_key_flags_t flags;
-    hal_error_t ret;
-
-    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
-    check(hal_xdr_decode_int(iptr, ilimit, &session.handle));
-    check(hal_xdr_decode_int(iptr, ilimit, &result_max));
-    check(hal_xdr_decode_int(iptr, ilimit, &flags));
-
-    hal_pkey_info_t result[result_max];
-    unsigned result_len;
-
-    /* call the local function */
-    ret = hal_rpc_pkey_list(client, session, result, &result_len, result_max, flags);
-
-    if (ret == HAL_OK) {
-        check(hal_xdr_encode_int(optr, olimit, result_len));
-        for (int i = 0; i < result_len; ++i) {
-            if ((ret = hal_xdr_encode_pkey_info(optr, olimit, &result[i])) != HAL_OK) {
-                *optr = optr_orig;
-                break;
-            }
-        }
-    }
-
-    return ret;
-}
-
 static hal_error_t pkey_match(const uint8_t **iptr, const uint8_t * const ilimit,
                               uint8_t **optr, const uint8_t * const olimit)
 {
@@ -912,9 +865,6 @@ hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ile
         break;
     case RPC_FUNC_PKEY_VERIFY:
         handler = pkey_verify;
-        break;
-    case RPC_FUNC_PKEY_LIST:
-        handler = pkey_list;
         break;
     case RPC_FUNC_PKEY_MATCH:
         handler = pkey_match;
