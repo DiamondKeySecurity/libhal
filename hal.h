@@ -710,7 +710,7 @@ extern hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
                                      const uint8_t * const der, const size_t der_len,
                                      const hal_key_flags_t flags);
 
-extern hal_error_t hal_rpc_pkey_find(const hal_client_handle_t client,
+extern hal_error_t hal_rpc_pkey_open(const hal_client_handle_t client,
                                      const hal_session_handle_t session,
                                      hal_pkey_handle_t *pkey,
                                      const hal_uuid_t * const name,

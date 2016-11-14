@@ -503,7 +503,7 @@ class TestPKeyList(TestCaseLoggedIn):
         uuids = set()
         for obj in PreloadedKey.db.itervalues():
             with hsm.pkey_load(obj.keytype, obj.curve, obj.der, flags) as k:
-                self.addCleanup(lambda uuid: hsm.pkey_find(uuid, flags = flags).delete(), k.uuid)
+                self.addCleanup(lambda uuid: hsm.pkey_open(uuid, flags = flags).delete(), k.uuid)
                 uuids.add(k.uuid)
                 k.set_attributes(dict((i, a) for i, a in enumerate((str(obj.keytype), str(obj.fn2)))))
         return uuids
@@ -525,7 +525,7 @@ class TestPKeyList(TestCaseLoggedIn):
         n = 0
         for uuid in hsm.pkey_match(**kwargs):
             if uuids is None or uuid in uuids:
-                with hsm.pkey_find(uuid, flags) as k:
+                with hsm.pkey_open(uuid, flags) as k:
                     n += 1
                     yield n, k
 
@@ -587,7 +587,7 @@ class TestPKeyAttribute(TestCaseLoggedIn):
             for obj in PreloadedKey.db.itervalues():
                 with hsm.pkey_load(obj.keytype, obj.curve, obj.der, flags) as k:
                     pinwheel()
-                    self.addCleanup(lambda uuid: hsm.pkey_find(uuid, flags = flags).delete(), k.uuid)
+                    self.addCleanup(lambda uuid: hsm.pkey_open(uuid, flags = flags).delete(), k.uuid)
                     k.set_attributes(dict((j, "Attribute {}{}".format(j, "*" * n_fill))
                                           for j in xrange(n_attrs)))
                     pinwheel()

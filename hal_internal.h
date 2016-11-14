@@ -189,7 +189,7 @@ typedef struct {
                        const uint8_t * const der, const size_t der_len,
                        const hal_key_flags_t flags);
 
-  hal_error_t  (*find)(const hal_client_handle_t client,
+  hal_error_t  (*open)(const hal_client_handle_t client,
                        const hal_session_handle_t session,
                        hal_pkey_handle_t *pkey,
                        const hal_uuid_t * const name,
@@ -883,7 +883,7 @@ typedef enum {
     RPC_FUNC_HASH_UPDATE,
     RPC_FUNC_HASH_FINALIZE,
     RPC_FUNC_PKEY_LOAD,
-    RPC_FUNC_PKEY_FIND,
+    RPC_FUNC_PKEY_OPEN,
     RPC_FUNC_PKEY_GENERATE_RSA,
     RPC_FUNC_PKEY_GENERATE_EC,
     RPC_FUNC_PKEY_CLOSE,

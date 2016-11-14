@@ -227,7 +227,7 @@ hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
   return hal_rpc_pkey_dispatch->load(client, session, pkey, type, curve, name, der, der_len, flags);
 }
 
-hal_error_t hal_rpc_pkey_find(const hal_client_handle_t client,
+hal_error_t hal_rpc_pkey_open(const hal_client_handle_t client,
                               const hal_session_handle_t session,
                               hal_pkey_handle_t *pkey,
                               const hal_uuid_t * const name,
@@ -235,7 +235,7 @@ hal_error_t hal_rpc_pkey_find(const hal_client_handle_t client,
 {
   if (pkey == NULL || name == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
-  return hal_rpc_pkey_dispatch->find(client, session, pkey, name, flags);
+  return hal_rpc_pkey_dispatch->open(client, session, pkey, name, flags);
 }
 
 hal_error_t hal_rpc_pkey_generate_rsa(const hal_client_handle_t client,

@@ -167,7 +167,7 @@ RPCFunc.define('''
     RPC_FUNC_HASH_UPDATE,
     RPC_FUNC_HASH_FINALIZE,
     RPC_FUNC_PKEY_LOAD,
-    RPC_FUNC_PKEY_FIND,
+    RPC_FUNC_PKEY_OPEN,
     RPC_FUNC_PKEY_GENERATE_RSA,
     RPC_FUNC_PKEY_GENERATE_EC,
     RPC_FUNC_PKEY_CLOSE,
@@ -573,8 +573,8 @@ class HSM(object):
         with self.rpc(RPC_FUNC_PKEY_LOAD, session, type, curve, der, flags, client = client) as r:
             return PKey(self, r.unpack_uint(), UUID(bytes = r.unpack_bytes()))
 
-    def pkey_find(self, uuid, flags = 0, client = 0, session = 0):
-        with self.rpc(RPC_FUNC_PKEY_FIND, session, uuid, flags, client = client) as r:
+    def pkey_open(self, uuid, flags = 0, client = 0, session = 0):
+        with self.rpc(RPC_FUNC_PKEY_OPEN, session, uuid, flags, client = client) as r:
             return PKey(self, r.unpack_uint(), uuid)
 
     def pkey_generate_rsa(self, keylen, exponent = "\x01\x00\x01", flags = 0, client = 0, session = 0):

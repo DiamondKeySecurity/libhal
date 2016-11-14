@@ -350,7 +350,7 @@ static hal_error_t pkey_load(const uint8_t **iptr, const uint8_t * const ilimit,
     return ret;
 }
 
-static hal_error_t pkey_find(const uint8_t **iptr, const uint8_t * const ilimit,
+static hal_error_t pkey_open(const uint8_t **iptr, const uint8_t * const ilimit,
                              uint8_t **optr, const uint8_t * const olimit)
 {
     hal_client_handle_t client;
@@ -370,7 +370,7 @@ static hal_error_t pkey_find(const uint8_t **iptr, const uint8_t * const ilimit,
         return HAL_ERROR_KEY_NAME_TOO_LONG;
 
     /* call the local function */
-    ret = hal_rpc_pkey_find(client, session, &pkey, (const hal_uuid_t *) name_ptr, flags);
+    ret = hal_rpc_pkey_open(client, session, &pkey, (const hal_uuid_t *) name_ptr, flags);
 
     if (ret == HAL_OK)
         check(hal_xdr_encode_int(optr, olimit, pkey.handle));
@@ -877,8 +877,8 @@ hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ile
     case RPC_FUNC_PKEY_LOAD:
         handler = pkey_load;
         break;
-    case RPC_FUNC_PKEY_FIND:
-        handler = pkey_find;
+    case RPC_FUNC_PKEY_OPEN:
+        handler = pkey_open;
         break;
     case RPC_FUNC_PKEY_GENERATE_RSA:
         handler = pkey_generate_rsa;

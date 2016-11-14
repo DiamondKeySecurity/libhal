@@ -264,7 +264,7 @@ static hal_error_t pkey_local_load(const hal_client_handle_t client,
  * Look up a key given its name, return a key handle.
  */
 
-static hal_error_t pkey_local_find(const hal_client_handle_t client,
+static hal_error_t pkey_local_open(const hal_client_handle_t client,
                                    const hal_session_handle_t session,
                                    hal_pkey_handle_t *pkey,
                                    const hal_uuid_t * const name,
@@ -1027,7 +1027,7 @@ static hal_error_t pkey_local_get_attributes(const hal_pkey_handle_t pkey,
 
 const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch = {
   pkey_local_load,
-  pkey_local_find,
+  pkey_local_open,
   pkey_local_generate_rsa,
   pkey_local_generate_ec,
   pkey_local_close,

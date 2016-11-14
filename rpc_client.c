@@ -455,7 +455,7 @@ static hal_error_t pkey_remote_load(const hal_client_handle_t client,
   return rpc_ret;
 }
 
-static hal_error_t pkey_remote_find(const hal_client_handle_t client,
+static hal_error_t pkey_remote_open(const hal_client_handle_t client,
                                     const hal_session_handle_t session,
                                     hal_pkey_handle_t *pkey,
                                     const hal_uuid_t * const name,
@@ -466,14 +466,14 @@ static hal_error_t pkey_remote_find(const hal_client_handle_t client,
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   hal_error_t rpc_ret;
 
-  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_FIND));
+  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_OPEN));
   check(hal_xdr_encode_int(&optr, olimit, client.handle));
   check(hal_xdr_encode_int(&optr, olimit, session.handle));
   check(hal_xdr_encode_buffer(&optr, olimit, name->uuid, sizeof(name->uuid)));
   check(hal_xdr_encode_int(&optr, olimit, flags));
   check(hal_rpc_send(outbuf, optr - outbuf));
 
-  check(read_matching_packet(RPC_FUNC_PKEY_FIND, inbuf, sizeof(inbuf), &iptr, &ilimit));
+  check(read_matching_packet(RPC_FUNC_PKEY_OPEN, inbuf, sizeof(inbuf), &iptr, &ilimit));
 
   check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
 
@@ -1072,7 +1072,7 @@ const hal_rpc_hash_dispatch_t hal_rpc_remote_hash_dispatch = {
 
 const hal_rpc_pkey_dispatch_t hal_rpc_remote_pkey_dispatch = {
   pkey_remote_load,
-  pkey_remote_find,
+  pkey_remote_open,
   pkey_remote_generate_rsa,
   pkey_remote_generate_ec,
   pkey_remote_close,
@@ -1093,7 +1093,7 @@ const hal_rpc_pkey_dispatch_t hal_rpc_remote_pkey_dispatch = {
 #if RPC_CLIENT == RPC_CLIENT_MIXED
 const hal_rpc_pkey_dispatch_t hal_rpc_mixed_pkey_dispatch = {
   pkey_remote_load,
-  pkey_remote_find,
+  pkey_remote_open,
   pkey_remote_generate_rsa,
   pkey_remote_generate_ec,
   pkey_remote_close,
