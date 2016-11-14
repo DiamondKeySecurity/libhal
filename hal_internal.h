@@ -666,10 +666,6 @@ static inline  hal_error_t hal_ks_set_attributes(hal_ks_t *ks,
   if (ks->driver->set_attributes == NULL)
     return HAL_ERROR_NOT_IMPLEMENTED;
 
-  for (int i = 0; i < attributes_len; i++)
-    if (attributes[i].length == 0 || attributes[i].value == NULL)
-      return HAL_ERROR_BAD_ARGUMENTS;
-
   return ks->driver->set_attributes(ks, slot, attributes, attributes_len);
 }
 
