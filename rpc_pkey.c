@@ -138,13 +138,21 @@ static inline hal_pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
  * need to refactor.
  */
 
+static inline hal_error_t check_normal_or_wheel(const hal_client_handle_t client)
+{
+  const hal_error_t err = hal_rpc_is_logged_in(client, HAL_USER_NORMAL);
+  return (err == HAL_ERROR_FORBIDDEN
+          ? hal_rpc_is_logged_in(client, HAL_USER_WHEEL)
+          : err);
+}
+
 static inline hal_error_t check_readable(const hal_client_handle_t client,
                                          const hal_key_flags_t flags)
 {
   if ((flags & HAL_KEY_FLAG_PUBLIC) != 0)
     return HAL_OK;
 
-  return hal_rpc_is_logged_in(client, HAL_USER_NORMAL);
+  return check_normal_or_wheel(client);
 }
 
 static inline hal_error_t check_writable(const hal_client_handle_t client,
@@ -153,7 +161,7 @@ static inline hal_error_t check_writable(const hal_client_handle_t client,
   if ((flags & (HAL_KEY_FLAG_TOKEN | HAL_KEY_FLAG_PUBLIC)) == HAL_KEY_FLAG_PUBLIC)
     return HAL_OK;
 
-  return hal_rpc_is_logged_in(client, HAL_USER_NORMAL);
+  return check_normal_or_wheel(client);
 }
 
 /*
