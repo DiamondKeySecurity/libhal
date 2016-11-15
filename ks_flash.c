@@ -563,28 +563,38 @@ static inline void *gnaw(uint8_t **mem, size_t *len, const size_t size)
   return ret;
 }
 
-static hal_error_t ks_init(const hal_ks_driver_t * const driver)
+static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc)
 {
   /*
    * Initialize the in-memory database.
    */
 
-  size_t len = (sizeof(*db.ksi.index) * NUM_FLASH_BLOCKS +
-                sizeof(*db.ksi.names) * NUM_FLASH_BLOCKS +
-                sizeof(*db.cache)     * KS_FLASH_CACHE_SIZE);
+  if (alloc) {
 
-  uint8_t *mem = hal_allocate_static_memory(len);
+    size_t len = (sizeof(*db.ksi.index) * NUM_FLASH_BLOCKS +
+                  sizeof(*db.ksi.names) * NUM_FLASH_BLOCKS +
+                  sizeof(*db.cache)     * KS_FLASH_CACHE_SIZE);
 
-  if (mem == NULL)
-    return HAL_ERROR_ALLOCATION_FAILURE;
+    uint8_t *mem = hal_allocate_static_memory(len);
 
-  memset(&db, 0, sizeof(db));
-  memset(mem, 0, len);
+    if (mem == NULL)
+      return HAL_ERROR_ALLOCATION_FAILURE;
 
-  db.ksi.index = gnaw(&mem, &len, sizeof(*db.ksi.index) * NUM_FLASH_BLOCKS);
-  db.ksi.names = gnaw(&mem, &len, sizeof(*db.ksi.names) * NUM_FLASH_BLOCKS);
-  db.cache     = gnaw(&mem, &len, sizeof(*db.cache)     * KS_FLASH_CACHE_SIZE);
-  db.ksi.size  = NUM_FLASH_BLOCKS;
+    memset(&db, 0, sizeof(db));
+    memset(mem, 0, len);
+
+    db.ksi.index = gnaw(&mem, &len, sizeof(*db.ksi.index) * NUM_FLASH_BLOCKS);
+    db.ksi.names = gnaw(&mem, &len, sizeof(*db.ksi.names) * NUM_FLASH_BLOCKS);
+    db.cache     = gnaw(&mem, &len, sizeof(*db.cache)     * KS_FLASH_CACHE_SIZE);
+    db.ksi.size  = NUM_FLASH_BLOCKS;
+  }
+
+  else {
+    memset(&db.wheel_pin, 0, sizeof(db.wheel_pin));
+    memset(&db.so_pin,    0, sizeof(db.so_pin));
+    memset(&db.user_pin,  0, sizeof(db.user_pin));
+  }
+
   db.ksi.used  = 0;
 
   if (db.ksi.index == NULL || db.ksi.names == NULL || db.cache == NULL)

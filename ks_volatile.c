@@ -143,26 +143,35 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver,
                            uint8_t *mem,
                            size_t len)
 {
-  if (ksv == NULL || mem == NULL)
+  if (ksv == NULL)
     return HAL_ERROR_IMPOSSIBLE;
 
-  memset(ksv, 0, sizeof(*ksv));
-  memset(mem, 0, len);
+  if (mem != NULL) {
+    memset(ksv, 0, sizeof(*ksv));
+    memset(mem, 0, len);
 
-  ksv->ks.driver     = driver;
-  ksv->per_session   = per_session;
-  ksv->db            = gnaw(&mem, &len, sizeof(*ksv->db));
-  ksv->db->ksi.index = gnaw(&mem, &len, sizeof(*ksv->db->ksi.index) * STATIC_KS_VOLATILE_SLOTS);
-  ksv->db->ksi.names = gnaw(&mem, &len, sizeof(*ksv->db->ksi.names) * STATIC_KS_VOLATILE_SLOTS);
-  ksv->db->keys      = gnaw(&mem, &len, sizeof(*ksv->db->keys)      * STATIC_KS_VOLATILE_SLOTS);
-  ksv->db->ksi.size  = STATIC_KS_VOLATILE_SLOTS;
-  ksv->db->ksi.used  = 0;
+    ksv->db            = gnaw(&mem, &len, sizeof(*ksv->db));
+    ksv->db->ksi.index = gnaw(&mem, &len, sizeof(*ksv->db->ksi.index) * STATIC_KS_VOLATILE_SLOTS);
+    ksv->db->ksi.names = gnaw(&mem, &len, sizeof(*ksv->db->ksi.names) * STATIC_KS_VOLATILE_SLOTS);
+    ksv->db->keys      = gnaw(&mem, &len, sizeof(*ksv->db->keys)      * STATIC_KS_VOLATILE_SLOTS);
+    ksv->db->ksi.size  = STATIC_KS_VOLATILE_SLOTS;
+  }
 
   if (ksv->db            == NULL ||
       ksv->db->ksi.index == NULL ||
       ksv->db->ksi.names == NULL ||
       ksv->db->keys      == NULL)
     return HAL_ERROR_IMPOSSIBLE;
+
+  if (mem == NULL) {
+    memset(ksv->db->ksi.index, 0, sizeof(*ksv->db->ksi.index) * STATIC_KS_VOLATILE_SLOTS);
+    memset(ksv->db->ksi.names, 0, sizeof(*ksv->db->ksi.names) * STATIC_KS_VOLATILE_SLOTS);
+    memset(ksv->db->keys,      0, sizeof(*ksv->db->keys)      * STATIC_KS_VOLATILE_SLOTS);
+  }
+
+  ksv->ks.driver     = driver;
+  ksv->per_session   = per_session;
+  ksv->db->ksi.used  = 0;
 
   /*
    * Set up keystore with empty index and full free list.
@@ -176,16 +185,16 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver,
   return hal_ks_index_setup(&ksv->db->ksi);
 }
 
-static hal_error_t ks_volatile_init(const hal_ks_driver_t * const driver)
+static hal_error_t ks_volatile_init(const hal_ks_driver_t * const driver, const int alloc)
 {
   const size_t len = (sizeof(*volatile_ks.db) +
                       sizeof(*volatile_ks.db->ksi.index) * STATIC_KS_VOLATILE_SLOTS +
                       sizeof(*volatile_ks.db->ksi.names) * STATIC_KS_VOLATILE_SLOTS +
                       sizeof(*volatile_ks.db->keys)      * STATIC_KS_VOLATILE_SLOTS);
 
-  uint8_t *mem = hal_allocate_static_memory(len);
+  uint8_t *mem = NULL;
 
-  if (mem == NULL)
+  if (alloc && (mem = hal_allocate_static_memory(len)) == NULL)
     return HAL_ERROR_ALLOCATION_FAILURE;
 
   return ks_init(driver, 1, &volatile_ks, mem, len);

@@ -453,7 +453,8 @@ typedef struct hal_ks hal_ks_t;
 
 struct hal_ks_driver {
 
-  hal_error_t (*init)(const hal_ks_driver_t * const driver);
+  hal_error_t (*init)(const hal_ks_driver_t * const driver,
+                      const int alloc);
 
   hal_error_t (*shutdown)(const hal_ks_driver_t * const driver);
 
@@ -518,7 +519,8 @@ extern const hal_ks_driver_t
    hal_ks_volatile_driver[1],
    hal_ks_token_driver[1];
 
-static inline hal_error_t hal_ks_init(const hal_ks_driver_t * const driver)
+static inline hal_error_t hal_ks_init(const hal_ks_driver_t * const driver,
+                                      const int alloc)
 {
   if (driver == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -526,7 +528,7 @@ static inline hal_error_t hal_ks_init(const hal_ks_driver_t * const driver)
   if (driver->init == NULL)
     return HAL_ERROR_NOT_IMPLEMENTED;
 
-  return driver->init(driver);
+  return driver->init(driver, alloc);
 }
 
 static inline hal_error_t hal_ks_shutdown(const hal_ks_driver_t * const driver)

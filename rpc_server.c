@@ -926,9 +926,9 @@ hal_error_t hal_rpc_server_init(void)
 {
     hal_error_t err;
 
-    if ((err = hal_ks_init(hal_ks_volatile_driver)) != HAL_OK ||
-        (err = hal_ks_init(hal_ks_token_driver))    != HAL_OK ||
-        (err = hal_rpc_server_transport_init())     != HAL_OK)
+    if ((err = hal_ks_init(hal_ks_volatile_driver, 1))  != HAL_OK ||
+        (err = hal_ks_init(hal_ks_token_driver, 1))     != HAL_OK ||
+        (err = hal_rpc_server_transport_init())         != HAL_OK)
         return err;
 
     return HAL_OK;
