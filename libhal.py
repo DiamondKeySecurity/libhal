@@ -382,8 +382,13 @@ class PKey(Handle):
     def set_attributes(self, attributes):
         self.hsm.pkey_set_attributes(self, attributes)
 
-    def get_attributes(self, attributes, attributes_buffer_len = 2048):
-        return self.hsm.pkey_get_attributes(self, attributes, attributes_buffer_len)
+    def get_attributes(self, attributes):
+        lengths = self.hsm.pkey_get_attributes(self, attributes, 0)
+        attributes = (k for k, v in lengths.iteritems() if v > 0)
+        buffer_length = sum(lengths.itervalues())
+        result = dict((a, None) for a in lengths)
+        result.update(self.hsm.pkey_get_attributes(self, attributes, buffer_length))
+        return result
 
 
 class HSM(object):
@@ -650,4 +655,7 @@ class HSM(object):
             n = r.unpack_uint()
             if n != len(attributes):
                 raise HAL_ERROR_RPC_PROTOCOL_ERROR
-            return dict((r.unpack_uint(), r.unpack_bytes()) for i in xrange(n))
+            if attributes_buffer_len > 0:
+                return dict((r.unpack_uint(), r.unpack_bytes()) for i in xrange(n))
+            else:
+                return dict((r.unpack_uint(), r.unpack_uint()) for i in xrange(n))

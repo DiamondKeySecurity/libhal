@@ -759,7 +759,10 @@ static hal_error_t pkey_get_attributes(const uint8_t **iptr, const uint8_t * con
             ret = hal_xdr_encode_int(optr, olimit, attributes[i].type);
             if (ret != HAL_OK)
                 break;
-            ret = hal_xdr_encode_buffer(optr, olimit, attributes[i].value, attributes[i].length);
+            if (attributes_buffer_len == 0)
+              ret = hal_xdr_encode_int(optr, olimit, attributes[i].length);
+            else
+              ret = hal_xdr_encode_buffer(optr, olimit, attributes[i].value, attributes[i].length);
         }
     }
 

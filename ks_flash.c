@@ -1579,7 +1579,7 @@ static  hal_error_t ks_get_attributes(hal_ks_t *ks,
                                       const size_t attributes_buffer_len)
 {
   if (ks != &db.ks || slot == NULL || attributes == NULL || attributes_len == 0 ||
-      attributes_buffer == NULL || attributes_buffer_len == 0)
+      attributes_buffer == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   for (int i = 0; i < attributes_len; i++) {
@@ -1626,7 +1626,7 @@ static  hal_error_t ks_get_attributes(hal_ks_t *ks,
 
     for (int i = 0; i < attributes_len; i++) {
 
-      if (attributes[i].value != NULL)
+      if (attributes[i].length > 0)
         continue;
 
       int j = 0;
@@ -1634,20 +1634,24 @@ static  hal_error_t ks_get_attributes(hal_ks_t *ks,
         j++;
       if (j >= *attrs_len)
         continue;
+      found++;
+
+      attributes[i].length = attrs[j].length;
+
+      if (attributes_buffer_len == 0)
+        continue;
 
       if (attrs[j].length > attributes_buffer + attributes_buffer_len - abuf)
         return HAL_ERROR_RESULT_TOO_LONG;
 
       memcpy(abuf, attrs[j].value, attrs[j].length);
       attributes[i].value  = abuf;
-      attributes[i].length = attrs[j].length;
       abuf += attrs[j].length;
-      found++;
     }
 
   } while (found < attributes_len && ++chunk < block->header.total_chunks);
 
-  if (found < attributes_len)
+  if (found < attributes_len && attributes_buffer_len > 0)
     return HAL_ERROR_ATTRIBUTE_NOT_FOUND;
 
   return HAL_OK;

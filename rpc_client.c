@@ -895,11 +895,18 @@ static hal_error_t pkey_remote_get_attributes(const hal_pkey_handle_t pkey,
       check(hal_xdr_decode_int(&iptr, ilimit, &u32));
       if (u32 != attributes[i].type)
         return HAL_ERROR_RPC_PROTOCOL_ERROR;
-      u32 = attributes_buffer + attributes_buffer_len - abuf;
-      check(hal_xdr_decode_buffer(&iptr, ilimit, abuf, &u32));
-      attributes[i].value  = abuf;
-      attributes[i].length = u32;
-      abuf += u32;
+      if (attributes_buffer_len == 0) {
+        check(hal_xdr_decode_int(&iptr, ilimit, &u32));
+        attributes[i].value  = NULL;
+        attributes[i].length = u32;
+      }
+      else {
+        u32 = attributes_buffer + attributes_buffer_len - abuf;
+        check(hal_xdr_decode_buffer(&iptr, ilimit, abuf, &u32));
+        attributes[i].value  = abuf;
+        attributes[i].length = u32;
+        abuf += u32;
+      }
     }
   }
   return rpc_ret;

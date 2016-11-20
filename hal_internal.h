@@ -649,8 +649,7 @@ static inline hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
                                                 const size_t attributes_buffer_len)
 {
   if (ks == NULL || ks->driver == NULL || slot == NULL ||
-      attributes == NULL || attributes_len == 0 ||
-      attributes_buffer == NULL || attributes_buffer_len == 0)
+      attributes == NULL || attributes_len == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   if (ks->driver->get_attributes == NULL)

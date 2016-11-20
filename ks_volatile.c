@@ -493,7 +493,7 @@ static hal_error_t ks_get_attributes(hal_ks_t *ks,
                                      const size_t attributes_buffer_len)
 {
   if (ks == NULL || slot == NULL || attributes == NULL || attributes_len == 0 ||
-      attributes_buffer == NULL || attributes_buffer_len == 0)
+      attributes_buffer == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   ks_t *ksv = ks_to_ksv(ks);
@@ -511,10 +511,7 @@ static hal_error_t ks_get_attributes(hal_ks_t *ks,
   if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k))
     return HAL_ERROR_KEY_NOT_FOUND;
 
-  if (k->attributes_len == 0)
-    return HAL_ERROR_ATTRIBUTE_NOT_FOUND;
-
-  hal_rpc_pkey_attribute_t attrs[k->attributes_len];
+  hal_rpc_pkey_attribute_t attrs[k->attributes_len > 0 ? k->attributes_len : 1];
 
   if ((err = hal_ks_attribute_scan(k->der + k->der_len, sizeof(k->der) - k->der_len,
                                    attrs, k->attributes_len, NULL)) != HAL_OK)
@@ -523,11 +520,19 @@ static hal_error_t ks_get_attributes(hal_ks_t *ks,
   uint8_t *abuf = attributes_buffer;
 
   for (int i = 0; i < attributes_len; i++) {
-
     int j = 0;
-    while (attrs[j].type != attributes[i].type)
-      if (++j >= k->attributes_len)
-        return HAL_ERROR_ATTRIBUTE_NOT_FOUND;
+    while (j < k->attributes_len && attrs[j].type != attributes[i].type)
+      j++;
+    const int found = j < k->attributes_len;
+
+    if (attributes_buffer_len == 0) {
+      attributes[i].value  = NULL;
+      attributes[i].length = found ? attrs[j].length : 0;
+      continue;
+    }
+
+    if (!found)
+      return HAL_ERROR_ATTRIBUTE_NOT_FOUND;
 
     if (attrs[j].length > attributes_buffer + attributes_buffer_len - abuf)
       return HAL_ERROR_RESULT_TOO_LONG;
