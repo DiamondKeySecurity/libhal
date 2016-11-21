@@ -945,7 +945,15 @@ static hal_error_t pkey_local_match(const hal_client_handle_t client,
   hal_ks_t *ks = NULL;
   hal_error_t err;
 
-  if ((err = check_readable(client, flags)) != HAL_OK)
+  err = check_readable(client, flags);
+
+  if (err == HAL_ERROR_FORBIDDEN) {
+    assert(result_len != NULL);
+    *result_len = 0;
+    return HAL_OK;
+  }
+
+  if (err != HAL_OK)
     return err;
 
   if ((err = ks_open_from_flags(&ks, flags)) == HAL_OK &&
