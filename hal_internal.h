@@ -286,24 +286,6 @@ extern hal_error_t hal_rpc_pkcs1_construct_digestinfo(const hal_hash_handle_t ha
                                                       const size_t digest_info_max);
 
 /*
- * UUID stuff.  All UUIDs we use (or are likely to use) are type 4 "random" UUIDs
- * Some of this may need to move to hal.h.
- */
-
-#define HAL_UUID_TEXT_SIZE	(sizeof("00112233-4455-6677-8899-aabbccddeeff"))
-
-static inline int hal_uuid_cmp(const hal_uuid_t * const a, const hal_uuid_t * const b)
-{
-  return memcmp(a, b, sizeof(hal_uuid_t));
-}
-
-extern hal_error_t hal_uuid_gen(hal_uuid_t *uuid);
-
-extern hal_error_t hal_uuid_parse(hal_uuid_t *uuid, const char * const string);
-
-extern hal_error_t hal_uuid_format(const hal_uuid_t * const uuid, char *buffer, const size_t buffer_len);
-
-/*
  * CRC-32 stuff (for flash keystore, etc).  Dunno if we want a Verilog
  * implementation of this, or if it would even be faster than doing it
  * the main CPU taking I/O overhead and so forth into account.

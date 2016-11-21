@@ -661,9 +661,11 @@ static hal_error_t pkey_match(const uint8_t **iptr, const uint8_t * const ilimit
 
     for (int i = 0; i < attributes_len; i++) {
         hal_rpc_pkey_attribute_t *a = &attributes[i];
+        const uint8_t *value;
         uint32_t value_len;
         check(hal_xdr_decode_int(iptr, ilimit, &a->type));
-        check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &a->value, &value_len));
+        check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &value, &value_len));
+        a->value  = value;
         a->length = value_len;
     }
 
@@ -712,9 +714,11 @@ static hal_error_t pkey_set_attributes(const uint8_t **iptr, const uint8_t * con
 
     for (int i = 0; i < attributes_len; i++) {
         hal_rpc_pkey_attribute_t *a = &attributes[i];
+        const uint8_t *value;
         uint32_t value_len;
         check(hal_xdr_decode_int(iptr, ilimit, &a->type));
-        check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &a->value, &value_len));
+        check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &value, &value_len));
+        a->value  = value;
         a->length = value_len;
     }
 

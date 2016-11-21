@@ -129,7 +129,7 @@ hal_error_t hal_ks_attribute_delete(uint8_t *bytes, const size_t bytes_len,
     return HAL_OK;
 
   const size_t delete_length = hal_ks_attribute_header_size + attributes[i].length;
-  const size_t delete_offset = attributes[i].value - hal_ks_attribute_header_size - bytes;
+  const size_t delete_offset = (uint8_t*) attributes[i].value - hal_ks_attribute_header_size - bytes;
 
   if (delete_offset + delete_length > *total_len)
     return HAL_ERROR_IMPOSSIBLE;
