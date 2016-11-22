@@ -1223,21 +1223,39 @@ static hal_error_t ks_match(hal_ks_t *ks,
   return HAL_OK;
 }
 
+/*
+ * This controls whether we include a separate code path for the
+ * common case where we can handle attribute setting via a single
+ * block update.  It's a lot simpler when it works, but it's yet
+ * another code path, and enabling it leaves the slower full-blown
+ * algorithm less tested.
+ */
+
+#ifndef KS_SET_ATTRIBUTES_SINGLE_BLOCK_UPDATE_FAST_PATH
+#define KS_SET_ATTRIBUTES_SINGLE_BLOCK_UPDATE_FAST_PATH 0
+#endif
+
+/*
+ * ks_set_attributes() is much too long.  Probably needs to be broken
+ * up into a collection of inline functions, even if most of them end
+ * up being called exactly once.
+ */
+
 static  hal_error_t ks_set_attributes(hal_ks_t *ks,
                                       hal_pkey_slot_t *slot,
                                       const hal_pkey_attribute_t *attributes,
                                       const unsigned attributes_len)
 {
-#warning This function is much too long
-  // Probably needs to be broken up into multiple sub-functions, or at least
-  // into discrete blocks to scope most of the variables, but let's finish
-  // writing the icky version before polishing the chrome.
-
   if (ks != &db.ks || slot == NULL || attributes == NULL || attributes_len == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   /*
-   * Try to add new attribute as a single-block update.
+   * Perform initial scan of the object to figure out the total
+   * attribute count and a few other parameters.
+   *
+   * If enabled, try to do everything as as a single-block update.  If
+   * single block update fails, we MUST clear the modified block from
+   * the cache before doing anything else.
    */
 
   unsigned updated_attributes_len = attributes_len;
@@ -1270,13 +1288,15 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
 
     updated_attributes_len += *attrs_len;
 
+#if KS_SET_ATTRIBUTES_SINGLE_BLOCK_UPDATE_FAST_PATH
+
     hal_pkey_attribute_t attrs[*attrs_len + attributes_len];
     size_t total;
 
     if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, &total)) != HAL_OK)
       return err;
 
-    for (int i = 0; err == HAL_OK && i < attributes_len; i++) {
+    for (int i = 0; err == HAL_OK && i < attributes_len; i++)
       if (attributes[i].length == HAL_PKEY_ATTRIBUTE_NIL)
         err = hal_ks_attribute_delete(bytes, bytes_len, attrs, attrs_len, &total,
                                       attributes[i].type);
@@ -1285,9 +1305,9 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
                                       attributes[i].type,
                                       attributes[i].value,
                                       attributes[i].length);
-      if (err != HAL_OK)
-        cache_release(block);
-    }
+
+    if (err != HAL_OK)
+      cache_release(block);
 
     if (err == HAL_ERROR_RESULT_TOO_LONG)
       continue;
@@ -1297,14 +1317,17 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
 
     return block_update(b, block, &slot->name, chunk, &hint);
 
+#endif /* KS_SET_ATTRIBUTES_SINGLE_BLOCK_UPDATE_FAST_PATH */
+
   } while (++chunk < block->header.total_chunks);
 
   /*
-   * If we get here, we have to add a new block, which requires
-   * rewriting all the others to bump the total_blocks count.  We need
-   * to keep track of all the old chunks so we can zero them at the
-   * end, and because we can't zero them until we've written out the
-   * new chunks, we need enough free blocks for the entire new object.
+   * If we get here, we're on the slow path, which requires rewriting
+   * all the chunks in this object but which can also add or remove
+   * chunks from this object.  We need to keep track of all the old
+   * chunks so we can zero them at the end, and because we can't zero
+   * them until we've written out the new chunks, we need enough free
+   * blocks to hold all the new chunks.
    *
    * Calculating all of this is extremely tedious, but flash writes
    * are so much more expensive than anything else we do here that
@@ -1329,6 +1352,12 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
   size_t bytes_available = 0;
 
   updated_attributes_len = 0;
+
+  /*
+   * Phase 0.1: Walk the old chunks to populate updated_attributes[].
+   * This also initializes bytes_available, since we can only get that
+   * by reading old chunk zero.
+   */
 
   for (chunk = 0; chunk < total_chunks_old; chunk++) {
     int hint = slot->hint + chunk;
@@ -1359,39 +1388,56 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
       bytes_available = bytes_len;
 
     for (int i = 0; i < *attrs_len; i++) {
+
       if (updated_attributes_len >= sizeof(updated_attributes)/sizeof(*updated_attributes))
         return HAL_ERROR_IMPOSSIBLE;
-      updated_attributes[updated_attributes_len].type = attrs[i].type;
+
+      updated_attributes[updated_attributes_len].type   = attrs[i].type;
       updated_attributes[updated_attributes_len].length = attrs[i].length;
-      updated_attributes[updated_attributes_len].value = NULL;
+      updated_attributes[updated_attributes_len].value  = NULL;
       updated_attributes_len++;
     }
   }
+
+  /*
+   * Phase 0.2: Merge new attributes into updated_attributes[].
+   */
 
   for (int i = 0; i < attributes_len; i++) {
 
     for (int j = 0; j < updated_attributes_len; j++)
       if (updated_attributes[j].type == attributes[i].type)
-        updated_attributes[j].length = 0;
+        updated_attributes[j].length = HAL_PKEY_ATTRIBUTE_NIL;
 
     if (updated_attributes_len >= sizeof(updated_attributes)/sizeof(*updated_attributes))
       return HAL_ERROR_IMPOSSIBLE;
+
     updated_attributes[updated_attributes_len].type   = attributes[i].type;
     updated_attributes[updated_attributes_len].length = attributes[i].length;
     updated_attributes[updated_attributes_len].value  = attributes[i].value;
     updated_attributes_len++;
   }
 
+  /*
+   * Phase 0.3: Prune trailing deletion actions: we don't need them to
+   * maintain synchronization with existing attributes, and doing so
+   * simplifies logic for updating the final new chunk.
+   */
+
+  while (updated_attributes_len > 0 &&
+         updated_attributes[updated_attributes_len - 1].length == HAL_PKEY_ATTRIBUTE_NIL)
+    --updated_attributes_len;
+
+  /*
+   * Phase 0.4: Figure out how many chunks all this will occupy.
+   */
+
   chunk = 0;
 
   for (int i = 0; i < updated_attributes_len; i++) {
 
-    if (updated_attributes[i].length == 0) {
-      memmove(&updated_attributes[i], &updated_attributes[i + 1], updated_attributes_len - i - 1);
-      updated_attributes_len--;
-      i--;
+    if (updated_attributes[i].length == HAL_PKEY_ATTRIBUTE_NIL)
       continue;
-    }
 
     const size_t needed = hal_ks_attribute_header_size + updated_attributes[i].length;
 
@@ -1407,6 +1453,10 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
   }
 
   const unsigned total_chunks_new = chunk + 1;
+
+  /*
+   * If there aren't enough free blocks, give up now, before changing anything.
+   */
 
   if (db.ksi.used + total_chunks_new > db.ksi.size)
     return HAL_ERROR_NO_KEY_INDEX_SLOTS;
@@ -1426,8 +1476,8 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
   }
 
   /*
-   * Phase 2: Write new chunks, copying attributes from old chunks and attributes[]
-   * as needed.  This is tedious.
+   * Phase 2: Write new chunks, copying attributes from old chunks or
+   * from attributes[], as needed.
    */
 
   {
@@ -1450,11 +1500,21 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
       if (old_chunk >= total_chunks_old || new_chunk >= total_chunks_new)
         return HAL_ERROR_IMPOSSIBLE;
 
-      if (updated_attributes[updated_attributes_i].value != NULL) {
+      /*
+       * If we've gotten as far as new data that comes from
+       * attributes[], we have it in hand and can just copy it.
+       */
+
+      if (updated_attributes_len - updated_attributes_i <= attributes_len) {
         new_attr_type   = updated_attributes[updated_attributes_i].type;
         new_attr_length = updated_attributes[updated_attributes_i].length;
         new_attr_value  = updated_attributes[updated_attributes_i].value;
       }
+
+      /*
+       * Otherwise, we have to read it from an old block, which may in
+       * turn require reading in the next old block.
+       */
 
       else {
 
@@ -1475,10 +1535,6 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
           old_attrs_i = 0;
         }
 
-        while (old_attrs_i < *old_attrs_len &&
-               old_attrs[old_attrs_i].type != updated_attributes[updated_attributes_i].type)
-          old_attrs_i++;
-
         if (old_attrs_i >= *old_attrs_len) {
           old_chunk++;
           old_block = NULL;
@@ -1488,7 +1544,25 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
         new_attr_type   = old_attrs[old_attrs_i].type;
         new_attr_length = old_attrs[old_attrs_i].length;
         new_attr_value  = old_attrs[old_attrs_i].value;
+
+        if (new_attr_type != updated_attributes[updated_attributes_i].type)
+          return HAL_ERROR_IMPOSSIBLE;
+
+        old_attrs_i++;
       }
+
+      /*
+       * Unless this is a deletion, we should have something to write.
+       */
+
+      if (new_attr_length != HAL_PKEY_ATTRIBUTE_NIL && new_attr_value == NULL)
+        return HAL_ERROR_IMPOSSIBLE;
+
+      /*
+       * Initialize the new block if necessary.  If it's the new chunk
+       * zero, we need to copy all the non-attribute data from the old
+       * chunk zero; otherwise, it's a new empty attribute block.
+       */
 
       if (new_block == NULL) {
 
@@ -1527,8 +1601,18 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
         new_total = 0;
       }
 
-      err = hal_ks_attribute_insert(new_bytes, new_bytes_len, new_attrs, new_attrs_len, &new_total,
-                                    new_attr_type, new_attr_value, new_attr_length);
+      /*
+       * After all that setup, we finally get to write the frelling attribute.
+       */
+
+      if (new_attr_length != HAL_PKEY_ATTRIBUTE_NIL)
+        err = hal_ks_attribute_insert(new_bytes, new_bytes_len, new_attrs, new_attrs_len, &new_total,
+                                      new_attr_type, new_attr_value, new_attr_length);
+
+      /*
+       * Figure out what to do next: immediately loop for next
+       * attribute, write current block, or bail out.
+       */
 
       switch (err) {
       case HAL_OK:
@@ -1542,6 +1626,11 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
       default:
         return err;
       }
+
+      /*
+       * If we get here, either the current new block is full or we
+       * finished the last block, so we need to write it out.
+       */
 
       int hint = slot->hint + new_chunk;
 
@@ -1558,6 +1647,20 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
       new_block = NULL;
       new_chunk++;
     }
+
+    /*
+     * If number of blocks shrank, we need to clear trailing entries from the index.
+     */
+
+    for (old_chunk = total_chunks_new; old_chunk < total_chunks_old; old_chunk++) {
+      int hint = slot->hint + old_chunk;
+
+      err = hal_ks_index_delete(&db.ksi, &slot->name, old_chunk, NULL, &hint);
+
+      if (err != HAL_OK)
+        return err;
+    }
+
   }
 
   /*
@@ -1569,6 +1672,12 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
       return err;
 
   return HAL_OK;
+
+#warning What happens if something goes wrong partway through this awful mess?
+  // We're left in a state with all the old blocks deprecated and
+  // (maybe) some of the new blocks current, need to clean that up.
+  // Would be nice if we could just reuse the keystore initialization
+  // code, but don't quite see how (yet?).
 }
 
 static  hal_error_t ks_get_attributes(hal_ks_t *ks,
