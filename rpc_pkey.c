@@ -935,7 +935,7 @@ static hal_error_t pkey_local_match(const hal_client_handle_t client,
                                     const hal_key_type_t type,
                                     const hal_curve_name_t curve,
                                     const hal_key_flags_t flags,
-                                    const hal_rpc_pkey_attribute_t *attributes,
+                                    const hal_pkey_attribute_t *attributes,
                                     const unsigned attributes_len,
                                     hal_uuid_t *result,
                                     unsigned *result_len,
@@ -967,7 +967,7 @@ static hal_error_t pkey_local_match(const hal_client_handle_t client,
 }
 
 static hal_error_t pkey_local_set_attributes(const hal_pkey_handle_t pkey,
-                                             const hal_rpc_pkey_attribute_t *attributes,
+                                             const hal_pkey_attribute_t *attributes,
                                              const unsigned attributes_len)
 {
   hal_pkey_slot_t *slot = find_handle(pkey);
@@ -991,7 +991,7 @@ static hal_error_t pkey_local_set_attributes(const hal_pkey_handle_t pkey,
 }
 
 static hal_error_t pkey_local_get_attributes(const hal_pkey_handle_t pkey,
-                                             hal_rpc_pkey_attribute_t *attributes,
+                                             hal_pkey_attribute_t *attributes,
                                              const unsigned attributes_len,
                                              uint8_t *attributes_buffer,
                                              const size_t attributes_buffer_len)

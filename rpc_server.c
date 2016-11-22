@@ -657,10 +657,10 @@ static hal_error_t pkey_match(const uint8_t **iptr, const uint8_t * const ilimit
     check(hal_xdr_decode_int(iptr, ilimit, &flags));
     check(hal_xdr_decode_int(iptr, ilimit, &attributes_len));
 
-    hal_rpc_pkey_attribute_t attributes[attributes_len > 0 ? attributes_len : 1];
+    hal_pkey_attribute_t attributes[attributes_len > 0 ? attributes_len : 1];
 
     for (int i = 0; i < attributes_len; i++) {
-        hal_rpc_pkey_attribute_t *a = &attributes[i];
+        hal_pkey_attribute_t *a = &attributes[i];
         const uint8_t *value;
         uint32_t value_len;
         check(hal_xdr_decode_int(iptr, ilimit, &a->type));
@@ -710,16 +710,22 @@ static hal_error_t pkey_set_attributes(const uint8_t **iptr, const uint8_t * con
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &attributes_len));
 
-    hal_rpc_pkey_attribute_t attributes[attributes_len > 0 ? attributes_len : 1];
+    hal_pkey_attribute_t attributes[attributes_len > 0 ? attributes_len : 1];
 
     for (int i = 0; i < attributes_len; i++) {
-        hal_rpc_pkey_attribute_t *a = &attributes[i];
-        const uint8_t *value;
-        uint32_t value_len;
+        hal_pkey_attribute_t *a = &attributes[i];
         check(hal_xdr_decode_int(iptr, ilimit, &a->type));
-        check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &value, &value_len));
-        a->value  = value;
-        a->length = value_len;
+        const uint8_t *iptr_prior_to_decoding_length = *iptr;
+        check(hal_xdr_decode_int(iptr, ilimit, &a->length));
+        if (a->length == HAL_PKEY_ATTRIBUTE_NIL) {
+            a->value = NULL;
+        }
+        else {
+            *iptr = iptr_prior_to_decoding_length;
+            const uint8_t *value;
+            check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &value, &a->length));
+            a->value = value;
+        }
     }
 
     ret = hal_rpc_pkey_set_attributes(pkey, attributes, attributes_len);
@@ -740,7 +746,7 @@ static hal_error_t pkey_get_attributes(const uint8_t **iptr, const uint8_t * con
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &attributes_len));
 
-    hal_rpc_pkey_attribute_t attributes[attributes_len > 0 ? attributes_len : 1];
+    hal_pkey_attribute_t attributes[attributes_len > 0 ? attributes_len : 1];
 
     for (int i = 0; i < attributes_len; i++)
         check(hal_xdr_decode_int(iptr, ilimit, &attributes[i].type));

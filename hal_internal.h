@@ -243,7 +243,7 @@ typedef struct {
                        const hal_key_type_t type,
                        const hal_curve_name_t curve,
                        const hal_key_flags_t flags,
-                       const hal_rpc_pkey_attribute_t *attributes,
+                       const hal_pkey_attribute_t *attributes,
                        const unsigned attributes_len,
                        hal_uuid_t *result,
                        unsigned *result_len,
@@ -251,11 +251,11 @@ typedef struct {
                        const hal_uuid_t * const previous_uuid);
 
   hal_error_t (*set_attributes)(const hal_pkey_handle_t pkey,
-                                const hal_rpc_pkey_attribute_t *attributes,
+                                const hal_pkey_attribute_t *attributes,
                                 const unsigned attributes_len);
 
   hal_error_t (*get_attributes)(const hal_pkey_handle_t pkey,
-                                hal_rpc_pkey_attribute_t *attributes,
+                                hal_pkey_attribute_t *attributes,
                                 const unsigned attributes_len,
                                 uint8_t *attributes_buffer,
                                 const size_t attributes_buffer_len);
@@ -462,7 +462,7 @@ struct hal_ks_driver {
                        const hal_key_type_t type,
                        const hal_curve_name_t curve,
                        const hal_key_flags_t flags,
-                       const hal_rpc_pkey_attribute_t *attributes,
+                       const hal_pkey_attribute_t *attributes,
                        const unsigned attributes_len,
                        hal_uuid_t *result,
                        unsigned *result_len,
@@ -471,12 +471,12 @@ struct hal_ks_driver {
 
   hal_error_t (*set_attributes)(hal_ks_t *ks,
                                 hal_pkey_slot_t *slot,
-                                const hal_rpc_pkey_attribute_t *attributes,
+                                const hal_pkey_attribute_t *attributes,
                                 const unsigned attributes_len);
 
   hal_error_t (*get_attributes)(hal_ks_t *ks,
                                 hal_pkey_slot_t *slot,
-                                hal_rpc_pkey_attribute_t *attributes,
+                                hal_pkey_attribute_t *attributes,
                                 const unsigned attributes_len,
                                 uint8_t *attributes_buffer,
                                 const size_t attributes_buffer_len);
@@ -591,7 +591,7 @@ static inline hal_error_t hal_ks_match(hal_ks_t *ks,
                                        const hal_key_type_t type,
                                        const hal_curve_name_t curve,
                                        const hal_key_flags_t flags,
-                                       const hal_rpc_pkey_attribute_t *attributes,
+                                       const hal_pkey_attribute_t *attributes,
                                        const unsigned attributes_len,
                                        hal_uuid_t *result,
                                        unsigned *result_len,
@@ -610,7 +610,7 @@ static inline hal_error_t hal_ks_match(hal_ks_t *ks,
 
 static inline  hal_error_t hal_ks_set_attributes(hal_ks_t *ks,
                                                  hal_pkey_slot_t *slot,
-                                                 const hal_rpc_pkey_attribute_t *attributes,
+                                                 const hal_pkey_attribute_t *attributes,
                                                  const unsigned attributes_len)
 {
   if (ks == NULL || ks->driver == NULL || slot == NULL ||
@@ -625,7 +625,7 @@ static inline  hal_error_t hal_ks_set_attributes(hal_ks_t *ks,
 
 static inline hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
                                                 hal_pkey_slot_t *slot,
-                                                hal_rpc_pkey_attribute_t *attributes,
+                                                hal_pkey_attribute_t *attributes,
                                                 const unsigned attributes_len,
                                                 uint8_t *attributes_buffer,
                                                 const size_t attributes_buffer_len)
@@ -780,19 +780,19 @@ extern const size_t hal_ks_attribute_header_size;
 
 extern hal_error_t hal_ks_attribute_scan(const uint8_t * const bytes,
                                          const size_t bytes_len,
-                                         hal_rpc_pkey_attribute_t *attributes,
+                                         hal_pkey_attribute_t *attributes,
                                          const unsigned attributes_len,
                                          size_t *total_len);
 
 extern hal_error_t hal_ks_attribute_delete(uint8_t *bytes,
                                            const size_t bytes_len,
-                                           hal_rpc_pkey_attribute_t *attributes,
+                                           hal_pkey_attribute_t *attributes,
                                            unsigned *attributes_len,
                                            size_t *total_len,
                                            const uint32_t type);
 
 extern hal_error_t hal_ks_attribute_insert(uint8_t *bytes, const size_t bytes_len,
-                                           hal_rpc_pkey_attribute_t *attributes,
+                                           hal_pkey_attribute_t *attributes,
                                            unsigned *attributes_len,
                                            size_t *total_len,
                                            const uint32_t type,

@@ -231,6 +231,8 @@ HAL_KEY_FLAG_USAGE_DATAENCIPHERMENT     = (1 << 2)
 HAL_KEY_FLAG_TOKEN                      = (1 << 3)
 HAL_KEY_FLAG_PUBLIC                     = (1 << 4)
 
+HAL_PKEY_ATTRIBUTE_NIL                  = (0xFFFFFFFF)
+
 
 class UUID(uuid.UUID):
 
@@ -383,11 +385,10 @@ class PKey(Handle):
         self.hsm.pkey_set_attributes(self, attributes)
 
     def get_attributes(self, attributes):
-        lengths = self.hsm.pkey_get_attributes(self, attributes, 0)
-        attributes = (k for k, v in lengths.iteritems() if v > 0)
-        buffer_length = sum(lengths.itervalues())
-        result = dict((a, None) for a in lengths)
-        result.update(self.hsm.pkey_get_attributes(self, attributes, buffer_length))
+        attrs = self.hsm.pkey_get_attributes(self, attributes, 0)
+        attrs = dict((k, v) for k, v in attrs.iteritems() if v != HAL_PKEY_ATTRIBUTE_NIL)
+        result = dict((a, None) for a in attributes)
+        result.update(self.hsm.pkey_get_attributes(self, attrs.iterkeys(), sum(attrs.itervalues())))
         return result
 
 
@@ -498,7 +499,7 @@ class HSM(object):
         packer.pack_uint(len(arg))
         for name, value in arg.iteritems():
             self._pack_arg(packer, name)
-            self._pack_arg(packer, value)
+            self._pack_arg(packer, HAL_PKEY_ATTRIBUTE_NIL if value is None else value)
 
     @contextlib.contextmanager
     def rpc(self, code, *args, **kwargs):

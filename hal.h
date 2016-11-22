@@ -720,6 +720,21 @@ typedef uint32_t hal_key_flags_t;
 #define	HAL_KEY_FLAG_TOKEN                      (1 << 3)
 #define HAL_KEY_FLAG_PUBLIC                     (1 << 4)
 
+/*
+ * hal_pkey_attribute_t.length would be size_t, except that we also
+ * need it to transport HAL_PKEY_ATTRIBUTE_NIL safely, which we can
+ * only do with a known-width type.  The RPC code conveys size_t as a
+ * uint32_t in any case, so we just use that here and have done.
+ */
+
+typedef struct {
+  uint32_t type;
+  uint32_t length;
+  const void *value;
+} hal_pkey_attribute_t;
+
+#define HAL_PKEY_ATTRIBUTE_NIL                  (0xFFFFFFFF)
+
 extern hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
                                      const hal_session_handle_t session,
                                      hal_pkey_handle_t *pkey,
@@ -778,18 +793,12 @@ extern hal_error_t hal_rpc_pkey_verify(const hal_pkey_handle_t pkey,
                                        const uint8_t * const input, const size_t input_len,
                                        const uint8_t * const signature, const size_t signature_len);
 
-typedef struct {
-  uint32_t type;
-  size_t length;
-  const void *value;
-} hal_rpc_pkey_attribute_t;
-
 extern hal_error_t hal_rpc_pkey_match(const hal_client_handle_t client,
                                       const hal_session_handle_t session,
                                       const hal_key_type_t type,
                                       const hal_curve_name_t curve,
                                       const hal_key_flags_t flags,
-                                      const hal_rpc_pkey_attribute_t *attributes,
+                                      const hal_pkey_attribute_t *attributes,
                                       const unsigned attributes_len,
                                       hal_uuid_t *result,
                                       unsigned *result_len,
@@ -797,11 +806,11 @@ extern hal_error_t hal_rpc_pkey_match(const hal_client_handle_t client,
                                       const hal_uuid_t * const previous_uuid);
 
 extern hal_error_t hal_rpc_pkey_set_attributes(const hal_pkey_handle_t pkey,
-                                               const hal_rpc_pkey_attribute_t *const attributes,
+                                               const hal_pkey_attribute_t *const attributes,
                                                const unsigned attributes_len);
 
 extern hal_error_t hal_rpc_pkey_get_attributes(const hal_pkey_handle_t pkey,
-                                               hal_rpc_pkey_attribute_t *attributes,
+                                               hal_pkey_attribute_t *attributes,
                                                const unsigned attributes_len,
                                                uint8_t *attributes_buffer,
                                                const size_t attributes_buffer_len);

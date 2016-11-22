@@ -594,6 +594,70 @@ class TestPKeyAttribute(TestCaseLoggedIn):
         self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 4, n_fill = 512) # [16, 1024]
 
 
+class TestPKeyAttributeP11(TestCaseLoggedIn):
+    """
+    Attribute creation/lookup/deletion tests based on a PKCS #11 trace.
+    """
+
+    def setUp(self):
+        der = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256].der
+        self.k = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256, der, HAL_KEY_FLAG_TOKEN)
+        self.addCleanup(self.k.delete)
+        super(TestPKeyAttributeP11, self).setUp()
+
+    def test_set_many_attributes(self):
+        self.k.set_attributes({
+            0x001 : "\x01",
+            0x108 : "\x01",
+            0x105 : "\x00",
+            0x002 : "\x01",
+            0x107 : "\x00",
+            0x102 : "\x45\x43\x2d\x50\x32\x35\x36",
+            0x003 : "\x45\x43\x2d\x50\x32\x35\x36",
+            0x162 : "\x00",
+            0x103 : "\x01",
+            0x000 : "\x03\x00\x00\x00",
+            0x100 : "\x03\x00\x00\x00",
+            0x101 : "",
+            0x109 : "\x00",
+            0x10c : "\x00",
+            0x110 : "",
+            0x111 : "",
+            0x163 : "\x00",
+            0x166 : "\xff\xff\xff\xff",
+            0x170 : "\x01",
+            0x210 : "\x00",
+            0x163 : "\x01",
+            0x166 : "\x40\x10\x00\x00",
+            0x180 : "\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07" })
+
+    def test_set_many_attributes_with_deletions(self):
+        self.k.set_attributes({
+            0x001 : "\x01",
+            0x108 : "\x01",
+            0x105 : "\x00",
+            0x002 : "\x01",
+            0x107 : "\x00",
+            0x102 : "\x45\x43\x2d\x50\x32\x35\x36",
+            0x003 : "\x45\x43\x2d\x50\x32\x35\x36",
+            0x162 : "\x00",
+            0x103 : "\x01",
+            0x000 : "\x03\x00\x00\x00",
+            0x100 : "\x03\x00\x00\x00",
+            0x101 : None,
+            0x109 : "\x00",
+            0x10c : "\x00",
+            0x110 : None,
+            0x111 : None,
+            0x163 : "\x00",
+            0x166 : "\xff\xff\xff\xff",
+            0x170 : "\x01",
+            0x210 : "\x00",
+            0x163 : "\x01",
+            0x166 : "\x40\x10\x00\x00",
+            0x180 : "\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07" })
+
+
 class TestPKeyAttributeWriteSpeedToken(TestCaseLoggedIn):
     """
     Attribute speed tests.

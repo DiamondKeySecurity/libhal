@@ -69,28 +69,27 @@ static int test_attributes(const hal_pkey_handle_t pkey,
     uint8_t buf_1[*size], buf_2[*size];
     memset(buf_1, 0x55, sizeof(buf_1));
     snprintf((char *) buf_1, sizeof(buf_1), format, (unsigned long) *size);
-    hal_rpc_pkey_attribute_t attr_1[1] = {{ *size, sizeof(buf_1), buf_1 }};
-    hal_rpc_pkey_attribute_t attr_2[1] = {{ *size, 0, NULL }};
-    hal_rpc_pkey_attribute_t attr_3[1] = {{ *size, 0, NULL }};
+    hal_pkey_attribute_t attr_set = { .type = *size, .length = sizeof(buf_1), .value = buf_1 };
+    hal_pkey_attribute_t attr_get = { .type = *size };
+    hal_pkey_attribute_t attr_del = { .type = *size, .length = HAL_PKEY_ATTRIBUTE_NIL };
 
-    if ((err = hal_rpc_pkey_set_attributes(pkey, attr_1, sizeof(attr_1)/sizeof(*attr_1))) != HAL_OK)
+    if ((err = hal_rpc_pkey_set_attributes(pkey, &attr_set, 1)) != HAL_OK)
       lose("Could not set attribute %lu: %s\n",
            (unsigned long) *size, hal_error_string(err));
 
-    if ((err = hal_rpc_pkey_get_attributes(pkey, attr_2, sizeof(attr_2)/sizeof(*attr_2),
-                                           buf_2, sizeof(buf_2))) != HAL_OK)
+    if ((err = hal_rpc_pkey_get_attributes(pkey, &attr_get, 1, buf_2, sizeof(buf_2))) != HAL_OK)
       lose("Could not get attribute %lu: %s\n",
            (unsigned long) *size, hal_error_string(err));
 
-    if (attr_2[0].length != *size)
+    if (attr_get.length != *size)
       lose("Unexpected size returned for attribute %lu: %lu\n",
-           (unsigned long) *size, (unsigned long) attr_2[0].length);
+           (unsigned long) *size, (unsigned long) attr_get.length);
 
-    if ((err = hal_rpc_pkey_set_attributes(pkey, attr_3, sizeof(attr_3)/sizeof(*attr_3))) != HAL_OK)
+    if ((err = hal_rpc_pkey_set_attributes(pkey, &attr_del, 1)) != HAL_OK)
       lose("Could not delete attribute %lu: %s\n",
            (unsigned long) *size, hal_error_string(err));
 
-    if ((err = hal_rpc_pkey_set_attributes(pkey, attr_1, sizeof(attr_1)/sizeof(*attr_1))) != HAL_OK)
+    if ((err = hal_rpc_pkey_set_attributes(pkey, &attr_set, 1)) != HAL_OK)
       lose("Could not (re)set attribute %lu: %s\n",
            (unsigned long) *size, hal_error_string(err));
   }
@@ -113,7 +112,7 @@ static int test_attributes(const hal_pkey_handle_t pkey,
       uint8_t buf[*size];
       memset(buf, 0x55, sizeof(buf));
       snprintf((char *) buf, sizeof(buf), format, (unsigned long) *size);
-      hal_rpc_pkey_attribute_t attribute[1] = {{ *size, sizeof(buf), buf }};
+      hal_pkey_attribute_t attribute[1] = {{ *size, sizeof(buf), buf }};
 
       if ((err = hal_rpc_pkey_match(client, session, HAL_KEY_TYPE_NONE, HAL_CURVE_NONE, flags,
                                     attribute, sizeof(attribute)/sizeof(*attribute),

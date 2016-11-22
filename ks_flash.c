@@ -1129,7 +1129,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
                             const hal_key_type_t type,
                             const hal_curve_name_t curve,
                             const hal_key_flags_t flags,
-                            const hal_rpc_pkey_attribute_t *attributes,
+                            const hal_pkey_attribute_t *attributes,
                             const unsigned attributes_len,
                             hal_uuid_t *result,
                             unsigned *result_len,
@@ -1187,7 +1187,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
         return err;
 
       if (*attrs_len > 0) {
-        hal_rpc_pkey_attribute_t attrs[*attrs_len];
+        hal_pkey_attribute_t attrs[*attrs_len];
 
         if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, NULL)) != HAL_OK)
           return err;
@@ -1197,7 +1197,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
           if (!need_attr[j])
             continue;
 
-          for (hal_rpc_pkey_attribute_t *a = attrs; a < attrs + *attrs_len; a++) {
+          for (hal_pkey_attribute_t *a = attrs; a < attrs + *attrs_len; a++) {
             if (a->type != attributes[j].type)
               continue;
             need_attr[j] = 0;
@@ -1225,7 +1225,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
 
 static  hal_error_t ks_set_attributes(hal_ks_t *ks,
                                       hal_pkey_slot_t *slot,
-                                      const hal_rpc_pkey_attribute_t *attributes,
+                                      const hal_pkey_attribute_t *attributes,
                                       const unsigned attributes_len)
 {
 #warning This function is much too long
@@ -1270,14 +1270,14 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
 
     updated_attributes_len += *attrs_len;
 
-    hal_rpc_pkey_attribute_t attrs[*attrs_len + attributes_len];
+    hal_pkey_attribute_t attrs[*attrs_len + attributes_len];
     size_t total;
 
     if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, &total)) != HAL_OK)
       return err;
 
     for (int i = 0; err == HAL_OK && i < attributes_len; i++) {
-      if (attributes[i].length == 0)
+      if (attributes[i].length == HAL_PKEY_ATTRIBUTE_NIL)
         err = hal_ks_attribute_delete(bytes, bytes_len, attrs, attrs_len, &total,
                                       attributes[i].type);
       else
@@ -1324,7 +1324,7 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
    * run faster.
    */
 
-  hal_rpc_pkey_attribute_t updated_attributes[updated_attributes_len];
+  hal_pkey_attribute_t updated_attributes[updated_attributes_len];
   const unsigned total_chunks_old = block->header.total_chunks;
   size_t bytes_available = 0;
 
@@ -1349,7 +1349,7 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
     if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
       return err;
 
-    hal_rpc_pkey_attribute_t attrs[*attrs_len];
+    hal_pkey_attribute_t attrs[*attrs_len];
     size_t total;
 
     if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, &total)) != HAL_OK)
@@ -1431,7 +1431,7 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
    */
 
   {
-    hal_rpc_pkey_attribute_t old_attrs[updated_attributes_len], new_attrs[updated_attributes_len];
+    hal_pkey_attribute_t old_attrs[updated_attributes_len], new_attrs[updated_attributes_len];
     unsigned                *old_attrs_len = NULL,             *new_attrs_len = NULL;
     flash_block_t           *old_block     = NULL,             *new_block     = NULL;
     uint8_t                 *old_bytes     = NULL,             *new_bytes     = NULL;
@@ -1573,7 +1573,7 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
 
 static  hal_error_t ks_get_attributes(hal_ks_t *ks,
                                       hal_pkey_slot_t *slot,
-                                      hal_rpc_pkey_attribute_t *attributes,
+                                      hal_pkey_attribute_t *attributes,
                                       const unsigned attributes_len,
                                       uint8_t *attributes_buffer,
                                       const size_t attributes_buffer_len)
@@ -1619,7 +1619,7 @@ static  hal_error_t ks_get_attributes(hal_ks_t *ks,
     if (*attrs_len == 0)
       continue;
 
-    hal_rpc_pkey_attribute_t attrs[*attrs_len];
+    hal_pkey_attribute_t attrs[*attrs_len];
 
     if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, NULL)) != HAL_OK)
       return err;

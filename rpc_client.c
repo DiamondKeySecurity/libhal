@@ -777,7 +777,7 @@ static hal_error_t pkey_remote_match(const hal_client_handle_t client,
                                      const hal_key_type_t type,
                                      const hal_curve_name_t curve,
                                      const hal_key_flags_t flags,
-                                     const hal_rpc_pkey_attribute_t *attributes,
+                                     const hal_pkey_attribute_t *attributes,
                                      const unsigned attributes_len,
                                      hal_uuid_t *result,
                                      unsigned *result_len,
@@ -831,7 +831,7 @@ static hal_error_t pkey_remote_match(const hal_client_handle_t client,
 }
 
 static hal_error_t pkey_remote_set_attributes(const hal_pkey_handle_t pkey,
-                                             const hal_rpc_pkey_attribute_t *attributes,
+                                             const hal_pkey_attribute_t *attributes,
                                              const unsigned attributes_len)
 {
   size_t outbuf_len = nargs(4 + 2 * attributes_len);
@@ -850,7 +850,10 @@ static hal_error_t pkey_remote_set_attributes(const hal_pkey_handle_t pkey,
   check(hal_xdr_encode_int(&optr, olimit, attributes_len));
   for (int i = 0; i < attributes_len; i++) {
     check(hal_xdr_encode_int(&optr, olimit, attributes[i].type));
-    check(hal_xdr_encode_buffer(&optr, olimit, attributes[i].value, attributes[i].length));
+    if (attributes[i].length == HAL_PKEY_ATTRIBUTE_NIL)
+      check(hal_xdr_encode_int(&optr, olimit, HAL_PKEY_ATTRIBUTE_NIL));
+    else
+      check(hal_xdr_encode_buffer(&optr, olimit, attributes[i].value, attributes[i].length));
   }
   check(hal_rpc_send(outbuf, optr - outbuf));
 
@@ -861,7 +864,7 @@ static hal_error_t pkey_remote_set_attributes(const hal_pkey_handle_t pkey,
 }
 
 static hal_error_t pkey_remote_get_attributes(const hal_pkey_handle_t pkey,
-                                              hal_rpc_pkey_attribute_t *attributes,
+                                              hal_pkey_attribute_t *attributes,
                                               const unsigned attributes_len,
                                               uint8_t *attributes_buffer,
                                               const size_t attributes_buffer_len)

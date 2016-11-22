@@ -360,7 +360,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
                             const hal_key_type_t type,
                             const hal_curve_name_t curve,
                             const hal_key_flags_t flags,
-                            const hal_rpc_pkey_attribute_t *attributes,
+                            const hal_pkey_attribute_t *attributes,
                             const unsigned attributes_len,
                             hal_uuid_t *result,
                             unsigned *result_len,
@@ -411,16 +411,16 @@ static hal_error_t ks_match(hal_ks_t *ks,
       if (k->attributes_len == 0)
         continue;
 
-      hal_rpc_pkey_attribute_t key_attrs[k->attributes_len];
+      hal_pkey_attribute_t key_attrs[k->attributes_len];
 
       if ((err = hal_ks_attribute_scan(k->der + k->der_len, sizeof(k->der) - k->der_len,
                                        key_attrs, k->attributes_len, NULL)) != HAL_OK)
         return err;
 
-      for (const hal_rpc_pkey_attribute_t *required = attributes;
+      for (const hal_pkey_attribute_t *required = attributes;
            ok && required < attributes + attributes_len; required++) {
 
-        hal_rpc_pkey_attribute_t *present = key_attrs;
+        hal_pkey_attribute_t *present = key_attrs;
         while (ok && present->type != required->type)
           ok = ++present < key_attrs + k->attributes_len;
 
@@ -442,7 +442,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
 
 static hal_error_t ks_set_attributes(hal_ks_t *ks,
                                      hal_pkey_slot_t *slot,
-                                     const hal_rpc_pkey_attribute_t *attributes,
+                                     const hal_pkey_attribute_t *attributes,
                                      const unsigned attributes_len)
 {
   if (ks == NULL || slot == NULL || attributes == NULL || attributes_len == 0)
@@ -463,7 +463,7 @@ static hal_error_t ks_set_attributes(hal_ks_t *ks,
   if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k))
     return HAL_ERROR_KEY_NOT_FOUND;
 
-  hal_rpc_pkey_attribute_t attrs[k->attributes_len + attributes_len];
+  hal_pkey_attribute_t attrs[k->attributes_len + attributes_len];
   uint8_t *bytes = k->der + k->der_len;
   size_t bytes_len = sizeof(k->der) - k->der_len;
   size_t total_len;
@@ -471,13 +471,13 @@ static hal_error_t ks_set_attributes(hal_ks_t *ks,
   if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, k->attributes_len, &total_len)) != HAL_OK)
     return err;
 
-  for (const hal_rpc_pkey_attribute_t *a = attributes; a < attributes + attributes_len; a++) {
-    if (a->length > 0 && a->value != NULL)
-      err =  hal_ks_attribute_insert(bytes, bytes_len, attrs, &k->attributes_len, &total_len,
-                                     a->type, a->value, a->length);
-    else
+  for (const hal_pkey_attribute_t *a = attributes; a < attributes + attributes_len; a++) {
+    if (a->length == HAL_PKEY_ATTRIBUTE_NIL)
       err =  hal_ks_attribute_delete(bytes, bytes_len, attrs, &k->attributes_len, &total_len,
                                      a->type);
+    else
+      err =  hal_ks_attribute_insert(bytes, bytes_len, attrs, &k->attributes_len, &total_len,
+                                     a->type, a->value, a->length);
     if (err != HAL_OK)
       return err;
   }
@@ -487,7 +487,7 @@ static hal_error_t ks_set_attributes(hal_ks_t *ks,
 
 static hal_error_t ks_get_attributes(hal_ks_t *ks,
                                      hal_pkey_slot_t *slot,
-                                     hal_rpc_pkey_attribute_t *attributes,
+                                     hal_pkey_attribute_t *attributes,
                                      const unsigned attributes_len,
                                      uint8_t *attributes_buffer,
                                      const size_t attributes_buffer_len)
@@ -511,7 +511,7 @@ static hal_error_t ks_get_attributes(hal_ks_t *ks,
   if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k))
     return HAL_ERROR_KEY_NOT_FOUND;
 
-  hal_rpc_pkey_attribute_t attrs[k->attributes_len > 0 ? k->attributes_len : 1];
+  hal_pkey_attribute_t attrs[k->attributes_len > 0 ? k->attributes_len : 1];
 
   if ((err = hal_ks_attribute_scan(k->der + k->der_len, sizeof(k->der) - k->der_len,
                                    attrs, k->attributes_len, NULL)) != HAL_OK)

@@ -44,7 +44,7 @@
  * issues, and doing it this way just isn't expensive enough to worry about.
  */
 
-const size_t hal_ks_attribute_header_size = 2 * sizeof(uint32_t);
+const size_t hal_ks_attribute_header_size = 6;
 
 static inline hal_error_t read_header(const uint8_t * const bytes, const size_t bytes_len,
                                       uint32_t *attribute_type, size_t *attribute_len)
@@ -80,7 +80,7 @@ static inline hal_error_t write_header(uint8_t *bytes, const size_t bytes_len,
 }
 
 hal_error_t hal_ks_attribute_scan(const uint8_t * const bytes, const size_t bytes_len,
-                                  hal_rpc_pkey_attribute_t *attributes, const unsigned attributes_len,
+                                  hal_pkey_attribute_t *attributes, const unsigned attributes_len,
                                   size_t *total_len)
 {
   if (bytes == NULL)
@@ -95,6 +95,8 @@ hal_error_t hal_ks_attribute_scan(const uint8_t * const bytes, const size_t byte
     hal_error_t err = read_header(b, end - b, &type, &length);
     if (err != HAL_OK)
       return err;
+    if (b + hal_ks_attribute_header_size + length  > end)
+      return HAL_ERROR_BAD_ATTRIBUTE_LENGTH;
     b += hal_ks_attribute_header_size;
     if (attributes != NULL) {
       attributes[i].type   = type;
@@ -102,8 +104,6 @@ hal_error_t hal_ks_attribute_scan(const uint8_t * const bytes, const size_t byte
       attributes[i].value  = b;
     }
     b += length;
-    if (b > end)
-      return HAL_ERROR_BAD_ATTRIBUTE_LENGTH;
   }
 
   if (total_len != NULL)
@@ -113,7 +113,7 @@ hal_error_t hal_ks_attribute_scan(const uint8_t * const bytes, const size_t byte
 }
 
 hal_error_t hal_ks_attribute_delete(uint8_t *bytes, const size_t bytes_len,
-                                    hal_rpc_pkey_attribute_t *attributes, unsigned *attributes_len,
+                                    hal_pkey_attribute_t *attributes, unsigned *attributes_len,
                                     size_t *total_len,
                                     const uint32_t type)
 {
@@ -138,17 +138,11 @@ hal_error_t hal_ks_attribute_delete(uint8_t *bytes, const size_t bytes_len,
           bytes + delete_offset + delete_length,
           *total_len - delete_length - delete_offset);
 
-  *total_len -= delete_length;
-
-  memmove(&attributes[i], &attributes[i + 1], *attributes_len - i - 1);
-
-  --*attributes_len;
-
-  return HAL_OK;
+  return hal_ks_attribute_scan(bytes, bytes_len, attributes, --*attributes_len, total_len);
 }
 
 hal_error_t hal_ks_attribute_insert(uint8_t *bytes, const size_t bytes_len,
-                                   hal_rpc_pkey_attribute_t *attributes, unsigned *attributes_len,
+                                   hal_pkey_attribute_t *attributes, unsigned *attributes_len,
                                    size_t *total_len,
                                    const uint32_t type,
                                    const uint8_t * const value, const size_t value_len)
@@ -172,19 +166,9 @@ hal_error_t hal_ks_attribute_insert(uint8_t *bytes, const size_t bytes_len,
   if ((err = write_header(b, bytes_len - *total_len, type, value_len)) != HAL_OK)
     return err;
 
-  b += hal_ks_attribute_header_size;
+  memcpy(b + hal_ks_attribute_header_size, value, value_len);
 
-  memcpy(b, value, value_len);
-
-  *total_len += hal_ks_attribute_header_size + value_len;
-
-  attributes[*attributes_len].type   = type;
-  attributes[*attributes_len].length = value_len;
-  attributes[*attributes_len].value  = b;
-
-  ++*attributes_len;
-
-  return HAL_OK;
+  return hal_ks_attribute_scan(bytes, bytes_len, attributes, ++*attributes_len, total_len);
 }
 
 /*
