@@ -41,6 +41,7 @@
  */
 extern hal_error_t hal_slip_send_char(const uint8_t c);
 extern hal_error_t hal_slip_send(const uint8_t * const buf, const size_t len);
+extern hal_error_t hal_slip_process_char(uint8_t c, uint8_t * const buf, size_t * const len, const size_t maxlen, int * const complete);
 extern hal_error_t hal_slip_recv_char(uint8_t * const buf, size_t * const len, const size_t maxlen, int * const complete);
 extern hal_error_t hal_slip_recv(uint8_t * const buf, size_t * const len, const size_t maxlen);
 

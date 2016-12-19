@@ -33,8 +33,6 @@
  */
 
 
-#include <stdio.h>      /* perror */
-
 #include "slip_internal.h"
 
 /* SLIP special character codes
@@ -44,9 +42,16 @@
 #define ESC_END         0334    /* ESC ESC_END means END data byte */
 #define ESC_ESC         0335    /* ESC ESC_ESC means ESC data byte */
 
-#define check_send_char(c) \
-    if (hal_serial_send_char(c) != HAL_OK) \
-        return perror("hal_serial_send_char"), HAL_ERROR_RPC_TRANSPORT;
+#ifndef HAL_SLIP_DEBUG
+#define HAL_SLIP_DEBUG 0
+#endif
+
+#if HAL_SLIP_DEBUG
+#include <stdio.h>
+#define check(op) do { const hal_error_t _err_ = (op); if (_err_ != HAL_OK) { printf("%s returned %d (%s)\n", #op, _err_, hal_error_string(_err_)); return _err_; } } while (0)
+#else
+#define check(op) do { const hal_error_t _err_ = (op); if (_err_ != HAL_OK) { return _err_; } } while (0)
+#endif
 
 /* Send a single character with SLIP escaping.
  */
@@ -54,15 +59,15 @@ hal_error_t hal_slip_send_char(const uint8_t c)
 {
     switch (c) {
     case END:
-        check_send_char(ESC);
-        check_send_char(ESC_END);
+        check(hal_serial_send_char(ESC));
+        check(hal_serial_send_char(ESC_END));
         break;
     case ESC:
-        check_send_char(ESC);
-        check_send_char(ESC_ESC);
+        check(hal_serial_send_char(ESC));
+        check(hal_serial_send_char(ESC_ESC));
         break;
     default:
-        check_send_char(c);
+        check(hal_serial_send_char(c));
     }
 
     return HAL_OK;
@@ -75,7 +80,7 @@ hal_error_t hal_slip_send(const uint8_t * const buf, const size_t len)
     /* send an initial END character to flush out any data that may
      * have accumulated in the receiver due to line noise
      */
-    check_send_char(END);
+    check(hal_serial_send_char(END));
 
     /* for each byte in the packet, send the appropriate character
      * sequence
@@ -88,25 +93,17 @@ hal_error_t hal_slip_send(const uint8_t * const buf, const size_t len)
 
     /* tell the receiver that we're done sending the packet
      */
-    check_send_char(END);
+    check(hal_serial_send_char(END));
 
     return HAL_OK;
 }
 
-#define check_recv_char(c) \
-    if (hal_serial_recv_char(c) != HAL_OK) \
-        return perror("hal_serial_recv_char"), HAL_ERROR_RPC_TRANSPORT;
-
 /* Receive a single character into a buffer, with SLIP un-escaping
  */
-hal_error_t hal_slip_recv_char(uint8_t * const buf, size_t * const len, const size_t maxlen, int * const complete)
+hal_error_t hal_slip_process_char(uint8_t c, uint8_t * const buf, size_t * const len, const size_t maxlen, int * const complete)
 {
 #define buf_push(c) do { if (*len < maxlen) buf[(*len)++] = c; } while (0)
     static int esc_flag = 0;
-    uint8_t c;
-    hal_error_t ret = hal_serial_recv_char(&c);
-    if (ret != HAL_OK)
-        return perror("hal_slip_recv_char"), ret;
     *complete = 0;
     switch (c) {
     case END:
@@ -136,6 +133,13 @@ hal_error_t hal_slip_recv_char(uint8_t * const buf, size_t * const len, const si
         break;
     }
     return HAL_OK;
+}
+
+hal_error_t hal_slip_recv_char(uint8_t * const buf, size_t * const len, const size_t maxlen, int * const complete)
+{
+    uint8_t c;
+    check(hal_serial_recv_char(&c));
+    return hal_slip_process_char(c, buf, len, maxlen, complete);
 }
 
 /* Receive a message with SLIP framing, blocking mode.

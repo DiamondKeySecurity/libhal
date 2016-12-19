@@ -47,7 +47,7 @@
 #include <stdio.h>
 #define check(op) do { const hal_error_t _err_ = (op); if (_err_ != HAL_OK) { printf("%s returned %d (%s)\n", #op, _err_, hal_error_string(_err_)); return _err_; } } while (0)
 #else
-#define check(op) do { const hal_error_t _err_ = (op); if (_err_ != HAL_OK) {                                                                       return _err_; } } while (0)
+#define check(op) do { const hal_error_t _err_ = (op); if (_err_ != HAL_OK) { return _err_; } } while (0)
 #endif
 
 #define pad(n) (((n) + 3) & ~3)

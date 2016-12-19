@@ -86,7 +86,7 @@
 #define HAL_RSA_USE_MODEXP 1
 #endif
 
-#ifdef RPC_CLIENT
+#if defined(RPC_CLIENT) && RPC_CLIENT != RPC_CLIENT_LOCAL
 #define hal_get_random(core, buffer, length) hal_rpc_get_random(buffer, length)
 #endif
 

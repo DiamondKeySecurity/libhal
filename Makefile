@@ -225,8 +225,9 @@ server:
 serial:
 	${MAKE} RPC_MODE=client-mixed RPC_TRANSPORT=serial
 
-daemon:
-	${MAKE} RPC_MODE=client-mixed RPC_TRANSPORT=daemon ${LIB} cryptech_rpcd
+daemon: mixed cryptech_rpcd
+
+.PHONY: client mixed server serial daemon
 
 cryptech_rpcd: daemon.o ${LIB}
 	${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}

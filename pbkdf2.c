@@ -105,15 +105,6 @@ hal_error_t hal_pbkdf2(hal_core_t *core,
   if ((uint64_t) derived_key_length > ((uint64_t) 0xFFFFFFFF) * descriptor->block_length)
     return HAL_ERROR_UNSUPPORTED_KEY;
 
-#if 1
-  /* HACK - find the second sha256 core, to avoid interfering with rpc.
-   * If there isn't a second one, this will set core to NULL, and
-   * hal_hash_initialize will find the first one.
-   */
-  core = hal_core_find(descriptor->core_name, NULL);
-  core = hal_core_find(descriptor->core_name, core);
-#endif
-
   memset(result, 0, sizeof(result));
   memset(mac,    0, sizeof(mac));
 
