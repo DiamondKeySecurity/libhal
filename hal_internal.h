@@ -356,6 +356,8 @@ extern hal_error_t hal_get_pin(const hal_user_t user,
 extern hal_error_t hal_set_pin(const hal_user_t user,
                                const hal_ks_pin_t * const pin);
 
+extern void hal_ks_init_read_only_pins_only(void);
+
 /*
  * Master key memory (MKM) and key-encryption-key (KEK).
  *

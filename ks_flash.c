@@ -1786,6 +1786,41 @@ const hal_ks_driver_t hal_ks_token_driver[1] = {{
  */
 
 /*
+ * Special bonus init routine used only by the bootloader, so that it
+ * can read PINs set by the main firmware.  Yes, this is a kludge.  We
+ * could of course call the real ks_init() routine instead, but it's
+ * slow, and we don't want to allow anything that would modify the
+ * flash here, so having a special entry point for this kludge is
+ * simplest, overall.  Sigh.
+ */
+
+void hal_ks_init_read_only_pins_only(void)
+{
+  unsigned b, best_seen = ~0;
+  flash_block_t block[1];
+
+  for (b = 0; b < NUM_FLASH_BLOCKS; b++) {
+    if (block_read(b, block) != HAL_OK || block_get_type(block) != BLOCK_TYPE_PIN)
+      continue;
+    best_seen = b;
+    if (block_get_status(block) == BLOCK_STATUS_LIVE)
+      break;
+  }
+
+  if (b != best_seen && best_seen != ~0 && block_read(best_seen, block) != HAL_OK)
+    best_seen = ~0;
+
+  if (best_seen == ~0) {
+    memset(block, 0xFF, sizeof(*block));
+    block->pin.wheel_pin = hal_last_gasp_pin;
+  }
+
+  db.wheel_pin = block->pin.wheel_pin;
+  db.so_pin    = block->pin.so_pin;
+  db.user_pin  = block->pin.user_pin;
+}
+
+/*
  * Fetch PIN.  This is always cached, so just returned cached value.
  */
 
