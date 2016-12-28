@@ -40,16 +40,22 @@ A Python interface to the Cryptech libhal RPC API.
 
 import os
 import sys
-import time
 import uuid
 import xdrlib
-import serial
+import socket
 import contextlib
 
 SLIP_END     = chr(0300)        # indicates end of packet
 SLIP_ESC     = chr(0333)        # indicates byte stuffing
 SLIP_ESC_END = chr(0334)        # ESC ESC_END means END data byte
 SLIP_ESC_ESC = chr(0335)        # ESC ESC_ESC means ESC data byte
+
+def slip_encode(buffer):
+    return SLIP_END + buffer.replace(SLIP_ESC, SLIP_ESC + SLIP_ESC_ESC).replace(SLIP_END, SLIP_ESC + SLIP_ESC_END) + SLIP_END
+
+def slip_decode(buffer):
+    return buffer.strip(SLIP_END).replace(SLIP_ESC + SLIP_ESC_END, SLIP_END).replace(SLIP_ESC + SLIP_ESC_ESC, SLIP_ESC)
+
 
 HAL_OK = 0
 
@@ -397,76 +403,37 @@ class HSM(object):
     debug      = False
     mixed_mode = False
 
-    _send_delay = 0             # 0.1
-
     def _raise_if_error(self, status):
         if status != 0:
             raise HALError.table[status]()
 
-    def __init__(self, device = os.getenv("CRYPTECH_RPC_CLIENT_SERIAL_DEVICE", "/dev/ttyUSB0")):
-        while True:
-            try:
-                self.tty = serial.Serial(device, 921600, timeout = 0.1)
-                break
-            except serial.SerialException:
-                time.sleep(0.2)
-
-    def _write(self, c):
-        if self.debug:
-            sys.stdout.write("{:02x}".format(ord(c)))
-        self.tty.write(c)
-        if self._send_delay > 0:
-            time.sleep(self._send_delay)
+    def __init__(self, sockname = os.getenv("CRYPTECH_RPC_CLIENT_SOCKET_NAME", "/tmp/.cryptech_rpcmuxd")):
+        self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.socket.connect(sockname)
+        self.sockfile = self.socket.makefile("rb")
 
     def _send(self, msg):       # Expects an xdrlib.Packer
+        msg = slip_encode(msg.get_buffer())
         if self.debug:
-            sys.stdout.write("+send: ")
-        self._write(SLIP_END)
-        for c in msg.get_buffer():
-            if c == SLIP_END:
-                self._write(SLIP_ESC)
-                self._write(SLIP_ESC_END)
-            elif c == SLIP_ESC:
-                self._write(SLIP_ESC)
-                self._write(SLIP_ESC_ESC)
-            else:
-                self._write(c)
-        self._write(SLIP_END)
-        if self.debug:
-            sys.stdout.write("\n")
+            sys.stdout.write("+send: {}\n".format(":".join("{:02x}".format(ord(c)) for c in msg)))
+        self.socket.sendall(msg)
 
     def _recv(self, code):      # Returns an xdrlib.Unpacker
-        if self.debug:
-            sys.stdout.write("+recv: ")
-        msg = []
-        esc = False
         while True:
-            c = self.tty.read(1)
-            if self.debug and c:
-                sys.stdout.write("{:02x}".format(ord(c)))
-            if not c:
-                time.sleep(0.1)
-            elif c == SLIP_END and not msg:
+            if self.debug:
+                sys.stdout.write("+recv: ")
+            msg = [self.sockfile.read(1)]
+            while msg[-1] != SLIP_END:
+                msg.append(self.sockfile.read(1))
+            if self.debug:
+                sys.stdout.write("{}\n".format(":".join("{:02x}".format(ord(c)) for c in msg)))
+            msg = slip_decode("".join(msg))
+            if not msg:
                 continue
-            elif c == SLIP_END:
-                if self.debug:
-                    sys.stdout.write("\n")
-                msg = xdrlib.Unpacker("".join(msg))
-                if msg.unpack_uint() == code:
-                    return msg
-                msg = []
-                if self.debug:
-                    sys.stdout.write("+recv: ")
-            elif c == SLIP_ESC:
-                esc = True
-            elif esc and c == SLIP_ESC_END:
-                esc = False
-                msg.append(SLIP_END)
-            elif esc and c == SLIP_ESC_ESC:
-                esc = False
-                msg.append(SLIP_ESC)
-            else:
-                msg.append(c)
+            msg = xdrlib.Unpacker("".join(msg))
+            if msg.unpack_uint() != code:
+                continue
+            return msg
 
     _pack_builtin = (((int, long),        "_pack_uint"),
                      (str,                "_pack_bytes"),
