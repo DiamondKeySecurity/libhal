@@ -144,16 +144,12 @@ endif
 # the C preprocessor: we can use symbolic names so long as they're defined as macros
 # in the C code, but we can't use things like C enum symbols.
 
-ifneq "${RPC_MODE}" "server"
-  OBJ += rpc_serial.o
-endif
-
 RPC_CLIENT_OBJ = rpc_client.o
 
 ifeq "${RPC_TRANSPORT}" "loopback"
   RPC_CLIENT_OBJ += rpc_client_loopback.o
 else ifeq "${RPC_TRANSPORT}" "serial"
-  RPC_CLIENT_OBJ += rpc_client_serial.o
+  RPC_CLIENT_OBJ += rpc_serial.o rpc_client_serial.o
 else ifeq "${RPC_TRANSPORT}" "daemon"
   RPC_CLIENT_OBJ += rpc_client_daemon.o
 endif
@@ -225,12 +221,9 @@ server:
 serial:
 	${MAKE} RPC_MODE=client-mixed RPC_TRANSPORT=serial
 
-daemon: mixed cryptech_rpcd
+daemon: mixed
 
 .PHONY: client mixed server serial daemon
-
-cryptech_rpcd: daemon.o ${LIB}
-	${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}
 
 ${OBJ}: ${INC}
 
@@ -251,7 +244,7 @@ test: all
 	cd tests; ${MAKE} -k $@
 
 clean:
-	rm -f *.o ${LIB} cryptech_rpcd
+	rm -f *.o ${LIB}
 	cd tests; ${MAKE} $@
 	cd utils; ${MAKE} $@
 
