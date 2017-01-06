@@ -407,7 +407,7 @@ class HSM(object):
         if status != 0:
             raise HALError.table[status]()
 
-    def __init__(self, sockname = os.getenv("CRYPTECH_RPC_CLIENT_SOCKET_NAME", "/tmp/.cryptech_rpcmuxd")):
+    def __init__(self, sockname = os.getenv("CRYPTECH_RPC_CLIENT_SOCKET_NAME", "/tmp/.cryptech_muxd.rpc")):
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.socket.connect(sockname)
         self.sockfile = self.socket.makefile("rb")

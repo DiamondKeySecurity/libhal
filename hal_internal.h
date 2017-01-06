@@ -880,7 +880,7 @@ typedef enum {
  */
 
 #ifndef HAL_CLIENT_DAEMON_DEFAULT_SOCKET_NAME
-#define HAL_CLIENT_DAEMON_DEFAULT_SOCKET_NAME   "/tmp/.cryptech_rpcmuxd"
+#define HAL_CLIENT_DAEMON_DEFAULT_SOCKET_NAME   "/tmp/.cryptech_muxd.rpc"
 #endif
 
 /*

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (c) 2016, NORDUnet A/S All rights reserved.
+# Copyright (c) 2016-2017, NORDUnet A/S All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -87,13 +87,8 @@ class SerialIOStream(tornado.iostream.BaseIOStream):
 
     def __init__(self, device, baudrate = 921600, debug = False, *pargs, **kwargs):
         self.serial = serial.Serial(device, baudrate, timeout = 0, write_timeout = 0)
-        self.queues = weakref.WeakValueDictionary()
-        self.debug = debug
-        self.hsm_write_lock = tornado.locks.Lock()
+        self.debug  = debug
         super(SerialIOStream, self).__init__(*pargs, **kwargs)
-
-    # The next four methods are required: BaseIOStream is an abstract
-    # class, we provide a driver by overriding them.
 
     def fileno(self):
         return self.serial.fileno()
@@ -107,17 +102,46 @@ class SerialIOStream(tornado.iostream.BaseIOStream):
     def read_from_fd(self):
         return self.serial.read(self.read_chunk_size) or None
 
+
+class PFUnixServer(tornado.tcpserver.TCPServer):
+    """
+    Variant on tornado.tcpserver.TCPServer, listening on a PF_UNIX
+    (aka PF_LOCAL) socket instead of a TCP socket.
+    """
+
+    def listen(self, filename, mode = 0600):
+        self.socket_filename = filename
+        self.add_socket(tornado.netutil.bind_unix_socket(filename, mode))
+        atexit.register(self.atexit_unlink)
+
+    def atexit_unlink(self):
+        try:
+            os.unlink(self.socket_filename)
+        except:
+            pass
+
+
+class RPCIOStream(SerialIOStream):
+    """
+    Tornado IOStream for a serial RPC channel.
+    """
+
+    def __init__(self, *pargs, **kwargs):
+        super(RPCIOStream, self).__init__(*pargs, **kwargs)
+        self.queues = weakref.WeakValueDictionary()
+        self.rpc_input_lock = tornado.locks.Lock()
+
     @tornado.gen.coroutine
-    def hsm_write(self, query, handle, queue):
+    def rpc_input(self, query, handle, queue):
         "Send a query to the HSM."
         if self.debug:
             sys.stdout.write("+send: {}\n".format(":".join("{:02x}".format(ord(c)) for c in query)))
         self.queues[handle] = queue
-        with (yield self.hsm_write_lock.acquire()):
+        with (yield self.rpc_input_lock.acquire()):
             yield self.write(query)
 
     @tornado.gen.coroutine
-    def hsm_read_loop(self):
+    def rpc_output_loop(self):
         "Handle reply stream HSM -> network."
         while True:
             reply = yield self.read_until(SLIP_END)
@@ -129,14 +153,10 @@ class SerialIOStream(tornado.iostream.BaseIOStream):
             self.queues[handle].put_nowait(reply)
 
 
-class UnixServer(tornado.tcpserver.TCPServer):
+class RPCServer(PFUnixServer):
     """
-    Variant on tornado.tcpserver.TCPServer, listening on a PF_UNIX
-    (aka PF_LOCAL) socket instead of a TCP socket.
+    Serve multiplexed Cryptech RPC over a PF_UNIX socket.
     """
-
-    def listen(self, filename, mode = 0600):
-        self.add_socket(tornado.netutil.bind_unix_socket(filename, mode))
 
     def set_serial(self, serial_stream):
         self.serial = serial_stream
@@ -153,28 +173,100 @@ class UnixServer(tornado.tcpserver.TCPServer):
                 if len(query) < 9:
                     continue
                 query = slip_encode(client_handle_set(slip_decode(query), handle))
-                yield self.serial.hsm_write(query, handle, queue)
+                yield self.serial.rpc_input(query, handle, queue)
                 reply = yield queue.get()
                 yield stream.write(SLIP_END + reply)
             except tornado.iostream.StreamClosedError:
                 closed = True
 
+class CTYIOStream(SerialIOStream):
+    """
+    Tornado IOStream for a serial console channel.
+    """
 
-parser = argparse.ArgumentParser(formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("-v", "--verbose",  action = "store_true",  help = "produce human-readable output")
-parser.add_argument("-d", "--debug",    action = "store_true",  help = "blather about what we're doing")
-parser.add_argument("device",           nargs = "?",            help = "serial device name",
-                    default = os.getenv("CRYPTECH_RPC_CLIENT_SERIAL_DEVICE", "/dev/ttyUSB0"))
-parser.add_argument("socket",           nargs = "?",            help = "PF_UNIX socket name",
-                    default = os.getenv("CRYPTECH_RPC_CLIENT_SOCKET_NAME", "/tmp/.cryptech_rpcmuxd"))
-args = parser.parse_args()
+    def __init__(self, *pargs, **kwargs):
+        super(CTYIOStream, self).__init__(*pargs, **kwargs)
+        self.attached_cty = None
 
-serial_stream = SerialIOStream(device = args.device, debug = args.debug)
+    @tornado.gen.coroutine
+    def cty_output_loop(self):
+        while True:
+            buffer = yield self.read_bytes(1024, partial = True)
+            try:
+                if self.attached_cty is not None:
+                    yield self.attached_cty.write(buffer)
+            except tornado.iostream.StreamClosedError:
+                pass
 
-unix_server = UnixServer()
-unix_server.set_serial(serial_stream)
-unix_server.listen(args.socket)
 
-atexit.register(os.unlink, args.socket)
+class CTYServer(PFUnixServer):
+    """
+    Serve Cryptech console over a PF_UNIX socket.
+    """
 
-tornado.ioloop.IOLoop.current().run_sync(serial_stream.hsm_read_loop)
+    def set_serial(self, serial_stream):
+        self.serial = serial_stream
+
+    @tornado.gen.coroutine
+    def handle_stream(self, stream, address):
+        "Handle one network connection."
+
+        if self.serial.attached_cty is not None:
+            yield stream.write("[Console already in use, sorry]\n")
+            stream.close()
+            return
+
+        try:
+            self.serial.attached_cty = stream
+            while self.serial.attached_cty is stream:
+                yield self.serial.write((yield stream.read_bytes(1024, partial = True)))
+        except tornado.iostream.StreamClosedError:
+            pass
+        finally:
+            if self.serial.attached_cty is stream:
+                self.serial.attached_cty = None
+
+
+@tornado.gen.coroutine
+def main():
+    parser = argparse.ArgumentParser(formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-v", "--verbose",  action = "store_true",  help = "produce human-readable output")
+    parser.add_argument("-d", "--debug",    action = "store_true",  help = "blather about what we're doing")
+
+    parser.add_argument("--rpc-device",            help = "RPC serial device name",
+                        default = os.getenv("CRYPTECH_RPC_CLIENT_SERIAL_DEVICE", "/dev/ttyUSB0"))
+    parser.add_argument("--rpc-socket",            help = "RPC PF_UNIX socket name",
+                        default = os.getenv("CRYPTECH_RPC_CLIENT_SOCKET_NAME", "/tmp/.cryptech_muxd.rpc"))
+
+    parser.add_argument("--cty-device",            help = "CTY serial device name",
+                        default = os.getenv("CRYPTECH_CTY_CLIENT_SERIAL_DEVICE", "/dev/ttyUSB0"))
+    parser.add_argument("--cty-socket",            help = "CTY PF_UNIX socket name",
+                        default = os.getenv("CRYPTECH_CTY_CLIENT_SOCKET_NAME", "/tmp/.cryptech_muxd.cty"))
+
+    args = parser.parse_args()
+
+    futures = []
+
+    rpc_stream = RPCIOStream(device = args.rpc_device, debug = args.debug)
+    rpc_server = RPCServer()
+    rpc_server.set_serial(rpc_stream)
+    rpc_server.listen(args.rpc_socket)
+    futures.append(rpc_stream.rpc_output_loop())
+
+    cty_stream = CTYIOStream(device = args.cty_device, debug = args.debug)
+    cty_server = CTYServer()
+    cty_server.set_serial(cty_stream)
+    cty_server.listen(args.cty_socket)
+    futures.append(cty_stream.cty_output_loop())
+
+    # Might want to use WaitIterator(dict(...)) here so we can
+    # diagnose and restart output loops if they fail.  Worry about
+    # that when we get to automatic device probing.
+
+    yield futures
+
+if __name__ == "__main__":
+    try:
+        tornado.ioloop.IOLoop.current().run_sync(main)
+    except KeyboardInterrupt:
+        pass
