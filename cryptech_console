@@ -37,11 +37,15 @@ import sys
 import socket
 import atexit
 import termios
+import logging
 import argparse
 
 import tornado.iostream
 import tornado.ioloop
 import tornado.gen
+
+
+logger = logging.getLogger("cryptech_console")
 
 
 class FemtoTerm(object):
@@ -64,7 +68,16 @@ class FemtoTerm(object):
         termios.tcsetattr(self.fd, termios.TCSANOW, self.new_tcattr)
 
     def termios_teardown(self):
-        termios.tcsetattr(self.fd, termios.TCSAFLUSH, self.old_tcattr)
+        if self.fd is not None:
+            termios.tcsetattr(self.fd, termios.TCSAFLUSH, self.old_tcattr)
+            self.fd = None
+
+    def close_loops(self):
+        self.termios_teardown()
+        self.stdin_stream.close()
+        self.stdout_stream.close()
+        self.socket_stream.close()
+        self.closed = True
 
     @tornado.gen.coroutine
     def stdin_loop(self):
@@ -73,7 +86,7 @@ class FemtoTerm(object):
                 buffer = yield self.stdin_stream.read_bytes(1024, partial = True)
                 yield self.socket_stream.write(buffer.replace("\n", "\r"))
         except tornado.iostream.StreamClosedError:
-            self.closed = True
+            self.close_loops()
 
     @tornado.gen.coroutine
     def stdout_loop(self):
@@ -82,7 +95,7 @@ class FemtoTerm(object):
                 buffer = yield self.socket_stream.read_bytes(1024, partial = True)
                 yield self.stdout_stream.write(buffer.replace("\r\n", "\n"))
         except tornado.iostream.StreamClosedError:
-            self.closed = True
+            self.close_loops()
 
 
 @tornado.gen.coroutine
@@ -100,20 +113,11 @@ def main():
     s.connect(args.cty_socket)
 
     term = FemtoTerm(s)
-
-    if False:
-        yield [term.stdin_loop(), term.stdout_loop()]
-
-    else:
-        stdout_future = term.stdout_loop()
-        stdin_future  = term.stdin_loop()
-        yield stdout_future
-        sys.stdin.close()
-        yield stdin_future
-
+    yield [term.stdout_loop(), term.stdin_loop()]
 
 if __name__ == "__main__":
     try:
+        #logging.basicConfig(level = logging.DEBUG)
         tornado.ioloop.IOLoop.current().run_sync(main)
     except KeyboardInterrupt:
         pass

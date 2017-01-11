@@ -39,16 +39,20 @@ A Python interface to the Cryptech libhal RPC API.
 # not likely to want to use the full ONC RPC mechanism.
 
 import os
-import sys
 import uuid
 import xdrlib
 import socket
+import logging
 import contextlib
+
+logger = logging.getLogger(__name__)
+
 
 SLIP_END     = chr(0300)        # indicates end of packet
 SLIP_ESC     = chr(0333)        # indicates byte stuffing
 SLIP_ESC_END = chr(0334)        # ESC ESC_END means END data byte
 SLIP_ESC_ESC = chr(0335)        # ESC ESC_ESC means ESC data byte
+
 
 def slip_encode(buffer):
     return SLIP_END + buffer.replace(SLIP_ESC, SLIP_ESC + SLIP_ESC_ESC).replace(SLIP_END, SLIP_ESC + SLIP_ESC_END) + SLIP_END
@@ -400,7 +404,6 @@ class PKey(Handle):
 
 class HSM(object):
 
-    debug      = False
     mixed_mode = False
 
     def _raise_if_error(self, status):
@@ -414,19 +417,18 @@ class HSM(object):
 
     def _send(self, msg):       # Expects an xdrlib.Packer
         msg = slip_encode(msg.get_buffer())
-        if self.debug:
-            sys.stdout.write("+send: {}\n".format(":".join("{:02x}".format(ord(c)) for c in msg)))
+        #logger.debug("send: %s", ":".join("{:02x}".format(ord(c)) for c in msg))
         self.socket.sendall(msg)
 
     def _recv(self, code):      # Returns an xdrlib.Unpacker
+        closed = False
         while True:
-            if self.debug:
-                sys.stdout.write("+recv: ")
             msg = [self.sockfile.read(1)]
             while msg[-1] != SLIP_END:
+                if msg[-1] == "":
+                    raise HAL_ERROR_RPC_TRANSPORT()
                 msg.append(self.sockfile.read(1))
-            if self.debug:
-                sys.stdout.write("{}\n".format(":".join("{:02x}".format(ord(c)) for c in msg)))
+            #logger.debug("recv: %s", ":".join("{:02x}".format(ord(c)) for c in msg))
             msg = slip_decode("".join(msg))
             if not msg:
                 continue
