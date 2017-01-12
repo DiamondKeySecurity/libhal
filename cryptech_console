@@ -37,16 +37,11 @@ import sys
 import socket
 import atexit
 import termios
-import logging
 import argparse
 
 import tornado.iostream
 import tornado.ioloop
 import tornado.gen
-
-
-logger = logging.getLogger("cryptech_console")
-
 
 class FemtoTerm(object):
 
@@ -56,6 +51,17 @@ class FemtoTerm(object):
         self.stdout_stream = tornado.iostream.PipeIOStream(sys.stdout.fileno())
         self.socket_stream = tornado.iostream.IOStream(s)
         self.closed = False
+
+    def close(self):
+        self.termios_teardown()
+        self.stdin_stream.close()
+        self.stdout_stream.close()
+        self.socket_stream.close()
+        self.closed = True
+
+    @tornado.gen.coroutine
+    def run(self):
+        yield [self.stdout_loop(), self.stdin_loop()]
 
     def termios_setup(self):
         self.fd = sys.stdin.fileno()
@@ -72,52 +78,39 @@ class FemtoTerm(object):
             termios.tcsetattr(self.fd, termios.TCSAFLUSH, self.old_tcattr)
             self.fd = None
 
-    def close_loops(self):
-        self.termios_teardown()
-        self.stdin_stream.close()
-        self.stdout_stream.close()
-        self.socket_stream.close()
-        self.closed = True
-
     @tornado.gen.coroutine
+    def copy_loop(self, stream1, stream2, text1, text2, buffer_size = 1024):
+        try:
+            while not self.closed:
+                buffer = yield stream1.read_bytes(buffer_size, partial = True)
+                yield stream2.write(buffer.replace(text1, text2))
+        except tornado.iostream.StreamClosedError:
+            self.close()
+
     def stdin_loop(self):
-        try:
-            while not self.closed:
-                buffer = yield self.stdin_stream.read_bytes(1024, partial = True)
-                yield self.socket_stream.write(buffer.replace("\n", "\r"))
-        except tornado.iostream.StreamClosedError:
-            self.close_loops()
+        return self.copy_loop(self.stdin_stream, self.socket_stream, "\n", "\r")
 
-    @tornado.gen.coroutine
     def stdout_loop(self):
-        try:
-            while not self.closed:
-                buffer = yield self.socket_stream.read_bytes(1024, partial = True)
-                yield self.stdout_stream.write(buffer.replace("\r\n", "\n"))
-        except tornado.iostream.StreamClosedError:
-            self.close_loops()
+        return self.copy_loop(self.socket_stream, self.stdout_stream, "\r\n", "\n")
 
-
-@tornado.gen.coroutine
 def main():
     parser = argparse.ArgumentParser(formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-v", "--verbose",  action = "store_true",  help = "produce human-readable output")
-    parser.add_argument("-d", "--debug",    action = "store_true",  help = "blather about what we're doing")
-
-    parser.add_argument("--cty-socket",            help = "CTY PF_UNIX socket name",
-                        default = os.getenv("CRYPTECH_CTY_CLIENT_SOCKET_NAME", "/tmp/.cryptech_muxd.cty"))
-
+    parser.add_argument("cty_socket",
+                        nargs = "?",
+                        help = "CTY PF_UNIX socket name",
+                        default = os.getenv("CRYPTECH_CTY_CLIENT_SOCKET_NAME",
+                                            "/tmp/.cryptech_muxd.cty"))
     args = parser.parse_args()
 
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.connect(args.cty_socket)
-
-    term = FemtoTerm(s)
-    yield [term.stdout_loop(), term.stdin_loop()]
+    try:
+        s.connect(args.cty_socket)
+    except socket.error:
+        sys.exit("Couldn't connect to socket {}".format(args.cty_socket))
+    tornado.ioloop.IOLoop.current().run_sync(FemtoTerm(s).run)
 
 if __name__ == "__main__":
     try:
-        #logging.basicConfig(level = logging.DEBUG)
-        tornado.ioloop.IOLoop.current().run_sync(main)
+        main()
     except KeyboardInterrupt:
         pass
