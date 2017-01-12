@@ -45,6 +45,7 @@ import atexit
 import weakref
 import logging
 import argparse
+import logging.handlers
 
 import serial
 import serial.tools.list_ports_posix
@@ -144,7 +145,7 @@ class RPCIOStream(SerialIOStream):
     @tornado.gen.coroutine
     def rpc_input(self, query, handle, queue):
         "Send a query to the HSM."
-        logger.debug("rpc send: %s", ":".join("{:02x}".format(ord(c)) for c in query))
+        logger.debug("RPC send: %s", ":".join("{:02x}".format(ord(c)) for c in query))
         self.queues[handle] = queue
         with (yield self.rpc_input_lock.acquire()):
             yield self.write(query)
@@ -156,11 +157,11 @@ class RPCIOStream(SerialIOStream):
             try:
                 reply = yield self.read_until(SLIP_END)
             except tornado.iostream.StreamClosedError:
-                logger.info("rpc uart closed")
+                logger.info("RPC UART closed")
                 for q in self.queues.itervalues():
                     q.put_nowait(None)
                 return
-            logger.debug("rpc recv: %s", ":".join("{:02x}".format(ord(c)) for c in reply))
+            logger.debug("RPC recv: %s", ":".join("{:02x}".format(ord(c)) for c in reply))
             try:
                 handle = client_handle_get(slip_decode(reply))
             except:
@@ -180,7 +181,7 @@ class RPCServer(PFUnixServer):
     @tornado.gen.coroutine
     def handle_stream(self, stream, address):
         "Handle one network connection."
-        logger.info("rpc connected %r", stream)
+        logger.info("RPC connected %r", stream)
         handle = stream.socket.fileno()
         queue  = tornado.queues.Queue()
         while True:
@@ -195,7 +196,7 @@ class RPCServer(PFUnixServer):
                     raise QueuedStreamClosedError()
                 yield stream.write(SLIP_END + reply)
             except tornado.iostream.StreamClosedError:
-                logger.info("rpc closing %r", stream)
+                logger.info("RPC closing %r", stream)
                 stream.close()
                 return
 
@@ -214,7 +215,7 @@ class CTYIOStream(SerialIOStream):
             try:
                 buffer = yield self.read_bytes(self.read_chunk_size, partial = True)
             except tornado.iostream.StreamClosedError:
-                logger.info("cty uart closed")
+                logger.info("CTY UART closed")
                 if self.attached_cty is not None:
                     self.attached_cty.close()
                 return
@@ -239,7 +240,7 @@ class CTYServer(PFUnixServer):
             stream.close()
             return
 
-        logger.info("cty connected to %r", stream)
+        logger.info("CTY connected to %r", stream)
 
         try:
             self.serial.attached_cty = stream
@@ -248,7 +249,7 @@ class CTYServer(PFUnixServer):
         except tornado.iostream.StreamClosedError:
             stream.close()
         finally:
-            logger.info("cty disconnecting from %r", stream)
+            logger.info("CTY disconnected from %r", stream)
             if self.serial.attached_cty is stream:
                 self.serial.attached_cty = None
 
@@ -288,11 +289,11 @@ class ProbeIOStream(SerialIOStream):
         for dev, result in results.iteritems():
 
             if result == "cty" and args.cty_device is None:
-                logger.info("Selecting %s as cty device", dev)
+                logger.info("Selecting %s as CTY device", dev)
                 args.cty_device = dev
 
             if result == "rpc" and args.rpc_device is None:
-                logger.info("Selecting %s as rpc device", dev)
+                logger.info("Selecting %s as RPC device", dev)
                 args.rpc_device = dev
 
     @tornado.gen.coroutine
@@ -343,8 +344,12 @@ def main():
                         action = "count",
                         help = "blather about what we're doing")
 
+    parser.add_argument("-l", "--log-file",
+                        help = "log to file instead of stderr")
+
     parser.add_argument("-p", "--probe",
                         nargs = "*",
+                        metavar = "DEVICE",
                         help = "probe for device UARTs")
 
     parser.add_argument("--rpc-device",
@@ -367,6 +372,13 @@ def main():
 
     args = parser.parse_args()
 
+    if args.log_file is not None:
+        logging.getLogger().handlers[:] = [logging.handlers.WatchedFileHandler(args.log_file)]
+
+    logging.getLogger().handlers[0].setFormatter(
+        logging.Formatter("%(asctime)-15s %(name)s[%(process)d]:%(levelname)s: %(message)s",
+                          "%Y-%m-%d %H:%M:%S"))
+
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG if args.verbose > 1 else logging.INFO)
 
@@ -375,19 +387,25 @@ def main():
 
     futures = []
 
-    rpc_stream = RPCIOStream(device = args.rpc_device)
-    rpc_server = RPCServer(rpc_stream, args.rpc_socket)
-    futures.append(rpc_stream.rpc_output_loop())
+    if args.rpc_device is None:
+        logger.warn("No RPC device found")
+    else:
+        rpc_stream = RPCIOStream(device = args.rpc_device)
+        rpc_server = RPCServer(rpc_stream, args.rpc_socket)
+        futures.append(rpc_stream.rpc_output_loop())
 
-    cty_stream = CTYIOStream(device = args.cty_device)
-    cty_server = CTYServer(cty_stream, args.cty_socket)
-    futures.append(cty_stream.cty_output_loop())
+    if args.cty_device is None:
+        logger.warn("No CTY device found")
+    else:
+        cty_stream = CTYIOStream(device = args.cty_device)
+        cty_server = CTYServer(cty_stream, args.cty_socket)
+        futures.append(cty_stream.cty_output_loop())
 
     # Might want to use WaitIterator(dict(...)) here so we can
-    # diagnose and restart output loops if they fail.  Worry about
-    # that when we get to automatic device probing.
+    # diagnose and restart output loops if they fail?
 
-    yield futures
+    if futures:
+        yield futures
 
 if __name__ == "__main__":
     try:
