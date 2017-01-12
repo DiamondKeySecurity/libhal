@@ -47,6 +47,7 @@ import logging
 import argparse
 
 import serial
+import serial.tools.list_ports_posix
 
 import tornado.tcpserver
 import tornado.iostream
@@ -64,6 +65,9 @@ SLIP_END     = chr(0300)        # Indicates end of SLIP packet
 SLIP_ESC     = chr(0333)        # Indicates byte stuffing
 SLIP_ESC_END = chr(0334)        # ESC ESC_END means END data byte
 SLIP_ESC_ESC = chr(0335)        # ESC ESC_ESC means ESC data byte
+
+Control_U    = chr(0025)        # Console: clear line
+Control_M    = chr(0015)        # Console: end of line
 
 
 def slip_encode(buffer):
@@ -89,9 +93,10 @@ class SerialIOStream(tornado.iostream.BaseIOStream):
     Implementation of a Tornado IOStream over a PySerial device.
     """
 
-    def __init__(self, device, baudrate = 921600, *pargs, **kwargs):
-        self.serial = serial.Serial(device, baudrate, timeout = 0, write_timeout = 0)
-        super(SerialIOStream, self).__init__(*pargs, **kwargs)
+    def __init__(self, device):
+        self.serial = serial.Serial(device, 921600, timeout = 0, write_timeout = 0)
+        self.serial_device = device
+        super(SerialIOStream, self).__init__()
 
     def fileno(self):
         return self.serial.fileno()
@@ -112,9 +117,11 @@ class PFUnixServer(tornado.tcpserver.TCPServer):
     (aka PF_LOCAL) socket instead of a TCP socket.
     """
 
-    def listen(self, filename, mode = 0600):
-        self.socket_filename = filename
-        self.add_socket(tornado.netutil.bind_unix_socket(filename, mode))
+    def __init__(self, serial_stream, socket_filename, mode = 0600):
+        super(PFUnixServer, self).__init__()
+        self.serial = serial_stream
+        self.socket_filename = socket_filename
+        self.add_socket(tornado.netutil.bind_unix_socket(socket_filename, mode))
         atexit.register(self.atexit_unlink)
 
     def atexit_unlink(self):
@@ -129,8 +136,8 @@ class RPCIOStream(SerialIOStream):
     Tornado IOStream for a serial RPC channel.
     """
 
-    def __init__(self, *pargs, **kwargs):
-        super(RPCIOStream, self).__init__(*pargs, **kwargs)
+    def __init__(self, device):
+        super(RPCIOStream, self).__init__(device)
         self.queues = weakref.WeakValueDictionary()
         self.rpc_input_lock = tornado.locks.Lock()
 
@@ -170,9 +177,6 @@ class RPCServer(PFUnixServer):
     Serve multiplexed Cryptech RPC over a PF_UNIX socket.
     """
 
-    def set_serial(self, serial_stream):
-        self.serial = serial_stream
-
     @tornado.gen.coroutine
     def handle_stream(self, stream, address):
         "Handle one network connection."
@@ -200,15 +204,15 @@ class CTYIOStream(SerialIOStream):
     Tornado IOStream for a serial console channel.
     """
 
-    def __init__(self, *pargs, **kwargs):
-        super(CTYIOStream, self).__init__(*pargs, **kwargs)
+    def __init__(self, device):
+        super(CTYIOStream, self).__init__(device)
         self.attached_cty = None
 
     @tornado.gen.coroutine
     def cty_output_loop(self):
         while True:
             try:
-                buffer = yield self.read_bytes(1024, partial = True)
+                buffer = yield self.read_bytes(self.read_chunk_size, partial = True)
             except tornado.iostream.StreamClosedError:
                 logger.info("cty uart closed")
                 if self.attached_cty is not None:
@@ -225,9 +229,6 @@ class CTYServer(PFUnixServer):
     """
     Serve Cryptech console over a PF_UNIX socket.
     """
-
-    def set_serial(self, serial_stream):
-        self.serial = serial_stream
 
     @tornado.gen.coroutine
     def handle_stream(self, stream, address):
@@ -252,36 +253,113 @@ class CTYServer(PFUnixServer):
                 self.serial.attached_cty = None
 
 
+class ProbeIOStream(SerialIOStream):
+    """
+    Tornado IOStream for probing a serial port.  This is nasty.
+    """
+
+    def __init__(self, device):
+        super(ProbeIOStream, self).__init__(device)
+
+    @tornado.gen.coroutine
+    def run_probe(self):
+
+        RPC_query = chr(0) * 8  # client_handle = 0, function code = RPC_FUNC_GET_VERSION
+        RPC_reply = chr(0) * 12 # opcode = RPC_FUNC_GET_VERSION, client_handle = 0, valret = HAL_OK
+
+        # We probably need to add timeout wrappers around these I/O calls.  See:
+        # http://tornadokevinlee.readthedocs.io/en/latest/gen.html#tornado.gen.with_timeout
+
+        yield self.write(SLIP_END + Control_U + SLIP_END + RPC_query + SLIP_END + Control_U + Control_M)
+        response = yield self.read_bytes(self.read_chunk_size, partial = True)
+
+        is_cty = any(prompt in response for prompt in ("Username:", "Password:", "cryptech>"))
+
+        try:
+            is_rpc = response[response.index(SLIP_END + RPC_reply) + len(SLIP_END + RPC_reply) + 4] == SLIP_END
+        except ValueError:
+            is_rpc = False
+        except IndexError:
+            is_rpc = False
+
+        assert not is_cty or not is_rpc
+
+        result = None
+
+        if is_cty:
+            result = "cty"
+            yield self.write(Control_U)
+
+        if is_rpc:
+            result = "rpc"
+            yield self.write(SLIP_END)
+
+        self.close()
+
+        raise tornado.gen.Return(result)
+
+
+
 @tornado.gen.coroutine
 def main():
     parser = argparse.ArgumentParser(formatter_class = argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-v", "--verbose",  action = "store_true",  help = "produce human-readable output")
-    parser.add_argument("-d", "--debug",    action = "store_true",  help = "blather about what we're doing")
 
-    parser.add_argument("--rpc-device",            help = "RPC serial device name",
-                        default = os.getenv("CRYPTECH_RPC_CLIENT_SERIAL_DEVICE", "/dev/ttyUSB0"))
-    parser.add_argument("--rpc-socket",            help = "RPC PF_UNIX socket name",
-                        default = os.getenv("CRYPTECH_RPC_CLIENT_SOCKET_NAME", "/tmp/.cryptech_muxd.rpc"))
+    parser.add_argument("-v", "--verbose",
+                        action = "count",
+                        help = "blather about what we're doing")
 
-    parser.add_argument("--cty-device",            help = "CTY serial device name",
-                        default = os.getenv("CRYPTECH_CTY_CLIENT_SERIAL_DEVICE", "/dev/ttyUSB0"))
-    parser.add_argument("--cty-socket",            help = "CTY PF_UNIX socket name",
-                        default = os.getenv("CRYPTECH_CTY_CLIENT_SOCKET_NAME", "/tmp/.cryptech_muxd.cty"))
+    parser.add_argument("-p", "--probe",
+                        nargs = "*",
+                        help = "probe for device UARTs")
+
+    parser.add_argument("--rpc-device",
+                        help    = "RPC serial device name",
+                        default = os.getenv("CRYPTECH_RPC_CLIENT_SERIAL_DEVICE"))
+
+    parser.add_argument("--rpc-socket",
+                        help    = "RPC PF_UNIX socket name",
+                        default = os.getenv("CRYPTECH_RPC_CLIENT_SOCKET_NAME",
+                                            "/tmp/.cryptech_muxd.rpc"))
+
+    parser.add_argument("--cty-device",
+                        help    = "CTY serial device name",
+                        default = os.getenv("CRYPTECH_CTY_CLIENT_SERIAL_DEVICE"))
+
+    parser.add_argument("--cty-socket",
+                        help    = "CTY PF_UNIX socket name",
+                        default = os.getenv("CRYPTECH_CTY_CLIENT_SOCKET_NAME",
+                                            "/tmp/.cryptech_muxd.cty"))
 
     args = parser.parse_args()
+
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG if args.verbose > 1 else logging.INFO)
+
+    if args.probe is not None and (args.rpc_device is None or args.cty_device is None):
+        probe_devs = (set(args.probe) or
+                      set(str(port) for port, desc, hwid in serial.tools.list_ports_posix.comports()
+                          if "VID:PID=0403:6014" in hwid))
+        probe_devs -= set((args.rpc_device, args.cty_device))
+
+        if probe_devs:
+            logging.debug("Probing candidate devices %s", " ".join(probe_devs))
+            probe_results = yield dict((dev, ProbeIOStream(dev).run_probe()) for dev in probe_devs)
+            for dev, res in probe_results.iteritems():
+                if res == "cty" and args.cty_device is None:
+                    logger.info("Selecting %s as cty device", dev)
+                    args.cty_device = dev
+                if res == "rpc" and args.rpc_device is None:
+                    logger.info("Selecting %s as rpc device", dev)
+                    args.rpc_device = dev
 
     futures = []
 
     rpc_stream = RPCIOStream(device = args.rpc_device)
-    rpc_server = RPCServer()
-    rpc_server.set_serial(rpc_stream)
-    rpc_server.listen(args.rpc_socket)
+    rpc_server = RPCServer(rpc_stream, args.rpc_socket)
     futures.append(rpc_stream.rpc_output_loop())
 
     cty_stream = CTYIOStream(device = args.cty_device)
-    cty_server = CTYServer()
-    cty_server.set_serial(cty_stream)
-    cty_server.listen(args.cty_socket)
+    cty_server = CTYServer(cty_stream, args.cty_socket)
     futures.append(cty_stream.cty_output_loop())
 
     # Might want to use WaitIterator(dict(...)) here so we can
@@ -292,7 +370,6 @@ def main():
 
 if __name__ == "__main__":
     try:
-        #logging.basicConfig(level = logging.DEBUG)
         tornado.ioloop.IOLoop.current().run_sync(main)
     except KeyboardInterrupt:
         pass
