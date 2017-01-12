@@ -261,17 +261,53 @@ class ProbeIOStream(SerialIOStream):
     def __init__(self, device):
         super(ProbeIOStream, self).__init__(device)
 
+    @classmethod
+    @tornado.gen.coroutine
+    def run_probes(cls, args):
+
+        if args.rpc_device is not None and args.cty_device is not None:
+            return
+
+        if args.probe:
+            devs = set(args.probe)
+        else:
+            devs = set(str(port)
+                       for port, desc, hwid in serial.tools.list_ports_posix.comports()
+                       if "VID:PID=0403:6014" in hwid)
+
+        devs.discard(args.rpc_device)
+        devs.discard(args.cty_device)
+
+        if not devs:
+            return
+
+        logging.debug("Probing candidate devices %s", " ".join(devs))
+
+        results = yield dict((dev, ProbeIOStream(dev).run_probe()) for dev in devs)
+
+        for dev, result in results.iteritems():
+
+            if result == "cty" and args.cty_device is None:
+                logger.info("Selecting %s as cty device", dev)
+                args.cty_device = dev
+
+            if result == "rpc" and args.rpc_device is None:
+                logger.info("Selecting %s as rpc device", dev)
+                args.rpc_device = dev
+
     @tornado.gen.coroutine
     def run_probe(self):
 
         RPC_query = chr(0) * 8  # client_handle = 0, function code = RPC_FUNC_GET_VERSION
         RPC_reply = chr(0) * 12 # opcode = RPC_FUNC_GET_VERSION, client_handle = 0, valret = HAL_OK
 
-        # We probably need to add timeout wrappers around these I/O calls.  See:
-        # http://tornadokevinlee.readthedocs.io/en/latest/gen.html#tornado.gen.with_timeout
+        probe_string = SLIP_END + Control_U + SLIP_END + RPC_query + SLIP_END + Control_U + Control_M
 
-        yield self.write(SLIP_END + Control_U + SLIP_END + RPC_query + SLIP_END + Control_U + Control_M)
+        yield self.write(probe_string)
+
         response = yield self.read_bytes(self.read_chunk_size, partial = True)
+
+        logger.debug("Probing %s: %r %s", self.serial_device, response, ":".join("{:02x}".format(ord(c)) for c in response))
 
         is_cty = any(prompt in response for prompt in ("Username:", "Password:", "cryptech>"))
 
@@ -295,7 +331,6 @@ class ProbeIOStream(SerialIOStream):
             yield self.write(SLIP_END)
 
         self.close()
-
         raise tornado.gen.Return(result)
 
 
@@ -335,22 +370,8 @@ def main():
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG if args.verbose > 1 else logging.INFO)
 
-    if args.probe is not None and (args.rpc_device is None or args.cty_device is None):
-        probe_devs = (set(args.probe) or
-                      set(str(port) for port, desc, hwid in serial.tools.list_ports_posix.comports()
-                          if "VID:PID=0403:6014" in hwid))
-        probe_devs -= set((args.rpc_device, args.cty_device))
-
-        if probe_devs:
-            logging.debug("Probing candidate devices %s", " ".join(probe_devs))
-            probe_results = yield dict((dev, ProbeIOStream(dev).run_probe()) for dev in probe_devs)
-            for dev, res in probe_results.iteritems():
-                if res == "cty" and args.cty_device is None:
-                    logger.info("Selecting %s as cty device", dev)
-                    args.cty_device = dev
-                if res == "rpc" and args.rpc_device is None:
-                    logger.info("Selecting %s as rpc device", dev)
-                    args.rpc_device = dev
+    if args.probe is not None:
+        yield ProbeIOStream.run_probes(args)
 
     futures = []
 
