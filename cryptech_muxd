@@ -305,7 +305,7 @@ class ProbeIOStream(SerialIOStream):
         probe_string = SLIP_END + Control_U + SLIP_END + RPC_query + SLIP_END + Control_U + Control_M
 
         yield self.write(probe_string)
-
+        yield tornado.gen.sleep(0.5)
         response = yield self.read_bytes(self.read_chunk_size, partial = True)
 
         logger.debug("Probing %s: %r %s", self.serial_device, response, ":".join("{:02x}".format(ord(c)) for c in response))
