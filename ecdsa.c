@@ -89,6 +89,18 @@
 #endif
 
 /*
+ * Whether to use experimental Verilog ECDSA-P256 point multiplier.
+ */
+
+#ifndef HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER
+#define HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER 1
+#endif
+
+#if HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER
+static int verilog_ecdsa256_multiplier = 1;
+#endif
+
+/*
  * Whether we want debug output.
  */
 
@@ -749,6 +761,65 @@ static inline hal_error_t get_random(void *buffer, const size_t length)
 #endif /* HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM */
 
 /*
+ * Use experimental Verilog base point multiplier core to calculate
+ * public key given a private key.  point_pick_random() has already
+ * selected a suitable private key for us, we just need to calculate
+ * the corresponding public key.
+ */
+
+#if HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER
+
+static hal_error_t verilog_point_pick_random(fp_int *k, ec_point_t *P)
+{
+  assert(k != NULL && P != NULL);
+
+  const size_t len = fp_unsigned_bin_size(k);
+  uint8_t b[ECDSA256_OPERAND_BITS / 8];
+  const uint8_t zero[4] = {0, 0, 0, 0};
+  hal_core_t *core = NULL;
+  hal_error_t err;
+
+  if (len > sizeof(b))
+    return HAL_ERROR_RESULT_TOO_LONG;
+
+  if ((err = hal_core_alloc(ECDSA256_NAME, &core)) != HAL_OK)
+    goto fail;
+
+#define check(_x_) do { if ((err = (_x_)) != HAL_OK) goto fail; } while (0)
+
+  memset(b, 0, sizeof(b));
+  fp_to_unsigned_bin(k, b + sizeof(b) - len);
+
+  for (int i = 0; i < sizeof(b); i += 4)
+    check(hal_io_write(core, ECDSA256_ADDR_K + i/4, &b[sizeof(b) - 4 - i], 4));
+
+  check(hal_io_write(core, ADDR_CTRL, zero, sizeof(zero)));
+  check(hal_io_next(core));
+  check(hal_io_wait_ready(core));
+
+  for (int i = 0; i < sizeof(b); i += 4)
+    check(hal_io_read(core, ECDSA256_ADDR_X + i/4, &b[sizeof(b) - 4 - i], 4));
+  fp_read_unsigned_bin(P->x, b, sizeof(b));
+
+  for (int i = 0; i < sizeof(b); i += 4)
+    check(hal_io_read(core, ECDSA256_ADDR_Y + i/4, &b[sizeof(b) - 4 - i], 4));
+  fp_read_unsigned_bin(P->y, b, sizeof(b));
+
+  fp_set(P->z, 1);
+
+#undef check
+
+  err = HAL_OK;
+
+ fail:
+  hal_core_free(core);
+  memset(b, 0, sizeof(b));
+  return err;
+}
+
+#endif
+
+/*
  * Pick a random point on the curve, return random scalar and
  * resulting point.
  */
@@ -791,6 +862,12 @@ static hal_error_t point_pick_random(const ecdsa_curve_t * const curve,
   } while (fp_iszero(k));
 
   memset(k_buf, 0, sizeof(k_buf));
+
+#if HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER
+  if (verilog_ecdsa256_multiplier && curve == get_curve(HAL_CURVE_P256) &&
+      (err = verilog_point_pick_random(k, P)) != HAL_ERROR_CORE_NOT_FOUND)
+    return err;
+#endif
 
   /*
    * Calculate P = kG and return.

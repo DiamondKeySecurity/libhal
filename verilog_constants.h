@@ -8,7 +8,7 @@
  * hand-edited.
  *
  * Authors: Joachim Strombergson, Paul Selkirk, Rob Austein
- * Copyright (c) 2015-2016, NORDUnet A/S All rights reserved.
+ * Copyright (c) 2015-2017, NORDUnet A/S All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -239,6 +239,22 @@
 #define MODEXPA7_ADDR_MESSAGE           (MODEXPA7_ADDR_OPERANDS + 1 * MODEXPA7_OPERAND_WORDS)
 #define MODEXPA7_ADDR_EXPONENT          (MODEXPA7_ADDR_OPERANDS + 2 * MODEXPA7_OPERAND_WORDS)
 #define MODEXPA7_ADDR_RESULT            (MODEXPA7_ADDR_OPERANDS + 3 * MODEXPA7_OPERAND_WORDS)
+
+/*
+ * ECDSA P-256 point mulitipler core.  ECDSA256_OPERAND_BITS is size
+ * in bits of the (only) supported operand size (256 bits, imagine that).
+ *
+ * (Not sure which category EC Point Mulitiplier will end up in, but
+ * let's pretend it's "math".)
+ */
+
+#define ECDSA256_OPERAND_BITS           (256)
+#define ECDSA256_OPERAND_WORDS          (ECDSA256_OPERAND_BITS / 32)
+#define ECDSA256_ADDR_REGISTERS         (0 * ECDSA256_OPERAND_WORDS)
+#define ECDSA256_ADDR_OPERANDS          (4 * ECDSA256_OPERAND_WORDS)
+#define ECDSA256_ADDR_K                 (ECDSA256_ADDR_OPERANDS + 0 * ECDSA256_OPERAND_WORDS)
+#define ECDSA256_ADDR_X                 (ECDSA256_ADDR_OPERANDS + 1 * ECDSA256_OPERAND_WORDS)
+#define ECDSA256_ADDR_Y                 (ECDSA256_ADDR_OPERANDS + 2 * ECDSA256_OPERAND_WORDS)
 
 /*
  * Utility cores.
