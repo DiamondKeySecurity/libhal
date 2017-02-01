@@ -417,7 +417,7 @@ class HSM(object):
 
     def _send(self, msg):       # Expects an xdrlib.Packer
         msg = slip_encode(msg.get_buffer())
-        #logger.debug("send: %s", ":".join("{:02x}".format(ord(c)) for c in msg))
+        logger.debug("send: %s", ":".join("{:02x}".format(ord(c)) for c in msg))
         self.socket.sendall(msg)
 
     def _recv(self, code):      # Returns an xdrlib.Unpacker
@@ -428,7 +428,7 @@ class HSM(object):
                 if msg[-1] == "":
                     raise HAL_ERROR_RPC_TRANSPORT()
                 msg.append(self.sockfile.read(1))
-            #logger.debug("recv: %s", ":".join("{:02x}".format(ord(c)) for c in msg))
+            logger.debug("recv: %s", ":".join("{:02x}".format(ord(c)) for c in msg))
             msg = slip_decode("".join(msg))
             if not msg:
                 continue

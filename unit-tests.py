@@ -66,23 +66,19 @@ except ImportError:
     ecdsa_loaded = False
 
 
-def log(msg):
-    if not args.quiet:
-        sys.stderr.write(msg)
-        sys.stderr.write("\n")
-
-
 def main():
     from sys import argv
     global args
     args = parse_arguments(argv[1:])
     argv = argv[:1] + args.only_test
+    logging.basicConfig(level = logging.DEBUG if args.debug else logging.INFO)
     unittest.main(verbosity = 1 if args.quiet else 2, argv = argv, catchbreak = True, testRunner = TextTestRunner)
 
 def parse_arguments(argv = ()):
     from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
     parser = ArgumentParser(description = __doc__, formatter_class = ArgumentDefaultsHelpFormatter)
     parser.add_argument("--quiet",      action = "store_true",          help = "suppress chatter")
+    parser.add_argument("--debug",      action = "store_true",          help = "debug-level logging")
     parser.add_argument("--wheel-pin",  default = "fnord",              help = "PIN for wheel user")
     parser.add_argument("--so-pin",     default = "fnord",              help = "PIN for security officer")
     parser.add_argument("--user-pin",   default = "fnord",              help = "PIN for normal user")
