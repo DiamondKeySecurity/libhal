@@ -187,6 +187,10 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver,
 
 static hal_error_t ks_volatile_init(const hal_ks_driver_t * const driver, const int alloc)
 {
+  hal_error_t err = HAL_OK;
+
+  hal_ks_lock();
+
   const size_t len = (sizeof(*volatile_ks.db) +
                       sizeof(*volatile_ks.db->ksi.index) * STATIC_KS_VOLATILE_SLOTS +
                       sizeof(*volatile_ks.db->ksi.names) * STATIC_KS_VOLATILE_SLOTS +
@@ -195,9 +199,12 @@ static hal_error_t ks_volatile_init(const hal_ks_driver_t * const driver, const 
   uint8_t *mem = NULL;
 
   if (alloc && (mem = hal_allocate_static_memory(len)) == NULL)
-    return HAL_ERROR_ALLOCATION_FAILURE;
+    err = HAL_ERROR_ALLOCATION_FAILURE;
+  else
+    err = ks_init(driver, 1, &volatile_ks, mem, len);
 
-  return ks_init(driver, 1, &volatile_ks, mem, len);
+  hal_ks_unlock();
+  return err;
 }
 
 static hal_error_t ks_volatile_shutdown(const hal_ks_driver_t * const driver)
@@ -241,14 +248,18 @@ static hal_error_t ks_store(hal_ks_t *ks,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   ks_t *ksv = ks_to_ksv(ks);
-  hal_error_t err;
+  hal_error_t err = HAL_OK;
   unsigned b;
 
-  if (ksv->db == NULL)
-    return HAL_ERROR_KEYSTORE_ACCESS;
+  hal_ks_lock();
+
+  if (ksv->db == NULL) {
+    err = HAL_ERROR_KEYSTORE_ACCESS;
+    goto done;
+  }
 
   if ((err = hal_ks_index_add(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
-    return err;
+    goto done;
 
   uint8_t kek[KEK_LENGTH];
   size_t kek_len;
@@ -272,6 +283,8 @@ static hal_error_t ks_store(hal_ks_t *ks,
   else
     (void) hal_ks_index_delete(&ksv->db->ksi, &slot->name, 0, NULL, &slot->hint);
 
+ done:
+  hal_ks_unlock();
   return err;
 }
 
@@ -283,19 +296,25 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   ks_t *ksv = ks_to_ksv(ks);
-  hal_error_t err;
+  hal_error_t err = HAL_OK;
   unsigned b;
 
-  if (ksv->db == NULL)
-    return HAL_ERROR_KEYSTORE_ACCESS;
+  hal_ks_lock();
+
+  if (ksv->db == NULL) {
+    err = HAL_ERROR_KEYSTORE_ACCESS;
+    goto done;
+  }
 
   if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
-    return err;
+    goto done;
 
   const ks_key_t * const k = &ksv->db->keys[b];
 
-  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k))
-    return HAL_ERROR_KEY_NOT_FOUND;
+  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k)) {
+    err = HAL_ERROR_KEY_NOT_FOUND;
+    goto done;
+  }
 
   slot->type  = k->type;
   slot->curve = k->curve;
@@ -319,12 +338,11 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
       err = hal_aes_keyunwrap(NULL, kek, kek_len, k->der, k->der_len, der, der_len);
 
     memset(kek, 0, sizeof(kek));
-
-    if (err != HAL_OK)
-      return err;
   }
 
-  return HAL_OK;
+ done:
+  hal_ks_unlock();
+  return err;
 }
 
 static hal_error_t ks_delete(hal_ks_t *ks,
@@ -334,24 +352,32 @@ static hal_error_t ks_delete(hal_ks_t *ks,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   ks_t *ksv = ks_to_ksv(ks);
-  hal_error_t err;
+  hal_error_t err = HAL_OK;
   unsigned b;
 
-  if (ksv->db == NULL)
-    return HAL_ERROR_KEYSTORE_ACCESS;
+  hal_ks_lock();
+
+  if (ksv->db == NULL) {
+    err = HAL_ERROR_KEYSTORE_ACCESS;
+    goto done;
+  }
 
   if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
-    return err;
+    goto done;
 
-  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, &ksv->db->keys[b]))
-    return HAL_ERROR_KEY_NOT_FOUND;
+  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, &ksv->db->keys[b])) {
+    err = HAL_ERROR_KEY_NOT_FOUND;
+    goto done;
+  }
 
   if ((err = hal_ks_index_delete(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
-    return err;
+    goto done;
 
   memset(&ksv->db->keys[b], 0, sizeof(ksv->db->keys[b]));
 
-  return HAL_OK;
+ done:
+  hal_ks_unlock();
+  return err;
 }
 
 static hal_error_t ks_match(hal_ks_t *ks,
@@ -376,8 +402,10 @@ static hal_error_t ks_match(hal_ks_t *ks,
   if (ksv->db == NULL)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
-  hal_error_t err;
+  hal_error_t err = HAL_OK;
   int i = -1;
+
+  hal_ks_lock();
 
   *result_len = 0;
 
@@ -386,7 +414,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
   if (err == HAL_ERROR_KEY_NOT_FOUND)
     i--;
   else if (err != HAL_OK)
-    return err;
+    goto done;
 
   while (*result_len < result_max && ++i < ksv->db->ksi.used) {
 
@@ -415,7 +443,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
 
       if ((err = hal_ks_attribute_scan(k->der + k->der_len, sizeof(k->der) - k->der_len,
                                        key_attrs, k->attributes_len, NULL)) != HAL_OK)
-        return err;
+        goto done;
 
       for (const hal_pkey_attribute_t *required = attributes;
            ok && required < attributes + attributes_len; required++) {
@@ -437,7 +465,11 @@ static hal_error_t ks_match(hal_ks_t *ks,
     ++*result_len;
   }
 
-  return HAL_OK;
+  err = HAL_OK;
+
+ done:
+  hal_ks_unlock();
+  return err;
 }
 
 static hal_error_t ks_set_attributes(hal_ks_t *ks,
@@ -449,40 +481,53 @@ static hal_error_t ks_set_attributes(hal_ks_t *ks,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   ks_t *ksv = ks_to_ksv(ks);
-  hal_error_t err;
+  hal_error_t err = HAL_OK;
   unsigned b;
 
-  if (ksv->db == NULL)
-    return HAL_ERROR_KEYSTORE_ACCESS;
+  hal_ks_lock();
 
-  if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
-    return err;
+  {
+    if (ksv->db == NULL) {
+      err = HAL_ERROR_KEYSTORE_ACCESS;
+      goto done;
+    }
 
-  ks_key_t * const k = &ksv->db->keys[b];
+    if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
+      goto done;
 
-  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k))
-    return HAL_ERROR_KEY_NOT_FOUND;
+    ks_key_t * const k = &ksv->db->keys[b];
 
-  hal_pkey_attribute_t attrs[k->attributes_len + attributes_len];
-  uint8_t *bytes = k->der + k->der_len;
-  size_t bytes_len = sizeof(k->der) - k->der_len;
-  size_t total_len;
+    if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k)) {
+      err = HAL_ERROR_KEY_NOT_FOUND;
+      goto done;
+    }
 
-  if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, k->attributes_len, &total_len)) != HAL_OK)
-    return err;
+    hal_pkey_attribute_t attrs[k->attributes_len + attributes_len];
+    uint8_t *bytes = k->der + k->der_len;
+    size_t bytes_len = sizeof(k->der) - k->der_len;
+    size_t total_len;
 
-  for (const hal_pkey_attribute_t *a = attributes; a < attributes + attributes_len; a++) {
-    if (a->length == HAL_PKEY_ATTRIBUTE_NIL)
-      err =  hal_ks_attribute_delete(bytes, bytes_len, attrs, &k->attributes_len, &total_len,
-                                     a->type);
-    else
-      err =  hal_ks_attribute_insert(bytes, bytes_len, attrs, &k->attributes_len, &total_len,
-                                     a->type, a->value, a->length);
-    if (err != HAL_OK)
-      return err;
+    if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, k->attributes_len, &total_len)) != HAL_OK)
+      goto done;
+
+    for (const hal_pkey_attribute_t *a = attributes; a < attributes + attributes_len; a++) {
+      if (a->length == HAL_PKEY_ATTRIBUTE_NIL)
+        err =  hal_ks_attribute_delete(bytes, bytes_len, attrs, &k->attributes_len, &total_len,
+                                       a->type);
+      else
+        err =  hal_ks_attribute_insert(bytes, bytes_len, attrs, &k->attributes_len, &total_len,
+                                       a->type, a->value, a->length);
+      if (err != HAL_OK)
+        goto done;
+    }
+
+    err = HAL_OK;
+
   }
 
-  return HAL_OK;
+ done:
+  hal_ks_unlock();
+  return err;
 }
 
 static hal_error_t ks_get_attributes(hal_ks_t *ks,
@@ -497,53 +542,70 @@ static hal_error_t ks_get_attributes(hal_ks_t *ks,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   ks_t *ksv = ks_to_ksv(ks);
-  hal_error_t err;
+  hal_error_t err = HAL_OK;
   unsigned b;
 
-  if (ksv->db == NULL)
-    return HAL_ERROR_KEYSTORE_ACCESS;
+  hal_ks_lock();
 
-  if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
-    return err;
-
-  const ks_key_t * const k = &ksv->db->keys[b];
-
-  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k))
-    return HAL_ERROR_KEY_NOT_FOUND;
-
-  hal_pkey_attribute_t attrs[k->attributes_len > 0 ? k->attributes_len : 1];
-
-  if ((err = hal_ks_attribute_scan(k->der + k->der_len, sizeof(k->der) - k->der_len,
-                                   attrs, k->attributes_len, NULL)) != HAL_OK)
-    return err;
-
-  uint8_t *abuf = attributes_buffer;
-
-  for (int i = 0; i < attributes_len; i++) {
-    int j = 0;
-    while (j < k->attributes_len && attrs[j].type != attributes[i].type)
-      j++;
-    const int found = j < k->attributes_len;
-
-    if (attributes_buffer_len == 0) {
-      attributes[i].value  = NULL;
-      attributes[i].length = found ? attrs[j].length : 0;
-      continue;
+  {
+    if (ksv->db == NULL) {
+      err = HAL_ERROR_KEYSTORE_ACCESS;
+      goto done;
     }
 
-    if (!found)
-      return HAL_ERROR_ATTRIBUTE_NOT_FOUND;
+    if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
+      goto done;
 
-    if (attrs[j].length > attributes_buffer + attributes_buffer_len - abuf)
-      return HAL_ERROR_RESULT_TOO_LONG;
+    const ks_key_t * const k = &ksv->db->keys[b];
 
-    memcpy(abuf, attrs[j].value, attrs[j].length);
-    attributes[i].value  = abuf;
-    attributes[i].length = attrs[j].length;
-    abuf += attrs[j].length;
+    if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k)) {
+      err = HAL_ERROR_KEY_NOT_FOUND;
+      goto done;
+    }
+
+    hal_pkey_attribute_t attrs[k->attributes_len > 0 ? k->attributes_len : 1];
+
+    if ((err = hal_ks_attribute_scan(k->der + k->der_len, sizeof(k->der) - k->der_len,
+                                     attrs, k->attributes_len, NULL)) != HAL_OK)
+      goto done;
+
+    uint8_t *abuf = attributes_buffer;
+
+    for (int i = 0; i < attributes_len; i++) {
+      int j = 0;
+      while (j < k->attributes_len && attrs[j].type != attributes[i].type)
+        j++;
+      const int found = j < k->attributes_len;
+
+      if (attributes_buffer_len == 0) {
+        attributes[i].value  = NULL;
+        attributes[i].length = found ? attrs[j].length : 0;
+        continue;
+      }
+
+      if (!found) {
+        err = HAL_ERROR_ATTRIBUTE_NOT_FOUND;
+        goto done;
+      }
+
+      if (attrs[j].length > attributes_buffer + attributes_buffer_len - abuf) {
+        err = HAL_ERROR_RESULT_TOO_LONG;
+        goto done;
+      }
+
+      memcpy(abuf, attrs[j].value, attrs[j].length);
+      attributes[i].value  = abuf;
+      attributes[i].length = attrs[j].length;
+      abuf += attrs[j].length;
+    }
+
+    err = HAL_OK;
+
   }
 
-  return HAL_OK;
+ done:
+  hal_ks_unlock();
+  return err;
 }
 
 const hal_ks_driver_t hal_ks_volatile_driver[1] = {{

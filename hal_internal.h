@@ -90,6 +90,15 @@ extern void *hal_allocate_static_memory(const size_t size);
 #define HAL_MAX_HASH_DIGEST_LENGTH      SHA512_DIGEST_LEN
 
 /*
+ * Locks and critical sections.
+ */
+
+extern void hal_critical_section_start(void);
+extern void hal_critical_section_end(void);
+extern void hal_ks_lock(void);
+extern void hal_ks_unlock(void);
+
+/*
  * Dispatch structures for RPC implementation.
  *
  * The breakdown of which functions go into which dispatch vectors is

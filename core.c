@@ -201,16 +201,6 @@ hal_core_t *hal_core_find(const char *name, hal_core_t *core)
   return NULL;
 }
 
-__attribute__((weak)) void hal_critical_section_start(void)
-{
-  return;
-}
-
-__attribute__((weak)) void hal_critical_section_end(void)
-{
-  return;
-}
-
 hal_error_t hal_core_alloc(const char *name, hal_core_t **pcore)
 {
   hal_core_t *core;
