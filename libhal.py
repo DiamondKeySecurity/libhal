@@ -405,6 +405,7 @@ class PKey(Handle):
 class HSM(object):
 
     mixed_mode = False
+    debug_io = False
 
     def _raise_if_error(self, status):
         if status != 0:
@@ -417,7 +418,8 @@ class HSM(object):
 
     def _send(self, msg):       # Expects an xdrlib.Packer
         msg = slip_encode(msg.get_buffer())
-        logger.debug("send: %s", ":".join("{:02x}".format(ord(c)) for c in msg))
+        if self.debug_io:
+            logger.debug("send: %s", ":".join("{:02x}".format(ord(c)) for c in msg))
         self.socket.sendall(msg)
 
     def _recv(self, code):      # Returns an xdrlib.Unpacker
@@ -428,7 +430,8 @@ class HSM(object):
                 if msg[-1] == "":
                     raise HAL_ERROR_RPC_TRANSPORT()
                 msg.append(self.sockfile.read(1))
-            logger.debug("recv: %s", ":".join("{:02x}".format(ord(c)) for c in msg))
+            if self.debug_io:
+                logger.debug("recv: %s", ":".join("{:02x}".format(ord(c)) for c in msg))
             msg = slip_decode("".join(msg))
             if not msg:
                 continue
@@ -545,25 +548,41 @@ class HSM(object):
 
     def pkey_load(self, type, curve, der, flags = 0, client = 0, session = 0):
         with self.rpc(RPC_FUNC_PKEY_LOAD, session, type, curve, der, flags, client = client) as r:
-            return PKey(self, r.unpack_uint(), UUID(bytes = r.unpack_bytes()))
+            pkey = PKey(self, r.unpack_uint(), UUID(bytes = r.unpack_bytes()))
+            logger.debug("Loaded pkey %s", pkey.uuid)
+            return pkey
 
     def pkey_open(self, uuid, flags = 0, client = 0, session = 0):
         with self.rpc(RPC_FUNC_PKEY_OPEN, session, uuid, flags, client = client) as r:
-            return PKey(self, r.unpack_uint(), uuid)
+            pkey = PKey(self, r.unpack_uint(), uuid)
+            logger.debug("Opened pkey %s", pkey.uuid)
+            return pkey
 
     def pkey_generate_rsa(self, keylen, exponent = "\x01\x00\x01", flags = 0, client = 0, session = 0):
         with self.rpc(RPC_FUNC_PKEY_GENERATE_RSA, session, keylen, exponent, flags, client = client) as r:
-            return PKey(self, r.unpack_uint(), UUID(bytes = r.unpack_bytes()))
+            pkey = PKey(self, r.unpack_uint(), UUID(bytes = r.unpack_bytes()))
+            logger.debug("Generated RSA pkey %s", pkey.uuid)
+            return pkey
 
     def pkey_generate_ec(self, curve, flags = 0, client = 0, session = 0):
         with self.rpc(RPC_FUNC_PKEY_GENERATE_EC, session, curve, flags, client = client) as r:
-            return PKey(self, r.unpack_uint(), UUID(bytes = r.unpack_bytes()))
+            pkey = PKey(self, r.unpack_uint(), UUID(bytes = r.unpack_bytes()))
+            logger.debug("Generated EC pkey %s", pkey.uuid)
+            return pkey
 
     def pkey_close(self, pkey):
+        try:
+            logger.debug("Closing pkey %s", pkey.uuid)
+        except AttributeError:
+            pass
         with self.rpc(RPC_FUNC_PKEY_CLOSE, pkey):
             return
 
     def pkey_delete(self, pkey):
+        try:
+            logger.debug("Deleting pkey %s", pkey.uuid)
+        except AttributeError:
+            pass
         with self.rpc(RPC_FUNC_PKEY_DELETE, pkey):
             return
 
