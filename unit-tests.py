@@ -39,6 +39,7 @@ LibHAL unit tests, using libhal.py and the Python unit_test framework.
 
 import unittest
 import datetime
+import logging
 import sys
 
 from libhal import *
@@ -64,6 +65,9 @@ try:
     ecdsa_loaded = True
 except ImportError:
     ecdsa_loaded = False
+
+
+logger = logging.getLogger("unit-tests")
 
 
 def main():
@@ -120,6 +124,12 @@ class TextTestResult(unittest.TextTestResult):
             self.stream.write("runtime {} ... ".format(test.endTime - test.startTime))
             self.stream.flush()
         super(TextTestResult, self).addSuccess(test)
+
+    def addError(self, test, err):
+        if self.showAll:
+            self.stream.write("exception {!s} ".format(err[0].__name__)) # err[1]
+            self.stream.flush()
+        super(TextTestResult, self).addError(test, err)
 
 class TextTestRunner(unittest.TextTestRunner):
     resultclass = TextTestResult
@@ -331,93 +341,123 @@ class TestPKeyHashing(TestCaseLoggedIn):
         k1.verify(signature = sig, hash = self.h(alg, mixed_mode = True))
         k2.verify(signature = sig, hash = self.h(alg, mixed_mode = True))
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_1024_sha256_data(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA256, 1024, self.sign_verify_data)
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_2048_sha384_data(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA384, 2048, self.sign_verify_data)
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_4096_sha512_data(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA512, 4096, self.sign_verify_data)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p256_sha256_data(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA256, HAL_CURVE_P256, self.sign_verify_data)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p384_sha384_data(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA384, HAL_CURVE_P384, self.sign_verify_data)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p521_sha512_data(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, HAL_CURVE_P521, self.sign_verify_data)
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_1024_sha256_remote_remote(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA256, 1024, self.sign_verify_remote_remote)
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_2048_sha384_remote_remote(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA384, 2048, self.sign_verify_remote_remote)
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_4096_sha512_remote_remote(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA512, 4096, self.sign_verify_remote_remote)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p256_sha256_remote_remote(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA256, HAL_CURVE_P256, self.sign_verify_remote_remote)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p384_sha384_remote_remote(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA384, HAL_CURVE_P384, self.sign_verify_remote_remote)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p521_sha512_remote_remote(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, HAL_CURVE_P521, self.sign_verify_remote_remote)
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_1024_sha256_remote_local(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA256, 1024, self.sign_verify_remote_local)
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_2048_sha384_remote_local(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA384, 2048, self.sign_verify_remote_local)
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_4096_sha512_remote_local(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA512, 4096, self.sign_verify_remote_local)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p256_sha256_remote_local(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA256, HAL_CURVE_P256, self.sign_verify_remote_local)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p384_sha384_remote_local(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA384, HAL_CURVE_P384, self.sign_verify_remote_local)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p521_sha512_remote_local(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, HAL_CURVE_P521, self.sign_verify_remote_local)
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_1024_sha256_local_remote(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA256, 1024, self.sign_verify_local_remote)
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_2048_sha384_local_remote(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA384, 2048, self.sign_verify_local_remote)
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_4096_sha512_local_remote(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA512, 4096, self.sign_verify_local_remote)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p256_sha256_local_remote(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA256, HAL_CURVE_P256, self.sign_verify_local_remote)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p384_sha384_local_remote(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA384, HAL_CURVE_P384, self.sign_verify_local_remote)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p521_sha512_local_remote(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, HAL_CURVE_P521, self.sign_verify_local_remote)
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_1024_sha256_local_local(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA256, 1024, self.sign_verify_local_local)
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_2048_sha384_local_local(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA384, 2048, self.sign_verify_local_local)
 
+    @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")
     def test_load_sign_verify_rsa_4096_sha512_local_local(self):
         self.load_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA512, 4096, self.sign_verify_local_local)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p256_sha256_local_local(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA256, HAL_CURVE_P256, self.sign_verify_local_local)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p384_sha384_local_local(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA384, HAL_CURVE_P384, self.sign_verify_local_local)
 
+    @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p521_sha512_local_local(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, HAL_CURVE_P521, self.sign_verify_local_local)
 
@@ -490,7 +530,7 @@ class TestPKeyECDSAInterop(TestCaseLoggedIn):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, SHA512, HAL_CURVE_P521)
 
 
-class TestPKeyList(TestCaseLoggedIn):
+class TestPKeyMatch(TestCaseLoggedIn):
     """
     Tests involving PKey list and match functions.
     """
@@ -590,6 +630,7 @@ class TestPKeyAttribute(TestCaseLoggedIn):
         self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 4, n_fill = 512) # [16, 1024]
 
 
+@unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
 class TestPKeyAttributeP11(TestCaseLoggedIn):
     """
     Attribute creation/lookup/deletion tests based on a PKCS #11 trace.
@@ -654,6 +695,7 @@ class TestPKeyAttributeP11(TestCaseLoggedIn):
             0x180 : "\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07" })
 
 
+@unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
 class TestPKeyAttributeWriteSpeedToken(TestCaseLoggedIn):
     """
     Attribute speed tests.
@@ -678,6 +720,7 @@ class TestPKeyAttributeWriteSpeedToken(TestCaseLoggedIn):
     def test_set_12_attributes(self):
         self.set_attributes(12)
 
+@unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
 class TestPKeyAttributeWriteSpeedVolatile(TestCaseLoggedIn):
     """
     Attribute speed tests.
@@ -702,6 +745,7 @@ class TestPKeyAttributeWriteSpeedVolatile(TestCaseLoggedIn):
     def test_set_12_attributes(self):
         self.set_attributes(12)
 
+@unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
 class TestPKeyAttributeReadSpeedToken(TestCaseLoggedIn):
     """
     Attribute speed tests.
@@ -733,6 +777,7 @@ class TestPKeyAttributeReadSpeedToken(TestCaseLoggedIn):
     def test_get_12_attributes(self):
         self.get_attributes(12)
 
+@unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
 class TestPKeyAttributeReadSpeedVolatile(TestCaseLoggedIn):
     """
     Attribute speed tests.
