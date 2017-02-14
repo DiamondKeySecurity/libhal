@@ -120,10 +120,17 @@ hal_error_t hal_ks_attribute_delete(uint8_t *bytes, const size_t bytes_len,
   if (bytes == NULL || attributes == NULL || attributes_len == NULL || total_len == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
+  /*
+   * Search for attribute by type. Note that there can be only one
+   * attribute of any given type.
+   */
+
   int i = 0;
 
   while (i < *attributes_len && attributes[i].type != type)
     i++;
+
+  /* If not found, great, it's already deleted from the key. */
 
   if (i == *attributes_len)
     return HAL_OK;
@@ -151,6 +158,8 @@ hal_error_t hal_ks_attribute_insert(uint8_t *bytes, const size_t bytes_len,
   if (bytes == NULL || attributes == NULL || attributes_len == NULL ||
       total_len == NULL || value == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
+
+  /* Delete the existing attribute value (if present), then write the new value. */
 
   hal_error_t err
     = hal_ks_attribute_delete(bytes, bytes_len, attributes, attributes_len, total_len, type);

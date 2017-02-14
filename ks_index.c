@@ -55,8 +55,8 @@ static inline int ks_name_cmp(const hal_ks_name_t * const name1, const hal_ks_na
 }
 
 /*
- * Return value indicates whether the name is present in the index.
- * "where" indicates the name's position whether present or not.
+ * Find a block in the index, return true (found) or false (not found).
+ * "where" indicates the name's position, or the position of the first free block.
  *
  * NB: This does NOT return a block number, it returns an index into
  * ksi->index[].
@@ -145,6 +145,10 @@ static inline void ks_heapsort(hal_ks_index_t *ksi)
   }
 }
 
+/*
+ * Perform a consistency check on the index.
+ */
+
 #define fsck(_ksi) \
   do { hal_error_t _err = hal_ks_index_fsck(_ksi); if (_err != HAL_OK) return _err; } while (0)
 
@@ -179,15 +183,15 @@ hal_error_t hal_ks_index_fsck(hal_ks_index_t *ksi)
   return HAL_OK;
 }
 
+/*
+ * Set up the index. Only setup task we have at the moment is sorting the index.
+ */
+
 hal_error_t hal_ks_index_setup(hal_ks_index_t *ksi)
 {
   if (ksi == NULL || ksi->index == NULL || ksi->names == NULL ||
       ksi->size == 0 || ksi->used > ksi->size)
     return HAL_ERROR_BAD_ARGUMENTS;
-
-  /*
-   * Only setup task we have at the moment is sorting the index.
-   */
 
   ks_heapsort(ksi);
 
@@ -199,6 +203,10 @@ hal_error_t hal_ks_index_setup(hal_ks_index_t *ksi)
 
   return HAL_OK;
 }
+
+/*
+ * Find a single block by name and chunk number.
+ */
 
 hal_error_t hal_ks_index_find(hal_ks_index_t *ksi,
 			      const hal_uuid_t * const name,
@@ -224,6 +232,11 @@ hal_error_t hal_ks_index_find(hal_ks_index_t *ksi,
 
   return ok ? HAL_OK : HAL_ERROR_KEY_NOT_FOUND;
 }
+
+/*
+ * Find all blocks with the given name.
+ * If 'strict' is set, expect it to be a well-ordered set of chunks.
+ */
 
 hal_error_t hal_ks_index_find_range(hal_ks_index_t *ksi,
                                     const hal_uuid_t * const name,
@@ -265,6 +278,10 @@ hal_error_t hal_ks_index_find_range(hal_ks_index_t *ksi,
 
   return HAL_OK;
 }
+
+/*
+ * Add a single block to the index.
+ */
 
 hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
 			     const hal_uuid_t * const name,
@@ -309,6 +326,10 @@ hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
   return HAL_OK;
 }
 
+/*
+ * Delete a single block from the index.
+ */
+
 hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
 				const hal_uuid_t * const name,
                                 const unsigned chunk,
@@ -347,6 +368,11 @@ hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
 
   return HAL_OK;
 }
+
+/*
+ * Delete all blocks with the given name. If blocknos is NULL, return a
+ * count of the matching blocks without deleting anything.
+ */
 
 hal_error_t hal_ks_index_delete_range(hal_ks_index_t *ksi,
                                       const hal_uuid_t * const name,
@@ -403,6 +429,10 @@ hal_error_t hal_ks_index_delete_range(hal_ks_index_t *ksi,
 
   return HAL_OK;
 }
+
+/*
+ * Replace a single block in the index.
+ */
 
 hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
                                  const hal_uuid_t * const name,

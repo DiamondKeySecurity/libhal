@@ -227,7 +227,8 @@ static inline hal_error_t ks_open_from_flags(hal_ks_t **ks, const hal_key_flags_
 }
 
 /*
- * Receive key from application, store it with supplied name, return a key handle.
+ * Receive key from application, generate a name (UUID), store it, and
+ * return a key handle and the name.
  */
 
 static hal_error_t pkey_local_load(const hal_client_handle_t client,

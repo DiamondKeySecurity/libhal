@@ -33,6 +33,15 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * This keystore driver operates over bare flash, versus over a flash file
+ * system or flash translation layer. The block size is large enough to
+ * hold an AES-keywrapped 4096-bit RSA key. Any remaining space in the key
+ * block may be used to store attributes (opaque TLV blobs). If the
+ * attributes overflow the key block, additional blocks may be added, but
+ * no attribute may exceed the block size.
+ */
+
 #include <stddef.h>
 #include <string.h>
 #include <assert.h>
@@ -312,7 +321,7 @@ static hal_crc32_t calculate_block_crc(const flash_block_t * const block)
 }
 
 /*
- * Calculate block offset.
+ * Calculate offset of the block in the flash address space.
  */
 
 static inline uint32_t block_offset(const unsigned blockno)
@@ -537,6 +546,11 @@ static hal_error_t block_update(const unsigned b1, flash_block_t *block,
 
   cache_mark_used(block, b2);
 
+  /*
+   * Erase the first block in the free list. In case of restart, this
+   * puts the block back at the head of the free list.
+   */
+
   return block_erase_maybe(db.ksi.index[db.ksi.used]);
 }
 
@@ -578,6 +592,12 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
     size_t len = (sizeof(*db.ksi.index) * NUM_FLASH_BLOCKS +
                   sizeof(*db.ksi.names) * NUM_FLASH_BLOCKS +
                   sizeof(*db.cache)     * KS_FLASH_CACHE_SIZE);
+
+    /*
+     * This is done as a single large allocation, rather than 3 smaller
+     * allocations, to make it atomic - we need all 3, so either all
+     * succeed or all fail.
+     */
 
     uint8_t *mem = hal_allocate_static_memory(len);
 
@@ -634,7 +654,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
      * Read one block.  If the CRC is bad or the block type is
      * unknown, it's old data we don't understand, something we were
      * writing when we crashed, or bad flash; in any of these cases,
-     * we want the block to ends up near the end of the free list.
+     * we want the block to end up near the end of the free list.
      */
 
     err = block_read(i, block);
@@ -742,20 +762,22 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
    *
    * For any tombstone we find, we start by looking for all the blocks
    * with a matching UUID, then see what valid sequences we can
-   * construct from what we found.
+   * construct from what we found. This basically works in reverse of
+   * the update sequence in ks_set_attributes().
    *
    * If we can construct a valid sequence of live blocks, the complete
-   * update was written out, and we just need to zero the tombstones.
+   * update was written out, and we just need to finish zeroing the
+   * tombstones.
    *
    * Otherwise, if we can construct a complete sequence of tombstone
    * blocks, the update failed before it was completely written, so we
    * have to zero the incomplete sequence of live blocks then restore
-   * from the tombstones.
+   * the tombstones.
    *
    * Otherwise, if the live and tombstone blocks taken together form a
    * valid sequence, the update failed while deprecating the old live
-   * blocks, and the update itself was not written, so we need to
-   * restore the tombstones and leave the live blocks alone.
+   * blocks, and none of the new data was written, so we need to restore
+   * the tombstones and leave the live blocks alone.
    *
    * If none of the above applies, we don't understand what happened,
    * which is a symptom of either a bug or a hardware failure more
@@ -775,10 +797,24 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
     if ((err = hal_ks_index_find_range(&db.ksi, &name, 0, &n_blocks, NULL, &where, 0)) != HAL_OK)
       goto done;
 
+    /*
+     * hal_ks_index_find_range does a binary search, not a linear search,
+     * so it may not return the first instance of a block with the given
+     * name and chunk=0. Search backwards to make sure we have all chunks.
+     */
+
     while (where > 0 && !hal_uuid_cmp(&name, &db.ksi.names[db.ksi.index[where - 1]].name)) {
       where--;
       n_blocks++;
     }
+
+    /*
+     * Rather than calling hal_ks_index_find_range with an array pointer
+     * to get the list of matching blocks (because of the binary search
+     * issue), we're going to fondle the index directly. This is really
+     * not something to do in regular code, but this is error-recovery
+     * code.
+     */
 
     int live_ok = 1, tomb_ok = 1, join_ok = 1;
     unsigned n_live = 0, n_tomb = 0;
@@ -823,6 +859,12 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
       goto done;
     }
 
+    /*
+     * If live_ok or tomb_ok, we have to zero out some blocks, and adjust
+     * the index. Again, don't fondle the index directly, outside of error
+     * recovery.
+     */
+
     if (live_ok) {
       for (int j = 0; j < n_tomb; j++) {
         const unsigned b = tomb_blocks[j];
@@ -861,6 +903,10 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
       n_blocks = n_tomb;
     }
 
+    /*
+     * Restore tombstone blocks (tomb_ok or join_ok).
+     */
+
     for (int j = 0; j < n_blocks; j++) {
       int hint = where + j;
       unsigned b1 = db.ksi.index[hint], b2;
@@ -877,6 +923,10 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
       block_status[b2] = BLOCK_STATUS_LIVE;
     }
   }
+
+  /*
+   * Fetch or create the PIN block.
+   */
 
   err = fetch_pin_block(NULL, &block);
 
@@ -1112,8 +1162,16 @@ static hal_error_t ks_delete(hal_ks_t *ks,
   hal_ks_lock();
 
   {
+    /*
+     * Get the count of blocks to delete.
+     */
+
     if ((err = hal_ks_index_delete_range(&db.ksi, &slot->name, 0, &n, NULL, &slot->hint)) != HAL_OK)
       goto done;
+
+    /*
+     * Then delete them.
+     */
 
     unsigned b[n];
 
@@ -1123,9 +1181,18 @@ static hal_error_t ks_delete(hal_ks_t *ks,
     for (int i = 0; i < n; i++)
       cache_release(cache_find_block(b[i]));
 
+    /*
+     * Zero the blocks, to mark them as recently used.
+     */
+
     for (int i = 0; i < n; i++)
       if ((err = block_zero(b[i])) != HAL_OK)
         goto done;
+
+    /*
+     * Erase the first block in the free list. In case of restart, this
+     * puts the block back at the head of the free list.
+     */
 
     err = block_erase_maybe(db.ksi.index[db.ksi.used]);
   }
@@ -1455,6 +1522,8 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
 
     /*
      * Phase 0.2: Merge new attributes into updated_attributes[].
+     * For each new attribute type, mark any existing attributes of that
+     * type for deletion. Append new attributes to updated_attributes[].
      */
 
     for (int i = 0; i < attributes_len; i++) {
