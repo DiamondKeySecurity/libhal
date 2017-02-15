@@ -1075,7 +1075,13 @@ static hal_error_t ks_store(hal_ks_t *ks,
   k->der_len = SIZEOF_FLASH_KEY_BLOCK_DER;
   k->attributes_len = 0;
 
-  if ((err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
+  if (db.ksi.used < db.ksi.size)
+    err = block_erase_maybe(db.ksi.index[db.ksi.used]);
+
+  if (err == HAL_OK)
+    err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek));
+
+  if (err == HAL_OK)
     err = hal_aes_keywrap(NULL, kek, kek_len, der, der_len, k->der, &k->der_len);
 
   memset(kek, 0, sizeof(kek));
