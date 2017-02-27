@@ -48,17 +48,19 @@ KS		?= flash
 RPC_MODE	?= none
 RPC_TRANSPORT	?= none
 MODEXP_CORE	?= no
+HASH_CORES	?= no
 
 ifeq (,$(and \
 	$(filter	none eim i2c fmc			,${IO_BUS}),\
 	$(filter	none server client-simple client-mixed	,${RPC_MODE}),\
 	$(filter	mmap flash				,${KS}),\
 	$(filter	none loopback serial daemon		,${RPC_TRANSPORT}),\
-	$(filter	no yes					,${MODEXP_CORE})))
+	$(filter	no yes					,${MODEXP_CORE}),\
+	$(filter	no yes					,${HASH_CORES})))
   $(error ${USAGE})
 endif
 
-$(info Building libhal with configuration IO_BUS=${IO_BUS} RPC_MODE=${RPC_MODE} KS=${KS} RPC_TRANSPORT=${RPC_TRANSPORT} MODEXP_CORE=${MODEXP_CORE})
+$(info Building libhal with configuration IO_BUS=${IO_BUS} RPC_MODE=${RPC_MODE} KS=${KS} RPC_TRANSPORT=${RPC_TRANSPORT} MODEXP_CORE=${MODEXP_CORE} HASH_CORES=${HASH_CORES})
 
 # Whether the RSA code should use the ModExp | ModExpS6 | ModExpA7 core.
 
@@ -66,6 +68,14 @@ ifeq "${MODEXP_CORE}" "yes"
   RSA_USE_MODEXP_CORE := 1
 else
   RSA_USE_MODEXP_CORE := 0
+endif
+
+# Whether the hash code should use the SHA-1 / SHA-256 / SHA-512 cores.
+
+ifeq "${HASH_CORES}" "yes"
+  HASH_ONLY_USE_SOFT_CORES := 0
+else
+  HASH_ONLY_USE_SOFT_CORES := 1
 endif
 
 # Object files to build, initialized with ones we always want.
@@ -167,7 +177,7 @@ ifeq "${RPC_MODE}" "none"
   CFLAGS += -DHAL_RSA_USE_MODEXP=${RSA_USE_MODEXP_CORE}
 else ifeq "${RPC_MODE}" "server"
   OBJ += ${CORE_OBJ} ${RPC_SERVER_OBJ}
-  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_LOCAL -DHAL_RSA_USE_MODEXP=${RSA_USE_MODEXP_CORE}
+  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_LOCAL -DHAL_RSA_USE_MODEXP=${RSA_USE_MODEXP_CORE} -DHAL_ONLY_USE_SOFTWARE_HASH_CORES=${HASH_ONLY_USE_SOFT_CORES}
 else ifeq "${RPC_MODE}" "client-simple"
   OBJ += ${RPC_CLIENT_OBJ}
   CFLAGS += -DRPC_CLIENT=RPC_CLIENT_REMOTE -DHAL_RSA_USE_MODEXP=0 -DHAL_ONLY_USE_SOFTWARE_HASH_CORES=1
