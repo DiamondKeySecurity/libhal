@@ -455,7 +455,7 @@ static hal_error_t block_erase(const unsigned blockno)
     return HAL_ERROR_IMPOSSIBLE;
 
   /* Sigh, magic numeric return codes */
-  if (keystore_erase_subsectors(blockno, blockno) != 1)
+  if (keystore_erase_subsector(blockno) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   return HAL_OK;
