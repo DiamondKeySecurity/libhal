@@ -241,7 +241,7 @@
 #define MODEXPA7_ADDR_RESULT            (MODEXPA7_ADDR_OPERANDS + 3 * MODEXPA7_OPERAND_WORDS)
 
 /*
- * ECDSA P-256 point mulitipler core.  ECDSA256_OPERAND_BITS is size
+ * ECDSA P-256 point multiplier core.  ECDSA256_OPERAND_BITS is size
  * in bits of the (only) supported operand size (256 bits, imagine that).
  *
  * (Not sure which category EC Point Mulitiplier will end up in, but
@@ -249,12 +249,24 @@
  */
 
 #define ECDSA256_OPERAND_BITS           (256)
-#define ECDSA256_OPERAND_WORDS          (ECDSA256_OPERAND_BITS / 32)
-#define ECDSA256_ADDR_REGISTERS         (0 * ECDSA256_OPERAND_WORDS)
-#define ECDSA256_ADDR_OPERANDS          (4 * ECDSA256_OPERAND_WORDS)
-#define ECDSA256_ADDR_K                 (ECDSA256_ADDR_OPERANDS + 0 * ECDSA256_OPERAND_WORDS)
-#define ECDSA256_ADDR_X                 (ECDSA256_ADDR_OPERANDS + 1 * ECDSA256_OPERAND_WORDS)
-#define ECDSA256_ADDR_Y                 (ECDSA256_ADDR_OPERANDS + 2 * ECDSA256_OPERAND_WORDS)
+#define ECDSA256_ADDR_REGISTERS         (0x00)
+#define ECDSA256_ADDR_K                 (0x20)
+#define ECDSA256_ADDR_X                 (0x28)
+#define ECDSA256_ADDR_Y                 (0x30)
+
+/*
+ * ECDSA P-384 point multiplier core.  ECDSA384_OPERAND_BITS is size
+ * in bits of the (only) supported operand size (384 bits, imagine that).
+ *
+ * (Not sure which category EC Point Mulitiplier will end up in, but
+ * let's pretend it's "math".)
+ */
+
+#define ECDSA384_OPERAND_BITS           (384)
+#define ECDSA384_ADDR_REGISTERS         (0x00)
+#define ECDSA384_ADDR_K                 (0x40)
+#define ECDSA384_ADDR_X                 (0x50)
+#define ECDSA384_ADDR_Y                 (0x60)
 
 /*
  * Utility cores.

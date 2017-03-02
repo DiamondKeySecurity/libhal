@@ -106,6 +106,9 @@
 #define ECDSA256_NAME           "ecdsa256"
 #define ECDSA256_VERSION        "0.11"
 
+#define ECDSA256_NAME           "ecdsa384"
+#define ECDSA256_VERSION        "0.11"
+
 /*
  * C API error codes.  Defined in this form so we can keep the tokens
  * and error strings together.  See errorstrings.c.
