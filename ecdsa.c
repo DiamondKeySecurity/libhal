@@ -828,7 +828,7 @@ static hal_error_t verilog_point_pick_random(const verilog_ecdsa_driver_t * cons
 
   check(hal_io_write(core, ADDR_CTRL, zero, sizeof(zero)));
   check(hal_io_next(core));
-  check(hal_io_wait_ready(core));
+  check(hal_io_wait_valid(core));
 
   for (int i = 0; i < sizeof(b); i += 4)
     check(hal_io_read(core, driver->x_addr + i/4, &b[sizeof(b) - 4 - i], 4));
