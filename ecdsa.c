@@ -856,7 +856,7 @@ static inline hal_error_t verilog_p256_point_pick_random(fp_int *k, ec_point_t *
 {
 #if HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER
 
-  static const verilog_ecdsa_driver_t verilog_p256_driver = {
+  static const verilog_ecdsa_driver_t p256_driver = {
       .name   = ECDSA256_NAME,
       .bytes  = ECDSA256_OPERAND_BITS / 8,
       .k_addr = ECDSA256_ADDR_K,
@@ -865,7 +865,7 @@ static inline hal_error_t verilog_p256_point_pick_random(fp_int *k, ec_point_t *
   };
 
   if (verilog_ecdsa256_multiplier)
-    return verilog_point_pick_random(&verilog_p256_driver, k, P);
+    return verilog_point_pick_random(&p256_driver, k, P);
 
 #endif
 
@@ -876,7 +876,7 @@ static inline hal_error_t verilog_p384_point_pick_random(fp_int *k, ec_point_t *
 {
 #if HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER
 
-  static const verilog_ecdsa_driver_t verilog_p384_driver = {
+  static const verilog_ecdsa_driver_t p384_driver = {
     .name   = ECDSA384_NAME,
     .bytes  = ECDSA384_OPERAND_BITS / 8,
     .k_addr = ECDSA384_ADDR_K,
@@ -884,8 +884,8 @@ static inline hal_error_t verilog_p384_point_pick_random(fp_int *k, ec_point_t *
     .y_addr = ECDSA384_ADDR_Y
   };
 
-  if (verilog_ecdsa256_multiplier)
-    return verilog_point_pick_random(&verilog_p256_driver, k, P);
+  if (verilog_ecdsa384_multiplier)
+    return verilog_point_pick_random(&p384_driver, k, P);
 
 #endif
 
