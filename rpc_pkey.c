@@ -61,6 +61,9 @@ static hal_pkey_slot_t pkey_handle[HAL_STATIC_PKEY_STATE_BLOCKS];
 
 static inline hal_pkey_slot_t *alloc_slot(const hal_key_flags_t flags)
 {
+  hal_pkey_slot_t *slot = NULL;
+  hal_critical_section_start();
+
 #if HAL_STATIC_PKEY_STATE_BLOCKS > 0
   static uint16_t next_glop = 0;
   uint32_t glop = ++next_glop << 16;
@@ -71,17 +74,18 @@ static inline hal_pkey_slot_t *alloc_slot(const hal_key_flags_t flags)
   if ((flags & HAL_KEY_FLAG_TOKEN) != 0)
     glop |= HAL_PKEY_HANDLE_TOKEN_FLAG;
 
-  for (int i = 0; i < sizeof(pkey_handle)/sizeof(*pkey_handle); i++) {
+  for (int i = 0; slot == NULL && i < sizeof(pkey_handle)/sizeof(*pkey_handle); i++) {
     if (pkey_handle[i].type != HAL_KEY_TYPE_NONE)
       continue;
     memset(&pkey_handle[i], 0, sizeof(pkey_handle[i]));
     pkey_handle[i].pkey_handle.handle = i | glop;
     pkey_handle[i].hint = -1;
-    return &pkey_handle[i];
+    slot = &pkey_handle[i];
   }
 #endif
 
-  return NULL;
+  hal_critical_section_end();
+  return slot;
 }
 
 /*
@@ -91,14 +95,18 @@ static inline hal_pkey_slot_t *alloc_slot(const hal_key_flags_t flags)
 
 static inline hal_pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
 {
+  hal_pkey_slot_t *slot = NULL;
+  hal_critical_section_start();
+
 #if HAL_STATIC_PKEY_STATE_BLOCKS > 0
   const int i = (int) (handle.handle & 0xFFFF);
 
   if (i < sizeof(pkey_handle)/sizeof(*pkey_handle) && pkey_handle[i].pkey_handle.handle == handle.handle)
-    return &pkey_handle[i];
+    slot = &pkey_handle[i];
 #endif
 
-  return NULL;
+  hal_critical_section_end();
+  return slot;
 }
 
 /*
@@ -219,7 +227,8 @@ static inline hal_error_t ks_open_from_flags(hal_ks_t **ks, const hal_key_flags_
 }
 
 /*
- * Receive key from application, store it with supplied name, return a key handle.
+ * Receive key from application, generate a name (UUID), store it, and
+ * return a key handle and the name.
  */
 
 static hal_error_t pkey_local_load(const hal_client_handle_t client,

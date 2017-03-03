@@ -103,24 +103,32 @@ static client_slot_t client_handle[HAL_STATIC_CLIENT_STATE_BLOCKS];
 
 static inline client_slot_t *alloc_slot(void)
 {
+  client_slot_t *slot = NULL;
+  hal_critical_section_start();
+
 #if HAL_STATIC_CLIENT_STATE_BLOCKS > 0
-  for (int i = 0; i < sizeof(client_handle)/sizeof(*client_handle); i++)
+  for (int i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
     if (client_handle[i].logged_in == HAL_USER_NONE)
-      return &client_handle[i];
+      slot = &client_handle[i];
 #endif
 
-  return NULL;
+  hal_critical_section_end();
+  return slot;
 }
 
 static inline client_slot_t *find_handle(const hal_client_handle_t handle)
 {
+  client_slot_t *slot = NULL;
+  hal_critical_section_start();
+
 #if HAL_STATIC_CLIENT_STATE_BLOCKS > 0
-  for (int i = 0; i < sizeof(client_handle)/sizeof(*client_handle); i++)
+  for (int i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
     if (client_handle[i].logged_in != HAL_USER_NONE && client_handle[i].handle.handle == handle.handle)
-      return &client_handle[i];
+      slot = &client_handle[i];
 #endif
 
-  return NULL;
+  hal_critical_section_end();
+  return slot;
 }
 
 static hal_error_t login(const hal_client_handle_t client,

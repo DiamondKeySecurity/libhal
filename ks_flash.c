@@ -33,6 +33,15 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * This keystore driver operates over bare flash, versus over a flash file
+ * system or flash translation layer. The block size is large enough to
+ * hold an AES-keywrapped 4096-bit RSA key. Any remaining space in the key
+ * block may be used to store attributes (opaque TLV blobs). If the
+ * attributes overflow the key block, additional blocks may be added, but
+ * no attribute may exceed the block size.
+ */
+
 #include <stddef.h>
 #include <string.h>
 #include <assert.h>
@@ -312,7 +321,7 @@ static hal_crc32_t calculate_block_crc(const flash_block_t * const block)
 }
 
 /*
- * Calculate block offset.
+ * Calculate offset of the block in the flash address space.
  */
 
 static inline uint32_t block_offset(const unsigned blockno)
@@ -446,7 +455,7 @@ static hal_error_t block_erase(const unsigned blockno)
     return HAL_ERROR_IMPOSSIBLE;
 
   /* Sigh, magic numeric return codes */
-  if (keystore_erase_subsectors(blockno, blockno) != 1)
+  if (keystore_erase_subsector(blockno) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   return HAL_OK;
@@ -537,6 +546,11 @@ static hal_error_t block_update(const unsigned b1, flash_block_t *block,
 
   cache_mark_used(block, b2);
 
+  /*
+   * Erase the first block in the free list. In case of restart, this
+   * puts the block back at the head of the free list.
+   */
+
   return block_erase_maybe(db.ksi.index[db.ksi.used]);
 }
 
@@ -565,6 +579,10 @@ static inline void *gnaw(uint8_t **mem, size_t *len, const size_t size)
 
 static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc)
 {
+  hal_error_t err = HAL_OK;
+
+  hal_ks_lock();
+
   /*
    * Initialize the in-memory database.
    */
@@ -575,10 +593,18 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
                   sizeof(*db.ksi.names) * NUM_FLASH_BLOCKS +
                   sizeof(*db.cache)     * KS_FLASH_CACHE_SIZE);
 
+    /*
+     * This is done as a single large allocation, rather than 3 smaller
+     * allocations, to make it atomic - we need all 3, so either all
+     * succeed or all fail.
+     */
+
     uint8_t *mem = hal_allocate_static_memory(len);
 
-    if (mem == NULL)
-      return HAL_ERROR_ALLOCATION_FAILURE;
+    if (mem == NULL) {
+      err = HAL_ERROR_ALLOCATION_FAILURE;
+      goto done;
+    }
 
     memset(&db, 0, sizeof(db));
     memset(mem, 0, len);
@@ -597,8 +623,10 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
 
   db.ksi.used  = 0;
 
-  if (db.ksi.index == NULL || db.ksi.names == NULL || db.cache == NULL)
-    return HAL_ERROR_IMPOSSIBLE;
+  if (db.ksi.index == NULL || db.ksi.names == NULL || db.cache == NULL) {
+    err = HAL_ERROR_IMPOSSIBLE;
+    goto done;
+  }
 
   for (int i = 0; i < KS_FLASH_CACHE_SIZE; i++)
     db.cache[i].blockno = ~0;
@@ -613,11 +641,12 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
   flash_block_status_t block_status[NUM_FLASH_BLOCKS];
   flash_block_t *block = cache_pick_lru();
   int first_erased = -1;
-  hal_error_t err;
   uint16_t n = 0;
 
-  if (block == NULL)
-    return HAL_ERROR_IMPOSSIBLE;
+  if (block == NULL) {
+    err = HAL_ERROR_IMPOSSIBLE;
+    goto done;
+  }
 
   for (int i = 0; i < NUM_FLASH_BLOCKS; i++) {
 
@@ -625,7 +654,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
      * Read one block.  If the CRC is bad or the block type is
      * unknown, it's old data we don't understand, something we were
      * writing when we crashed, or bad flash; in any of these cases,
-     * we want the block to ends up near the end of the free list.
+     * we want the block to end up near the end of the free list.
      */
 
     err = block_read(i, block);
@@ -637,7 +666,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
       block_types[i] = block_get_type(block);
 
     else
-      return err;
+      goto done;
 
     switch (block_types[i]) {
     case BLOCK_TYPE_KEY:
@@ -718,7 +747,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
    */
 
   if ((err = hal_ks_index_setup(&db.ksi)) != HAL_OK)
-    return err;
+    goto done;
 
   /*
    * We might want to call hal_ks_index_fsck() here, if we can figure
@@ -733,20 +762,22 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
    *
    * For any tombstone we find, we start by looking for all the blocks
    * with a matching UUID, then see what valid sequences we can
-   * construct from what we found.
+   * construct from what we found. This basically works in reverse of
+   * the update sequence in ks_set_attributes().
    *
    * If we can construct a valid sequence of live blocks, the complete
-   * update was written out, and we just need to zero the tombstones.
+   * update was written out, and we just need to finish zeroing the
+   * tombstones.
    *
    * Otherwise, if we can construct a complete sequence of tombstone
    * blocks, the update failed before it was completely written, so we
    * have to zero the incomplete sequence of live blocks then restore
-   * from the tombstones.
+   * the tombstones.
    *
    * Otherwise, if the live and tombstone blocks taken together form a
    * valid sequence, the update failed while deprecating the old live
-   * blocks, and the update itself was not written, so we need to
-   * restore the tombstones and leave the live blocks alone.
+   * blocks, and none of the new data was written, so we need to restore
+   * the tombstones and leave the live blocks alone.
    *
    * If none of the above applies, we don't understand what happened,
    * which is a symptom of either a bug or a hardware failure more
@@ -764,12 +795,26 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
     int where = -1;
 
     if ((err = hal_ks_index_find_range(&db.ksi, &name, 0, &n_blocks, NULL, &where, 0)) != HAL_OK)
-      return err;
+      goto done;
+
+    /*
+     * hal_ks_index_find_range does a binary search, not a linear search,
+     * so it may not return the first instance of a block with the given
+     * name and chunk=0. Search backwards to make sure we have all chunks.
+     */
 
     while (where > 0 && !hal_uuid_cmp(&name, &db.ksi.names[db.ksi.index[where - 1]].name)) {
       where--;
       n_blocks++;
     }
+
+    /*
+     * Rather than calling hal_ks_index_find_range with an array pointer
+     * to get the list of matching blocks (because of the binary search
+     * issue), we're going to fondle the index directly. This is really
+     * not something to do in regular code, but this is error-recovery
+     * code.
+     */
 
     int live_ok = 1, tomb_ok = 1, join_ok = 1;
     unsigned n_live = 0, n_tomb = 0;
@@ -778,9 +823,9 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
     for (int j = 0; j < n_blocks; j++) {
       unsigned b = db.ksi.index[where + j];
       switch (block_status[b]) {
-      case BLOCK_STATUS_LIVE:           n_live++;       break;
-      case BLOCK_STATUS_TOMBSTONE:      n_tomb++;       break;
-      default:                          return HAL_ERROR_IMPOSSIBLE;
+      case BLOCK_STATUS_LIVE:           n_live++;                       break;
+      case BLOCK_STATUS_TOMBSTONE:      n_tomb++;                       break;
+      default:                          err = HAL_ERROR_IMPOSSIBLE;     goto done;
       }
     }
 
@@ -790,7 +835,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
       unsigned b = db.ksi.index[where + j];
 
       if ((err = block_read(b, block)) != HAL_OK)
-        return err;
+        goto done;
 
       join_ok &= block->header.this_chunk == j && block->header.total_chunks == n_blocks;
 
@@ -804,18 +849,27 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
         tomb_ok &= block->header.this_chunk == i_tomb++ && block->header.total_chunks == n_tomb;
         break;
       default:
-        return HAL_ERROR_IMPOSSIBLE;
+        err = HAL_ERROR_IMPOSSIBLE;
+        goto done;
       }
     }
 
-    if (!live_ok && !tomb_ok && !join_ok)
-      return HAL_ERROR_KEYSTORE_LOST_DATA;
+    if (!live_ok && !tomb_ok && !join_ok) {
+      err = HAL_ERROR_KEYSTORE_LOST_DATA;
+      goto done;
+    }
+
+    /*
+     * If live_ok or tomb_ok, we have to zero out some blocks, and adjust
+     * the index. Again, don't fondle the index directly, outside of error
+     * recovery.
+     */
 
     if (live_ok) {
       for (int j = 0; j < n_tomb; j++) {
         const unsigned b = tomb_blocks[j];
         if ((err = block_zero(b)) != HAL_OK)
-          return err;
+          goto done;
         block_types[b]  = BLOCK_TYPE_ZEROED;
         block_status[b] = BLOCK_STATUS_UNKNOWN;
       }
@@ -825,7 +879,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
       for (int j = 0; j < n_live; j++) {
         const unsigned b = live_blocks[j];
         if ((err = block_zero(b)) != HAL_OK)
-          return err;
+          goto done;
         block_types[b]  = BLOCK_TYPE_ZEROED;
         block_status[b] = BLOCK_STATUS_UNKNOWN;
       }
@@ -849,22 +903,30 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
       n_blocks = n_tomb;
     }
 
+    /*
+     * Restore tombstone blocks (tomb_ok or join_ok).
+     */
+
     for (int j = 0; j < n_blocks; j++) {
       int hint = where + j;
       unsigned b1 = db.ksi.index[hint], b2;
       if (block_status[b1] != BLOCK_STATUS_TOMBSTONE)
         continue;
       if ((err = block_read(b1, block)) != HAL_OK)
-        return err;
+        goto done;
       block->header.block_status = BLOCK_STATUS_LIVE;
       if ((err = hal_ks_index_replace(&db.ksi, &name, j, &b2, &hint)) != HAL_OK ||
           (err = block_write(b2, block)) != HAL_OK)
-        return err;
+        goto done;
       block_types[b1]  = BLOCK_TYPE_ZEROED;
       block_status[b1] = BLOCK_STATUS_UNKNOWN;
       block_status[b2] = BLOCK_STATUS_LIVE;
     }
   }
+
+  /*
+   * Fetch or create the PIN block.
+   */
 
   err = fetch_pin_block(NULL, &block);
 
@@ -875,7 +937,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
   }
 
   else if (err != HAL_ERROR_KEY_NOT_FOUND)
-    return err;
+    goto done;
 
   else {
     /*
@@ -900,7 +962,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
     block->pin.user_pin  = db.user_pin;
 
     if ((err = hal_ks_index_add(&db.ksi, &pin_uuid, 0, &b, NULL)) != HAL_OK)
-      return err;
+      goto done;
 
     cache_mark_used(block, b);
 
@@ -909,7 +971,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
     cache_release(block);
 
     if (err != HAL_OK)
-      return err;
+      goto done;
   }
 
   /*
@@ -918,7 +980,7 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
 
   if (db.ksi.used < db.ksi.size &&
       (err = block_erase_maybe(db.ksi.index[db.ksi.used])) != HAL_OK)
-    return err;
+    goto done;
 
   /*
    * And we're finally done.
@@ -926,7 +988,11 @@ static hal_error_t ks_init(const hal_ks_driver_t * const driver, const int alloc
 
   db.ks.driver = driver;
 
-  return HAL_OK;
+  err = HAL_OK;
+
+ done:
+  hal_ks_unlock();
+  return err;
 }
 
 static hal_error_t ks_shutdown(const hal_ks_driver_t * const driver)
@@ -974,18 +1040,24 @@ static hal_error_t ks_store(hal_ks_t *ks,
   if (ks != &db.ks || slot == NULL || der == NULL || der_len == 0 || !acceptable_key_type(slot->type))
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  flash_block_t *block = cache_pick_lru();
-  flash_key_block_t *k = &block->key;
+  hal_error_t err = HAL_OK;
+  flash_block_t *block;
+  flash_key_block_t *k;
   uint8_t kek[KEK_LENGTH];
   size_t kek_len;
-  hal_error_t err;
   unsigned b;
 
-  if (block == NULL)
-    return HAL_ERROR_IMPOSSIBLE;
+  hal_ks_lock();
+
+  if ((block = cache_pick_lru()) == NULL) {
+    err = HAL_ERROR_IMPOSSIBLE;
+    goto done;
+  }
+
+  k = &block->key;
 
   if ((err = hal_ks_index_add(&db.ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
-    return err;
+    goto done;
 
   cache_mark_used(block, b);
 
@@ -1003,18 +1075,29 @@ static hal_error_t ks_store(hal_ks_t *ks,
   k->der_len = SIZEOF_FLASH_KEY_BLOCK_DER;
   k->attributes_len = 0;
 
-  if ((err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
+  if (db.ksi.used < db.ksi.size)
+    err = block_erase_maybe(db.ksi.index[db.ksi.used]);
+
+  if (err == HAL_OK)
+    err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek));
+
+  if (err == HAL_OK)
     err = hal_aes_keywrap(NULL, kek, kek_len, der, der_len, k->der, &k->der_len);
 
   memset(kek, 0, sizeof(kek));
 
-  if (err == HAL_OK &&
-      (err = block_write(b, block)) == HAL_OK)
-    return HAL_OK;
+  if (err == HAL_OK)
+    err = block_write(b, block);
+
+  if (err == HAL_OK)
+    goto done;
 
   memset(block, 0, sizeof(*block));
   cache_release(block);
   (void) hal_ks_index_delete(&db.ksi, &slot->name, 0, NULL, &slot->hint);
+
+ done:
+  hal_ks_unlock();
   return err;
 }
 
@@ -1025,16 +1108,20 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
   if (ks != &db.ks || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
+  hal_error_t err = HAL_OK;
   flash_block_t *block;
-  hal_error_t err;
   unsigned b;
+
+  hal_ks_lock();
 
   if ((err = hal_ks_index_find(&db.ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK ||
       (err = block_read_cached(b, &block))                                != HAL_OK)
-    return err;
+    goto done;
 
-  if (block_get_type(block) != BLOCK_TYPE_KEY)
-    return HAL_ERROR_KEYSTORE_WRONG_BLOCK_TYPE; /* HAL_ERROR_KEY_NOT_FOUND */
+  if (block_get_type(block) != BLOCK_TYPE_KEY) {
+    err = HAL_ERROR_KEYSTORE_WRONG_BLOCK_TYPE; /* HAL_ERROR_KEY_NOT_FOUND */
+    goto done;
+  }
 
   cache_mark_used(block, b);
 
@@ -1062,12 +1149,11 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
       err = hal_aes_keyunwrap(NULL, kek, kek_len, k->der, k->der_len, der, der_len);
 
     memset(kek, 0, sizeof(kek));
-
-    if (err != HAL_OK)
-      return err;
   }
 
-  return HAL_OK;
+ done:
+  hal_ks_unlock();
+  return err;
 }
 
 static hal_error_t ks_delete(hal_ks_t *ks,
@@ -1076,25 +1162,50 @@ static hal_error_t ks_delete(hal_ks_t *ks,
   if (ks != &db.ks || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  hal_error_t err;
+  hal_error_t err = HAL_OK;
   unsigned n;
 
-  if ((err = hal_ks_index_delete_range(&db.ksi, &slot->name, 0, &n, NULL, &slot->hint)) != HAL_OK)
-    return err;
+  hal_ks_lock();
 
-  unsigned b[n];
+  {
+    /*
+     * Get the count of blocks to delete.
+     */
 
-  if ((err = hal_ks_index_delete_range(&db.ksi, &slot->name, n, NULL, b, &slot->hint)) != HAL_OK)
-    return err;
+    if ((err = hal_ks_index_delete_range(&db.ksi, &slot->name, 0, &n, NULL, &slot->hint)) != HAL_OK)
+      goto done;
 
-  for (int i = 0; i < n; i++)
-    cache_release(cache_find_block(b[i]));
+    /*
+     * Then delete them.
+     */
 
-  for (int i = 0; i < n; i++)
-    if ((err = block_zero(b[i])) != HAL_OK)
-      return err;
+    unsigned b[n];
 
-  return block_erase_maybe(db.ksi.index[db.ksi.used]);
+    if ((err = hal_ks_index_delete_range(&db.ksi, &slot->name, n, NULL, b, &slot->hint)) != HAL_OK)
+      goto done;
+
+    for (int i = 0; i < n; i++)
+      cache_release(cache_find_block(b[i]));
+
+    /*
+     * Zero the blocks, to mark them as recently used.
+     */
+
+    for (int i = 0; i < n; i++)
+      if ((err = block_zero(b[i])) != HAL_OK)
+        goto done;
+
+    /*
+     * Erase the first block in the free list. In case of restart, this
+     * puts the block back at the head of the free list.
+     */
+
+    err = block_erase_maybe(db.ksi.index[db.ksi.used]);
+  }
+
+ done:
+  hal_ks_unlock();
+  return err;
 }
 
 static inline hal_error_t locate_attributes(flash_block_t *block, const unsigned chunk,
@@ -1141,10 +1252,12 @@ static hal_error_t ks_match(hal_ks_t *ks,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   uint8_t need_attr[attributes_len > 0 ? attributes_len : 1];
+  hal_error_t err = HAL_OK;
   flash_block_t *block;
   int possible = 0;
-  hal_error_t err;
   int i = -1;
+
+  hal_ks_lock();
 
   *result_len = 0;
 
@@ -1153,7 +1266,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
   if (err == HAL_ERROR_KEY_NOT_FOUND)
     i--;
   else if (err != HAL_OK)
-    return err;
+    goto done;
 
   while (*result_len < result_max && ++i < db.ksi.used) {
 
@@ -1166,7 +1279,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
       continue;
 
     if ((err = block_read_cached(b, &block)) != HAL_OK)
-      return err;
+      goto done;
 
     if (db.ksi.names[b].chunk == 0) {
       memset(need_attr, 1, sizeof(need_attr));
@@ -1184,13 +1297,13 @@ static hal_error_t ks_match(hal_ks_t *ks,
 
       if ((err = locate_attributes(block, db.ksi.names[b].chunk,
                                    &bytes, &bytes_len, &attrs_len)) != HAL_OK)
-        return err;
+        goto done;
 
       if (*attrs_len > 0) {
         hal_pkey_attribute_t attrs[*attrs_len];
 
         if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, NULL)) != HAL_OK)
-          return err;
+          goto done;
 
         for (int j = 0; possible && j < attributes_len; j++) {
 
@@ -1220,7 +1333,11 @@ static hal_error_t ks_match(hal_ks_t *ks,
     possible = 0;
   }
 
-  return HAL_OK;
+  err = HAL_OK;
+
+ done:
+  hal_ks_unlock();
+  return err;
 }
 
 /*
@@ -1259,419 +1376,453 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
    */
 
   unsigned updated_attributes_len = attributes_len;
+  hal_error_t err = HAL_OK;
   flash_block_t *block;
   unsigned chunk = 0;
-  hal_error_t err;
   unsigned b;
 
-  do {
-    int hint = slot->hint + chunk;
+  hal_ks_lock();
 
-    if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &b, &hint)) != HAL_OK ||
-        (err = block_read_cached(b, &block))                              != HAL_OK)
-      return err;
+  {
 
-    if (block->header.this_chunk != chunk)
-      return HAL_ERROR_IMPOSSIBLE;
+    do {
+      int hint = slot->hint + chunk;
 
-    cache_mark_used(block, b);
+      if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &b, &hint)) != HAL_OK ||
+          (err = block_read_cached(b, &block))                              != HAL_OK)
+        goto done;
 
-    if (chunk == 0)
-      slot->hint = hint;
+      if (block->header.this_chunk != chunk) {
+        err = HAL_ERROR_IMPOSSIBLE;
+        goto done;
+      }
 
-    uint8_t *bytes = NULL;
-    size_t bytes_len = 0;
-    unsigned *attrs_len;
+      cache_mark_used(block, b);
 
-    if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
-      return err;
+      if (chunk == 0)
+        slot->hint = hint;
 
-    updated_attributes_len += *attrs_len;
+      uint8_t *bytes = NULL;
+      size_t bytes_len = 0;
+      unsigned *attrs_len;
+
+      if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
+        goto done;
+
+      updated_attributes_len += *attrs_len;
 
 #if KS_SET_ATTRIBUTES_SINGLE_BLOCK_UPDATE_FAST_PATH
 
-    hal_pkey_attribute_t attrs[*attrs_len + attributes_len];
-    size_t total;
+      hal_pkey_attribute_t attrs[*attrs_len + attributes_len];
+      size_t total;
 
-    if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, &total)) != HAL_OK)
-      return err;
+      if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, &total)) != HAL_OK)
+        goto done;
 
-    for (int i = 0; err == HAL_OK && i < attributes_len; i++)
-      if (attributes[i].length == HAL_PKEY_ATTRIBUTE_NIL)
-        err = hal_ks_attribute_delete(bytes, bytes_len, attrs, attrs_len, &total,
-                                      attributes[i].type);
-      else
-        err = hal_ks_attribute_insert(bytes, bytes_len, attrs, attrs_len, &total,
-                                      attributes[i].type,
-                                      attributes[i].value,
-                                      attributes[i].length);
+      for (int i = 0; err == HAL_OK && i < attributes_len; i++)
+        if (attributes[i].length == HAL_PKEY_ATTRIBUTE_NIL)
+          err = hal_ks_attribute_delete(bytes, bytes_len, attrs, attrs_len, &total,
+                                        attributes[i].type);
+        else
+          err = hal_ks_attribute_insert(bytes, bytes_len, attrs, attrs_len, &total,
+                                        attributes[i].type,
+                                        attributes[i].value,
+                                        attributes[i].length);
 
-    if (err != HAL_OK)
-      cache_release(block);
+      if (err != HAL_OK)
+        cache_release(block);
 
-    if (err == HAL_ERROR_RESULT_TOO_LONG)
-      continue;
+      if (err == HAL_ERROR_RESULT_TOO_LONG)
+        continue;
 
-    if (err != HAL_OK)
-      return err;
+      if (err == HAL_OK)
+        err = block_update(b, block, &slot->name, chunk, &hint);
 
-    return block_update(b, block, &slot->name, chunk, &hint);
+      goto done;
 
 #endif /* KS_SET_ATTRIBUTES_SINGLE_BLOCK_UPDATE_FAST_PATH */
 
-  } while (++chunk < block->header.total_chunks);
+    } while (++chunk < block->header.total_chunks);
 
-  /*
-   * If we get here, we're on the slow path, which requires rewriting
-   * all the chunks in this object but which can also add or remove
-   * chunks from this object.  We need to keep track of all the old
-   * chunks so we can zero them at the end, and because we can't zero
-   * them until we've written out the new chunks, we need enough free
-   * blocks to hold all the new chunks.
-   *
-   * Calculating all of this is extremely tedious, but flash writes
-   * are so much more expensive than anything else we do here that
-   * it's almost certainly worth it.
-   *
-   * We don't need the attribute values to compute the sizes, just the
-   * attribute sizes, so we scan all the existing blocks, build up a
-   * structure with the current attribute types and sizes, modify that
-   * according to our arguments, and compute the needed size.  Once we
-   * have that, we can start rewriting existing blocks.  We put all
-   * the new stuff at the end, which simplifies this slightly.
-   *
-   * In theory, this process never requires us to have more than two
-   * blocks in memory at the same time (source and destination when
-   * copying across chunk boundaries), but having enough cache buffers
-   * to keep the whole set in memory will almost certainly make this
-   * run faster.
-   */
+    /*
+     * If we get here, we're on the slow path, which requires rewriting
+     * all the chunks in this object but which can also add or remove
+     * chunks from this object.  We need to keep track of all the old
+     * chunks so we can zero them at the end, and because we can't zero
+     * them until we've written out the new chunks, we need enough free
+     * blocks to hold all the new chunks.
+     *
+     * Calculating all of this is extremely tedious, but flash writes
+     * are so much more expensive than anything else we do here that
+     * it's almost certainly worth it.
+     *
+     * We don't need the attribute values to compute the sizes, just the
+     * attribute sizes, so we scan all the existing blocks, build up a
+     * structure with the current attribute types and sizes, modify that
+     * according to our arguments, and compute the needed size.  Once we
+     * have that, we can start rewriting existing blocks.  We put all
+     * the new stuff at the end, which simplifies this slightly.
+     *
+     * In theory, this process never requires us to have more than two
+     * blocks in memory at the same time (source and destination when
+     * copying across chunk boundaries), but having enough cache buffers
+     * to keep the whole set in memory will almost certainly make this
+     * run faster.
+     */
 
-  hal_pkey_attribute_t updated_attributes[updated_attributes_len];
-  const unsigned total_chunks_old = block->header.total_chunks;
-  size_t bytes_available = 0;
+    hal_pkey_attribute_t updated_attributes[updated_attributes_len];
+    const unsigned total_chunks_old = block->header.total_chunks;
+    size_t bytes_available = 0;
 
-  updated_attributes_len = 0;
+    updated_attributes_len = 0;
 
-  /*
-   * Phase 0.1: Walk the old chunks to populate updated_attributes[].
-   * This also initializes bytes_available, since we can only get that
-   * by reading old chunk zero.
-   */
+    /*
+     * Phase 0.1: Walk the old chunks to populate updated_attributes[].
+     * This also initializes bytes_available, since we can only get that
+     * by reading old chunk zero.
+     */
 
-  for (chunk = 0; chunk < total_chunks_old; chunk++) {
-    int hint = slot->hint + chunk;
+    for (chunk = 0; chunk < total_chunks_old; chunk++) {
+      int hint = slot->hint + chunk;
 
-    if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &b, &hint)) != HAL_OK ||
-        (err = block_read_cached(b, &block))                              != HAL_OK)
-      return err;
+      if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &b, &hint)) != HAL_OK ||
+          (err = block_read_cached(b, &block))                              != HAL_OK)
+        goto done;
 
-    if (block->header.this_chunk != chunk)
-      return HAL_ERROR_IMPOSSIBLE;
-
-    cache_mark_used(block, b);
-
-    uint8_t *bytes = NULL;
-    size_t bytes_len = 0;
-    unsigned *attrs_len;
-
-    if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
-      return err;
-
-    hal_pkey_attribute_t attrs[*attrs_len];
-    size_t total;
-
-    if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, &total)) != HAL_OK)
-      return err;
-
-    if (chunk == 0)
-      bytes_available = bytes_len;
-
-    for (int i = 0; i < *attrs_len; i++) {
-
-      if (updated_attributes_len >= sizeof(updated_attributes)/sizeof(*updated_attributes))
-        return HAL_ERROR_IMPOSSIBLE;
-
-      updated_attributes[updated_attributes_len].type   = attrs[i].type;
-      updated_attributes[updated_attributes_len].length = attrs[i].length;
-      updated_attributes[updated_attributes_len].value  = NULL;
-      updated_attributes_len++;
-    }
-  }
-
-  /*
-   * Phase 0.2: Merge new attributes into updated_attributes[].
-   */
-
-  for (int i = 0; i < attributes_len; i++) {
-
-    for (int j = 0; j < updated_attributes_len; j++)
-      if (updated_attributes[j].type == attributes[i].type)
-        updated_attributes[j].length = HAL_PKEY_ATTRIBUTE_NIL;
-
-    if (updated_attributes_len >= sizeof(updated_attributes)/sizeof(*updated_attributes))
-      return HAL_ERROR_IMPOSSIBLE;
-
-    updated_attributes[updated_attributes_len].type   = attributes[i].type;
-    updated_attributes[updated_attributes_len].length = attributes[i].length;
-    updated_attributes[updated_attributes_len].value  = attributes[i].value;
-    updated_attributes_len++;
-  }
-
-  /*
-   * Phase 0.3: Prune trailing deletion actions: we don't need them to
-   * maintain synchronization with existing attributes, and doing so
-   * simplifies logic for updating the final new chunk.
-   */
-
-  while (updated_attributes_len > 0 &&
-         updated_attributes[updated_attributes_len - 1].length == HAL_PKEY_ATTRIBUTE_NIL)
-    --updated_attributes_len;
-
-  /*
-   * Phase 0.4: Figure out how many chunks all this will occupy.
-   */
-
-  chunk = 0;
-
-  for (int i = 0; i < updated_attributes_len; i++) {
-
-    if (updated_attributes[i].length == HAL_PKEY_ATTRIBUTE_NIL)
-      continue;
-
-    const size_t needed = hal_ks_attribute_header_size + updated_attributes[i].length;
-
-    if (needed > bytes_available) {
-      bytes_available = SIZEOF_FLASH_ATTRIBUTE_BLOCK_ATTRIBUTES;
-      chunk++;
-    }
-
-    if (needed > bytes_available)
-      return HAL_ERROR_RESULT_TOO_LONG;
-
-    bytes_available -= needed;
-  }
-
-  const unsigned total_chunks_new = chunk + 1;
-
-  /*
-   * If there aren't enough free blocks, give up now, before changing anything.
-   */
-
-  if (db.ksi.used + total_chunks_new > db.ksi.size)
-    return HAL_ERROR_NO_KEY_INDEX_SLOTS;
-
-  /*
-   * Phase 1: Deprecate all the old chunks, remember where they were.
-   */
-
-  unsigned old_blocks[total_chunks_old];
-
-  for (chunk = 0; chunk < total_chunks_old; chunk++) {
-    int hint = slot->hint + chunk;
-    if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &b, &hint)) != HAL_OK ||
-        (err = block_deprecate(b))                                        != HAL_OK)
-      return err;
-    old_blocks[chunk] = b;
-  }
-
-  /*
-   * Phase 2: Write new chunks, copying attributes from old chunks or
-   * from attributes[], as needed.
-   */
-
-  {
-    hal_pkey_attribute_t old_attrs[updated_attributes_len], new_attrs[updated_attributes_len];
-    unsigned                *old_attrs_len = NULL,             *new_attrs_len = NULL;
-    flash_block_t           *old_block     = NULL,             *new_block     = NULL;
-    uint8_t                 *old_bytes     = NULL,             *new_bytes     = NULL;
-    size_t                   old_bytes_len = 0,                 new_bytes_len = 0;
-    unsigned                 old_chunk     = 0,                 new_chunk     = 0;
-    size_t                   old_total     = 0,                 new_total     = 0;
-
-    int updated_attributes_i = 0, old_attrs_i = 0;
-
-    uint32_t       new_attr_type;
-    size_t         new_attr_length;
-    const uint8_t *new_attr_value;
-
-    while (updated_attributes_i < updated_attributes_len) {
-
-      if (old_chunk >= total_chunks_old || new_chunk >= total_chunks_new)
-        return HAL_ERROR_IMPOSSIBLE;
-
-      /*
-       * If we've gotten as far as new data that comes from
-       * attributes[], we have it in hand and can just copy it.
-       */
-
-      if (updated_attributes_len - updated_attributes_i <= attributes_len) {
-        new_attr_type   = updated_attributes[updated_attributes_i].type;
-        new_attr_length = updated_attributes[updated_attributes_i].length;
-        new_attr_value  = updated_attributes[updated_attributes_i].value;
+      if (block->header.this_chunk != chunk) {
+        err = HAL_ERROR_IMPOSSIBLE;
+        goto done;
       }
 
-      /*
-       * Otherwise, we have to read it from an old block, which may in
-       * turn require reading in the next old block.
-       */
+      cache_mark_used(block, b);
 
-      else {
+      uint8_t *bytes = NULL;
+      size_t bytes_len = 0;
+      unsigned *attrs_len;
 
-        if (old_block == NULL) {
+      if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
+        goto done;
 
-          if ((err = block_read_cached(old_blocks[old_chunk], &old_block)) != HAL_OK)
-            return err;
+      hal_pkey_attribute_t attrs[*attrs_len];
+      size_t total;
 
-          if (old_block->header.this_chunk != old_chunk)
-            return HAL_ERROR_IMPOSSIBLE;
+      if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, &total)) != HAL_OK)
+        goto done;
 
-          if ((err = locate_attributes(old_block, old_chunk,
-                                       &old_bytes, &old_bytes_len, &old_attrs_len)) != HAL_OK ||
-              (err = hal_ks_attribute_scan(old_bytes, old_bytes_len,
-                                           old_attrs, *old_attrs_len, &old_total))  != HAL_OK)
-            return err;
+      if (chunk == 0)
+        bytes_available = bytes_len;
 
-          old_attrs_i = 0;
+      for (int i = 0; i < *attrs_len; i++) {
+
+        if (updated_attributes_len >= sizeof(updated_attributes)/sizeof(*updated_attributes)) {
+          err = HAL_ERROR_IMPOSSIBLE;
+          goto done;
         }
 
-        if (old_attrs_i >= *old_attrs_len) {
-          old_chunk++;
-          old_block = NULL;
-          continue;
-        }
-
-        new_attr_type   = old_attrs[old_attrs_i].type;
-        new_attr_length = old_attrs[old_attrs_i].length;
-        new_attr_value  = old_attrs[old_attrs_i].value;
-
-        if (new_attr_type != updated_attributes[updated_attributes_i].type)
-          return HAL_ERROR_IMPOSSIBLE;
-
-        old_attrs_i++;
+        updated_attributes[updated_attributes_len].type   = attrs[i].type;
+        updated_attributes[updated_attributes_len].length = attrs[i].length;
+        updated_attributes[updated_attributes_len].value  = NULL;
+        updated_attributes_len++;
       }
-
-      /*
-       * Unless this is a deletion, we should have something to write.
-       */
-
-      if (new_attr_length != HAL_PKEY_ATTRIBUTE_NIL && new_attr_value == NULL)
-        return HAL_ERROR_IMPOSSIBLE;
-
-      /*
-       * Initialize the new block if necessary.  If it's the new chunk
-       * zero, we need to copy all the non-attribute data from the old
-       * chunk zero; otherwise, it's a new empty attribute block.
-       */
-
-      if (new_block == NULL) {
-
-        new_block = cache_pick_lru();
-        memset(new_block, 0xFF, sizeof(*new_block));
-
-        if (new_chunk == 0) {
-          flash_block_t *tmp_block;
-          if ((err = block_read_cached(old_blocks[0], &tmp_block)) != HAL_OK)
-            return err;
-          if (tmp_block->header.this_chunk != 0)
-            return HAL_ERROR_IMPOSSIBLE;
-          new_block->header.block_type   = BLOCK_TYPE_KEY;
-          new_block->key.name            = slot->name;
-          new_block->key.type            = tmp_block->key.type;
-          new_block->key.curve           = tmp_block->key.curve;
-          new_block->key.flags           = tmp_block->key.flags;
-          new_block->key.der_len         = tmp_block->key.der_len;
-          new_block->key.attributes_len  = 0;
-          memcpy(new_block->key.der, tmp_block->key.der, tmp_block->key.der_len);
-        }
-        else {
-          new_block->header.block_type   = BLOCK_TYPE_ATTR;
-          new_block->attr.name           = slot->name;
-          new_block->attr.attributes_len = 0;
-        }
-
-        new_block->header.block_status = BLOCK_STATUS_LIVE;
-        new_block->header.total_chunks = total_chunks_new;
-        new_block->header.this_chunk   = new_chunk;
-
-        if ((err = locate_attributes(new_block, new_chunk,
-                                     &new_bytes, &new_bytes_len, &new_attrs_len)) != HAL_OK)
-          return err;
-
-        new_total = 0;
-      }
-
-      /*
-       * After all that setup, we finally get to write the frelling attribute.
-       */
-
-      if (new_attr_length != HAL_PKEY_ATTRIBUTE_NIL)
-        err = hal_ks_attribute_insert(new_bytes, new_bytes_len, new_attrs, new_attrs_len, &new_total,
-                                      new_attr_type, new_attr_value, new_attr_length);
-
-      /*
-       * Figure out what to do next: immediately loop for next
-       * attribute, write current block, or bail out.
-       */
-
-      switch (err) {
-      case HAL_OK:
-        if (++updated_attributes_i < updated_attributes_len)
-          continue;
-        break;
-      case HAL_ERROR_RESULT_TOO_LONG:
-        if (new_chunk > 0 && new_attrs_len == 0)
-          return err;
-        break;
-      default:
-        return err;
-      }
-
-      /*
-       * If we get here, either the current new block is full or we
-       * finished the last block, so we need to write it out.
-       */
-
-      int hint = slot->hint + new_chunk;
-
-      if (new_chunk < total_chunks_old)
-        err = hal_ks_index_replace(&db.ksi, &slot->name, new_chunk, &b, &hint);
-      else
-        err = hal_ks_index_add(    &db.ksi, &slot->name, new_chunk, &b, &hint);
-
-      if (err != HAL_OK || (err = block_write(b, new_block)) != HAL_OK)
-        return err;
-
-      cache_mark_used(new_block, b);
-
-      new_block = NULL;
-      new_chunk++;
     }
 
     /*
-     * If number of blocks shrank, we need to clear trailing entries from the index.
+     * Phase 0.2: Merge new attributes into updated_attributes[].
+     * For each new attribute type, mark any existing attributes of that
+     * type for deletion. Append new attributes to updated_attributes[].
      */
 
-    for (old_chunk = total_chunks_new; old_chunk < total_chunks_old; old_chunk++) {
-      int hint = slot->hint + old_chunk;
+    for (int i = 0; i < attributes_len; i++) {
 
-      err = hal_ks_index_delete(&db.ksi, &slot->name, old_chunk, NULL, &hint);
+      for (int j = 0; j < updated_attributes_len; j++)
+        if (updated_attributes[j].type == attributes[i].type)
+          updated_attributes[j].length = HAL_PKEY_ATTRIBUTE_NIL;
 
-      if (err != HAL_OK)
-        return err;
+      if (updated_attributes_len >= sizeof(updated_attributes)/sizeof(*updated_attributes)) {
+        err = HAL_ERROR_IMPOSSIBLE;
+        goto done;
+      }
+
+      updated_attributes[updated_attributes_len].type   = attributes[i].type;
+      updated_attributes[updated_attributes_len].length = attributes[i].length;
+      updated_attributes[updated_attributes_len].value  = attributes[i].value;
+      updated_attributes_len++;
     }
+
+    /*
+     * Phase 0.3: Prune trailing deletion actions: we don't need them to
+     * maintain synchronization with existing attributes, and doing so
+     * simplifies logic for updating the final new chunk.
+     */
+
+    while (updated_attributes_len > 0 &&
+           updated_attributes[updated_attributes_len - 1].length == HAL_PKEY_ATTRIBUTE_NIL)
+      --updated_attributes_len;
+
+    /*
+     * Phase 0.4: Figure out how many chunks all this will occupy.
+     */
+
+    chunk = 0;
+
+    for (int i = 0; i < updated_attributes_len; i++) {
+
+      if (updated_attributes[i].length == HAL_PKEY_ATTRIBUTE_NIL)
+        continue;
+
+      const size_t needed = hal_ks_attribute_header_size + updated_attributes[i].length;
+
+      if (needed > bytes_available) {
+        bytes_available = SIZEOF_FLASH_ATTRIBUTE_BLOCK_ATTRIBUTES;
+        chunk++;
+      }
+
+      if (needed > bytes_available) {
+        err = HAL_ERROR_RESULT_TOO_LONG;
+        goto done;
+      }
+
+      bytes_available -= needed;
+    }
+
+    const unsigned total_chunks_new = chunk + 1;
+
+    /*
+     * If there aren't enough free blocks, give up now, before changing anything.
+     */
+
+    if (db.ksi.used + total_chunks_new > db.ksi.size) {
+      err = HAL_ERROR_NO_KEY_INDEX_SLOTS;
+      goto done;
+    }
+
+    /*
+     * Phase 1: Deprecate all the old chunks, remember where they were.
+     */
+
+    unsigned old_blocks[total_chunks_old];
+
+    for (chunk = 0; chunk < total_chunks_old; chunk++) {
+      int hint = slot->hint + chunk;
+      if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &b, &hint)) != HAL_OK ||
+          (err = block_deprecate(b))                                        != HAL_OK)
+        goto done;
+      old_blocks[chunk] = b;
+    }
+
+    /*
+     * Phase 2: Write new chunks, copying attributes from old chunks or
+     * from attributes[], as needed.
+     */
+
+    {
+      hal_pkey_attribute_t old_attrs[updated_attributes_len], new_attrs[updated_attributes_len];
+      unsigned                *old_attrs_len = NULL,             *new_attrs_len = NULL;
+      flash_block_t           *old_block     = NULL,             *new_block     = NULL;
+      uint8_t                 *old_bytes     = NULL,             *new_bytes     = NULL;
+      size_t                   old_bytes_len = 0,                 new_bytes_len = 0;
+      unsigned                 old_chunk     = 0,                 new_chunk     = 0;
+      size_t                   old_total     = 0,                 new_total     = 0;
+
+      int updated_attributes_i = 0, old_attrs_i = 0;
+
+      uint32_t       new_attr_type;
+      size_t         new_attr_length;
+      const uint8_t *new_attr_value;
+
+      while (updated_attributes_i < updated_attributes_len) {
+
+        if (old_chunk >= total_chunks_old || new_chunk >= total_chunks_new) {
+          err = HAL_ERROR_IMPOSSIBLE;
+          goto done;
+        }
+
+        /*
+         * If we've gotten as far as new data that comes from
+         * attributes[], we have it in hand and can just copy it.
+         */
+
+        if (updated_attributes_len - updated_attributes_i <= attributes_len) {
+          new_attr_type   = updated_attributes[updated_attributes_i].type;
+          new_attr_length = updated_attributes[updated_attributes_i].length;
+          new_attr_value  = updated_attributes[updated_attributes_i].value;
+        }
+
+        /*
+         * Otherwise, we have to read it from an old block, which may in
+         * turn require reading in the next old block.
+         */
+
+        else {
+
+          if (old_block == NULL) {
+
+            if ((err = block_read_cached(old_blocks[old_chunk], &old_block)) != HAL_OK)
+              goto done;
+
+            if (old_block->header.this_chunk != old_chunk) {
+              err = HAL_ERROR_IMPOSSIBLE;
+              goto done;
+            }
+
+            if ((err = locate_attributes(old_block, old_chunk,
+                                         &old_bytes, &old_bytes_len, &old_attrs_len)) != HAL_OK ||
+                (err = hal_ks_attribute_scan(old_bytes, old_bytes_len,
+                                             old_attrs, *old_attrs_len, &old_total))  != HAL_OK)
+              goto done;
+
+            old_attrs_i = 0;
+          }
+
+          if (old_attrs_i >= *old_attrs_len) {
+            old_chunk++;
+            old_block = NULL;
+            continue;
+          }
+
+          new_attr_type   = old_attrs[old_attrs_i].type;
+          new_attr_length = old_attrs[old_attrs_i].length;
+          new_attr_value  = old_attrs[old_attrs_i].value;
+
+          if (new_attr_type != updated_attributes[updated_attributes_i].type) {
+            err = HAL_ERROR_IMPOSSIBLE;
+            goto done;
+          }
+
+          old_attrs_i++;
+        }
+
+        /*
+         * Unless this is a deletion, we should have something to write.
+         */
+
+        if (new_attr_length != HAL_PKEY_ATTRIBUTE_NIL && new_attr_value == NULL) {
+          err = HAL_ERROR_IMPOSSIBLE;
+          goto done;
+        }
+
+        /*
+         * Initialize the new block if necessary.  If it's the new chunk
+         * zero, we need to copy all the non-attribute data from the old
+         * chunk zero; otherwise, it's a new empty attribute block.
+         */
+
+        if (new_block == NULL) {
+
+          new_block = cache_pick_lru();
+          memset(new_block, 0xFF, sizeof(*new_block));
+
+          if (new_chunk == 0) {
+            flash_block_t *tmp_block;
+            if ((err = block_read_cached(old_blocks[0], &tmp_block)) != HAL_OK)
+              goto done;
+            if (tmp_block->header.this_chunk != 0) {
+              err = HAL_ERROR_IMPOSSIBLE;
+              goto done;
+            }
+            new_block->header.block_type   = BLOCK_TYPE_KEY;
+            new_block->key.name            = slot->name;
+            new_block->key.type            = tmp_block->key.type;
+            new_block->key.curve           = tmp_block->key.curve;
+            new_block->key.flags           = tmp_block->key.flags;
+            new_block->key.der_len         = tmp_block->key.der_len;
+            new_block->key.attributes_len  = 0;
+            memcpy(new_block->key.der, tmp_block->key.der, tmp_block->key.der_len);
+          }
+          else {
+            new_block->header.block_type   = BLOCK_TYPE_ATTR;
+            new_block->attr.name           = slot->name;
+            new_block->attr.attributes_len = 0;
+          }
+
+          new_block->header.block_status = BLOCK_STATUS_LIVE;
+          new_block->header.total_chunks = total_chunks_new;
+          new_block->header.this_chunk   = new_chunk;
+
+          if ((err = locate_attributes(new_block, new_chunk,
+                                       &new_bytes, &new_bytes_len, &new_attrs_len)) != HAL_OK)
+            goto done;
+
+          new_total = 0;
+        }
+
+        /*
+         * After all that setup, we finally get to write the frelling attribute.
+         */
+
+        if (new_attr_length != HAL_PKEY_ATTRIBUTE_NIL)
+          err = hal_ks_attribute_insert(new_bytes, new_bytes_len, new_attrs, new_attrs_len, &new_total,
+                                        new_attr_type, new_attr_value, new_attr_length);
+
+        /*
+         * Figure out what to do next: immediately loop for next
+         * attribute, write current block, or bail out.
+         */
+
+        switch (err) {
+        case HAL_OK:
+          if (++updated_attributes_i < updated_attributes_len)
+            continue;
+          break;
+        case HAL_ERROR_RESULT_TOO_LONG:
+          if (new_chunk > 0 && new_attrs_len == 0)
+            goto done;
+          break;
+        default:
+          goto done;
+        }
+
+        /*
+         * If we get here, either the current new block is full or we
+         * finished the last block, so we need to write it out.
+         */
+
+        int hint = slot->hint + new_chunk;
+
+        if (new_chunk < total_chunks_old)
+          err = hal_ks_index_replace(&db.ksi, &slot->name, new_chunk, &b, &hint);
+        else
+          err = hal_ks_index_add(    &db.ksi, &slot->name, new_chunk, &b, &hint);
+
+        if (err != HAL_OK || (err = block_write(b, new_block)) != HAL_OK)
+          goto done;
+
+        cache_mark_used(new_block, b);
+
+        new_block = NULL;
+        new_chunk++;
+      }
+
+      /*
+       * If number of blocks shrank, we need to clear trailing entries from the index.
+       */
+
+      for (old_chunk = total_chunks_new; old_chunk < total_chunks_old; old_chunk++) {
+        int hint = slot->hint + old_chunk;
+
+        err = hal_ks_index_delete(&db.ksi, &slot->name, old_chunk, NULL, &hint);
+
+        if (err != HAL_OK)
+          goto done;
+      }
+
+    }
+
+    /*
+     * Phase 3: Zero the old chunks we deprecated in phase 1.
+     */
+
+    for (chunk = 0; chunk < total_chunks_old; chunk++)
+      if ((err = block_zero(old_blocks[chunk])) != HAL_OK)
+        goto done;
+
+    err = HAL_OK;
 
   }
 
-  /*
-   * Phase 3: Zero the old chunks we deprecated in phase 1.
-   */
-
-  for (chunk = 0; chunk < total_chunks_old; chunk++)
-    if ((err = block_zero(old_blocks[chunk])) != HAL_OK)
-      return err;
-
-  return HAL_OK;
+ done:
+  hal_ks_unlock();
+  return err;
 
 #warning What happens if something goes wrong partway through this awful mess?
   // We're left in a state with all the old blocks deprecated and
@@ -1700,18 +1851,22 @@ static  hal_error_t ks_get_attributes(hal_ks_t *ks,
   flash_block_t *block = NULL;
   unsigned chunk = 0;
   unsigned found = 0;
-  hal_error_t err;
+  hal_error_t err = HAL_OK;
   unsigned b;
+
+  hal_ks_lock();
 
   do {
     int hint = slot->hint + chunk;
 
     if ((err = hal_ks_index_find(&db.ksi, &slot->name, chunk, &b, &hint)) != HAL_OK ||
         (err = block_read_cached(b, &block))                              != HAL_OK)
-      return err;
+      goto done;
 
-    if (block->header.this_chunk != chunk)
-      return HAL_ERROR_IMPOSSIBLE;
+    if (block->header.this_chunk != chunk) {
+      err = HAL_ERROR_IMPOSSIBLE;
+      goto done;
+    }
 
     if (chunk == 0)
       slot->hint = hint;
@@ -1723,7 +1878,7 @@ static  hal_error_t ks_get_attributes(hal_ks_t *ks,
     unsigned *attrs_len;
 
     if ((err = locate_attributes(block, chunk, &bytes, &bytes_len, &attrs_len)) != HAL_OK)
-      return err;
+      goto done;
 
     if (*attrs_len == 0)
       continue;
@@ -1731,7 +1886,7 @@ static  hal_error_t ks_get_attributes(hal_ks_t *ks,
     hal_pkey_attribute_t attrs[*attrs_len];
 
     if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, NULL)) != HAL_OK)
-      return err;
+      goto done;
 
     for (int i = 0; i < attributes_len; i++) {
 
@@ -1750,8 +1905,10 @@ static  hal_error_t ks_get_attributes(hal_ks_t *ks,
       if (attributes_buffer_len == 0)
         continue;
 
-      if (attrs[j].length > attributes_buffer + attributes_buffer_len - abuf)
-        return HAL_ERROR_RESULT_TOO_LONG;
+      if (attrs[j].length > attributes_buffer + attributes_buffer_len - abuf) {
+        err = HAL_ERROR_RESULT_TOO_LONG;
+        goto done;
+      }
 
       memcpy(abuf, attrs[j].value, attrs[j].length);
       attributes[i].value  = abuf;
@@ -1761,9 +1918,13 @@ static  hal_error_t ks_get_attributes(hal_ks_t *ks,
   } while (found < attributes_len && ++chunk < block->header.total_chunks);
 
   if (found < attributes_len && attributes_buffer_len > 0)
-    return HAL_ERROR_ATTRIBUTE_NOT_FOUND;
+    err = HAL_ERROR_ATTRIBUTE_NOT_FOUND;
+  else
+    err = HAL_OK;
 
-  return HAL_OK;
+ done:
+  hal_ks_unlock();
+  return err;
 }
 
 const hal_ks_driver_t hal_ks_token_driver[1] = {{
@@ -1799,6 +1960,8 @@ void hal_ks_init_read_only_pins_only(void)
   unsigned b, best_seen = ~0;
   flash_block_t block[1];
 
+  hal_ks_lock();
+
   for (b = 0; b < NUM_FLASH_BLOCKS; b++) {
     if (block_read(b, block) != HAL_OK || block_get_type(block) != BLOCK_TYPE_PIN)
       continue;
@@ -1818,6 +1981,8 @@ void hal_ks_init_read_only_pins_only(void)
   db.wheel_pin = block->pin.wheel_pin;
   db.so_pin    = block->pin.so_pin;
   db.user_pin  = block->pin.user_pin;
+
+  hal_ks_unlock();
 }
 
 /*
@@ -1830,14 +1995,20 @@ hal_error_t hal_get_pin(const hal_user_t user,
   if (pin == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
+  hal_error_t err = HAL_OK;
+
+  hal_ks_lock();
+
   switch (user) {
   case HAL_USER_WHEEL:  *pin = &db.wheel_pin;  break;
   case HAL_USER_SO:     *pin = &db.so_pin;     break;
   case HAL_USER_NORMAL: *pin = &db.user_pin;   break;
-  default:              return HAL_ERROR_BAD_ARGUMENTS;
+  default:               err = HAL_ERROR_BAD_ARGUMENTS;
   }
 
-  return HAL_OK;
+  hal_ks_unlock();
+
+  return err;
 }
 
 /*
@@ -1904,8 +2075,10 @@ hal_error_t hal_set_pin(const hal_user_t user,
   hal_error_t err;
   unsigned b;
 
+  hal_ks_lock();
+
   if ((err = fetch_pin_block(&b, &block)) != HAL_OK)
-    return err;
+    goto done;
 
   flash_pin_block_t new_data = block->pin;
   hal_ks_pin_t *dp, *bp;
@@ -1914,7 +2087,7 @@ hal_error_t hal_set_pin(const hal_user_t user,
   case HAL_USER_WHEEL:  bp = &new_data.wheel_pin; dp = &db.wheel_pin; break;
   case HAL_USER_SO:     bp = &new_data.so_pin;    dp = &db.so_pin;    break;
   case HAL_USER_NORMAL: bp = &new_data.user_pin;  dp = &db.user_pin;  break;
-  default:              return HAL_ERROR_BAD_ARGUMENTS;
+  default:              err = HAL_ERROR_BAD_ARGUMENTS;  goto done;
   }
 
   const hal_ks_pin_t old_pin = *dp;
@@ -1923,6 +2096,8 @@ hal_error_t hal_set_pin(const hal_user_t user,
   if ((err = update_pin_block(b, block, &new_data)) != HAL_OK)
     *dp = old_pin;
 
+ done:
+  hal_ks_unlock();
   return err;
 }
 
@@ -1951,16 +2126,20 @@ hal_error_t hal_mkm_flash_read(uint8_t *buf, const size_t len)
   hal_error_t err;
   unsigned b;
 
+  hal_ks_lock();
+
   if ((err = fetch_pin_block(&b, &block)) != HAL_OK)
-    return err;
+    goto done;
 
   if (block->pin.kek_set != FLASH_KEK_SET)
-    return HAL_ERROR_MASTERKEY_NOT_SET;
+    err = HAL_ERROR_MASTERKEY_NOT_SET;
 
-  if (buf != NULL)
+  else if (buf != NULL)
     memcpy(buf, block->pin.kek, len);
 
-  return HAL_OK;
+ done:
+  hal_ks_unlock();
+  return err;
 }
 
 hal_error_t hal_mkm_flash_write(const uint8_t * const buf, const size_t len)
@@ -1975,15 +2154,21 @@ hal_error_t hal_mkm_flash_write(const uint8_t * const buf, const size_t len)
   hal_error_t err;
   unsigned b;
 
+  hal_ks_lock();
+
   if ((err = fetch_pin_block(&b, &block)) != HAL_OK)
-    return err;
+    goto done;
 
   flash_pin_block_t new_data = block->pin;
 
   new_data.kek_set = FLASH_KEK_SET;
   memcpy(new_data.kek, buf, len);
 
-  return update_pin_block(b, block, &new_data);
+  err = update_pin_block(b, block, &new_data);
+
+ done:
+  hal_ks_unlock();
+  return err;
 }
 
 hal_error_t hal_mkm_flash_erase(const size_t len)
@@ -1995,15 +2180,21 @@ hal_error_t hal_mkm_flash_erase(const size_t len)
   hal_error_t err;
   unsigned b;
 
+  hal_ks_lock();
+
   if ((err = fetch_pin_block(&b, &block)) != HAL_OK)
-    return err;
+    goto done;
 
   flash_pin_block_t new_data = block->pin;
 
   new_data.kek_set = FLASH_KEK_SET;
   memset(new_data.kek, 0, len);
 
-  return update_pin_block(b, block, &new_data);
+  err = update_pin_block(b, block, &new_data);
+
+ done:
+  hal_ks_unlock();
+  return err;
 }
 
 #endif /* HAL_MKM_FLASH_BACKUP_KLUDGE */

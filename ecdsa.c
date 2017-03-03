@@ -1140,11 +1140,9 @@ hal_error_t hal_ecdsa_key_load_public(hal_ecdsa_key_t **key_,
 }
 
 /*
- * Load a private key from components; does all the same things as
- * hal_ecdsa_key_load_public(), then loads the private key itself and
- * adjusts the key type.
- *
- * For extra paranoia, we could check Q == dG.
+ * Load a private key from components: does the same things as
+ * hal_ecdsa_key_load_public(), but also checks the private key, and
+ * generates the public key from the private key if necessary.
  */
 
 hal_error_t hal_ecdsa_key_load_private(hal_ecdsa_key_t **key_,
@@ -1154,18 +1152,47 @@ hal_error_t hal_ecdsa_key_load_private(hal_ecdsa_key_t **key_,
                                        const uint8_t * const y, const size_t y_len,
                                        const uint8_t * const d, const size_t d_len)
 {
+  const ecdsa_curve_t * const curve = get_curve(curve_);
   hal_ecdsa_key_t *key = keybuf;
   hal_error_t err;
 
-  if (d == NULL)
+  if (key_ == NULL || key == NULL || keybuf_len < sizeof(*key) || curve == NULL ||
+      d == NULL || d_len == 0 || (x == NULL && x_len != 0) || (y == NULL && y_len != 0))
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if ((err = hal_ecdsa_key_load_public(key_, keybuf, keybuf_len, curve_, x, x_len, y, y_len)) != HAL_OK)
-    return err;
+  memset(keybuf, 0, keybuf_len);
 
   key->type = HAL_KEY_TYPE_EC_PRIVATE;
+  key->curve = curve_;
+
   fp_read_unsigned_bin(key->d, unconst_uint8_t(d), d_len);
+
+  if (fp_iszero(key->d) || fp_cmp(key->d, unconst_fp_int(curve->n)) != FP_LT)
+    lose(HAL_ERROR_BAD_ARGUMENTS);
+
+  fp_set(key->Q->z, 1);
+
+  if (x_len != 0 || y_len != 0) {
+    fp_read_unsigned_bin(key->Q->x, unconst_uint8_t(x), x_len);
+    fp_read_unsigned_bin(key->Q->y, unconst_uint8_t(y), y_len);
+  }
+
+  else {
+    fp_copy(curve->Gx, key->Q->x);
+    fp_copy(curve->Gy, key->Q->y);
+    if ((err = point_scalar_multiply(key->d, key->Q, key->Q, curve)) != HAL_OK)
+      goto fail;
+  }
+
+  if (!point_is_on_curve(key->Q, curve))
+    lose(HAL_ERROR_KEY_NOT_ON_CURVE);
+
+  *key_ = key;
   return HAL_OK;
+
+ fail:
+  memset(keybuf, 0, keybuf_len);
+  return err;
 }
 
 /*
