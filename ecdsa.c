@@ -869,7 +869,8 @@ hal_error_t hal_ecdsa_key_gen(const hal_core_t *core,
   if ((err = point_pick_random(curve, key->d, key->Q)) != HAL_OK)
     return err;
 
-  assert(point_is_on_curve(key->Q, curve));
+  if (!point_is_on_curve(key->Q, curve))
+    return HAL_ERROR_KEY_NOT_ON_CURVE;
 
   *key_ = key;
   return HAL_OK;
@@ -1527,7 +1528,8 @@ hal_error_t hal_ecdsa_sign(const hal_core_t *core,
     if ((err = point_pick_random(curve, k, R)) != HAL_OK)
       goto fail;
 
-    assert(point_is_on_curve(R, curve));
+    if (!point_is_on_curve(R, curve))
+      lose(HAL_ERROR_IMPOSSIBLE);
 
     if (fp_mod(R->x, n, r) != FP_OKAY)
       lose(HAL_ERROR_IMPOSSIBLE);
