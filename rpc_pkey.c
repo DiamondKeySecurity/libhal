@@ -44,11 +44,11 @@
 #endif
 
 #if HAL_STATIC_PKEY_STATE_BLOCKS > 0
-static hal_pkey_slot_t pkey_handle[HAL_STATIC_PKEY_STATE_BLOCKS];
+static hal_pkey_slot_t pkey_slot[HAL_STATIC_PKEY_STATE_BLOCKS];
 #endif
 
 /*
- * Handle allocation is simple: look for an unused (HAL_KEY_TYPE_NONE)
+ * Handle allocation is simple: look for an unused (HAL_HANDLE_NONE)
  * slot in the table, and, assuming we find one, construct a composite
  * handle consisting of the index into the table and a counter whose
  * sole purpose is to keep the same handle from reoccurring anytime
@@ -74,13 +74,13 @@ static inline hal_pkey_slot_t *alloc_slot(const hal_key_flags_t flags)
   if ((flags & HAL_KEY_FLAG_TOKEN) != 0)
     glop |= HAL_PKEY_HANDLE_TOKEN_FLAG;
 
-  for (int i = 0; slot == NULL && i < sizeof(pkey_handle)/sizeof(*pkey_handle); i++) {
-    if (pkey_handle[i].type != HAL_KEY_TYPE_NONE)
+  for (int i = 0; slot == NULL && i < sizeof(pkey_slot)/sizeof(*pkey_slot); i++) {
+    if (pkey_slot[i].pkey_handle.handle != HAL_HANDLE_NONE)
       continue;
-    memset(&pkey_handle[i], 0, sizeof(pkey_handle[i]));
-    pkey_handle[i].pkey_handle.handle = i | glop;
-    pkey_handle[i].hint = -1;
-    slot = &pkey_handle[i];
+    memset(&pkey_slot[i], 0, sizeof(pkey_slot[i]));
+    pkey_slot[i].pkey_handle.handle = i | glop;
+    pkey_slot[i].hint = -1;
+    slot = &pkey_slot[i];
   }
 #endif
 
@@ -101,8 +101,8 @@ static inline hal_pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
 #if HAL_STATIC_PKEY_STATE_BLOCKS > 0
   const int i = (int) (handle.handle & 0xFFFF);
 
-  if (i < sizeof(pkey_handle)/sizeof(*pkey_handle) && pkey_handle[i].pkey_handle.handle == handle.handle)
-    slot = &pkey_handle[i];
+  if (i < sizeof(pkey_slot)/sizeof(*pkey_slot) && pkey_slot[i].pkey_handle.handle == handle.handle)
+    slot = &pkey_slot[i];
 #endif
 
   hal_critical_section_end();
