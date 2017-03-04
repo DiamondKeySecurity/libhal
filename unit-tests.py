@@ -83,6 +83,7 @@ def parse_arguments(argv = ()):
     parser = ArgumentParser(description = __doc__, formatter_class = ArgumentDefaultsHelpFormatter)
     parser.add_argument("--quiet",      action = "store_true",          help = "suppress chatter")
     parser.add_argument("--debug",      action = "store_true",          help = "debug-level logging")
+    parser.add_argument("--io-log",     action = "store_true",          help = "log HSM I/O stream")
     parser.add_argument("--wheel-pin",  default = "fnord",              help = "PIN for wheel user")
     parser.add_argument("--so-pin",     default = "fnord",              help = "PIN for security officer")
     parser.add_argument("--user-pin",   default = "fnord",              help = "PIN for normal user")
@@ -99,6 +100,7 @@ pin_map = { HAL_USER_NORMAL : "user_pin", HAL_USER_SO : "so_pin", HAL_USER_WHEEL
 def setUpModule():
     global hsm
     hsm = HSM()
+    hsm.debug_io = args.io_log
 
 def tearDownModule():
     hsm.logout()
