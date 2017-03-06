@@ -75,8 +75,13 @@ def main():
     global args
     args = parse_arguments(argv[1:])
     argv = argv[:1] + args.only_test
-    logging.basicConfig(level = logging.DEBUG if args.debug else logging.INFO)
-    unittest.main(verbosity = 1 if args.quiet else 2, argv = argv, catchbreak = True, testRunner = TextTestRunner)
+    logging.basicConfig(level   = logging.DEBUG if args.debug else logging.INFO,
+                        datefmt = "%Y-%m-%d %H:%M:%S",
+                        format  = "%(asctime)-15s %(name)s[%(process)d]:%(levelname)s: %(message)s",)
+    unittest.main(verbosity  = 1 if args.quiet else 2,
+                  argv       = argv,
+                  catchbreak = True,
+                  testRunner = TextTestRunner)
 
 def parse_arguments(argv = ()):
     from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
