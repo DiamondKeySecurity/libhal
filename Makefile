@@ -27,13 +27,13 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-# Number of static hash and HMAC state blocks to allocate.
-# Numbers pulled out of a hat, just testing.
+# Number of various kinds of static state blocks to allocate.
+# Numbers pulled out of a hat, tune as we go.
 
 STATIC_CORE_STATE_BLOCKS = 32
-STATIC_HASH_STATE_BLOCKS = 10
-STATIC_HMAC_STATE_BLOCKS = 4
-STATIC_PKEY_STATE_BLOCKS = 32
+STATIC_HASH_STATE_BLOCKS = 32
+STATIC_HMAC_STATE_BLOCKS = 16
+STATIC_PKEY_STATE_BLOCKS = 256
 STATIC_KS_VOLATILE_SLOTS = 128
 
 INC		= hal.h hal_internal.h
