@@ -149,12 +149,14 @@ class RPCIOStream(SerialIOStream):
         self.queues[handle] = queue
         with (yield self.rpc_input_lock.acquire()):
             yield self.write(query)
+        logger.debug("RPC sent")
 
     @tornado.gen.coroutine
     def rpc_output_loop(self):
         "Handle reply stream HSM -> network."
         while True:
             try:
+                logger.debug("RPC UART read")
                 reply = yield self.read_until(SLIP_END)
             except tornado.iostream.StreamClosedError:
                 logger.info("RPC UART closed")
@@ -166,6 +168,8 @@ class RPCIOStream(SerialIOStream):
                 handle = client_handle_get(slip_decode(reply))
             except:
                 continue
+            logger.debug("RPC queue put: handle 0x%x, qsize %s, maxsize %s",
+                         handle, self.queues[handle].qsize(), self.queues[handle].maxsize)
             self.queues[handle].put_nowait(reply)
 
 
@@ -181,24 +185,28 @@ class RPCServer(PFUnixServer):
     @tornado.gen.coroutine
     def handle_stream(self, stream, address):
         "Handle one network connection."
-        logger.info("RPC connected %r", stream)
         handle = stream.socket.fileno()
         queue  = tornado.queues.Queue()
+        logger.info("RPC connected %r, handle 0x%x", stream, handle)
         while True:
             try:
+                logger.debug("RPC socket read, handle 0x%x", handle)
                 query = yield stream.read_until(SLIP_END)
                 if len(query) < 9:
                     continue
                 query = slip_encode(client_handle_set(slip_decode(query), handle))
                 yield self.serial.rpc_input(query, handle, queue)
+                logger.debug("RPC queue wait, handle 0x%x", handle)
                 reply = yield queue.get()
                 if reply is None:
                     raise QueuedStreamClosedError()
+                logger.debug("RPC socket write, handle 0x%x", handle)
                 yield stream.write(SLIP_END + reply)
             except tornado.iostream.StreamClosedError:
-                logger.info("RPC closing %r", stream)
+                logger.info("RPC closing %r, handle 0x%x", stream, handle)
                 stream.close()
                 return
+
 
 class CTYIOStream(SerialIOStream):
     """
