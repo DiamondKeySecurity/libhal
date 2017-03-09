@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016, NORDUnet A/S
+# Copyright (c) 2015-2017, NORDUnet A/S
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -41,24 +41,28 @@ LIB		= libhal.a
 
 # Error checking on known control options, some of which allow the user entirely too much rope.
 
-USAGE := "usage: ${MAKE} [IO_BUS=eim|i2c|fmc] [RPC_MODE=none|server|client-simple|client-mixed] [KS=mmap|flash] [RPC_TRANSPORT=none|loopback|serial|daemon] [MODEXP_CORE=no|yes]"
+USAGE := "usage: ${MAKE} [IO_BUS=eim|i2c|fmc] [RPC_MODE=none|server|client-simple|client-mixed] [KS=mmap|flash] [RPC_TRANSPORT=none|loopback|serial|daemon] [MODEXP_CORE=no|yes] [HASH_CORES=no|yes] [ECDSA_CORES=no|yes]"
 
 IO_BUS		?= none
 KS		?= flash
 RPC_MODE	?= none
 RPC_TRANSPORT	?= none
 MODEXP_CORE	?= no
+HASH_CORES	?= no
+ECDSA_CORES	?= yes
 
 ifeq (,$(and \
 	$(filter	none eim i2c fmc			,${IO_BUS}),\
 	$(filter	none server client-simple client-mixed	,${RPC_MODE}),\
 	$(filter	mmap flash				,${KS}),\
 	$(filter	none loopback serial daemon		,${RPC_TRANSPORT}),\
-	$(filter	no yes					,${MODEXP_CORE})))
+	$(filter	no yes					,${MODEXP_CORE}),\
+	$(filter	no yes					,${HASH_CORES}),\
+	$(filter	no yes					,${ECDSA_CORES})))
   $(error ${USAGE})
 endif
 
-$(info Building libhal with configuration IO_BUS=${IO_BUS} RPC_MODE=${RPC_MODE} KS=${KS} RPC_TRANSPORT=${RPC_TRANSPORT} MODEXP_CORE=${MODEXP_CORE})
+$(info Building libhal with configuration IO_BUS=${IO_BUS} RPC_MODE=${RPC_MODE} KS=${KS} RPC_TRANSPORT=${RPC_TRANSPORT} MODEXP_CORE=${MODEXP_CORE} HASH_CORES=${HASH_CORES} ECDSA_CORES=${ECDSA_CORES})
 
 # Whether the RSA code should use the ModExp | ModExpS6 | ModExpA7 core.
 
@@ -66,6 +70,24 @@ ifeq "${MODEXP_CORE}" "yes"
   RSA_USE_MODEXP_CORE := 1
 else
   RSA_USE_MODEXP_CORE := 0
+endif
+
+# Whether the hash code should use the SHA-1 / SHA-256 / SHA-512 cores.
+
+ifeq "${HASH_CORES}" "yes"
+  HASH_ONLY_USE_SOFT_CORES := 0
+else
+  HASH_ONLY_USE_SOFT_CORES := 1
+endif
+
+# Whether the ECDSA code should use the ECDSA256 and ECDSA384 cores.
+
+ifeq "${ECDSA_CORES}" "yes"
+  ECDSA_USE_ECDSA256_CORE := 1
+  ECDSA_USE_ECDSA384_CORE := 1
+else
+  ECDSA_USE_ECDSA256_CORE := 0
+  ECDSA_USE_ECDSA384_CORE := 0
 endif
 
 # Object files to build, initialized with ones we always want.
@@ -169,15 +191,30 @@ endif
 ifeq "${RPC_MODE}" "none"
   OBJ += ${CORE_OBJ}
   CFLAGS += -DHAL_RSA_USE_MODEXP=${RSA_USE_MODEXP_CORE}
+  CFLAGS += -DHAL_ONLY_USE_SOFTWARE_HASH_CORES=${HASH_ONLY_USE_SOFT_CORES}
+  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER=${ECDSA_USE_ECDSA256_CORE}
+  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER=${ECDSA_USE_ECDSA384_CORE}
 else ifeq "${RPC_MODE}" "server"
   OBJ += ${CORE_OBJ} ${RPC_SERVER_OBJ}
-  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_LOCAL -DHAL_RSA_USE_MODEXP=${RSA_USE_MODEXP_CORE}
+  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_LOCAL
+  CFLAGS += -DHAL_RSA_USE_MODEXP=${RSA_USE_MODEXP_CORE}
+  CFLAGS += -DHAL_ONLY_USE_SOFTWARE_HASH_CORES=${HASH_ONLY_USE_SOFT_CORES}
+  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER=${ECDSA_USE_ECDSA256_CORE}
+  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER=${ECDSA_USE_ECDSA384_CORE}
 else ifeq "${RPC_MODE}" "client-simple"
   OBJ += ${RPC_CLIENT_OBJ}
-  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_REMOTE -DHAL_RSA_USE_MODEXP=0 -DHAL_ONLY_USE_SOFTWARE_HASH_CORES=1
+  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_REMOTE
+  CFLAGS += -DHAL_RSA_USE_MODEXP=0
+  CFLAGS += -DHAL_ONLY_USE_SOFTWARE_HASH_CORES=1
+  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER=0
+  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER=0
 else ifeq "${RPC_MODE}" "client-mixed"
   OBJ += ${RPC_CLIENT_OBJ}
-  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_MIXED -DHAL_RSA_USE_MODEXP=0 -DHAL_ONLY_USE_SOFTWARE_HASH_CORES=1
+  CFLAGS += -DRPC_CLIENT=RPC_CLIENT_MIXED
+  CFLAGS += -DHAL_RSA_USE_MODEXP=0
+  CFLAGS += -DHAL_ONLY_USE_SOFTWARE_HASH_CORES=1
+  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER=0
+  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER=0
 endif
 
 ifndef CRYPTECH_ROOT
@@ -206,12 +243,19 @@ CFLAGS		+= -I${LIBTFM_BLD}
 
 CFLAGS		+= -DHAL_ENABLE_SOFTWARE_HASH_CORES=1
 
-export CFLAGS
+# We used to "export CFLAGS" here, but for some reason that causes GNU
+# make to duplicate its value, sometimes with conflicting settings.
+# Weird, but this is complicated enough already, so we just pass
+# CFLAGS explicitly in the small number of cases where we run a
+# sub-make, below.
+
+#export CFLAGS
+
 export RPC_MODE
 
 all: ${LIB}
-	cd tests; ${MAKE} $@
-	cd utils; ${MAKE} $@
+	${MAKE} -C tests $@ CFLAGS='${CFLAGS}'
+	${MAKE} -C utils $@ CFLAGS='${CFLAGS}'
 
 client:
 	${MAKE} RPC_MODE=client-simple RPC_TRANSPORT=daemon
@@ -247,13 +291,12 @@ last_gasp_pin_internal.h:
 	./utils/last_gasp_default_pin >$@
 
 test: all
-	export RPC_MODE
-	cd tests; ${MAKE} -k $@
+	${MAKE} -C tests -k $@ CFLAGS='${CFLAGS}'
 
 clean:
-	rm -f *.o ${LIB} cryptech_rpcd
-	cd tests; ${MAKE} $@
-	cd utils; ${MAKE} $@
+	rm -f *.o ${LIB}
+	${MAKE} -C tests $@ CFLAGS='${CFLAGS}'
+	${MAKE} -C utils $@ CFLAGS='${CFLAGS}'
 
 distclean: clean
 	rm -f TAGS
