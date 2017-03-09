@@ -89,6 +89,18 @@
 #endif
 
 /*
+ * Whether to use the Verilog point multipliers.
+ */
+
+#ifndef HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER
+#define HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER 1
+#endif
+
+#ifndef HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER
+#define HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER 1
+#endif
+
+/*
  * Whether we want debug output.
  */
 
@@ -124,6 +136,7 @@ typedef struct {
   fp_digit rho;                         /* Montgomery reduction value */
   const uint8_t *oid;                   /* OBJECT IDENTIFIER */
   size_t oid_len;                       /* Length of OBJECT IDENTIFIER */
+  hal_curve_name_t curve;               /* Curve name */
 } ecdsa_curve_t;
 
 /*
@@ -206,6 +219,7 @@ static const ecdsa_curve_t * const get_curve(const hal_curve_name_t curve)
     fp_montgomery_calc_normalization(curve_p256.mu, curve_p256.q);
     curve_p256.oid = p256_oid;
     curve_p256.oid_len = sizeof(p256_oid);
+    curve_p256.curve = HAL_CURVE_P256;
 
     fp_read_unsigned_bin(curve_p384.q,  unconst_uint8_t(p384_q),  sizeof(p384_q));
     fp_read_unsigned_bin(curve_p384.b,  unconst_uint8_t(p384_b),  sizeof(p384_b));
@@ -218,6 +232,7 @@ static const ecdsa_curve_t * const get_curve(const hal_curve_name_t curve)
     fp_montgomery_calc_normalization(curve_p384.mu, curve_p384.q);
     curve_p384.oid = p384_oid;
     curve_p384.oid_len = sizeof(p384_oid);
+    curve_p384.curve = HAL_CURVE_P384;
 
     fp_read_unsigned_bin(curve_p521.q,  unconst_uint8_t(p521_q),  sizeof(p521_q));
     fp_read_unsigned_bin(curve_p521.b,  unconst_uint8_t(p521_b),  sizeof(p521_b));
@@ -230,6 +245,7 @@ static const ecdsa_curve_t * const get_curve(const hal_curve_name_t curve)
     fp_montgomery_calc_normalization(curve_p521.mu, curve_p521.q);
     curve_p521.oid = p521_oid;
     curve_p521.oid_len = sizeof(p521_oid);
+    curve_p521.curve = HAL_CURVE_P521;
 
     initialized = 1;
   }
@@ -749,6 +765,113 @@ static inline hal_error_t get_random(void *buffer, const size_t length)
 #endif /* HAL_ECDSA_DEBUG_ONLY_STATIC_TEST_VECTOR_RANDOM */
 
 /*
+ * Use experimental Verilog base point multiplier cores to calculate
+ * public key given a private key.  point_pick_random() has already
+ * selected a suitable private key for us, we just need to calculate
+ * the corresponding public key.
+ */
+
+#if HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER || HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER
+
+typedef struct {
+  size_t bytes;
+  const char *name;
+  hal_addr_t k_addr;
+  hal_addr_t x_addr;
+  hal_addr_t y_addr;
+} verilog_ecdsa_driver_t;
+
+static hal_error_t verilog_point_pick_random(const verilog_ecdsa_driver_t * const driver,
+                                             fp_int *k,
+                                             ec_point_t *P)
+{
+  assert(k != NULL && P != NULL);
+
+  const size_t len = fp_unsigned_bin_size(k);
+  uint8_t b[driver->bytes];
+  const uint8_t zero[4] = {0, 0, 0, 0};
+  hal_core_t *core = NULL;
+  hal_error_t err;
+
+  if (len > sizeof(b))
+    return HAL_ERROR_RESULT_TOO_LONG;
+
+  if ((err = hal_core_alloc(driver->name, &core)) != HAL_OK)
+    goto fail;
+
+#define check(_x_) do { if ((err = (_x_)) != HAL_OK) goto fail; } while (0)
+
+  memset(b, 0, sizeof(b));
+  fp_to_unsigned_bin(k, b + sizeof(b) - len);
+
+  for (int i = 0; i < sizeof(b); i += 4)
+    check(hal_io_write(core, driver->k_addr + i/4, &b[sizeof(b) - 4 - i], 4));
+
+  check(hal_io_write(core, ADDR_CTRL, zero, sizeof(zero)));
+  check(hal_io_next(core));
+  check(hal_io_wait_valid(core));
+
+  for (int i = 0; i < sizeof(b); i += 4)
+    check(hal_io_read(core, driver->x_addr + i/4, &b[sizeof(b) - 4 - i], 4));
+  fp_read_unsigned_bin(P->x, b, sizeof(b));
+
+  for (int i = 0; i < sizeof(b); i += 4)
+    check(hal_io_read(core, driver->y_addr + i/4, &b[sizeof(b) - 4 - i], 4));
+  fp_read_unsigned_bin(P->y, b, sizeof(b));
+
+  fp_set(P->z, 1);
+
+#undef check
+
+  err = HAL_OK;
+
+ fail:
+  hal_core_free(core);
+  memset(b, 0, sizeof(b));
+  return err;
+}
+
+#endif
+
+static inline hal_error_t verilog_p256_point_pick_random(fp_int *k, ec_point_t *P)
+{
+#if HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER
+
+  static const verilog_ecdsa_driver_t p256_driver = {
+      .name   = ECDSA256_NAME,
+      .bytes  = ECDSA256_OPERAND_BITS / 8,
+      .k_addr = ECDSA256_ADDR_K,
+      .x_addr = ECDSA256_ADDR_X,
+      .y_addr = ECDSA256_ADDR_Y
+  };
+
+  return verilog_point_pick_random(&p256_driver, k, P);
+
+#endif
+
+  return HAL_ERROR_CORE_NOT_FOUND;
+}
+
+static inline hal_error_t verilog_p384_point_pick_random(fp_int *k, ec_point_t *P)
+{
+#if HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER
+
+  static const verilog_ecdsa_driver_t p384_driver = {
+    .name   = ECDSA384_NAME,
+    .bytes  = ECDSA384_OPERAND_BITS / 8,
+    .k_addr = ECDSA384_ADDR_K,
+    .x_addr = ECDSA384_ADDR_X,
+    .y_addr = ECDSA384_ADDR_Y
+  };
+
+  return verilog_point_pick_random(&p384_driver, k, P);
+
+#endif
+
+  return HAL_ERROR_CORE_NOT_FOUND;
+}
+
+/*
  * Pick a random point on the curve, return random scalar and
  * resulting point.
  */
@@ -791,6 +914,24 @@ static hal_error_t point_pick_random(const ecdsa_curve_t * const curve,
   } while (fp_iszero(k));
 
   memset(k_buf, 0, sizeof(k_buf));
+
+#if HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER || HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER
+  switch (curve->curve) {
+
+  case HAL_CURVE_P256:
+    if ((err = verilog_p256_point_pick_random(k, P)) != HAL_ERROR_CORE_NOT_FOUND)
+      return err;
+  break;
+
+  case HAL_CURVE_P384:
+    if ((err = verilog_p384_point_pick_random(k, P)) != HAL_ERROR_CORE_NOT_FOUND)
+      return err;
+  break;
+
+  default:
+    break;
+  }
+#endif
 
   /*
    * Calculate P = kG and return.
