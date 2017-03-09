@@ -89,35 +89,16 @@
 #endif
 
 /*
- * Whether to use experimental Verilog ECDSA-P256 point multiplier.
+ * Whether to use the Verilog point multipliers.
  */
 
 #ifndef HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER
 #define HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER 1
 #endif
 
-#if HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER
-static int verilog_ecdsa256_multiplier = 1;
-#endif
-
-/*
- * Whether to use experimental Verilog ECDSA-P384 point multiplier.
- */
-
 #ifndef HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER
 #define HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER 1
 #endif
-
-#if HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER
-static int verilog_ecdsa384_multiplier = 1;
-#endif
-
-/*
- * Whether to include Verilog point multiplier code at all.
- */
-
-#define HAL_ECDSA_ANY_VERILOG_MULTIPLIER \
-  (HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER | HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER)
 
 /*
  * Whether we want debug output.
@@ -790,7 +771,7 @@ static inline hal_error_t get_random(void *buffer, const size_t length)
  * the corresponding public key.
  */
 
-#if HAL_ECDSA_ANY_VERILOG_MULTIPLIER
+#if HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER || HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER
 
 typedef struct {
   size_t bytes;
@@ -864,8 +845,7 @@ static inline hal_error_t verilog_p256_point_pick_random(fp_int *k, ec_point_t *
       .y_addr = ECDSA256_ADDR_Y
   };
 
-  if (verilog_ecdsa256_multiplier)
-    return verilog_point_pick_random(&p256_driver, k, P);
+  return verilog_point_pick_random(&p256_driver, k, P);
 
 #endif
 
@@ -884,8 +864,7 @@ static inline hal_error_t verilog_p384_point_pick_random(fp_int *k, ec_point_t *
     .y_addr = ECDSA384_ADDR_Y
   };
 
-  if (verilog_ecdsa384_multiplier)
-    return verilog_point_pick_random(&p384_driver, k, P);
+  return verilog_point_pick_random(&p384_driver, k, P);
 
 #endif
 
@@ -936,7 +915,7 @@ static hal_error_t point_pick_random(const ecdsa_curve_t * const curve,
 
   memset(k_buf, 0, sizeof(k_buf));
 
-#if HAL_ECDSA_ANY_VERILOG_MULTIPLIER
+#if HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER || HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER
   switch (curve->curve) {
 
   case HAL_CURVE_P256:
