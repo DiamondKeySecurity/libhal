@@ -392,7 +392,7 @@ class PKey(Handle):
         self.hsm.pkey_verify(self, hash = hash, data = data, signature = signature)
 
     def set_attributes(self, attributes = None, **kwargs):
-        assert if attributes is None or not kwargs
+        assert attributes is None or not kwargs
         self.hsm.pkey_set_attributes(self, attributes or kwargs)
 
     def get_attributes(self, attributes):
