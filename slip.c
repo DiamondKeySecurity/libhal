@@ -73,14 +73,33 @@ hal_error_t hal_slip_send_char(const uint8_t c)
     return HAL_OK;
 }
 
+static hal_error_t _send_uint32(const uint32_t val)
+{
+    uint32_t data = val;
+
+    for (int i = 0; i < 4; ++i) {
+	uint8_t *p = (uint8_t *) &data;
+	check(hal_slip_send_char(p[i]));
+    }
+
+    return HAL_OK;
+}
+
 /* Send a message with SLIP framing.
  */
 hal_error_t hal_slip_send(const uint8_t * const buf, const size_t len)
 {
+    hal_crc32_t crc;
+
     /* send an initial END character to flush out any data that may
      * have accumulated in the receiver due to line noise
      */
     check(hal_serial_send_char(END));
+
+    /* Calculate CRC32 checksum of the contents, before SLIP encoding */
+    crc = hal_crc32_init();
+    crc = hal_crc32_update(crc, buf, len);
+    crc = ~hal_crc32_finalize(crc);
 
     /* for each byte in the packet, send the appropriate character
      * sequence
@@ -90,6 +109,9 @@ hal_error_t hal_slip_send(const uint8_t * const buf, const size_t len)
         if ((ret = hal_slip_send_char(buf[i])) != HAL_OK)
             return ret;
     }
+
+    /* Transmit the CRC */
+    check(_send_uint32(crc));
 
     /* tell the receiver that we're done sending the packet
      */
