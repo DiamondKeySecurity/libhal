@@ -113,6 +113,24 @@ extern hal_error_t hal_asn1_decode_spki(const uint8_t **alg_oid,   size_t *alg_o
                                         const uint8_t **pubkey,    size_t *pubkey_len,
                                         const uint8_t *const der,  const size_t der_len);
 
+extern hal_error_t hal_asn1_encode_pkcs8_privatekeyinfo(const uint8_t * const alg_oid,   const size_t alg_oid_len,
+                                                        const uint8_t * const curve_oid, const size_t curve_oid_len,
+                                                        const uint8_t * const privkey,   const size_t privkey_len,
+                                                        uint8_t *der, size_t *der_len, const size_t der_max);
+
+extern hal_error_t hal_asn1_decode_pkcs8_privatekeyinfo(const uint8_t **alg_oid,   size_t *alg_oid_len,
+                                                        const uint8_t **curve_oid, size_t *curve_oid_len,
+                                                        const uint8_t **privkey,   size_t *privkey_len,
+                                                        const uint8_t *const der,  const size_t der_len);
+
+extern hal_error_t hal_asn1_encode_pkcs8_encryptedprivatekeyinfo(const uint8_t * const alg_oid, const size_t alg_oid_len,
+                                                                 const uint8_t * const data,    const size_t data_len,
+                                                                 uint8_t *der, size_t *der_len, const size_t der_max);
+
+extern hal_error_t hal_asn1_decode_pkcs8_encryptedprivatekeyinfo(const uint8_t **alg_oid,  size_t *alg_oid_len,
+                                                                 const uint8_t **data,     size_t *data_len,
+                                                                 const uint8_t *const der, const size_t der_len);
+
 #endif /* _HAL_ASN1_INTERNAL_H_ */
 
 /*
