@@ -880,7 +880,7 @@ static hal_error_t point_pick_random(const ecdsa_curve_t * const curve,
   switch (curve->curve) {
 
 #if HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER
-  case HAL_CURVE_P256:
+  case HAL_CURVE_P256:;
     static const verilog_ecdsa_driver_t p256_driver = {
       .name   = ECDSA256_NAME,
       .bytes  = ECDSA256_OPERAND_BITS / 8,
@@ -894,7 +894,7 @@ static hal_error_t point_pick_random(const ecdsa_curve_t * const curve,
 #endif
 
 #if HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER
-  case HAL_CURVE_P384:
+  case HAL_CURVE_P384:;
     static const verilog_ecdsa_driver_t p384_driver = {
       .name   = ECDSA384_NAME,
       .bytes  = ECDSA384_OPERAND_BITS / 8,
