@@ -24,6 +24,11 @@ from pyasn1.type.constraint     import SingleValueConstraint
 from pyasn1.codec.der.encoder   import encode as DER_Encode
 from pyasn1.codec.der.decoder   import decode as DER_Decode
 
+from ecdsa                      import der as ECDSA_DER
+from ecdsa.util                 import oid_ecPublicKey, encoded_oid_ecPublicKey
+from ecdsa.keys                 import SigningKey
+from ecdsa.curves               import find_curve
+
 class AlgorithmIdentifier(Sequence):
     componentType = NamedTypes(
         NamedType(              "algorithm",            ObjectIdentifier()),
@@ -263,6 +268,18 @@ if __name__ == "__main__":
     #print; dumpasn1(der_test_keys["ec_pkcs8"])
     print; print "Reencoded PKCS #8 {} static data".format("matches" if der == der_test_keys["ec_pkcs8"] else "doesn't match")
 
+    # Try doing same thing with ecdsa package ASN.1 utilities.
+    sk = SigningKey.from_der(der_test_keys["ec_rfc5915"])
+    vk = ECDSA_DER.encode_bitstring("\x00\x04" + sk.get_verifying_key().to_string())
+    ec = ECDSA_DER.encode_sequence(ECDSA_DER.encode_integer(1),
+                                   ECDSA_DER.encode_octet_string(sk.to_string()),
+                                   ECDSA_DER.encode_constructed(1, vk))
+    p8 = ECDSA_DER.encode_sequence(ECDSA_DER.encode_integer(0),
+                                   ECDSA_DER.encode_sequence(encoded_oid_ecPublicKey,
+                                                             sk.curve.encoded_oid),
+                                   ECDSA_DER.encode_octet_string(ec))
+    print; print "ECDSA-library PKCS #8 encoding {} pyasn1 PKCS #8 encoding".format("matches" if p8 == der_test_keys["ec_pkcs8"] else "doesn't match")
+
     # Generate ECPrivateKey from  PKCS #8 and check against static data
     ec = ECPrivateKey()
     ec["version"]    = ec_pkcs8_privateKey["version"]
@@ -275,6 +292,33 @@ if __name__ == "__main__":
     print; print "Reencoded PKCS #8 {} static data".format("matches" if der == der_test_keys["ec_rfc5915"] else "doesn't match")
 
     # Paranoia: Make sure we really can load the RFC 5915 we just generated.
-    from ecdsa.keys import SigningKey
     sk = SigningKey.from_der(der)
     print; print "ECDSA Python library parse of reencoded PKCS #8 data: {!r}".format(sk)
+
+    # Same thing with ecdsa package ASN.1 utilities.
+    car, cdr = ECDSA_DER.remove_sequence(der_test_keys["ec_pkcs8"])
+    assert cdr == ""
+    version, cdr = ECDSA_DER.remove_integer(car)
+    assert version == 0
+    car, ec = ECDSA_DER.remove_sequence(cdr)
+    oid, cdr = ECDSA_DER.remove_object(car)
+    assert oid == oid_ecPublicKey
+    oid, cdr = ECDSA_DER.remove_object(cdr)
+    curve = find_curve(oid)
+    assert cdr == ""
+    car, cdr = ECDSA_DER.remove_octet_string(ec)
+    assert cdr == ""
+    car, cdr = ECDSA_DER.remove_sequence(car)
+    assert cdr == ""
+    version, cdr = ECDSA_DER.remove_integer(car)
+    assert version == 1
+    privkey, cdr = ECDSA_DER.remove_octet_string(cdr)
+    tag, car, cdr = ECDSA_DER.remove_constructed(cdr)
+    assert tag == 1
+    assert cdr == ""
+    pubkey, cdr = ECDSA_DER.remove_bitstring(car)
+    assert cdr == ""
+    assert pubkey[:2] == "\x00\x04"
+    sk = SigningKey.from_string(privkey, curve)
+    print; print "ECDSA-library PKCS #8 decoding {} pyasn1 PKCS #8 decoding".format(
+        "matches" if der == sk.to_der() else "doesn't match")
