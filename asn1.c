@@ -58,6 +58,16 @@
 #define INIT_FP_INT     {{{0}}}
 
 /*
+ * Algorithm OIDs used in SPKI and PKCS #8.
+ */
+
+const uint8_t hal_asn1_oid_rsaEncryption[] = { 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01 };
+const size_t  hal_asn1_oid_rsaEncryption_len = sizeof(hal_asn1_oid_rsaEncryption);
+
+const uint8_t hal_asn1_oid_ecPublicKey[] = { 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01 };
+const size_t  hal_asn1_oid_ecPublicKey_len = sizeof(hal_asn1_oid_ecPublicKey);
+
+/*
  * Encode tag and length fields of an ASN.1 object.
  *
  * Sets *der_len to the size of of the ASN.1 header (tag and length
@@ -556,8 +566,7 @@ hal_error_t hal_asn1_decode_pkcs8_privatekeyinfo(const uint8_t **alg_oid,   size
                                                  const uint8_t **privkey,   size_t *privkey_len,
                                                  const uint8_t *const der,  const size_t der_len)
 {
-  if (alg_oid == NULL || alg_oid_len == NULL || curve_oid == NULL || curve_oid_len == NULL ||
-      privkey == NULL || privkey_len == NULL || der == NULL)
+  if (der == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   const uint8_t * const der_end = der + der_len;
@@ -591,12 +600,16 @@ hal_error_t hal_asn1_decode_pkcs8_privatekeyinfo(const uint8_t **alg_oid,   size
   d += hlen;
   if (vlen > algid_end - d)
     return HAL_ERROR_ASN1_PARSE_FAILED;
-  *alg_oid = d;
-  *alg_oid_len = vlen;
+  if (alg_oid != NULL)
+    *alg_oid = d;
+  if (alg_oid_len != NULL)
+    *alg_oid_len = vlen;
   d += vlen;
 
-  *curve_oid = NULL;
-  *curve_oid_len = 0;
+  if (curve_oid != NULL)
+    *curve_oid = NULL;
+  if (curve_oid_len != NULL)
+    *curve_oid_len = 0;
 
   if (d < algid_end) {
     switch (*d) {
@@ -607,8 +620,10 @@ hal_error_t hal_asn1_decode_pkcs8_privatekeyinfo(const uint8_t **alg_oid,   size
       d += hlen;
       if (vlen > algid_end - d)
         return HAL_ERROR_ASN1_PARSE_FAILED;
-      *curve_oid = d;
-      *curve_oid_len = vlen;
+      if (curve_oid != NULL)
+        *curve_oid = d;
+      if (curve_oid_len != NULL)
+        *curve_oid_len = vlen;
       d += vlen;
       break;
 
@@ -632,8 +647,10 @@ hal_error_t hal_asn1_decode_pkcs8_privatekeyinfo(const uint8_t **alg_oid,   size
   d += hlen;
   if (vlen >= algid_end - d)
     return HAL_ERROR_ASN1_PARSE_FAILED;
-  *privkey = d;
-  *privkey_len = vlen;
+  if (privkey != NULL)
+    *privkey = d;
+  if (privkey_len != NULL)
+    *privkey_len = vlen;
   d += vlen;
 
   if (d != der_end)

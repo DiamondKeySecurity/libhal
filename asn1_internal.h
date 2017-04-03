@@ -89,6 +89,20 @@ static inline uint8_t *unconst_uint8_t(const uint8_t * const arg)
   return (uint8_t *) arg;
 }
 
+/*
+ * OIDs.
+ */
+
+extern const uint8_t hal_asn1_oid_rsaEncryption[];
+extern const size_t  hal_asn1_oid_rsaEncryption_len;
+
+extern const uint8_t hal_asn1_oid_ecPublicKey[];
+extern const size_t  hal_asn1_oid_ecPublicKey_len;
+
+/*
+ * Transcoding functions.
+ */
+
 extern hal_error_t hal_asn1_encode_header(const uint8_t tag,
                                           const size_t value_len,
                                           uint8_t *der, size_t *der_len, const size_t der_max);

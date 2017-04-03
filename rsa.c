@@ -673,7 +673,7 @@ hal_error_t hal_rsa_key_gen(const hal_core_t *core,
 
 /*
  * Just enough ASN.1 to read and write PKCS #1.5 RSAPrivateKey syntax
- * (RFC 2313 section 7.2).
+ * (RFC 2313 section 7.2) wrapped in a PKCS #8 PrivateKeyInfo (RFC 5208).
  *
  * RSAPrivateKey fields in the required order.
  */
@@ -709,15 +709,12 @@ hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
   RSAPrivateKey_fields;
 #undef _
 
-  /*
-   * Encode header.
-   */
-
-  if ((err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, der, &hlen, der_max))  != HAL_OK)
+  if ((err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, NULL, &hlen, 0)) != HAL_OK)
     return err;
 
-  if (der_len != NULL)
-    *der_len = hlen + vlen;
+  if ((err = hal_asn1_encode_pkcs8_privatekeyinfo(hal_asn1_oid_rsaEncryption, hal_asn1_oid_rsaEncryption_len,
+                                                  NULL, 0, NULL, hlen + vlen, NULL, der_len, der_max)) != HAL_OK)
+    return err;
 
   if (der == NULL)
     return HAL_OK;
@@ -726,13 +723,18 @@ hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
    * Encode data.
    */
 
-  der += hlen;
+  if ((err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, der, &hlen, der_max)) != HAL_OK)
+    return err;
 
-#define _(x) { size_t n; if ((err = hal_asn1_encode_integer(x, der, &n, vlen)) != HAL_OK) return err; der += n; vlen -= n; }
+  uint8_t *d = der + hlen;
+  memset(d, 0, vlen);
+
+#define _(x) { size_t n; if ((err = hal_asn1_encode_integer(x, d, &n, vlen)) != HAL_OK) return err; d += n; vlen -= n; }
   RSAPrivateKey_fields;
 #undef _
 
-  return HAL_OK;
+  return hal_asn1_encode_pkcs8_privatekeyinfo(hal_asn1_oid_rsaEncryption, hal_asn1_oid_rsaEncryption_len,
+                                              NULL, 0, der, d - der, der, der_len, der_max);
 }
 
 size_t hal_rsa_private_key_to_der_len(const hal_rsa_key_t * const key)
@@ -754,21 +756,33 @@ hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key_,
 
   key->type = HAL_KEY_TYPE_RSA_PRIVATE;
 
-  hal_error_t err = HAL_OK;
-  size_t hlen, vlen;
+  size_t hlen, vlen, alg_oid_len, curve_oid_len, privkey_len;
+  const uint8_t     *alg_oid,    *curve_oid,    *privkey;
+  hal_error_t err;
 
-  if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, der, der_len, &hlen, &vlen)) != HAL_OK)
+  if ((err = hal_asn1_decode_pkcs8_privatekeyinfo(&alg_oid, &alg_oid_len,
+                                                  &curve_oid, &curve_oid_len,
+                                                  &privkey, &privkey_len,
+                                                  der, der_len)) != HAL_OK)
     return err;
 
-  der += hlen;
+  if (alg_oid_len != hal_asn1_oid_rsaEncryption_len ||
+      memcmp(alg_oid, hal_asn1_oid_rsaEncryption, alg_oid_len) != 0 ||
+      curve_oid_len != 0)
+    return HAL_ERROR_ASN1_PARSE_FAILED;
+
+  if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, privkey, privkey_len, &hlen, &vlen)) != HAL_OK)
+    return err;
+
+  const uint8_t *d = privkey + hlen;
 
   fp_int version[1] = INIT_FP_INT;
 
-#define _(x) { size_t i; if ((err = hal_asn1_decode_integer(x, der, &i, vlen)) != HAL_OK) return err; der += i; vlen -= i; }
+#define _(x) { size_t n; if ((err = hal_asn1_decode_integer(x, d, &n, vlen)) != HAL_OK) return err; d += n; vlen -= n; }
   RSAPrivateKey_fields;
 #undef _
 
-  if (fp_cmp_d(version, 0) != FP_EQ)
+  if (d != privkey + privkey_len || !fp_iszero(version))
     return HAL_ERROR_ASN1_PARSE_FAILED;
 
   *key_ = key;
@@ -779,8 +793,6 @@ hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key_,
 /*
  * ASN.1 public keys in SubjectPublicKeyInfo form, see RFCs 2313, 4055, and 5280.
  */
-
-static const uint8_t oid_rsaEncryption[] = { 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01 };
 
 hal_error_t hal_rsa_public_key_to_der(const hal_rsa_key_t * const key,
                                       uint8_t *der, size_t *der_len, const size_t der_max)
@@ -810,7 +822,7 @@ hal_error_t hal_rsa_public_key_to_der(const hal_rsa_key_t * const key,
       return err;
   }
 
-  return hal_asn1_encode_spki(oid_rsaEncryption, sizeof(oid_rsaEncryption),
+  return hal_asn1_encode_spki(hal_asn1_oid_rsaEncryption, hal_asn1_oid_rsaEncryption_len,
                               NULL, 0, der, hlen + vlen,
                               der, der_len, der_max);
 
@@ -843,7 +855,7 @@ hal_error_t hal_rsa_public_key_from_der(hal_rsa_key_t **key_,
     return err;
 
   if (null != NULL || null_len != 0 || alg_oid == NULL ||
-      alg_oid_len != sizeof(oid_rsaEncryption) || memcmp(alg_oid, oid_rsaEncryption, alg_oid_len) != 0)
+      alg_oid_len != hal_asn1_oid_rsaEncryption_len || memcmp(alg_oid, hal_asn1_oid_rsaEncryption, alg_oid_len) != 0)
     return HAL_ERROR_ASN1_PARSE_FAILED;
 
   size_t len, hlen, vlen;

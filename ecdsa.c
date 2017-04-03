@@ -833,44 +833,6 @@ static hal_error_t verilog_point_pick_random(const verilog_ecdsa_driver_t * cons
 
 #endif
 
-static inline hal_error_t verilog_p256_point_pick_random(fp_int *k, ec_point_t *P)
-{
-#if HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER
-
-  static const verilog_ecdsa_driver_t p256_driver = {
-      .name   = ECDSA256_NAME,
-      .bytes  = ECDSA256_OPERAND_BITS / 8,
-      .k_addr = ECDSA256_ADDR_K,
-      .x_addr = ECDSA256_ADDR_X,
-      .y_addr = ECDSA256_ADDR_Y
-  };
-
-  return verilog_point_pick_random(&p256_driver, k, P);
-
-#endif
-
-  return HAL_ERROR_CORE_NOT_FOUND;
-}
-
-static inline hal_error_t verilog_p384_point_pick_random(fp_int *k, ec_point_t *P)
-{
-#if HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER
-
-  static const verilog_ecdsa_driver_t p384_driver = {
-    .name   = ECDSA384_NAME,
-    .bytes  = ECDSA384_OPERAND_BITS / 8,
-    .k_addr = ECDSA384_ADDR_K,
-    .x_addr = ECDSA384_ADDR_X,
-    .y_addr = ECDSA384_ADDR_Y
-  };
-
-  return verilog_point_pick_random(&p384_driver, k, P);
-
-#endif
-
-  return HAL_ERROR_CORE_NOT_FOUND;
-}
-
 /*
  * Pick a random point on the curve, return random scalar and
  * resulting point.
@@ -915,23 +877,39 @@ static hal_error_t point_pick_random(const ecdsa_curve_t * const curve,
 
   memset(k_buf, 0, sizeof(k_buf));
 
-#if HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER || HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER
   switch (curve->curve) {
 
+#if HAL_ECDSA_VERILOG_ECDSA256_MULTIPLIER
   case HAL_CURVE_P256:
-    if ((err = verilog_p256_point_pick_random(k, P)) != HAL_ERROR_CORE_NOT_FOUND)
+    static const verilog_ecdsa_driver_t p256_driver = {
+      .name   = ECDSA256_NAME,
+      .bytes  = ECDSA256_OPERAND_BITS / 8,
+      .k_addr = ECDSA256_ADDR_K,
+      .x_addr = ECDSA256_ADDR_X,
+      .y_addr = ECDSA256_ADDR_Y
+    };
+    if ((err = verilog_point_pick_random(&p256_driver, k, P)) != HAL_ERROR_CORE_NOT_FOUND)
       return err;
-  break;
+    break;
+#endif
 
+#if HAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER
   case HAL_CURVE_P384:
-    if ((err = verilog_p384_point_pick_random(k, P)) != HAL_ERROR_CORE_NOT_FOUND)
+    static const verilog_ecdsa_driver_t p384_driver = {
+      .name   = ECDSA384_NAME,
+      .bytes  = ECDSA384_OPERAND_BITS / 8,
+      .k_addr = ECDSA384_ADDR_K,
+      .x_addr = ECDSA384_ADDR_X,
+      .y_addr = ECDSA384_ADDR_Y
+    };
+    if ((err = verilog_point_pick_random(&p384_driver, k, P)) != HAL_ERROR_CORE_NOT_FOUND)
       return err;
-  break;
+    break;
+#endif
 
   default:
     break;
   }
-#endif
 
   /*
    * Calculate P = kG and return.
@@ -1287,7 +1265,11 @@ hal_error_t hal_ecdsa_key_from_ecpoint(hal_ecdsa_key_t **key_,
 }
 
 /*
- * Write private key in RFC 5915 ASN.1 DER format.
+ * Write private key in PKCS #8 PrivateKeyInfo DER format (RFC 5208).
+ * This is basically just the PKCS #8 wrapper around the ECPrivateKey
+ * format from RFC 5915, except that the OID naming the curve is in
+ * the privateKeyAlgorithm.parameters field in the PKCS #8 wrapper and
+ * is therefore omitted from the ECPrivateKey.
  *
  * This is hand-coded, and is approaching the limit where one should
  * probably be using an ASN.1 compiler like asn1c instead.
@@ -1314,27 +1296,29 @@ hal_error_t hal_ecdsa_private_key_to_der(const hal_ecdsa_key_t * const key,
 
   hal_error_t err;
 
-  size_t version_len, hlen, hlen_oct, hlen_oid, hlen_exp0, hlen_bit, hlen_exp1;
+  size_t version_len, hlen, hlen_oct, hlen_bit, hlen_exp1;
 
   if ((err = hal_asn1_encode_integer(version,                                    NULL, &version_len, 0)) != HAL_OK ||
       (err = hal_asn1_encode_header(ASN1_OCTET_STRING,          q_len,           NULL, &hlen_oct,    0)) != HAL_OK ||
-      (err = hal_asn1_encode_header(ASN1_OBJECT_IDENTIFIER,     curve->oid_len,  NULL, &hlen_oid,    0)) != HAL_OK ||
-      (err = hal_asn1_encode_header(ASN1_EXPLICIT_0, hlen_oid + curve->oid_len,  NULL, &hlen_exp0,   0)) != HAL_OK ||
       (err = hal_asn1_encode_header(ASN1_BIT_STRING,            (q_len + 1) * 2, NULL, &hlen_bit,    0)) != HAL_OK ||
       (err = hal_asn1_encode_header(ASN1_EXPLICIT_1, hlen_bit + (q_len + 1) * 2, NULL, &hlen_exp1,   0)) != HAL_OK)
     return err;
 
-  const size_t vlen = (version_len   +
-                       hlen_oct + q_len +
-                       hlen_oid + hlen_exp0 + curve->oid_len +
-                       hlen_bit + hlen_exp1 + (q_len + 1) * 2);
+  const size_t vlen = version_len + hlen_oct + q_len + hlen_exp1 + hlen_bit + (q_len + 1) * 2;
 
-  err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, der, &hlen, der_max);
+  if ((err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, NULL, &hlen, 0)) != HAL_OK)
+    return err;
 
-  if (der_len != NULL)
-    *der_len = hlen + vlen;
+  if ((err = hal_asn1_encode_pkcs8_privatekeyinfo(hal_asn1_oid_ecPublicKey, hal_asn1_oid_ecPublicKey_len,
+                                                  curve->oid, curve->oid_len,
+                                                  NULL, hlen + vlen,
+                                                  NULL, der_len, der_max)) != HAL_OK)
+    return err;
+                                                  
+  if (der == NULL)
+    return HAL_OK;
 
-  if (der == NULL || err != HAL_OK)
+  if ((err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, der, &hlen, der_max)) != HAL_OK)
     return err;
 
   uint8_t *d = der + hlen;
@@ -1350,15 +1334,6 @@ hal_error_t hal_ecdsa_private_key_to_der(const hal_ecdsa_key_t * const key,
   fp_to_unsigned_bin(unconst_fp_int(key->d), d + q_len - d_len);
   d += q_len;
 
-  if ((err = hal_asn1_encode_header(ASN1_EXPLICIT_0, hlen_oid + curve->oid_len, d, &hlen, der + der_max - d)) != HAL_OK)
-    return err;
-  d += hlen;
-  if ((err = hal_asn1_encode_header(ASN1_OBJECT_IDENTIFIER, curve->oid_len, d, &hlen, der + der_max - d)) != HAL_OK)
-    return err;
-  d += hlen;
-  memcpy(d, curve->oid, curve->oid_len);
-  d += curve->oid_len;
-
   if ((err = hal_asn1_encode_header(ASN1_EXPLICIT_1, hlen_bit + (q_len + 1) * 2, d, &hlen, der + der_max - d)) != HAL_OK)
     return err;
   d += hlen;
@@ -1372,9 +1347,10 @@ hal_error_t hal_ecdsa_private_key_to_der(const hal_ecdsa_key_t * const key,
   fp_to_unsigned_bin(unconst_fp_int(key->Q->y), d + q_len - Qy_len);
   d += q_len;
 
-  assert(d <= der + der_max);
-
-  return HAL_OK;
+  return hal_asn1_encode_pkcs8_privatekeyinfo(hal_asn1_oid_ecPublicKey, hal_asn1_oid_ecPublicKey_len,
+                                              curve->oid, curve->oid_len,
+                                              der, d - der,
+                                              der, der_len, der_max);
 }
 
 /*
@@ -1389,7 +1365,7 @@ size_t hal_ecdsa_private_key_to_der_len(const hal_ecdsa_key_t * const key)
 }
 
 /*
- * Read private key in RFC 5915 ASN.1 DER format.
+ * Read private key in PKCS #8 PrivateKeyInfo DER format (RFC 5208, RFC 5915).
  *
  * This is hand-coded, and is approaching the limit where one should
  * probably be using an ASN.1 compiler like asn1c instead.
@@ -1407,48 +1383,47 @@ hal_error_t hal_ecdsa_private_key_from_der(hal_ecdsa_key_t **key_,
   memset(keybuf, 0, keybuf_len);
   key->type = HAL_KEY_TYPE_EC_PRIVATE;
 
-  size_t hlen, vlen;
+  size_t hlen, vlen, alg_oid_len, curve_oid_len, privkey_len;
+  const uint8_t     *alg_oid,    *curve_oid,    *privkey;
   hal_error_t err;
 
-  if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, der, der_len, &hlen, &vlen)) != HAL_OK)
+  if ((err = hal_asn1_decode_pkcs8_privatekeyinfo(&alg_oid, &alg_oid_len,
+                                                  &curve_oid, &curve_oid_len,
+                                                  &privkey, &privkey_len,
+                                                  der, der_len)) != HAL_OK)
     return err;
 
-  const uint8_t * const der_end = der + hlen + vlen;
-  const uint8_t *d = der + hlen;
-  const ecdsa_curve_t *curve = NULL;
+  if (alg_oid_len != hal_asn1_oid_ecPublicKey_len ||
+      memcmp(alg_oid, hal_asn1_oid_ecPublicKey, alg_oid_len) != 0 ||
+      oid_to_curve(&key->curve, curve_oid, curve_oid_len) == NULL)
+    return HAL_ERROR_ASN1_PARSE_FAILED;
+
+  if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, privkey, privkey_len, &hlen, &vlen)) != HAL_OK)
+    return err;
+
+  const uint8_t * const der_end = privkey + hlen + vlen;
+  const uint8_t *d = privkey + hlen;
   fp_int version[1] = INIT_FP_INT;
 
   if ((err = hal_asn1_decode_integer(version, d, &hlen, vlen)) != HAL_OK)
-    goto fail;
+    return err;
   if (fp_cmp_d(version, 1) != FP_EQ)
-    lose(HAL_ERROR_ASN1_PARSE_FAILED);
+    return HAL_ERROR_ASN1_PARSE_FAILED;
   d += hlen;
 
   if ((err = hal_asn1_decode_header(ASN1_OCTET_STRING, d, der_end - d, &hlen, &vlen)) != HAL_OK)
-    return err;
+    goto fail;
   d += hlen;
   fp_read_unsigned_bin(key->d, unconst_uint8_t(d), vlen);
   d += vlen;
 
-  if ((err = hal_asn1_decode_header(ASN1_EXPLICIT_0, d, der_end - d, &hlen, &vlen)) != HAL_OK)
-    return err;
-  d += hlen;
-  if (vlen > der_end - d)
-    lose(HAL_ERROR_ASN1_PARSE_FAILED);
-  if ((err = hal_asn1_decode_header(ASN1_OBJECT_IDENTIFIER, d, vlen, &hlen, &vlen)) != HAL_OK)
-    return err;
-  d += hlen;
-  if ((curve = oid_to_curve(&key->curve, d, vlen)) == NULL)
-    lose(HAL_ERROR_ASN1_PARSE_FAILED);
-  d += vlen;
-
   if ((err = hal_asn1_decode_header(ASN1_EXPLICIT_1, d, der_end - d, &hlen, &vlen)) != HAL_OK)
-    return err;
+    goto fail;
   d += hlen;
   if (vlen > der_end - d)
     lose(HAL_ERROR_ASN1_PARSE_FAILED);
   if ((err = hal_asn1_decode_header(ASN1_BIT_STRING, d, vlen, &hlen, &vlen)) != HAL_OK)
-    return err;
+    goto fail;
   d += hlen;
   if (vlen < 4 || (vlen & 1) != 0 || *d++ != 0x00 || *d++ != 0x04)
     lose(HAL_ERROR_ASN1_PARSE_FAILED);
@@ -1473,8 +1448,6 @@ hal_error_t hal_ecdsa_private_key_from_der(hal_ecdsa_key_t **key_,
 /*
  * Write public key in SubjectPublicKeyInfo format, see RFCS 5280 and 5480.
  */
-
-static const uint8_t oid_ecPublicKey[] = { 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01 };
 
 hal_error_t hal_ecdsa_public_key_to_der(const hal_ecdsa_key_t * const key,
                                         uint8_t *der, size_t *der_len, const size_t der_max)
@@ -1508,7 +1481,7 @@ hal_error_t hal_ecdsa_public_key_to_der(const hal_ecdsa_key_t * const key,
     assert(d < der + der_max);
   }
 
-  return hal_asn1_encode_spki(oid_ecPublicKey, sizeof(oid_ecPublicKey),
+  return hal_asn1_encode_spki(hal_asn1_oid_ecPublicKey, hal_asn1_oid_ecPublicKey_len,
                               curve->oid, curve->oid_len,
                               der, ecpoint_len,
                               der, der_len, der_max);
@@ -1551,7 +1524,8 @@ hal_error_t hal_ecdsa_public_key_from_der(hal_ecdsa_key_t **key_,
     return err;
 
   if (alg_oid == NULL || curve_oid == NULL || pubkey == NULL ||
-      alg_oid_len != sizeof(oid_ecPublicKey) || memcmp(alg_oid, oid_ecPublicKey, alg_oid_len) != 0 ||
+      alg_oid_len != hal_asn1_oid_ecPublicKey_len ||
+      memcmp(alg_oid, hal_asn1_oid_ecPublicKey, alg_oid_len) != 0 ||
       (curve = oid_to_curve(&key->curve, curve_oid, curve_oid_len)) == NULL ||
       pubkey_len < 3 || (pubkey_len & 1) == 0 || pubkey[0] != 0x04 ||
       pubkey_len / 2 != fp_unsigned_bin_size(unconst_fp_int(curve->q)))
