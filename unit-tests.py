@@ -280,7 +280,7 @@ class TestPKeyGen(TestCaseLoggedIn):
     def test_gen_sign_verify_ecdsa_p521_sha512(self):
         self.gen_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, HAL_CURVE_P521)
 
-    def test_gen_sign_verify_rsa_1024_p256_sha256(self):
+    def test_gen_sign_verify_rsa_1024_sha256(self):
         self.gen_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA256, 1024)
 
     @unittest.skipUnless(args.all_tests, "Slow")
