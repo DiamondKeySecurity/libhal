@@ -569,8 +569,7 @@ class TestPKeyMatch(TestCaseLoggedIn):
             tags.extend(PreloadedKey.db)
         self.assertEqual(len(tags), len(uuids))
 
-        matched_uuids = set(k.uuid for n, k in self.match(flags = flags))
-        self.assertGreaterEqual(matched_uuids, uuids)
+        self.assertEqual(uuids, set(k.uuid for n, k in self.match(flags = flags, uuids = uuids)))
 
         for keytype in set(HALKeyType.index.itervalues()) - {HAL_KEY_TYPE_NONE}:
             for n, k in self.match(flags = flags, uuids = uuids, type = keytype):
