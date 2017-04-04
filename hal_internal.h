@@ -317,15 +317,16 @@ static inline hal_crc32_t hal_crc32_finalize(hal_crc32_t crc)
 }
 
 /*
- * Sizes for ASN.1-encoded keys, this may not be exact due to ASN.1
- * INTEGER encoding rules but should be good enough for buffer sizing:
+ * Sizes for PKCS #8 encoded private keys.  This may not be exact due
+ * to ASN.1 INTEGER encoding rules, but should be good enough for
+ * buffer sizing.
  *
- * 2048-bit RSA:        1194 bytes
- * 4096-bit RSA:        2351 bytes
- * 8192-bit RSA:        4655 bytes
- * EC P-256:             121 bytes
- * EC P-384:             167 bytes
- * EC P-521:             223 bytes
+ * 2048-bit RSA:        1219 bytes
+ * 4096-bit RSA:        2373 bytes
+ * 8192-bit RSA:        4679 bytes
+ * EC P-256:             138 bytes
+ * EC P-384:             185 bytes
+ * EC P-521:             240 bytes
  *
  * Plus we need a bit of AES-keywrap overhead, since we're storing the
  * wrapped form (see hal_aes_keywrap_cyphertext_length()).
@@ -338,7 +339,7 @@ static inline hal_crc32_t hal_crc32_finalize(hal_crc32_t crc)
  * moment we take the easy way out and cap this at 4096-bit RSA.
  */
 
-#define HAL_KS_WRAPPED_KEYSIZE  ((2351 + 15) & ~7)
+#define HAL_KS_WRAPPED_KEYSIZE  ((2373 + 15) & ~7)
 
 /*
  * PINs.
