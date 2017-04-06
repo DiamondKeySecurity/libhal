@@ -38,6 +38,7 @@
 
 #include "hal.h"
 #include "hal_internal.h"
+#include "asn1_internal.h"
 
 #ifndef HAL_STATIC_PKEY_STATE_BLOCKS
 #define HAL_STATIC_PKEY_STATE_BLOCKS 0
@@ -1137,7 +1138,7 @@ static hal_error_t pkey_local_export(const hal_pkey_handle_t pkey_handle,
   if (err != HAL_OK)
     goto fail;
 
-  if ((err = hal_rsa_get_modulus(rsa, NULL, kek_len, 0)) != HAL_OK)
+  if ((err = hal_rsa_key_get_modulus(rsa, NULL, kek_len, 0)) != HAL_OK)
     goto fail;
 
   if (*kek_len > kek_max) {
@@ -1171,7 +1172,7 @@ static hal_error_t pkey_local_export(const hal_pkey_handle_t pkey_handle,
     goto fail;
 
   if ((err = hal_asn1_encode_pkcs8_encryptedprivatekeyinfo(hal_asn1_oid_rsaEncryption, hal_asn1_oid_rsaEncryption_len,
-                                                           kek, *kek_len, kek, *kek_len, kek_max)) != HAL_OK)
+                                                           kek, *kek_len, kek, kek_len, kek_max)) != HAL_OK)
     goto fail;
 
   memset(rsabuf,  0, sizeof(rsabuf));
@@ -1196,8 +1197,9 @@ static hal_error_t pkey_local_import(const hal_client_handle_t client,
 {
   assert(pkey != NULL && name != NULL && pkcs8 != NULL && kek_ != NULL && kek_len > 2);
 
-  uint8_t kek[KEK_LENGTH], rsabuf[hal_rsa_key_t_size], der[HAL_KS_WRAPPED_KEYSIZE], *d, *oid, *data;
+  uint8_t kek[KEK_LENGTH], rsabuf[hal_rsa_key_t_size], der[HAL_KS_WRAPPED_KEYSIZE], *d;
   size_t der_len, oid_len, data_len;
+  const uint8_t *oid, *data;
   hal_rsa_key_t *rsa = NULL;
   hal_curve_name_t curve;
   hal_key_type_t type;
