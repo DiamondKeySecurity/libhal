@@ -1062,33 +1062,6 @@ static hal_error_t pkey_local_get_attributes(const hal_pkey_handle_t pkey,
   return err;
 }
 
-/*
- * This is an RPC function, so the NULL pointer input convention for
- * querying required buffer length isn't all that useful, but buffer
- * lengths are predictable anyway:
- *
- *   Size of the pkcs8 buffer is a constant, determined by
- *   oid_aes_aesKeyWrap_len, HAL_KS_WRAPPED_KEYSIZE, and some ASN.1
- *   overhead;
- *
- *   Size of the kek buffer is the same as the length of the
- *   modulus of the RSA public key indicated by wrap_handle.
- *
- * Except that we might want ASN.1 around the KEK, something like:
- *
- *   SEQUENCE {
- *     keyEncryptionAlgorithm AlgorithmIdentifier { rsaEncryption },
- *     encryptedKey OCTET STRING
- *   }
- *
- * which would still be constant-length, just a bit more verbose.
- *
- * Oddly enough, this is exactly the syntax of PKCS #8
- * EncryptedPrivateKeyInfo, which we already use for other purposes.
- * Using it to wrap an AES key encrypted with an RSA key seems a bit
- * odd, but it's a good fit and lets us reuse ASN.1 code.  Cool.
- */
-
 static hal_error_t pkey_local_export(const hal_pkey_handle_t pkey_handle,
                                      const hal_pkey_handle_t kekek_handle,
                                      uint8_t *pkcs8, size_t *pkcs8_len, const size_t pkcs8_max,
@@ -1158,11 +1131,14 @@ static hal_error_t pkey_local_export(const hal_pkey_handle_t pkey_handle,
   if ((err = hal_get_random(NULL, kek, KEK_LENGTH)) != HAL_OK)
     goto fail;
 
-  if ((err = hal_aes_keywrap(NULL, kek, KEK_LENGTH, pkcs8, len, pkcs8, &len)) != HAL_OK)
+  *pkcs8_len = pkcs8_max;
+  if ((err = hal_aes_keywrap(NULL, kek, KEK_LENGTH, pkcs8, len, pkcs8, pkcs8_len)) != HAL_OK)
     goto fail;
 
-  if ((err = hal_asn1_encode_pkcs8_encryptedprivatekeyinfo(hal_asn1_oid_aesKeyWrap, hal_asn1_oid_aesKeyWrap_len,
-                                                           pkcs8, len, pkcs8, pkcs8_len, pkcs8_max)) != HAL_OK)
+  if ((err = hal_asn1_encode_pkcs8_encryptedprivatekeyinfo(hal_asn1_oid_aesKeyWrap,
+                                                           hal_asn1_oid_aesKeyWrap_len,
+                                                           pkcs8, *pkcs8_len,
+                                                           pkcs8, pkcs8_len, pkcs8_max)) != HAL_OK)
     goto fail;
 
   if ((err = pkcs1_5_pad(kek, KEK_LENGTH, kek, *kek_len, 0x02)) != HAL_OK)
@@ -1171,8 +1147,10 @@ static hal_error_t pkey_local_export(const hal_pkey_handle_t pkey_handle,
   if ((err = hal_rsa_encrypt(NULL, rsa, kek, *kek_len, kek, *kek_len)) != HAL_OK)
     goto fail;
 
-  if ((err = hal_asn1_encode_pkcs8_encryptedprivatekeyinfo(hal_asn1_oid_rsaEncryption, hal_asn1_oid_rsaEncryption_len,
-                                                           kek, *kek_len, kek, kek_len, kek_max)) != HAL_OK)
+  if ((err = hal_asn1_encode_pkcs8_encryptedprivatekeyinfo(hal_asn1_oid_rsaEncryption,
+                                                           hal_asn1_oid_rsaEncryption_len,
+                                                           kek, *kek_len,
+                                                           kek, kek_len, kek_max)) != HAL_OK)
     goto fail;
 
   memset(rsabuf,  0, sizeof(rsabuf));

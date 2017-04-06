@@ -75,7 +75,9 @@ static inline int check_pkey_flags(const hal_key_flags_t flags)
   return (flags &~ (HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE |
                     HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT  |
                     HAL_KEY_FLAG_USAGE_DATAENCIPHERMENT |
-                    HAL_KEY_FLAG_TOKEN)) == 0;
+                    HAL_KEY_FLAG_TOKEN                  |
+                    HAL_KEY_FLAG_PUBLIC                 |
+                    HAL_KEY_FLAG_EXPORTABLE)) == 0;
 }
 
 static inline int check_pkey_type_curve_flags(const hal_key_type_t type,

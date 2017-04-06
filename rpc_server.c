@@ -782,6 +782,74 @@ static hal_error_t pkey_get_attributes(const uint8_t **iptr, const uint8_t * con
     return ret;
 }
 
+static hal_error_t pkey_export(const uint8_t **iptr, const uint8_t * const ilimit,
+                               uint8_t **optr, const uint8_t * const olimit)
+{
+    hal_client_handle_t client;
+    hal_pkey_handle_t pkey;
+    hal_pkey_handle_t kekek;
+    size_t   pkcs8_len, kek_len;
+    uint32_t pkcs8_max, kek_max;
+    uint8_t *optr_orig = *optr;
+    hal_error_t ret;
+
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
+    check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
+    check(hal_xdr_decode_int(iptr, ilimit, &kekek.handle));
+    check(hal_xdr_decode_int(iptr, ilimit, &pkcs8_max));
+    check(hal_xdr_decode_int(iptr, ilimit, &kek_max));
+
+    uint8_t pkcs8[pkcs8_max], kek[kek_max];
+
+    ret = hal_rpc_pkey_export(pkey, kekek, pkcs8, &pkcs8_len, sizeof(pkcs8), kek, &kek_len, sizeof(kek));
+
+    if (ret == HAL_OK)
+        ret = hal_xdr_encode_buffer(optr, olimit, pkcs8, pkcs8_len);
+
+    if (ret == HAL_OK)
+        ret = hal_xdr_encode_buffer(optr, olimit, kek, kek_len);
+
+    if (ret != HAL_OK)
+        *optr = optr_orig;
+
+    return ret;
+}
+
+static hal_error_t pkey_import(const uint8_t **iptr, const uint8_t * const ilimit,
+                               uint8_t **optr, const uint8_t * const olimit)
+{
+    hal_client_handle_t client;
+    hal_session_handle_t session;
+    hal_pkey_handle_t pkey;
+    hal_pkey_handle_t kekek;
+    hal_uuid_t name;
+    const uint8_t *pkcs8, *kek;
+    uint32_t pkcs8_len, kek_len;
+    uint8_t *optr_orig = *optr;
+    hal_key_flags_t flags;
+    hal_error_t ret;
+
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
+    check(hal_xdr_decode_int(iptr, ilimit, &session.handle));
+    check(hal_xdr_decode_int(iptr, ilimit, &kekek.handle));
+    check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &pkcs8, &pkcs8_len));
+    check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &kek, &kek_len));
+    check(hal_xdr_decode_int(iptr, ilimit, &flags));
+
+    ret = hal_rpc_pkey_import(client, session, &pkey, &name, kekek, pkcs8, pkcs8_len, kek, kek_len, flags);
+
+    if (ret == HAL_OK)
+        ret = hal_xdr_encode_int(optr, olimit, pkey.handle);
+
+    if (ret == HAL_OK)
+        ret = hal_xdr_encode_buffer(optr, olimit, name.uuid, sizeof(name.uuid));
+
+    if (ret != HAL_OK)
+        *optr = optr_orig;
+
+    return ret;
+}
+
 
 hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
                                     uint8_t * const obuf, size_t * const olen)
@@ -887,6 +955,12 @@ hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ile
         break;
     case RPC_FUNC_PKEY_GET_ATTRIBUTES:
         handler = pkey_get_attributes;
+        break;
+    case RPC_FUNC_PKEY_EXPORT:
+        handler = pkey_export;
+        break;
+    case RPC_FUNC_PKEY_IMPORT:
+        handler = pkey_import;
         break;
     }
 
