@@ -192,6 +192,8 @@ RPCFunc.define('''
     RPC_FUNC_PKEY_GET_KEY_CURVE,
     RPC_FUNC_PKEY_SET_ATTRIBUTES,
     RPC_FUNC_PKEY_GET_ATTRIBUTES,
+    RPC_FUNC_PKEY_EXPORT,
+    RPC_FUNC_PKEY_IMPORT,
 ''')
 
 class HALDigestAlgorithm(Enum): pass
@@ -240,6 +242,7 @@ HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT      = (1 << 1)
 HAL_KEY_FLAG_USAGE_DATAENCIPHERMENT     = (1 << 2)
 HAL_KEY_FLAG_TOKEN                      = (1 << 3)
 HAL_KEY_FLAG_PUBLIC                     = (1 << 4)
+HAL_KEY_FLAG_EXPORTABLE                 = (1 << 5)
 
 HAL_PKEY_ATTRIBUTE_NIL                  = (0xFFFFFFFF)
 
@@ -402,6 +405,11 @@ class PKey(Handle):
         result.update(self.hsm.pkey_get_attributes(self, attrs.iterkeys(), sum(attrs.itervalues())))
         return result
 
+    def export_pkey(self, pkey):
+        return self.hsm.pkey_export(pkey = pkey, kekek = self, pkcs8_max = 2560, kek_max = 512)
+
+    def import_pkey(self, pkcs8, kek, flags = 0):
+        return self.hsm.pkey_import(kekek = self, pkcs8 = pkcs8, kek = kek, flags = flags)
 
 class HSM(object):
 
@@ -649,3 +657,15 @@ class HSM(object):
                 return dict((r.unpack_uint(), r.unpack_bytes()) for i in xrange(n))
             else:
                 return dict((r.unpack_uint(), r.unpack_uint()) for i in xrange(n))
+
+    def pkey_export(self, pkey, kekek, pkcs8_max = 2560, kek_max = 512):
+        with self.rpc(RPC_FUNC_PKEY_EXPORT, pkey, kekek, pkcs8_max, kek_max) as r:
+            pkcs8, kek = r.unpack_bytes(), r.unpack_bytes()
+            logger.debug("Exported pkey %s", pkey.uuid)
+            return pkcs8, kek
+
+    def pkey_import(self, kekek, pkcs8, kek, flags = 0, client = 0, session = 0):
+        with self.rpc(RPC_FUNC_PKEY_IMPORT, session, kekek, pkcs8, kek, flags, client = client) as r:
+            pkey = PKey(self, r.unpack_uint(), UUID(bytes = r.unpack_bytes()))
+            logger.debug("Imported pkey %s", pkey.uuid)
+            return pkey
