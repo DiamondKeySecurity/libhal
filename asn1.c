@@ -52,7 +52,7 @@
 #include <assert.h>
 
 #include "hal.h"
-
+#include "hal_internal.h"
 #include "asn1_internal.h"
 
 #define INIT_FP_INT     {{{0}}}
@@ -66,6 +66,16 @@ const size_t  hal_asn1_oid_rsaEncryption_len = sizeof(hal_asn1_oid_rsaEncryption
 
 const uint8_t hal_asn1_oid_ecPublicKey[] = { 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01 };
 const size_t  hal_asn1_oid_ecPublicKey_len = sizeof(hal_asn1_oid_ecPublicKey);
+
+#if KEK_LENGTH == (bitsToBytes(128))
+const uint8_t hal_asn1_oid_aesKeyWrap[] = { 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x08 };
+const size_t hal_asn1_oid_aesKeyWrap_len = sizeof(hal_asn1_oid_aesKeyWrap);
+#endif
+
+#if KEK_LENGTH == (bitsToBytes(256))
+const uint8_t hal_asn1_oid_aesKeyWrap[] = { 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x30 };
+const size_t hal_asn1_oid_aesKeyWrap_len = sizeof(hal_asn1_oid_aesKeyWrap);
+#endif
 
 /*
  * Encode tag and length fields of an ASN.1 object.
@@ -482,8 +492,7 @@ hal_error_t hal_asn1_decode_spki(const uint8_t **alg_oid,   size_t *alg_oid_len,
                                  const uint8_t **pubkey,    size_t *pubkey_len,
                                  const uint8_t *const der,  const size_t der_len)
 {
-  if (alg_oid == NULL || alg_oid_len == NULL || curve_oid == NULL || curve_oid_len == NULL ||
-      pubkey == NULL || pubkey_len == NULL || der == NULL)
+  if (der == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   const uint8_t * const der_end = der + der_len;
@@ -510,12 +519,16 @@ hal_error_t hal_asn1_decode_spki(const uint8_t **alg_oid,   size_t *alg_oid_len,
   d += hlen;
   if (vlen > algid_end - d)
     return HAL_ERROR_ASN1_PARSE_FAILED;
-  *alg_oid = d;
-  *alg_oid_len = vlen;
+  if (alg_oid != NULL)
+    *alg_oid = d;
+  if (alg_oid_len != NULL)
+    *alg_oid_len = vlen;
   d += vlen;
 
-  *curve_oid = NULL;
-  *curve_oid_len = 0;
+  if (curve_oid != NULL)
+    *curve_oid = NULL;
+  if (curve_oid_len != NULL)
+    *curve_oid_len = 0;
 
   if (d < algid_end) {
     switch (*d) {
@@ -526,8 +539,10 @@ hal_error_t hal_asn1_decode_spki(const uint8_t **alg_oid,   size_t *alg_oid_len,
       d += hlen;
       if (vlen > algid_end - d)
         return HAL_ERROR_ASN1_PARSE_FAILED;
-      *curve_oid = d;
-      *curve_oid_len = vlen;
+      if (curve_oid != NULL)
+        *curve_oid = d;
+      if (curve_oid_len != NULL)
+        *curve_oid_len = vlen;
       d += vlen;
       break;
 
@@ -551,8 +566,11 @@ hal_error_t hal_asn1_decode_spki(const uint8_t **alg_oid,   size_t *alg_oid_len,
   d += hlen;
   if (vlen >= algid_end - d || vlen == 0 || *d != 0x00)
     return HAL_ERROR_ASN1_PARSE_FAILED;
-  *pubkey = ++d;
-  *pubkey_len = --vlen;
+  ++d; --vlen;
+  if (pubkey != NULL)
+    *pubkey = d;
+  if (pubkey_len != NULL)
+    *pubkey_len = vlen;
   d += vlen;
 
   if (d != der_end)
@@ -718,6 +736,49 @@ hal_error_t hal_asn1_decode_pkcs8_encryptedprivatekeyinfo(const uint8_t **alg_oi
     return HAL_ERROR_ASN1_PARSE_FAILED;
 
   return HAL_OK;
+}
+
+/*
+ * Attempt to guess what kind of key we're looking at.
+ */
+
+hal_error_t hal_asn1_guess_key_type(hal_key_type_t *type,
+                                    hal_curve_name_t *curve,
+                                    const uint8_t *const der,  const size_t der_len)
+{
+  if (type == NULL || curve == NULL || der == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  const uint8_t *alg_oid, *curve_oid;
+  size_t alg_oid_len, curve_oid_len;
+  hal_error_t err;
+  int public = 0;
+
+  err = hal_asn1_decode_pkcs8_privatekeyinfo(&alg_oid, &alg_oid_len, &curve_oid, &curve_oid_len, NULL, 0, der, der_len);
+
+  if (err == HAL_ERROR_ASN1_PARSE_FAILED &&
+      (err = hal_asn1_decode_spki(&alg_oid, &alg_oid_len, &curve_oid, &curve_oid_len, NULL, 0, der, der_len)) == HAL_OK)
+    public = 1;
+
+  if (err != HAL_OK)
+    return err;
+
+  if (alg_oid_len == hal_asn1_oid_rsaEncryption_len && memcmp(alg_oid, hal_asn1_oid_rsaEncryption, alg_oid_len) == 0) {
+    *type = public ? HAL_KEY_TYPE_RSA_PUBLIC : HAL_KEY_TYPE_RSA_PRIVATE;
+    *curve = HAL_CURVE_NONE;
+    return HAL_OK;
+  }
+
+  if (alg_oid_len == hal_asn1_oid_ecPublicKey_len && memcmp(alg_oid, hal_asn1_oid_ecPublicKey, alg_oid_len) == 0) {
+    *type = public ? HAL_KEY_TYPE_EC_PUBLIC : HAL_KEY_TYPE_EC_PRIVATE;
+    if ((err = hal_ecdsa_oid_to_curve(curve, curve_oid, curve_oid_len)) != HAL_OK)
+      *curve = HAL_CURVE_NONE;
+    return err;
+  }
+
+  *type = HAL_KEY_TYPE_NONE;
+  *curve = HAL_CURVE_NONE;
+  return HAL_ERROR_UNSUPPORTED_KEY;
 }
 
 /*

@@ -99,6 +99,9 @@ extern const size_t  hal_asn1_oid_rsaEncryption_len;
 extern const uint8_t hal_asn1_oid_ecPublicKey[];
 extern const size_t  hal_asn1_oid_ecPublicKey_len;
 
+extern const uint8_t hal_asn1_oid_aesKeyWrap[];
+extern const size_t  hal_asn1_oid_aesKeyWrap_len;
+
 /*
  * Transcoding functions.
  */
@@ -144,6 +147,9 @@ extern hal_error_t hal_asn1_encode_pkcs8_encryptedprivatekeyinfo(const uint8_t *
 extern hal_error_t hal_asn1_decode_pkcs8_encryptedprivatekeyinfo(const uint8_t **alg_oid,  size_t *alg_oid_len,
                                                                  const uint8_t **data,     size_t *data_len,
                                                                  const uint8_t *const der, const size_t der_len);
+
+extern hal_error_t hal_asn1_guess_key_type(hal_key_type_t *type, hal_curve_name_t *curve,
+                                           const uint8_t *const der,  const size_t der_len);
 
 #endif /* _HAL_ASN1_INTERNAL_H_ */
 

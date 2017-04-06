@@ -269,6 +269,20 @@ typedef struct {
                                 uint8_t *attributes_buffer,
                                 const size_t attributes_buffer_len);
 
+  hal_error_t (*export)(const hal_pkey_handle_t pkey_handle,
+                        const hal_pkey_handle_t kekek_handle,
+                        uint8_t *pkcs8, size_t *pkcs8_len, const size_t pkcs8_max,
+                        uint8_t *kek, size_t *kek_len, const size_t kek_max);
+
+  hal_error_t (*import)(const hal_client_handle_t client,
+                        const hal_session_handle_t session,
+                        hal_pkey_handle_t *pkey,
+                        hal_uuid_t *name,
+                        const hal_pkey_handle_t kekek_handle,
+                        const uint8_t * const pkcs8, const size_t pkcs8_len,
+                        const uint8_t * const kek, const size_t kek_len,
+                        const hal_key_flags_t flags);
+
 } hal_rpc_pkey_dispatch_t;
 
 
@@ -459,11 +473,11 @@ struct hal_ks_driver {
 
   hal_error_t (*store)(hal_ks_t *ks,
                        hal_pkey_slot_t *slot,
-		       const uint8_t * const der,  const size_t der_len);
+                       const uint8_t * const der,  const size_t der_len);
 
   hal_error_t (*fetch)(hal_ks_t *ks,
                        hal_pkey_slot_t *slot,
-		       uint8_t *der, size_t *der_len, const size_t der_max);
+                       uint8_t *der, size_t *der_len, const size_t der_max);
 
   hal_error_t (*delete)(hal_ks_t *ks,
                         hal_pkey_slot_t *slot);
@@ -537,7 +551,7 @@ static inline hal_error_t hal_ks_shutdown(const hal_ks_driver_t * const driver)
 }
 
 static inline hal_error_t hal_ks_open(const hal_ks_driver_t * const driver,
-			       hal_ks_t **ks)
+                                      hal_ks_t **ks)
 {
   if (driver == NULL || ks == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -863,6 +877,8 @@ typedef enum {
     RPC_FUNC_PKEY_GET_KEY_CURVE,
     RPC_FUNC_PKEY_SET_ATTRIBUTES,
     RPC_FUNC_PKEY_GET_ATTRIBUTES,
+    RPC_FUNC_PKEY_EXPORT,
+    RPC_FUNC_PKEY_IMPORT,
 } rpc_func_num_t;
 
 #define RPC_VERSION 0x01010000          /* 1.1.0.0 */
@@ -898,7 +914,7 @@ typedef enum {
  */
 
 #ifndef HAL_CLIENT_SERIAL_DEFAULT_DEVICE
-#define HAL_CLIENT_SERIAL_DEFAULT_DEVICE 	"/dev/ttyUSB0"
+#define HAL_CLIENT_SERIAL_DEFAULT_DEVICE        "/dev/ttyUSB0"
 #endif
 
 #ifndef HAL_CLIENT_SERIAL_DEFAULT_SPEED
@@ -909,8 +925,8 @@ typedef enum {
  * Names of environment variables for setting the above in RPC clients.
  */
 
-#define	HAL_CLIENT_SERIAL_DEVICE_ENVVAR		"CRYPTECH_RPC_CLIENT_SERIAL_DEVICE"
-#define	HAL_CLIENT_SERIAL_SPEED_ENVVAR		"CRYPTECH_RPC_CLIENT_SERIAL_SPEED"
+#define HAL_CLIENT_SERIAL_DEVICE_ENVVAR         "CRYPTECH_RPC_CLIENT_SERIAL_DEVICE"
+#define HAL_CLIENT_SERIAL_SPEED_ENVVAR          "CRYPTECH_RPC_CLIENT_SERIAL_SPEED"
 
 #endif /* _HAL_INTERNAL_H_ */
 

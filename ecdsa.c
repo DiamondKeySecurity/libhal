@@ -258,20 +258,21 @@ static const ecdsa_curve_t * const get_curve(const hal_curve_name_t curve)
   }
 }
 
-static inline const ecdsa_curve_t * oid_to_curve(hal_curve_name_t *curve_name,
-                                                 const uint8_t * const oid,
-                                                 const size_t oid_len)
+hal_error_t hal_ecdsa_oid_to_curve(hal_curve_name_t *curve_name,
+                                   const uint8_t * const oid,
+                                   const size_t oid_len)
 {
-  assert(curve_name != NULL && oid != NULL);
+  if (curve_name == NULL || oid == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
 
-  const ecdsa_curve_t *curve = NULL;
   *curve_name = HAL_CURVE_NONE;
+  const ecdsa_curve_t *curve;
 
   while ((curve = get_curve(++*curve_name)) != NULL)
     if (oid_len == curve->oid_len && memcmp(oid, curve->oid, oid_len) == 0)
-      return curve;
+      return HAL_OK;
 
-  return NULL;
+  return HAL_ERROR_UNSUPPORTED_KEY;
 }
 
 /*
@@ -1395,7 +1396,7 @@ hal_error_t hal_ecdsa_private_key_from_der(hal_ecdsa_key_t **key_,
 
   if (alg_oid_len != hal_asn1_oid_ecPublicKey_len ||
       memcmp(alg_oid, hal_asn1_oid_ecPublicKey, alg_oid_len) != 0 ||
-      oid_to_curve(&key->curve, curve_oid, curve_oid_len) == NULL)
+      hal_ecdsa_oid_to_curve(&key->curve, curve_oid, curve_oid_len) != HAL_OK)
     return HAL_ERROR_ASN1_PARSE_FAILED;
 
   if ((err = hal_asn1_decode_header(ASN1_SEQUENCE, privkey, privkey_len, &hlen, &vlen)) != HAL_OK)
@@ -1516,19 +1517,19 @@ hal_error_t hal_ecdsa_public_key_from_der(hal_ecdsa_key_t **key_,
 
   const uint8_t *alg_oid = NULL, *curve_oid = NULL, *pubkey = NULL;
   size_t         alg_oid_len,     curve_oid_len,     pubkey_len;
-  const ecdsa_curve_t *curve;
   hal_error_t err;
 
-  if ((err = hal_asn1_decode_spki(&alg_oid, &alg_oid_len, &curve_oid, &curve_oid_len, &pubkey, &pubkey_len,
+  if ((err = hal_asn1_decode_spki(&alg_oid, &alg_oid_len, &curve_oid, &curve_oid_len,
+                                  &pubkey, &pubkey_len,
                                   der, der_len)) != HAL_OK)
     return err;
 
   if (alg_oid == NULL || curve_oid == NULL || pubkey == NULL ||
       alg_oid_len != hal_asn1_oid_ecPublicKey_len ||
       memcmp(alg_oid, hal_asn1_oid_ecPublicKey, alg_oid_len) != 0 ||
-      (curve = oid_to_curve(&key->curve, curve_oid, curve_oid_len)) == NULL ||
+      hal_ecdsa_oid_to_curve(&key->curve, curve_oid, curve_oid_len) != HAL_OK ||
       pubkey_len < 3 || (pubkey_len & 1) == 0 || pubkey[0] != 0x04 ||
-      pubkey_len / 2 != fp_unsigned_bin_size(unconst_fp_int(curve->q)))
+      pubkey_len / 2 != fp_unsigned_bin_size(unconst_fp_int(get_curve(key->curve)->q)))
     return HAL_ERROR_ASN1_PARSE_FAILED;
 
   const uint8_t * const Qx = pubkey + 1;

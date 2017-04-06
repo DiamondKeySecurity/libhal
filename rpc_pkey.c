@@ -117,10 +117,10 @@ static inline hal_pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
  *
  * That's almost the rule that PKCS #11 follows for so-called
  * "private" objects (CKA_PRIVATE = CK_TRUE), but PKCS #11 has a more
- * model which not only allows wider visibility to "public" objects
- * (CKA_PRIVATE = CK_FALSE) but also allows write access to "public
- * session" (CKA_PRIVATE = CK_FALSE, CKA_TOKEN = CK_FALSE) objects
- * regardless of login state.
+ * complex model which not only allows wider visibility to "public"
+ * objects (CKA_PRIVATE = CK_FALSE) but also allows write access to
+ * "public session" (CKA_PRIVATE = CK_FALSE, CKA_TOKEN = CK_FALSE)
+ * objects regardless of login state.
  *
  * PKCS #11 also has a concept of read-only sessions, which we don't
  * bother to implement at all on the HSM, since the PIN is required to
@@ -173,29 +173,55 @@ static inline hal_error_t check_writable(const hal_client_handle_t client,
 }
 
 /*
+ * PKCS #1.5 encryption requires non-zero random bytes, which is a bit
+ * messy if done in place, so make it a separate function for readability.
+ */
+
+static inline hal_error_t get_nonzero_random(uint8_t *buffer, size_t n)
+{
+  assert(buffer != NULL);
+
+  uint32_t word = 0;
+  hal_error_t err;
+
+  while (n > 0) {
+
+    while ((word &  0xFF) == 0)
+      if  ((word & ~0xFF) != 0)
+        word >>= 8;
+      else if ((err = hal_get_random(NULL, &word, sizeof(word))) != HAL_OK)
+        return err;
+
+    *buffer++ = word & 0xFF;
+    word >>= 8;
+    n--;
+  }
+
+  return HAL_OK;
+}
+
+/*
  * Pad an octet string with PKCS #1.5 padding for use with RSA.
  *
- * For the moment, this only handles type 01 encryption blocks, thus
- * is only suitable for use with signature and verification.  If and
- * when we add support for encryption and decryption, this function
- * should be extended to take an argument specifying the block type
- * and include support for generating type 02 encryption blocks.
- * Other than the block type code, the only difference is the padding
- * value: for type 01 it's constant (0xFF), for type 02 it should be
- * non-zero random bytes from the CSPRNG.
+ * This handles type 01 and type 02 encryption blocks.  The formats
+ * are identical, except that the padding string is constant 0xFF
+ * bytes for type 01 and non-zero random bytes for type 02.
  *
  * We use memmove() instead of memcpy() so that the caller can
  * construct the data to be padded in the same buffer.
  */
 
 static hal_error_t pkcs1_5_pad(const uint8_t * const data, const size_t data_len,
-                               uint8_t *block, const size_t block_len)
+                               uint8_t *block, const size_t block_len,
+                               const uint8_t type)
 {
-  assert(data != NULL && block != NULL);
+  assert(data != NULL && block != NULL && (type == 0x01 || type == 0x02));
+
+  hal_error_t err;
 
   /*
    * Congregation will now please turn to RFC 2313 8.1 as we
-   * construct a PKCS #1.5 type 01 encryption block.
+   * construct a PKCS #1.5 type 01 or type 02 encryption block.
    */
 
   if (data_len > block_len - 11)
@@ -204,10 +230,20 @@ static hal_error_t pkcs1_5_pad(const uint8_t * const data, const size_t data_len
   memmove(block + block_len - data_len, data, data_len);
 
   block[0] = 0x00;
-  block[1] = 0x01;
+  block[1] = type;
 
-  /* This is where we'd use non-zero random bytes if constructing a type 02 block. */
-  memset(block + 2, 0xFF, block_len - 3 - data_len);
+  switch (type) {
+
+  case 0x01:                    /* Signature */
+    memset(block + 2, 0xFF, block_len - 3 - data_len);
+    break;
+
+  case 0x02:                    /* Encryption */
+    if ((err = get_nonzero_random(block + 2, block_len - 3 - data_len)) != HAL_OK)
+      return err;
+    break;
+
+  }
 
   block[block_len - data_len - 1] = 0x00;
 
@@ -230,6 +266,8 @@ static inline hal_error_t ks_open_from_flags(hal_ks_t **ks, const hal_key_flags_
  * Receive key from application, generate a name (UUID), store it, and
  * return a key handle and the name.
  */
+
+#warning Convert hal_rpc_pkey_load() to use hal-asn1_guess_key_type()?
 
 static hal_error_t pkey_local_load(const hal_client_handle_t client,
                                    const hal_session_handle_t session,
@@ -699,7 +737,7 @@ static hal_error_t pkey_local_sign_rsa(uint8_t *keybuf, const size_t keybuf_len,
     input = signature;
   }
 
-  if ((err = pkcs1_5_pad(input, input_len, signature, *signature_len))                         != HAL_OK ||
+  if ((err = pkcs1_5_pad(input, input_len, signature, *signature_len, 0x01))                   != HAL_OK ||
       (err = hal_rsa_decrypt(NULL, key, signature, *signature_len, signature, *signature_len)) != HAL_OK)
     return err;
 
@@ -831,7 +869,7 @@ static hal_error_t pkey_local_verify_rsa(uint8_t *keybuf, const size_t keybuf_le
     input = expected;
   }
 
-  if ((err = pkcs1_5_pad(input, input_len, expected, sizeof(expected)))                        != HAL_OK ||
+  if ((err = pkcs1_5_pad(input, input_len, expected, sizeof(expected), 0x01))                  != HAL_OK ||
       (err = hal_rsa_encrypt(NULL, key, signature, signature_len, received, sizeof(received))) != HAL_OK)
     return err;
 
@@ -1023,6 +1061,216 @@ static hal_error_t pkey_local_get_attributes(const hal_pkey_handle_t pkey,
   return err;
 }
 
+/*
+ * This is an RPC function, so the NULL pointer input convention for
+ * querying required buffer length isn't all that useful, but buffer
+ * lengths are predictable anyway:
+ *
+ *   Size of the pkcs8 buffer is a constant, determined by
+ *   oid_aes_aesKeyWrap_len, HAL_KS_WRAPPED_KEYSIZE, and some ASN.1
+ *   overhead;
+ *
+ *   Size of the kek buffer is the same as the length of the
+ *   modulus of the RSA public key indicated by wrap_handle.
+ *
+ * Except that we might want ASN.1 around the KEK, something like:
+ *
+ *   SEQUENCE {
+ *     keyEncryptionAlgorithm AlgorithmIdentifier { rsaEncryption },
+ *     encryptedKey OCTET STRING
+ *   }
+ *
+ * which would still be constant-length, just a bit more verbose.
+ *
+ * Oddly enough, this is exactly the syntax of PKCS #8
+ * EncryptedPrivateKeyInfo, which we already use for other purposes.
+ * Using it to wrap an AES key encrypted with an RSA key seems a bit
+ * odd, but it's a good fit and lets us reuse ASN.1 code.  Cool.
+ */
+
+static hal_error_t pkey_local_export(const hal_pkey_handle_t pkey_handle,
+                                     const hal_pkey_handle_t kekek_handle,
+                                     uint8_t *pkcs8, size_t *pkcs8_len, const size_t pkcs8_max,
+                                     uint8_t *kek,   size_t *kek_len,   const size_t kek_max)
+{
+  assert(pkcs8 != NULL && pkcs8_len != NULL && kek != NULL && kek_len != NULL && kek_max > KEK_LENGTH);
+
+  uint8_t rsabuf[hal_rsa_key_t_size];
+  hal_rsa_key_t *rsa = NULL;
+  hal_ks_t *ks = NULL;
+  hal_error_t err;
+  size_t len;
+
+  hal_pkey_slot_t * const pkey  = find_handle(pkey_handle);
+  hal_pkey_slot_t * const kekek = find_handle(kekek_handle);
+
+  if (pkey == NULL || kekek == NULL)
+    return HAL_ERROR_KEY_NOT_FOUND;
+
+  if ((pkey->flags & HAL_KEY_FLAG_EXPORTABLE) == 0)
+    return HAL_ERROR_FORBIDDEN;
+
+  if (kekek->type != HAL_KEY_TYPE_RSA_PRIVATE && kekek->type != HAL_KEY_TYPE_RSA_PUBLIC)
+    return HAL_ERROR_UNSUPPORTED_KEY;
+
+  if (pkcs8_max < HAL_KS_WRAPPED_KEYSIZE)
+    return HAL_ERROR_RESULT_TOO_LONG;
+
+  if ((err = ks_open_from_flags(&ks, kekek->flags)) == HAL_OK &&
+      (err = hal_ks_fetch(ks, kekek, pkcs8, &len, pkcs8_max)) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
+  if (err != HAL_OK)
+    goto fail;
+
+  switch (kekek->type) {
+  case HAL_KEY_TYPE_RSA_PRIVATE:
+    err = hal_rsa_private_key_from_der(&rsa, rsabuf, sizeof(rsabuf), pkcs8, len);
+    break;
+  case HAL_KEY_TYPE_RSA_PUBLIC:
+    err = hal_rsa_public_key_from_der(&rsa, rsabuf, sizeof(rsabuf), pkcs8, len);
+    break;
+  default:
+    err = HAL_ERROR_IMPOSSIBLE;
+  }
+  if (err != HAL_OK)
+    goto fail;
+
+  if ((err = hal_rsa_get_modulus(rsa, NULL, kek_len, 0)) != HAL_OK)
+    goto fail;
+
+  if (*kek_len > kek_max) {
+    err = HAL_ERROR_RESULT_TOO_LONG;
+    goto fail;
+  }
+
+  if ((err = ks_open_from_flags(&ks, pkey->flags)) == HAL_OK &&
+      (err = hal_ks_fetch(ks, pkey, pkcs8, &len, pkcs8_max)) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
+
+  if (err != HAL_OK)
+    goto fail;
+
+  if ((err = hal_get_random(NULL, kek, KEK_LENGTH)) != HAL_OK)
+    goto fail;
+
+  if ((err = hal_aes_keywrap(NULL, kek, KEK_LENGTH, pkcs8, len, pkcs8, &len)) != HAL_OK)
+    goto fail;
+
+  if ((err = hal_asn1_encode_pkcs8_encryptedprivatekeyinfo(hal_asn1_oid_aesKeyWrap, hal_asn1_oid_aesKeyWrap_len,
+                                                           pkcs8, len, pkcs8, pkcs8_len, pkcs8_max)) != HAL_OK)
+    goto fail;
+
+  if ((err = pkcs1_5_pad(kek, KEK_LENGTH, kek, *kek_len, 0x02)) != HAL_OK)
+    goto fail;
+
+  if ((err = hal_rsa_encrypt(NULL, rsa, kek, *kek_len, kek, *kek_len)) != HAL_OK)
+    goto fail;
+
+  if ((err = hal_asn1_encode_pkcs8_encryptedprivatekeyinfo(hal_asn1_oid_rsaEncryption, hal_asn1_oid_rsaEncryption_len,
+                                                           kek, *kek_len, kek, *kek_len, kek_max)) != HAL_OK)
+    goto fail;
+
+  memset(rsabuf,  0, sizeof(rsabuf));
+  return HAL_OK;
+
+ fail:
+  memset(pkcs8,   0, pkcs8_max);
+  memset(kek, 0, kek_max);
+  memset(rsabuf,  0, sizeof(rsabuf));
+  *pkcs8_len = *kek_len = 0;
+  return err;
+}
+
+static hal_error_t pkey_local_import(const hal_client_handle_t client,
+                                     const hal_session_handle_t session,
+                                     hal_pkey_handle_t *pkey,
+                                     hal_uuid_t *name,
+                                     const hal_pkey_handle_t kekek_handle,
+                                     const uint8_t * const pkcs8, const size_t pkcs8_len,
+                                     const uint8_t * const kek_,  const size_t kek_len,
+                                     const hal_key_flags_t flags)
+{
+  assert(pkey != NULL && name != NULL && pkcs8 != NULL && kek_ != NULL && kek_len > 2);
+
+  uint8_t kek[KEK_LENGTH], rsabuf[hal_rsa_key_t_size], der[HAL_KS_WRAPPED_KEYSIZE], *d, *oid, *data;
+  size_t der_len, oid_len, data_len;
+  hal_rsa_key_t *rsa = NULL;
+  hal_curve_name_t curve;
+  hal_key_type_t type;
+  hal_ks_t *ks = NULL;
+  hal_error_t err;
+
+  hal_pkey_slot_t * const kekek = find_handle(kekek_handle);
+
+  if (kekek == NULL)
+    return HAL_ERROR_KEY_NOT_FOUND;
+
+  if (kekek->type != HAL_KEY_TYPE_RSA_PRIVATE)
+    return HAL_ERROR_UNSUPPORTED_KEY;
+
+  if ((err = ks_open_from_flags(&ks, kekek->flags)) == HAL_OK &&
+      (err = hal_ks_fetch(ks, kekek, der, &der_len, sizeof(der))) == HAL_OK)
+    err = hal_ks_close(ks);
+  else if (ks != NULL)
+    (void) hal_ks_close(ks);
+  if (err != HAL_OK)
+    goto fail;
+
+  if ((err = hal_rsa_private_key_from_der(&rsa, rsabuf, sizeof(rsabuf), der, der_len)) != HAL_OK)
+    goto fail;
+
+  if ((err = hal_asn1_decode_pkcs8_encryptedprivatekeyinfo(&oid, &oid_len, &data, &data_len, kek_, kek_len)) != HAL_OK)
+    goto fail;
+
+  if (oid_len != hal_asn1_oid_rsaEncryption_len ||
+      memcmp(oid, hal_asn1_oid_rsaEncryption, oid_len) != 0 ||
+      data_len > sizeof(der) ||
+      data_len < 2) {
+    err = HAL_ERROR_ASN1_PARSE_FAILED;
+    goto fail;
+  }
+
+  if ((err = hal_rsa_decrypt(NULL, rsa, data, data_len, der, data_len)) != HAL_OK)
+    goto fail;
+
+  d = memchr(der + 2, 0x00, data_len - 2);
+
+  if (der[0] != 0x00 || der[1] != 0x02 || d == NULL || der + data_len != d + 1 + KEK_LENGTH) {
+    err = HAL_ERROR_ASN1_PARSE_FAILED;
+    goto fail;
+  }
+
+  memcpy(kek, d + 1, sizeof(kek));
+
+  if ((err = hal_asn1_decode_pkcs8_encryptedprivatekeyinfo(&oid, &oid_len, &data, &data_len, pkcs8, pkcs8_len)) != HAL_OK)
+    goto fail;
+
+  if (oid_len != hal_asn1_oid_aesKeyWrap_len ||
+      memcmp(oid, hal_asn1_oid_aesKeyWrap, oid_len) != 0 ||
+      data_len > sizeof(der)) {
+    err = HAL_ERROR_ASN1_PARSE_FAILED;
+    goto fail;
+  }
+
+  if ((err = hal_aes_keyunwrap(NULL, kek, sizeof(kek), data, data_len, der, &der_len)) != HAL_OK)
+    goto fail;
+
+  if ((err = hal_asn1_guess_key_type(&type, &curve, der, der_len)) != HAL_OK)
+    goto fail;
+
+  err = pkey_local_load(client, session, pkey, type, curve, name, der, der_len, flags);
+
+ fail:
+  memset(rsabuf, 0, sizeof(rsabuf));
+  memset(kek, 0, sizeof(kek));
+  memset(der, 0, sizeof(der));
+  return err;
+}
+
 const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch = {
   .load                 = pkey_local_load,
   .open                 = pkey_local_open,
@@ -1039,7 +1287,9 @@ const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch = {
   .verify               = pkey_local_verify,
   .match                = pkey_local_match,
   .set_attributes       = pkey_local_set_attributes,
-  .get_attributes       = pkey_local_get_attributes
+  .get_attributes       = pkey_local_get_attributes,
+  .export               = pkey_local_export,
+  .import               = pkey_local_import
 };
 
 /*

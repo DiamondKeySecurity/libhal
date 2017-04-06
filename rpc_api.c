@@ -381,6 +381,30 @@ hal_error_t hal_rpc_pkey_get_attributes(const hal_pkey_handle_t pkey,
                                                attributes_buffer, attributes_buffer_len);
 }
 
+hal_error_t hal_rpc_pkey_export(const hal_pkey_handle_t pkey,
+                                const hal_pkey_handle_t kekek,
+                                uint8_t *pkcs8, size_t *pkcs8_len, const size_t pkcs8_max,
+                                uint8_t *kek,   size_t *kek_len,   const size_t kek_max)
+{
+  if (pkcs8 == NULL || pkcs8_len == NULL || kek == NULL || kek_len == NULL || kek_max <= KEK_LENGTH)
+    return HAL_ERROR_BAD_ARGUMENTS;
+  return hal_rpc_pkey_dispatch->export(pkey, kekek, pkcs8, pkcs8_len, pkcs8_max, kek, kek_len, kek_max);
+}
+
+hal_error_t hal_rpc_pkey_import(const hal_client_handle_t client,
+                                const hal_session_handle_t session,
+                                hal_pkey_handle_t *pkey,
+                                hal_uuid_t *name,
+                                const hal_pkey_handle_t kekek,
+                                const uint8_t * const pkcs8, const size_t pkcs8_len,
+                                const uint8_t * const kek,   const size_t kek_len,
+                                const hal_key_flags_t flags)
+{
+  if (pkey == NULL || name == NULL || pkcs8 == NULL || kek == NULL || kek_len <= 2)
+    return HAL_ERROR_BAD_ARGUMENTS;
+  return hal_rpc_pkey_dispatch->import(client, session, pkey, name, kekek, pkcs8, pkcs8_len, kek, kek_len, flags);
+}
+
 /*
  * Local variables:
  * indent-tabs-mode: nil

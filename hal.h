@@ -505,6 +505,10 @@ extern const size_t hal_ecdsa_key_t_size;
 
 extern void hal_ecdsa_set_debug(const int onoff);
 
+extern hal_error_t hal_ecdsa_oid_to_curve(hal_curve_name_t *curve,
+                                          const uint8_t * const oid,
+                                          const size_t oid_len);
+
 extern hal_error_t hal_ecdsa_key_load_private(hal_ecdsa_key_t **key,
                                               void *keybuf, const size_t keybuf_len,
                                               const hal_curve_name_t curve,
@@ -725,6 +729,7 @@ typedef uint32_t hal_key_flags_t;
 #define	HAL_KEY_FLAG_USAGE_DATAENCIPHERMENT	(1 << 2)
 #define	HAL_KEY_FLAG_TOKEN                      (1 << 3)
 #define HAL_KEY_FLAG_PUBLIC                     (1 << 4)
+#define HAL_KEY_FLAG_EXPORTABLE                 (1 << 5)
 
 /*
  * hal_pkey_attribute_t.length would be size_t, except that we also
@@ -820,6 +825,20 @@ extern hal_error_t hal_rpc_pkey_get_attributes(const hal_pkey_handle_t pkey,
                                                const unsigned attributes_len,
                                                uint8_t *attributes_buffer,
                                                const size_t attributes_buffer_len);
+
+extern hal_error_t hal_rpc_pkey_export(const hal_pkey_handle_t pkey,
+                                       const hal_pkey_handle_t kekek,
+                                       uint8_t *pkcs8, size_t *pkcs8_len, const size_t pkcs8_max,
+                                       uint8_t *kek,   size_t *kek_len,   const size_t kek_max);
+
+extern hal_error_t hal_rpc_pkey_import(const hal_client_handle_t client,
+                                       const hal_session_handle_t session,
+                                       hal_pkey_handle_t *pkey,
+                                       hal_uuid_t *name,
+                                       const hal_pkey_handle_t kekek,
+                                       const uint8_t * const pkcs8, const size_t pkcs8_len,
+                                       const uint8_t * const kek,   const size_t kek_len,
+                                       const hal_key_flags_t flags);
 
 extern hal_error_t hal_rpc_client_init(void);
 

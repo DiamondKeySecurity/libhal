@@ -915,6 +915,78 @@ static hal_error_t pkey_remote_get_attributes(const hal_pkey_handle_t pkey,
   return rpc_ret;
 }
 
+static hal_error_t pkey_remote_export(const hal_pkey_handle_t pkey,
+                                      const hal_pkey_handle_t kekek,
+                                      uint8_t *pkcs8, size_t *pkcs8_len, const size_t pkcs8_max,
+                                      uint8_t *kek,   size_t *kek_len,   const size_t kek_max)
+{
+  uint8_t outbuf[nargs(6)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t inbuf[nargs(5) + pad(pkcs8_max) + pad(kek_max)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  hal_client_handle_t dummy_client = {0};
+  hal_error_t rpc_ret;
+
+  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_EXPORT));
+  check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
+  check(hal_xdr_encode_int(&optr, olimit, pkey.handle));
+  check(hal_xdr_encode_int(&optr, olimit, kekek.handle));
+  check(hal_xdr_encode_int(&optr, olimit, pkcs8_max));
+  check(hal_xdr_encode_int(&optr, olimit, kek_max));
+  check(hal_rpc_send(outbuf, optr - outbuf));
+
+  check(read_matching_packet(RPC_FUNC_PKEY_EXPORT, inbuf, sizeof(inbuf), &iptr, &ilimit));
+
+  check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
+  if (rpc_ret == HAL_OK) {
+    uint32_t len;
+    len = pkcs8_max;
+    check(hal_xdr_decode_buffer(&iptr, ilimit, pkcs8, &len));
+    *pkcs8_len = (size_t) len;
+    len = kek_max;
+    check(hal_xdr_decode_buffer(&iptr, ilimit, kek, &len));
+    *kek_len = (size_t) len;
+  }
+  return rpc_ret;
+}
+
+static hal_error_t pkey_remote_import(const hal_client_handle_t client,
+                                      const hal_session_handle_t session,
+                                      hal_pkey_handle_t *pkey,
+                                      hal_uuid_t *name,
+                                      const hal_pkey_handle_t kekek,
+                                      const uint8_t * const pkcs8, const size_t pkcs8_len,
+                                      const uint8_t * const kek,   const size_t kek_len,
+                                      const hal_key_flags_t flags)
+{
+  uint8_t outbuf[nargs(7) + pad(pkcs8_len) + pad(kek_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t inbuf[nargs(5) + pad(sizeof(name->uuid))];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  uint32_t name_len = sizeof(name->uuid);
+  hal_error_t rpc_ret;
+
+  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_IMPORT));
+  check(hal_xdr_encode_int(&optr, olimit, client.handle));
+  check(hal_xdr_encode_int(&optr, olimit, session.handle));
+  check(hal_xdr_encode_int(&optr, olimit, kekek.handle));
+  check(hal_xdr_encode_buffer(&optr, olimit, pkcs8, pkcs8_len));
+  check(hal_xdr_encode_buffer(&optr, olimit, kek, kek_len));
+  check(hal_xdr_encode_int(&optr, olimit, flags));
+  check(hal_rpc_send(outbuf, optr - outbuf));
+
+  check(read_matching_packet(RPC_FUNC_PKEY_IMPORT, inbuf, sizeof(inbuf), &iptr, &ilimit));
+
+  check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
+
+  if (rpc_ret == HAL_OK) {
+    check(hal_xdr_decode_int(&iptr, ilimit, &pkey->handle));
+    check(hal_xdr_decode_buffer(&iptr, ilimit, name->uuid, &name_len));
+    if (name_len != sizeof(name->uuid))
+      return HAL_ERROR_KEY_NAME_TOO_LONG;
+  }
+
+  return rpc_ret;
+}
+
 #if RPC_CLIENT == RPC_CLIENT_MIXED
 
 /*
@@ -1043,7 +1115,9 @@ const hal_rpc_pkey_dispatch_t hal_rpc_remote_pkey_dispatch = {
   .verify                       = pkey_remote_verify,
   .match                        = pkey_remote_match,
   .set_attributes               = pkey_remote_set_attributes,
-  .get_attributes               = pkey_remote_get_attributes
+  .get_attributes               = pkey_remote_get_attributes,
+  .export                       = pkey_remote_export,
+  .import                       = pkey_remote_import
 };
 
 #if RPC_CLIENT == RPC_CLIENT_MIXED
@@ -1063,7 +1137,9 @@ const hal_rpc_pkey_dispatch_t hal_rpc_mixed_pkey_dispatch = {
   .verify                       = pkey_mixed_verify,
   .match                        = pkey_remote_match,
   .set_attributes               = pkey_remote_set_attributes,
-  .get_attributes               = pkey_remote_get_attributes
+  .get_attributes               = pkey_remote_get_attributes,
+  .export                       = pkey_remote_export,
+  .import                       = pkey_remote_import
 };
 #endif /* RPC_CLIENT == RPC_CLIENT_MIXED */
 
@@ -1099,7 +1175,6 @@ hal_error_t hal_rpc_client_close(void)
   return hal_rpc_client_transport_close();
 #endif
 }
-
 
 /*
  * Local variables:
