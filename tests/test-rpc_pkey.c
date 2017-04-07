@@ -177,8 +177,8 @@ static int test_rsa_testvec(const rsa_tc_t * const tc, hal_key_flags_t flags)
 
     assert(len == sizeof(private_der));
 
-    if ((err = hal_rpc_pkey_load(client, session, &private_key, HAL_KEY_TYPE_RSA_PRIVATE, HAL_CURVE_NONE,
-                                 &private_name, private_der, sizeof(private_der), flags)) != HAL_OK)
+    if ((err = hal_rpc_pkey_load(client, session, &private_key, &private_name,
+                                 private_der, sizeof(private_der), flags)) != HAL_OK)
       lose("Could not load private key into RPC: %s\n", hal_error_string(err));
 
     if ((err = hal_rsa_public_key_to_der(tc_key, public_der, &len, sizeof(public_der))) != HAL_OK)
@@ -186,8 +186,8 @@ static int test_rsa_testvec(const rsa_tc_t * const tc, hal_key_flags_t flags)
 
     assert(len == sizeof(public_der));
 
-    if ((err = hal_rpc_pkey_load(client, session, &public_key, HAL_KEY_TYPE_RSA_PUBLIC, HAL_CURVE_NONE,
-                                 &public_name, public_der, sizeof(public_der), flags)) != HAL_OK)
+    if ((err = hal_rpc_pkey_load(client, session, &public_key, &public_name,
+                                 public_der, sizeof(public_der), flags)) != HAL_OK)
       lose("Could not load public key into RPC: %s\n", hal_error_string(err));
 
     uint8_t sig[tc->s.len];
@@ -271,8 +271,8 @@ static int test_ecdsa_testvec(const ecdsa_tc_t * const tc, hal_key_flags_t flags
 
     assert(len == sizeof(private_der));
 
-    if ((err = hal_rpc_pkey_load(client, session, &private_key, HAL_KEY_TYPE_EC_PRIVATE, tc->curve,
-                                 &private_name, private_der, sizeof(private_der), flags)) != HAL_OK)
+    if ((err = hal_rpc_pkey_load(client, session, &private_key, &private_name,
+                                 private_der, sizeof(private_der), flags)) != HAL_OK)
       lose("Could not load private key into RPC: %s\n", hal_error_string(err));
 
     if ((err = hal_ecdsa_public_key_to_der(tc_key, public_der, &len, sizeof(public_der))) != HAL_OK)
@@ -280,8 +280,8 @@ static int test_ecdsa_testvec(const ecdsa_tc_t * const tc, hal_key_flags_t flags
 
     assert(len == sizeof(public_der));
 
-    if ((err = hal_rpc_pkey_load(client, session, &public_key, HAL_KEY_TYPE_EC_PUBLIC, tc->curve,
-                                 &public_name, public_der, sizeof(public_der), flags)) != HAL_OK)
+    if ((err = hal_rpc_pkey_load(client, session, &public_key, &public_name,
+                                 public_der, sizeof(public_der), flags)) != HAL_OK)
       lose("Could not load public key into RPC: %s\n", hal_error_string(err));
 
     if ((err = hal_rpc_pkey_verify(public_key, hal_hash_handle_none,
@@ -353,8 +353,8 @@ static int test_rsa_generate(const rsa_tc_t * const tc, hal_key_flags_t flags)
 
     assert(len == sizeof(public_der));
 
-    if ((err = hal_rpc_pkey_load(client, session, &public_key, HAL_KEY_TYPE_RSA_PUBLIC, HAL_CURVE_NONE,
-                                 &public_name, public_der, sizeof(public_der), flags)) != HAL_OK)
+    if ((err = hal_rpc_pkey_load(client, session, &public_key, &public_name,
+                                 public_der, sizeof(public_der), flags)) != HAL_OK)
       lose("Could not load public key into RPC: %s\n", hal_error_string(err));
 
     uint8_t sig[tc->s.len];
@@ -429,8 +429,8 @@ static int test_ecdsa_generate(const ecdsa_tc_t * const tc, hal_key_flags_t flag
 
     assert(len == sizeof(public_der));
 
-    if ((err = hal_rpc_pkey_load(client, session, &public_key, HAL_KEY_TYPE_EC_PUBLIC, tc->curve,
-                                 &public_name, public_der, sizeof(public_der), flags)) != HAL_OK)
+    if ((err = hal_rpc_pkey_load(client, session, &public_key, &public_name,
+                                 public_der, sizeof(public_der), flags)) != HAL_OK)
       lose("Could not load public key into RPC: %s\n", hal_error_string(err));
 
     uint8_t sig[tc->sig_len + 4];

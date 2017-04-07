@@ -192,8 +192,6 @@ typedef struct {
   hal_error_t  (*load)(const hal_client_handle_t client,
                        const hal_session_handle_t session,
                        hal_pkey_handle_t *pkey,
-                       const hal_key_type_t type,
-                       const hal_curve_name_t curve,
                        hal_uuid_t *name,
                        const uint8_t * const der, const size_t der_len,
                        const hal_key_flags_t flags);

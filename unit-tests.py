@@ -260,16 +260,14 @@ class TestPKeyGen(TestCaseLoggedIn):
     def gen_sign_verify_rsa(self, hashalg, keylen):
         k1 = hsm.pkey_generate_rsa(keylen, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k1.delete)
-        k2 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PUBLIC, HAL_CURVE_NONE, k1.public_key,
-                           HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
+        k2 = hsm.pkey_load(k1.public_key, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k2.delete)
         self.sign_verify(hashalg, k1, k2)
 
     def gen_sign_verify_ecdsa(self, hashalg, curve):
         k1 = hsm.pkey_generate_ec(curve, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k1.delete)
-        k2 = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC, curve, k1.public_key,
-                           HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
+        k2 = hsm.pkey_load(k1.public_key, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k2.delete)
         self.sign_verify(hashalg, k1, k2)
 
@@ -303,23 +301,19 @@ class TestPKeyHashing(TestCaseLoggedIn):
     """
 
     def load_sign_verify_rsa(self, alg, keylen, method):
-        k1 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PRIVATE, HAL_CURVE_NONE,
-                           PreloadedKey.db[HAL_KEY_TYPE_RSA_PRIVATE, keylen].der,
+        k1 = hsm.pkey_load(PreloadedKey.db[HAL_KEY_TYPE_RSA_PRIVATE, keylen].der,
                            HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k1.delete)
-        k2 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PUBLIC, HAL_CURVE_NONE,
-                           PreloadedKey.db[HAL_KEY_TYPE_RSA_PUBLIC, keylen].der,
+        k2 = hsm.pkey_load(PreloadedKey.db[HAL_KEY_TYPE_RSA_PUBLIC, keylen].der,
                            HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k2.delete)
         method(alg, k1, k2)
 
     def load_sign_verify_ecdsa(self, alg, curve, method):
-        k1 = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, curve,
-                           PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, curve].der,
+        k1 = hsm.pkey_load(PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, curve].der,
                            HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k1.delete)
-        k2 = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC, curve,
-                           PreloadedKey.db[HAL_KEY_TYPE_EC_PUBLIC, curve].der,
+        k2 = hsm.pkey_load(PreloadedKey.db[HAL_KEY_TYPE_EC_PUBLIC, curve].der,
                            HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k2.delete)
         method(alg, k1, k2)
@@ -490,9 +484,9 @@ class TestPKeyRSAInterop(TestCaseLoggedIn):
         hamster = "Your mother was a hamster"
         sk = PreloadedKey.db[HAL_KEY_TYPE_RSA_PRIVATE, keylen]
         vk = PreloadedKey.db[HAL_KEY_TYPE_RSA_PUBLIC,  keylen]
-        k1 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PRIVATE, HAL_CURVE_NONE, sk.der, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
+        k1 = hsm.pkey_load(sk.der, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k1.delete)
-        k2 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PUBLIC,  HAL_CURVE_NONE, vk.der, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
+        k2 = hsm.pkey_load(vk.der, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k2.delete)
         sig1 = k1.sign(hash = self.h(alg, hamster))
         sig2 = sk.sign(hamster, pyhash)
@@ -525,9 +519,9 @@ class TestPKeyECDSAInterop(TestCaseLoggedIn):
         hamster = "Your mother was a hamster"
         sk = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, curve]
         vk = PreloadedKey.db[HAL_KEY_TYPE_EC_PUBLIC,  curve]
-        k1 = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, curve, sk.der, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
+        k1 = hsm.pkey_load(sk.der, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k1.delete)
-        k2 = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC,  curve, vk.der, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
+        k2 = hsm.pkey_load(vk.der, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k2.delete)
         sig1 = k1.sign(hash = self.h(alg, hamster))
         sig2 = sk.sign(hamster, pyhash)
@@ -553,7 +547,7 @@ class TestPKeyMatch(TestCaseLoggedIn):
     def load_keys(self, flags):
         uuids = set()
         for obj in PreloadedKey.db.itervalues():
-            with hsm.pkey_load(obj.keytype, obj.curve, obj.der, flags) as k:
+            with hsm.pkey_load(obj.der, flags) as k:
                 self.addCleanup(lambda uuid: hsm.pkey_open(uuid, flags = flags).delete(), k.uuid)
                 uuids.add(k.uuid)
                 k.set_attributes(dict((i, a) for i, a in enumerate((str(obj.keytype), str(obj.fn2)))))
@@ -624,7 +618,7 @@ class TestPKeyAttribute(TestCaseLoggedIn):
         pinwheel = Pinwheel()
         for i in xrange(n_keys):
             for obj in PreloadedKey.db.itervalues():
-                with hsm.pkey_load(obj.keytype, obj.curve, obj.der, flags) as k:
+                with hsm.pkey_load(obj.der, flags) as k:
                     pinwheel()
                     self.addCleanup(lambda uuid: hsm.pkey_open(uuid, flags = flags).delete(), k.uuid)
                     k.set_attributes(dict((j, "Attribute {}{}".format(j, "*" * n_fill))
@@ -652,7 +646,7 @@ class TestPKeyAttributeP11(TestCaseLoggedIn):
 
     def setUp(self):
         der = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256].der
-        self.k = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256, der, HAL_KEY_FLAG_TOKEN)
+        self.k = hsm.pkey_load(der, HAL_KEY_FLAG_TOKEN)
         self.addCleanup(self.k.delete)
         super(TestPKeyAttributeP11, self).setUp()
 
@@ -717,7 +711,7 @@ class TestPKeyAttributeWriteSpeedToken(TestCaseLoggedIn):
 
     def setUp(self):
         der = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256].der
-        self.k = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256, der, HAL_KEY_FLAG_TOKEN)
+        self.k = hsm.pkey_load(der, HAL_KEY_FLAG_TOKEN)
         self.addCleanup(self.k.delete)
         super(TestPKeyAttributeWriteSpeedToken, self).setUp()
 
@@ -742,7 +736,7 @@ class TestPKeyAttributeWriteSpeedVolatile(TestCaseLoggedIn):
 
     def setUp(self):
         der = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256].der
-        self.k = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256, der, 0)
+        self.k = hsm.pkey_load(der, 0)
         self.addCleanup(self.k.delete)
         super(TestPKeyAttributeWriteSpeedVolatile, self).setUp()
 
@@ -767,7 +761,7 @@ class TestPKeyAttributeReadSpeedToken(TestCaseLoggedIn):
 
     def setUp(self):
         der = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256].der
-        self.k = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256, der, HAL_KEY_FLAG_TOKEN)
+        self.k = hsm.pkey_load(der, HAL_KEY_FLAG_TOKEN)
         self.addCleanup(self.k.delete)
         self.k.set_attributes(dict((i, "Attribute {}".format(i))
                                    for i in xrange(12)))
@@ -799,7 +793,7 @@ class TestPKeyAttributeReadSpeedVolatile(TestCaseLoggedIn):
 
     def setUp(self):
         der = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256].der
-        self.k = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, HAL_CURVE_P256, der, 0)
+        self.k = hsm.pkey_load(der, 0)
         self.addCleanup(self.k.delete)
         self.k.set_attributes(dict((i, "Attribute {}".format(i))
                                    for i in xrange(12)))
@@ -830,10 +824,10 @@ class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
     ECDSA verification tests based on Suite B Implementer's Guide to FIPS 186-3.
     """
 
-    def verify(self, Qx, Qy, H, r, s, hal_curve, py_curve, py_hash):
+    def verify(self, Qx, Qy, H, r, s, py_curve, py_hash):
         Q = ECDSA_VerifyingKey.from_public_point(Point(py_curve.curve, Qx, Qy),
                                                  py_curve, py_hash).to_der()
-        k  = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC, hal_curve, Q, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
+        k  = hsm.pkey_load(Q, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k.delete)
         k.verify(signature = (r + s).decode("hex"), data = H.decode("hex"))
 
@@ -844,7 +838,6 @@ class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
             H  = "7c3e883ddc8bd688f96eac5e9324222c8f30f9d6bb59e9c5f020bd39ba2b8377",
             r  = "7214bc9647160bbd39ff2f80533f5dc6ddd70ddf86bb815661e805d5d4e6f27c",
             s  = "7d1ff961980f961bdaa3233b6209f4013317d3e3f9e1493592dbeaa1af2bc367",
-            hal_curve = HAL_CURVE_P256,
             py_curve  = NIST256p,
             py_hash   = SHA256)
 
@@ -855,7 +848,6 @@ class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
             H  = "b9210c9d7e20897ab86597266a9d5077e8db1b06f7220ed6ee75bd8b45db37891f8ba5550304004159f4453dc5b3f5a1",
             r  = "a0c27ec893092dea1e1bd2ccfed3cf945c8134ed0c9f81311a0f4a05942db8dbed8dd59f267471d5462aa14fe72de856",
             s  = "20ab3f45b74f10b6e11f96a2c8eb694d206b9dda86d3c7e331c26b22c987b7537726577667adadf168ebbe803794a402",
-            hal_curve = HAL_CURVE_P384,
             py_curve  = NIST384p,
             py_hash   = SHA384)
 

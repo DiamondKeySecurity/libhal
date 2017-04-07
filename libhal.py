@@ -555,8 +555,8 @@ class HSM(object):
         with self.rpc(RPC_FUNC_HASH_FINALIZE, handle, length) as r:
             return r.unpack_bytes()
 
-    def pkey_load(self, type, curve, der, flags = 0, client = 0, session = 0):
-        with self.rpc(RPC_FUNC_PKEY_LOAD, session, type, curve, der, flags, client = client) as r:
+    def pkey_load(self, der, flags = 0, client = 0, session = 0):
+        with self.rpc(RPC_FUNC_PKEY_LOAD, session, der, flags, client = client) as r:
             pkey = PKey(self, r.unpack_uint(), UUID(bytes = r.unpack_bytes()))
             logger.debug("Loaded pkey %s", pkey.uuid)
             return pkey

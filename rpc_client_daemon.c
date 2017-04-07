@@ -40,6 +40,7 @@
 
 #include "hal.h"
 #include "hal_internal.h"
+#include "slip_internal.h"
 
 static int sock = -1;
 

@@ -268,24 +268,25 @@ static inline hal_error_t ks_open_from_flags(hal_ks_t **ks, const hal_key_flags_
  * return a key handle and the name.
  */
 
-#warning Convert hal_rpc_pkey_load() to use hal_asn1_guess_key_type()?
-
 static hal_error_t pkey_local_load(const hal_client_handle_t client,
                                    const hal_session_handle_t session,
                                    hal_pkey_handle_t *pkey,
-                                   const hal_key_type_t type,
-                                   const hal_curve_name_t curve,
                                    hal_uuid_t *name,
                                    const uint8_t * const der, const size_t der_len,
                                    const hal_key_flags_t flags)
 {
-  assert(pkey != NULL && name != NULL);
+  assert(pkey != NULL && name != NULL && der != NULL);
 
+  hal_curve_name_t curve;
   hal_pkey_slot_t *slot;
+  hal_key_type_t type;
   hal_ks_t *ks = NULL;
   hal_error_t err;
 
   if ((err = check_writable(client, flags)) != HAL_OK)
+    return err;
+
+  if ((err = hal_asn1_guess_key_type(&type, &curve, der, der_len)) != HAL_OK)
     return err;
 
   if ((slot = alloc_slot(flags)) == NULL)
@@ -1188,8 +1189,6 @@ static hal_error_t pkey_local_import(const hal_client_handle_t client,
   size_t der_len, oid_len, data_len;
   const uint8_t *oid, *data;
   hal_rsa_key_t *rsa = NULL;
-  hal_curve_name_t curve;
-  hal_key_type_t type;
   hal_ks_t *ks = NULL;
   hal_error_t err;
 
@@ -1253,10 +1252,7 @@ static hal_error_t pkey_local_import(const hal_client_handle_t client,
   if ((err = hal_aes_keyunwrap(NULL, kek, sizeof(kek), data, data_len, der, &der_len)) != HAL_OK)
     goto fail;
 
-  if ((err = hal_asn1_guess_key_type(&type, &curve, der, der_len)) != HAL_OK)
-    goto fail;
-
-  err = pkey_local_load(client, session, pkey, type, curve, name, der, der_len, flags);
+  err = pkey_local_load(client, session, pkey, name, der, der_len, flags);
 
  fail:
   memset(rsabuf, 0, sizeof(rsabuf));

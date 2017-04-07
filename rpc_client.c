@@ -420,13 +420,11 @@ static hal_error_t hash_finalize(const hal_hash_handle_t hash,
 static hal_error_t pkey_remote_load(const hal_client_handle_t client,
                                     const hal_session_handle_t session,
                                     hal_pkey_handle_t *pkey,
-                                    const hal_key_type_t type,
-                                    const hal_curve_name_t curve,
                                     hal_uuid_t *name,
                                     const uint8_t * const der, const size_t der_len,
                                     const hal_key_flags_t flags)
 {
-  uint8_t outbuf[nargs(7) + pad(der_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t outbuf[nargs(5) + pad(der_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(5) + pad(sizeof(name->uuid))];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   uint32_t name_len = sizeof(name->uuid);
@@ -435,8 +433,6 @@ static hal_error_t pkey_remote_load(const hal_client_handle_t client,
   check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_LOAD));
   check(hal_xdr_encode_int(&optr, olimit, client.handle));
   check(hal_xdr_encode_int(&optr, olimit, session.handle));
-  check(hal_xdr_encode_int(&optr, olimit, type));
-  check(hal_xdr_encode_int(&optr, olimit, curve));
   check(hal_xdr_encode_buffer(&optr, olimit, der, der_len));
   check(hal_xdr_encode_int(&optr, olimit, flags));
   check(hal_rpc_send(outbuf, optr - outbuf));

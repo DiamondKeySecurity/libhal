@@ -218,15 +218,13 @@ hal_error_t hal_rpc_hash_finalize(const hal_hash_handle_t hash,
 hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
                               const hal_session_handle_t session,
                               hal_pkey_handle_t *pkey,
-                              const hal_key_type_t type,
-                              const hal_curve_name_t curve,
                               hal_uuid_t *name,
                               const uint8_t * const der, const size_t der_len,
                               const hal_key_flags_t flags)
 {
-  if (pkey == NULL || name == NULL || der == NULL || der_len == 0 || !check_pkey_type_curve_flags(type, curve, flags))
+  if (pkey == NULL || name == NULL || der == NULL || der_len == 0 || !check_pkey_flags(flags))
     return HAL_ERROR_BAD_ARGUMENTS;
-  return hal_rpc_pkey_dispatch->load(client, session, pkey, type, curve, name, der, der_len, flags);
+  return hal_rpc_pkey_dispatch->load(client, session, pkey, name, der, der_len, flags);
 }
 
 hal_error_t hal_rpc_pkey_open(const hal_client_handle_t client,

@@ -70,8 +70,6 @@ def test_export():
     kekek = RSA.importKey(kekek_pem)
 
     kekek_handle = hsm.pkey_load(
-        type  = HAL_KEY_TYPE_RSA_PUBLIC,
-        curve = HAL_CURVE_NONE,
         flags = HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT,
         der   = kekek.publickey().exportKey(format = "DER"))
     atexit(kekek_handle.delete)
@@ -102,8 +100,6 @@ def test_import():
     if False:
         kekek = RSA.importKey(kekek_pem)
         kekek_handle = hsm.pkey_load(
-            type  = HAL_KEY_TYPE_RSA_PRIVATE,
-            curve = HAL_CURVE_NONE,
             flags = HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT,
             der   = kekek.exportKey(format = "DER", pkcs = 8))
         atexit(kekek_handle.delete)
