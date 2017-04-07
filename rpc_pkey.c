@@ -1203,7 +1203,8 @@ static hal_error_t pkey_local_import(const hal_client_handle_t client,
   if ((err = hal_rsa_private_key_from_der(&rsa, rsabuf, sizeof(rsabuf), der, der_len)) != HAL_OK)
     goto fail;
 
-  if ((err = hal_asn1_decode_pkcs8_encryptedprivatekeyinfo(&oid, &oid_len, &data, &data_len, kek_, kek_len)) != HAL_OK)
+  if ((err = hal_asn1_decode_pkcs8_encryptedprivatekeyinfo(&oid, &oid_len, &data, &data_len,
+                                                           kek_, kek_len)) != HAL_OK)
     goto fail;
 
   if (oid_len != hal_asn1_oid_rsaEncryption_len ||
@@ -1225,7 +1226,8 @@ static hal_error_t pkey_local_import(const hal_client_handle_t client,
   if (der[0] == 0x00 && der[1] == 0x02 && d != NULL && der + data_len == d + 1 + KEK_LENGTH)
     memcpy(kek, d + 1, sizeof(kek));
 
-  if ((err = hal_asn1_decode_pkcs8_encryptedprivatekeyinfo(&oid, &oid_len, &data, &data_len, pkcs8, pkcs8_len)) != HAL_OK)
+  if ((err = hal_asn1_decode_pkcs8_encryptedprivatekeyinfo(&oid, &oid_len, &data, &data_len,
+                                                           pkcs8, pkcs8_len)) != HAL_OK)
     goto fail;
 
   if (oid_len != hal_asn1_oid_aesKeyWrap_len ||
@@ -1235,6 +1237,7 @@ static hal_error_t pkey_local_import(const hal_client_handle_t client,
     goto fail;
   }
 
+  der_len = sizeof(der);
   if ((err = hal_aes_keyunwrap(NULL, kek, sizeof(kek), data, data_len, der, &der_len)) != HAL_OK)
     goto fail;
 

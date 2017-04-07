@@ -34,75 +34,107 @@ from libhal import *
 
 from Crypto.PublicKey   import RSA
 from Crypto.Cipher      import AES, PKCS1_v1_5
-from Crypto.Util.asn1   import DerObject, DerSequence, DerNull, DerOctetString, DerObjectId
+from Crypto.Util.asn1   import DerObject, DerSequence, DerOctetString, DerObjectId, DerNull
 from Crypto.Random      import new as csprng
 from struct             import pack, unpack
+from atexit             import register as atexit
 
-
-def dumpasn1(der):
+def dumpasn1(der, flags = "-aop"):
     from subprocess import call
     from tempfile import NamedTemporaryFile
     with NamedTemporaryFile() as f:
         f.write(der)
         f.flush()
-        call(("dumpasn1", "-aop", f.name))
-
-def t(x):
-    return filter(x.isType, x.typeTags)[0]
+        call(("dumpasn1", flags, f.name))
 
 hal_asn1_oid_rsaEncryption = "\x2A\x86\x48\x86\xF7\x0D\x01\x01\x01"
 hal_asn1_oid_aesKeyWrap    = "\x60\x86\x48\x01\x65\x03\x04\x01\x30"
 
 kek_length = 256/8      # We can determine this from the keywrap OID, this is for AES-256
 
+hsm = None
+
+
 def main():
-    kekek = RSA.importKey(kekek_pem)
-
-    from atexit import register as atexit
-
+    global hsm
     hsm = HSM()
     #hsm.debug_io = args.io_log
-
     hsm.login(HAL_USER_WHEEL, "fnord")
     atexit(hsm.logout)
+    test_export()
+    test_import()
 
-    kekek_handle = hsm.pkey_load(type  = HAL_KEY_TYPE_RSA_PUBLIC,
-                                 curve = HAL_CURVE_NONE,
-                                 der   = kekek.publickey().exportKey(format = "DER"))
+def test_export():
+    print "Testing hal_rpc_pkey_export()"
+
+    kekek = RSA.importKey(kekek_pem)
+
+    kekek_handle = hsm.pkey_load(
+        type  = HAL_KEY_TYPE_RSA_PUBLIC,
+        curve = HAL_CURVE_NONE,
+        flags = HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT,
+        der   = kekek.publickey().exportKey(format = "DER"))
     atexit(kekek_handle.delete)
-    print "KEKEK:", kekek_handle.uuid
 
-    pkey_handle = hsm.pkey_generate_ec(HAL_CURVE_P256, HAL_KEY_FLAG_EXPORTABLE)
-    atexit(pkey_handle.delete)
-    print "PKey: ", pkey_handle.uuid
+    pkey1 = hsm.pkey_generate_ec(
+        curve = HAL_CURVE_P256,
+        flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | HAL_KEY_FLAG_EXPORTABLE)
+    atexit(pkey1.delete)
 
-    pkcs8_der, kek_der = kekek_handle.export_pkey(pkey_handle)
+    pkey2 = hsm.pkey_generate_rsa(
+        keylen= 2048,
+        flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | HAL_KEY_FLAG_EXPORTABLE)
+    atexit(pkey2.delete)
 
-    pkcs8_alg, pkcs8_data = show_encrypted_pkcs8("PKCS #8:", pkcs8_der, hal_asn1_oid_aesKeyWrap)
-    kek_alg,   kek_data   = show_encrypted_pkcs8("KEK:    ", kek_der,   hal_asn1_oid_rsaEncryption)
-
-    # Voodoo to defend against Bleichenbacher Attack per Crypto.Cipher.PKCS1_v1_5 API documentation
-
-    kek = PKCS1_v1_5.new(kekek).decrypt(kek_data, csprng().read(kek_length))
-
-    pkey = AESKeyWrapWithPadding(kek).unwrap(pkcs8_data)
-
-    dumpasn1(pkey)
+    for pkey in (pkey1, pkey2):
+        pkcs8_der, kek_der = kekek_handle.export_pkey(pkey)
+        kek = PKCS1_v1_5.new(kekek).decrypt(
+            parse_EncryptedPrivateKeyInfo(kek_der, hal_asn1_oid_rsaEncryption),
+            csprng().read(kek_length))
+        der = AESKeyWrapWithPadding(kek).unwrap(
+            parse_EncryptedPrivateKeyInfo(pkcs8_der, hal_asn1_oid_aesKeyWrap))
+        dumpasn1(der)
 
 
-def show_encrypted_pkcs8(label, der, oid):
-    print
-    print label
-    dumpasn1(der)
-    print
-    result = parse_encrypted_pkcs8(der)
-    for name, value in zip(("algorithm", "encryptedData"), result):
-        print "{:14s} {}".format(name, "-".join("{:02x}".format(ord(v)) for v in value))
-    print
-    print "OID {}".format("matches" if result[0] == oid else "doesn't match")
-    return result
+def test_import():
+    print "Testing hal_rpc_pkey_import()"
 
-def parse_encrypted_pkcs8(der):
+    if False:
+        kekek = RSA.importKey(kekek_pem)
+        kekek_handle = hsm.pkey_load(
+            type  = HAL_KEY_TYPE_RSA_PRIVATE,
+            curve = HAL_CURVE_NONE,
+            flags = HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT,
+            der   = kekek.exportKey(format = "DER", pkcs = 8))
+        atexit(kekek_handle.delete)
+        kekek = kekek.publickey()
+
+    else:
+        kekek_handle = hsm.pkey_generate_rsa(
+            keylen= 2048,
+            flags = HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT)
+        atexit(kekek_handle.delete)
+        kekek = RSA.importKey(kekek_handle.public_key)
+
+    for der in (rsa_2048_der, ecdsa_p384_der):
+
+        kek = csprng().read(kek_length)
+
+        pkey = kekek_handle.import_pkey(
+            pkcs8 = encode_EncryptedPrivateKeyInfo(AESKeyWrapWithPadding(kek).wrap(der),
+                                                   hal_asn1_oid_aesKeyWrap),
+            kek   = encode_EncryptedPrivateKeyInfo(PKCS1_v1_5.new(kekek).encrypt(kek),
+                                                   hal_asn1_oid_rsaEncryption),
+            flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
+
+        atexit(pkey.delete)
+
+        print "Imported", pkey.uuid
+        dumpasn1(pkey.public_key)
+        dumpasn1(der)
+
+
+def parse_EncryptedPrivateKeyInfo(der, oid):
 
     encryptedPrivateKeyInfo = DerSequence()
     encryptedPrivateKeyInfo.decode(der)
@@ -113,10 +145,20 @@ def parse_encrypted_pkcs8(der):
     algorithm = DerObjectId()
     algorithm.decode(encryptionAlgorithm[0])
 
-    encryptedData = DerObject()
+    encryptedData = DerOctetString()
     encryptedData.decode(encryptedPrivateKeyInfo[1])
 
-    return algorithm.payload, encryptedData.payload
+    if algorithm.payload != oid:
+        raise ValueError
+
+    return encryptedData.payload
+
+
+def encode_EncryptedPrivateKeyInfo(der, oid):
+    return DerSequence([
+        DerSequence([chr(0x06) + chr(len(oid)) + oid]).encode(),
+        DerOctetString(der).encode()
+    ]).encode()
 
 
 class AESKeyWrapWithPadding(object):
@@ -227,6 +269,44 @@ FUQep3DnjONc0kX9xeiSn3Z2jbUMcoub/uY0OWreE+3FL1ZgjYs1KKdUOWF2DL/X
 L7en4sepnWifRGs2gnPYKrn1Zg==
 -----END PRIVATE KEY-----
 '''
+
+# Static keys for import testing.
+
+rsa_2048_der = '''\
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCwyEYARfw428GU
+6XwflyOMJt1U+SM+H1zVmguXDqOX9i/aAhe8dvmYTokcxiWJ14N8dfbwKh3pyaBB
+HenlaarQvINRYa812X7z/UeBBTNEmURWVCiGMq/ginxpyUSxjTxtOP/VRH8tYlwm
+9K/L/7BN78bdQLeA6atFuuJkZDjvrLn7UypzCa/3Mip9kpu/6nJDnDUYkngwE4G5
+4J6yWO+/BEqoRFhVkDdtyDcyBOvZsV3Vqi8tvpNrLTujzFHAQD8EIT9r7IxP/me7
+We3Tu2i8CEnqUNiGxhoi5hzKq36NIDYrYvzg3xQNorS9SC3rHz/F3I9+XDqNnfYV
+ok8CBFNFAgMBAAECggEBAIH0Z8kxqW1e1tqSHUXXxDD2LQSXNPoo8gSv/k8oWsiO
+GLUpjqtjxq3ZJeA6JUREYosu6L26KE1BhAX6aIPV/tT9j4dWyQdMAJB6I4NMAFkw
+VlUj/rpQLoxhIX5ej5n6Gm6sVR1BAkCpqtaUT1smdkOEvWrOdVdV7ysOa/ii2FwP
+IzYbHoBOWeI/aq8RdtZ/NeQenPZX++VihRT7b4prfjxTbeghvN1NNy7TmCquBZSM
+9aVMIB4Q4dXAdRePB6K6N0Gy60CQll62veppbFJHDPdjKjkxiOgIJo2XYIM5LziD
+ta0VxHRNpTULCGwAA94f9yNo/YzpxLNw94COu0StLa0CgYEA4k0UHHSRb0jhkB0f
+6jknEthhBWIFmJ8bDJ/ObN0wxLhluiajzelPS/YB2Qsdj8NGXSX5yIrrNyCc+tjk
+wniFD8X52h3z4nEzrx0Hn2jqL6w8k2jp1WMZCGW7Ure6o5ilhb5vMUqjvHyVDsG6
+aAl/82oWWXV0HWEHHzjWgeNWpPMCgYEAx/uJx07z0TztvyEaJrBy/rvPtdOnZ03F
+UiKAUFWS6C9vncmoH5m+fHaxKn7jPCCxHyoea3BKvqv5MIxkn3DJMmu9UVwLAGne
+JnElygsA1ogy9f9YN+Fp1jXikdywbd2T0RsuoaUm+iMFO/fSPGM5qTbOTzY4dw4R
+oSX/NmzjlOcCgYEAgss10nR1EjK3W8nZhlBeCwBQowHSZjGfOp6qejUlWK2S7hIj
+HoG4ORkIXF+WSF7+rhui0IuqAwSwdjMhlFx/22v7SluBd+EhlBZdL389yyvrHu/G
+JnTOJRJXQCm8j41MLY6xSXXwSKJgrFS/3h2PfCpWnIHMCKbprNv27r9sdo0CgYBg
+UBGUDr84N1rdIQkiNvq7GiK4FD5cb0UoAHvBtOTys93SpUs2JOprsRI0QDYaQDht
+pPBPmB43ZEW4DvVrIHuVr/PWmjimM1aNNxMXEmON7rx0Y0zOZN5/DyaWTy4dS4ik
+Pa4gpZR3BaTAs+LpuHQNvdpwpdFd7UWqUc1vHdQhYwKBgAbz0tbrr/QTl6/WvbBS
+6rALr2x7hueOmyCGzgk6o1gPkqbvuGZDJIkInzjYMxKly13pWQhFJlSZMlhpBosu
+u/L+h81Pj1Ks38yzxnoz1QJ/s3xWfE77xFvz8u319Gv25Hf+SFkd97+BxF1Fq8tV
+r/gYnWjq6Ay5HGptjovGzyYi
+'''.decode("base64")
+
+ecdsa_p384_der = '''\
+MIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDB4+4rLfjwI6g5bIk4H
+Glylc+ggvl7rBcFCxTY2K6Rd/ZuDto4ZOwxaQcvTyctOZaKhZANiAATaNzklDKdP
+QYe2NhCvkoxirFCw3AKy767BCmPjad4ZfVNCchSRY+fKTgatEDtCly8+G2914q1w
+/CdxWp+coDHxgG6zBV/y7KvtoO8cA5E3KE2jHZP8gwkzUe/SNx9Tx6U=
+'''.decode("base64")
 
 if __name__ == "__main__":
     main()
