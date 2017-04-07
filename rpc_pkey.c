@@ -1234,7 +1234,8 @@ static hal_error_t pkey_local_import(const hal_client_handle_t client,
 
   d = memchr(der + 2, 0x00, data_len - 2);
 
-  if (der[0] == 0x00 && der[1] == 0x02 && d != NULL && der + data_len == d + 1 + KEK_LENGTH)
+  if (der[0] == 0x00 && der[1] == 0x02 && d != NULL && d - der > 10 &&
+      der + data_len == d + 1 + KEK_LENGTH)
     memcpy(kek, d + 1, sizeof(kek));
 
   if ((err = hal_asn1_decode_pkcs8_encryptedprivatekeyinfo(&oid, &oid_len, &data, &data_len,
@@ -1252,7 +1253,7 @@ static hal_error_t pkey_local_import(const hal_client_handle_t client,
   if ((err = hal_aes_keyunwrap(NULL, kek, sizeof(kek), data, data_len, der, &der_len)) != HAL_OK)
     goto fail;
 
-  err = pkey_local_load(client, session, pkey, name, der, der_len, flags);
+  err = hal_rpc_pkey_load(client, session, pkey, name, der, der_len, flags);
 
  fail:
   memset(rsabuf, 0, sizeof(rsabuf));
