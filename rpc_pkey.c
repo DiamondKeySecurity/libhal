@@ -268,7 +268,7 @@ static inline hal_error_t ks_open_from_flags(hal_ks_t **ks, const hal_key_flags_
  * return a key handle and the name.
  */
 
-#warning Convert hal_rpc_pkey_load() to use hal-asn1_guess_key_type()?
+#warning Convert hal_rpc_pkey_load() to use hal_asn1_guess_key_type()?
 
 static hal_error_t pkey_local_load(const hal_client_handle_t client,
                                    const hal_session_handle_t session,
@@ -809,6 +809,9 @@ static hal_error_t pkey_local_sign(const hal_pkey_handle_t pkey,
     return HAL_ERROR_UNSUPPORTED_KEY;
   }
 
+  if ((slot->flags & HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE) == 0)
+    return HAL_ERROR_FORBIDDEN;
+
   uint8_t keybuf[hal_rsa_key_t_size > hal_ecdsa_key_t_size ? hal_rsa_key_t_size : hal_ecdsa_key_t_size];
   uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
   size_t der_len;
@@ -957,6 +960,9 @@ static hal_error_t pkey_local_verify(const hal_pkey_handle_t pkey,
     return HAL_ERROR_UNSUPPORTED_KEY;
   }
 
+  if ((slot->flags & HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE) == 0)
+    return HAL_ERROR_FORBIDDEN;
+
   uint8_t keybuf[hal_rsa_key_t_size > hal_ecdsa_key_t_size ? hal_rsa_key_t_size : hal_ecdsa_key_t_size];
   uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
   size_t der_len;
@@ -1084,6 +1090,9 @@ static hal_error_t pkey_local_export(const hal_pkey_handle_t pkey_handle,
   if ((pkey->flags & HAL_KEY_FLAG_EXPORTABLE) == 0)
     return HAL_ERROR_FORBIDDEN;
 
+  if ((kekek->flags & HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT) == 0)
+    return HAL_ERROR_FORBIDDEN;
+
   if (kekek->type != HAL_KEY_TYPE_RSA_PRIVATE && kekek->type != HAL_KEY_TYPE_RSA_PUBLIC)
     return HAL_ERROR_UNSUPPORTED_KEY;
 
@@ -1188,6 +1197,9 @@ static hal_error_t pkey_local_import(const hal_client_handle_t client,
 
   if (kekek == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
+
+  if ((kekek->flags & HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT) == 0)
+    return HAL_ERROR_FORBIDDEN;
 
   if (kekek->type != HAL_KEY_TYPE_RSA_PRIVATE)
     return HAL_ERROR_UNSUPPORTED_KEY;

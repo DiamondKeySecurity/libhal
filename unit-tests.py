@@ -258,16 +258,18 @@ class TestPKeyGen(TestCaseLoggedIn):
         k2.verify(signature = sig, data = data)
 
     def gen_sign_verify_rsa(self, hashalg, keylen):
-        k1 = hsm.pkey_generate_rsa(keylen)
+        k1 = hsm.pkey_generate_rsa(keylen, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k1.delete)
-        k2 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PUBLIC, HAL_CURVE_NONE, k1.public_key)
+        k2 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PUBLIC, HAL_CURVE_NONE, k1.public_key,
+                           HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k2.delete)
         self.sign_verify(hashalg, k1, k2)
 
     def gen_sign_verify_ecdsa(self, hashalg, curve):
-        k1 = hsm.pkey_generate_ec(curve)
+        k1 = hsm.pkey_generate_ec(curve, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k1.delete)
-        k2 = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC, curve, k1.public_key)
+        k2 = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC, curve, k1.public_key,
+                           HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k2.delete)
         self.sign_verify(hashalg, k1, k2)
 
@@ -302,19 +304,23 @@ class TestPKeyHashing(TestCaseLoggedIn):
 
     def load_sign_verify_rsa(self, alg, keylen, method):
         k1 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PRIVATE, HAL_CURVE_NONE,
-                           PreloadedKey.db[HAL_KEY_TYPE_RSA_PRIVATE, keylen].der)
+                           PreloadedKey.db[HAL_KEY_TYPE_RSA_PRIVATE, keylen].der,
+                           HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k1.delete)
         k2 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PUBLIC, HAL_CURVE_NONE,
-                           PreloadedKey.db[HAL_KEY_TYPE_RSA_PUBLIC, keylen].der)
+                           PreloadedKey.db[HAL_KEY_TYPE_RSA_PUBLIC, keylen].der,
+                           HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k2.delete)
         method(alg, k1, k2)
 
     def load_sign_verify_ecdsa(self, alg, curve, method):
         k1 = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, curve,
-                           PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, curve].der)
+                           PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, curve].der,
+                           HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k1.delete)
         k2 = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC, curve,
-                           PreloadedKey.db[HAL_KEY_TYPE_EC_PUBLIC, curve].der)
+                           PreloadedKey.db[HAL_KEY_TYPE_EC_PUBLIC, curve].der,
+                           HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k2.delete)
         method(alg, k1, k2)
 
@@ -484,9 +490,9 @@ class TestPKeyRSAInterop(TestCaseLoggedIn):
         hamster = "Your mother was a hamster"
         sk = PreloadedKey.db[HAL_KEY_TYPE_RSA_PRIVATE, keylen]
         vk = PreloadedKey.db[HAL_KEY_TYPE_RSA_PUBLIC,  keylen]
-        k1 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PRIVATE, HAL_CURVE_NONE, sk.der)
+        k1 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PRIVATE, HAL_CURVE_NONE, sk.der, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k1.delete)
-        k2 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PUBLIC,  HAL_CURVE_NONE, vk.der)
+        k2 = hsm.pkey_load(HAL_KEY_TYPE_RSA_PUBLIC,  HAL_CURVE_NONE, vk.der, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k2.delete)
         sig1 = k1.sign(hash = self.h(alg, hamster))
         sig2 = sk.sign(hamster, pyhash)
@@ -519,9 +525,9 @@ class TestPKeyECDSAInterop(TestCaseLoggedIn):
         hamster = "Your mother was a hamster"
         sk = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, curve]
         vk = PreloadedKey.db[HAL_KEY_TYPE_EC_PUBLIC,  curve]
-        k1 = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, curve, sk.der)
+        k1 = hsm.pkey_load(HAL_KEY_TYPE_EC_PRIVATE, curve, sk.der, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k1.delete)
-        k2 = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC,  curve, vk.der)
+        k2 = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC,  curve, vk.der, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k2.delete)
         sig1 = k1.sign(hash = self.h(alg, hamster))
         sig2 = sk.sign(hamster, pyhash)
@@ -827,7 +833,7 @@ class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
     def verify(self, Qx, Qy, H, r, s, hal_curve, py_curve, py_hash):
         Q = ECDSA_VerifyingKey.from_public_point(Point(py_curve.curve, Qx, Qy),
                                                  py_curve, py_hash).to_der()
-        k  = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC, hal_curve, Q)
+        k  = hsm.pkey_load(HAL_KEY_TYPE_EC_PUBLIC, hal_curve, Q, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k.delete)
         k.verify(signature = (r + s).decode("hex"), data = H.decode("hex"))
 
@@ -852,18 +858,6 @@ class TestPkeyECDSAVerificationNIST(TestCaseLoggedIn):
             hal_curve = HAL_CURVE_P384,
             py_curve  = NIST384p,
             py_hash   = SHA384)
-
-
-# Entire classes of tests still missing:
-#
-# * pkey attribute functions
-#
-# * pkey list and match functions
-#
-# * token vs session key tests
-#
-# Preloaded keys should suffice for all of these.
-
 
 
 class Pinwheel(object):
@@ -891,13 +885,10 @@ class Pinwheel(object):
 class PreloadedKey(object):
     """
     Keys for preload tests, here at the end because they're large.
-    For the moment, we use PKCS #1.5 format for RSA and secg format
-    for ECDSA, because those are the formats that everything
-    (including our own ASN.1 code) supports.  Arguably, we should be
-    using PKCS #8 to get a single, consistent, self-identifying
-    private key format, but we're not there yet and it's not
-    particularly urgent given widespread availablity of conversion
-    tools (eg, "openssl pkcs8").
+    These are now in PKCS #8 format, which gives us a single,
+    consistent, self-identifying private key format.  See tools
+    like "openssl pkcs8" if you need to convert from some other format
+    (eg, PKCS #1 or secg).
     """
 
     db = {}

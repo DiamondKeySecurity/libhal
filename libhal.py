@@ -567,7 +567,7 @@ class HSM(object):
             logger.debug("Opened pkey %s", pkey.uuid)
             return pkey
 
-    def pkey_generate_rsa(self, keylen, exponent = "\x01\x00\x01", flags = 0, client = 0, session = 0):
+    def pkey_generate_rsa(self, keylen, flags = 0, exponent = "\x01\x00\x01", client = 0, session = 0):
         with self.rpc(RPC_FUNC_PKEY_GENERATE_RSA, session, keylen, exponent, flags, client = client) as r:
             pkey = PKey(self, r.unpack_uint(), UUID(bytes = r.unpack_bytes()))
             logger.debug("Generated RSA pkey %s", pkey.uuid)
