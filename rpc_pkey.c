@@ -1217,14 +1217,13 @@ static hal_error_t pkey_local_import(const hal_client_handle_t client,
   if ((err = hal_rsa_decrypt(NULL, rsa, data, data_len, der, data_len)) != HAL_OK)
     goto fail;
 
+  if ((err = hal_get_random(NULL, kek, sizeof(kek))) != HAL_OK)
+    goto fail;
+
   d = memchr(der + 2, 0x00, data_len - 2);
 
-  if (der[0] != 0x00 || der[1] != 0x02 || d == NULL || der + data_len != d + 1 + KEK_LENGTH) {
-    err = HAL_ERROR_ASN1_PARSE_FAILED;
-    goto fail;
-  }
-
-  memcpy(kek, d + 1, sizeof(kek));
+  if (der[0] == 0x00 && der[1] == 0x02 && d != NULL && der + data_len == d + 1 + KEK_LENGTH)
+    memcpy(kek, d + 1, sizeof(kek));
 
   if ((err = hal_asn1_decode_pkcs8_encryptedprivatekeyinfo(&oid, &oid_len, &data, &data_len, pkcs8, pkcs8_len)) != HAL_OK)
     goto fail;
