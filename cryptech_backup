@@ -1,0 +1,240 @@
+#!/usr/bin/env python
+
+#    KEY SOURCE                            KEY BACKUP
+#
+#                                          Generate and export KEKEK:
+#                                               hal_rpc_pkey_generate_rsa()
+#                                               hal_rpc_pkey_get_public_key()
+#
+#   Load KEKEK public   <----------------  Export KEKEK public
+#
+#                       {
+#                               "kekek-uuid":   "[UUID]",
+#                               "kekek":        "[Base64]"
+#                       }
+#
+#       hal_rpc_pkey_load()
+#       hal_rpc_pkey_export()
+#
+#   Export PKCS #8 and KEK   ---------->   Load PKCS #8 and KEK, import key:
+#
+#                       {
+#                               "kekek-uuid":   "[UUID]",
+#                               "pkey":         "[Base64]",
+#                               "kek":          "[Base64]"
+#                       }
+#
+#
+#                                               hal_rpc_pkey_import()
+
+import sys
+import json
+import uuid
+import atexit
+import getpass
+import argparse
+
+from libhal import *
+
+def main():
+
+    parser = argparse.ArgumentParser(
+        formatter_class = argparse.ArgumentDefaultsHelpFormatter,
+        description = __doc__)
+    subparsers = parser.add_subparsers(
+        title = "Commands (use \"--help\" after command name for help with individual commands)",
+        metavar = "")
+    parser.add_argument(
+        "-p", "--pin",
+        help = "wheel PIN")
+
+    subparser = defcmd(subparsers, cmd_setup)
+    group = subparser.add_mutually_exclusive_group()
+    group.add_argument(
+        "-n", "--new", action = "store_true",
+        help = "force creation of new KEKEK")
+    group.add_argument(
+        "-u", "--uuid",
+        help = "UUID of existing KEKEK to use")
+    subparser.add_argument(
+        "-k", "--keylen", type = int, default = 2048,
+        help = "length of new KEKEK if we need to create one")
+    subparser.add_argument(
+        "-o", "--output", type = argparse.FileType("w"), default = "-",
+        help = "output file")
+
+    subparser = defcmd(subparsers, cmd_export)
+    subparser.add_argument(
+        "-i", "--input", type = argparse.FileType("r"), default = "-",
+        help = "input file")
+    subparser.add_argument(
+        "-o", "--output", type = argparse.FileType("w"), default = "-",
+        help = "output file")
+
+    subparser = defcmd(subparsers, cmd_import)
+    subparser.add_argument(
+        "-i", "--input", type = argparse.FileType("r"), default = "-",
+        help = "input file")
+
+    args = parser.parse_args()
+
+    hsm = HSM()
+
+    try:
+        hsm.login(HAL_USER_WHEEL, args.pin or getpass.getpass("Wheel PIN: "))
+
+    except HALError as e:
+        sys.exit("Couldn't log into HSM: {}".format(e))
+
+    try:
+        sys.exit(args.func(args, hsm))
+
+    finally:
+        hsm.logout()
+
+
+def defcmd(subparsers, func):
+    assert func.__name__.startswith("cmd_")
+    subparser = subparsers.add_parser(func.__name__[4:],
+                                      description = func.__doc__,
+                                      help = func.__doc__.strip().splitlines()[0])
+    subparser.set_defaults(func = func)
+    return subparser
+
+
+def b64(bytes):
+    return bytes.encode("base64").splitlines()
+
+def b64join(lines):
+    return "".join(lines).decode("base64")
+
+
+def cmd_setup(args, hsm):
+    """
+    Set up backup HSM for subsequent import.
+    Generates an RSA keypair with appropriate usage settings
+    to use as a key-encryption-key-encryption-key (KEKEK), and
+    writes the KEKEK to a JSON file for transfer to primary HSM.
+    """
+
+    result = {}
+
+    uuids = []
+    if args.uuid:
+        uuids.append(args.uuid)
+    elif not args.new:
+        uuids.extend(hsm.pkey_match(
+            type  = HAL_KEY_TYPE_RSA_PRIVATE,
+            flags = HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT | HAL_KEY_FLAG_TOKEN))
+
+    for uuid in uuids:
+        with hsm.pkey_open(uuid, HAL_KEY_FLAG_TOKEN) as kekek:
+            if kekek.key_type != HAL_KEY_TYPE_RSA_PRIVATE:
+                sys.stderr.write("Key {} is not an RSA private key\n".format(uuid))
+            elif (kekek.key_flags & HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT) == 0:
+                sys.stderr.write("Key {} does not allow key encipherment\n".format(uuid))
+            else:
+                result.update(kekek_uuid   = str(kekek.uuid),
+                              kekek_pubkey = b64(kekek.public_key))
+                break
+
+    if not result and not args.uuid:
+        with hsm.pkey_generate_rsa(
+                keylen = args.keylen,
+                flags = HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT | HAL_KEY_FLAG_TOKEN) as kekek:
+            result.update(kekek_uuid   = str(kekek.uuid),
+                          kekek_pubkey = b64(kekek.public_key))
+    if not result:
+        sys.exit("Could not find suitable KEKEK")
+
+    result.update(comment = "KEKEK public key")
+    json.dump(result, args.output, indent = 4, sort_keys = True)
+
+
+def key_flag_names(flags):
+    names = dict(digitalsignature = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE,
+                 keyencipherment  = HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT,
+                 dataencipherment = HAL_KEY_FLAG_USAGE_DATAENCIPHERMENT,
+                 token            = HAL_KEY_FLAG_TOKEN,
+                 public           = HAL_KEY_FLAG_PUBLIC,
+                 exportable       = HAL_KEY_FLAG_EXPORTABLE)
+    return ", ".join(sorted(k for k, v in names.iteritems() if (flags & v) != 0))
+
+
+def cmd_export(args, hsm):
+    """
+    Export encrypted keys from primary HSM.
+    Takes a JSON file containing KEKEK (generated by running this
+    script's "setup" command against the backup HSM), installs that
+    key on the primary HSM, and backs up keys encrypted to the KEKEK
+    by writing them to another JSON file for transfer to the backup HSM.
+    """
+
+    db = json.load(args.input)
+
+    result = []
+
+    kekek = None
+    try:
+        kekek = hsm.pkey_load(der   = b64join(db["kekek_pubkey"]),
+                              flags = HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT)
+
+        # What we *should* do here is a single .pkey_match() loop
+        # matching exactly the keys we want, but the current semantics
+        # of .pkey_match() are a bit confused.  While that yak is
+        # waiting for its shave, we do this the dumb way by iterating
+        # over all keys then skipping the ones we don't want.
+
+        for flags in (0, HAL_KEY_FLAG_TOKEN):
+            for uuid in hsm.pkey_match(flags = flags):
+                with hsm.pkey_open(uuid, flags) as pkey:
+                    if (pkey.key_flags & HAL_KEY_FLAG_EXPORTABLE) == 0:
+                        continue
+                    if pkey.key_type in (HAL_KEY_TYPE_RSA_PRIVATE, HAL_KEY_TYPE_EC_PRIVATE):
+                        pkcs8, kek = kekek.export_pkey(pkey)
+                        result.append(dict(
+                            comment = "Encrypted private key",
+                            pkcs8   = b64(pkcs8),
+                            kek     = b64(kek),
+                            uuid    = str(pkey.uuid),
+                            flags   = pkey.key_flags))
+                    elif pkey.key_type in (HAL_KEY_TYPE_RSA_PUBLIC, HAL_KEY_TYPE_EC_PUBLIC):
+                        result.append(dict(
+                            comment = "Public key",
+                            spki    = b64(pkey.public_key),
+                            uuid    = str(pkey.uuid),
+                            flags   = pkey.key_flags))
+    finally:
+        if kekek is not None:
+            kekek.delete()
+
+    db.update(comment = "Cryptech Alpha encrypted key backup",
+              keys    = result)
+    json.dump(db, args.output, indent = 4, sort_keys = True)
+
+
+def cmd_import(args, hsm):
+    """
+    Import encrypted keys into backup HSM.
+    Takes a JSON file containing a key backup (generated by running
+    this script's "export" command against the primary HSM) and imports
+    keys into the backup HSM.
+    """
+
+    db = json.load(args.input)
+    with hsm.pkey_open(uuid.UUID(db["kekek_uuid"]).bytes, HAL_KEY_FLAG_TOKEN) as kekek:
+        for k in db["keys"]:
+            pkcs8 = b64join(k.get("pkcs8", ""))
+            spki  = b64join(k.get("spki",  ""))
+            kek   = b64join(k.get("kek",   ""))
+            flags =         k.get("flags",  0)
+            if pkcs8 and kek:
+                with kekek.import_pkey(pkcs8 = pkcs8, kek = kek, flags = flags) as pkey:
+                    print "Imported {} as {}".format(k["uuid"], pkey.uuid)
+            elif spki:
+                with hsm.pkey_load(der = spki, flags = flags) as pkey:
+                    print "Loaded {} as {}".format(k["uuid"], pkey.uuid)
+
+
+if __name__ == "__main__":
+    main()
