@@ -454,10 +454,9 @@ static hal_error_t pkey_remote_load(const hal_client_handle_t client,
 static hal_error_t pkey_remote_open(const hal_client_handle_t client,
                                     const hal_session_handle_t session,
                                     hal_pkey_handle_t *pkey,
-                                    const hal_uuid_t * const name,
-                                    const hal_key_flags_t flags)
+                                    const hal_uuid_t * const name)
 {
-  uint8_t outbuf[nargs(5) + pad(sizeof(name->uuid))], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t outbuf[nargs(4) + pad(sizeof(name->uuid))], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
   uint8_t inbuf[nargs(4)];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   hal_error_t rpc_ret;
@@ -466,7 +465,6 @@ static hal_error_t pkey_remote_open(const hal_client_handle_t client,
   check(hal_xdr_encode_int(&optr, olimit, client.handle));
   check(hal_xdr_encode_int(&optr, olimit, session.handle));
   check(hal_xdr_encode_buffer(&optr, olimit, name->uuid, sizeof(name->uuid)));
-  check(hal_xdr_encode_int(&optr, olimit, flags));
   check(hal_rpc_send(outbuf, optr - outbuf));
 
   check(read_matching_packet(RPC_FUNC_PKEY_OPEN, inbuf, sizeof(inbuf), &iptr, &ilimit));
@@ -772,9 +770,11 @@ static hal_error_t pkey_remote_match(const hal_client_handle_t client,
                                      const hal_session_handle_t session,
                                      const hal_key_type_t type,
                                      const hal_curve_name_t curve,
+                                     const hal_key_flags_t mask,
                                      const hal_key_flags_t flags,
                                      const hal_pkey_attribute_t *attributes,
                                      const unsigned attributes_len,
+                                     unsigned *state,
                                      hal_uuid_t *result,
                                      unsigned *result_len,
                                      const unsigned result_max,
@@ -785,9 +785,9 @@ static hal_error_t pkey_remote_match(const hal_client_handle_t client,
     for (int i = 0; i < attributes_len; i++)
       attributes_buffer_len += pad(attributes[i].length);
 
-  uint8_t outbuf[nargs(9 + attributes_len * 2) + attributes_buffer_len + pad(sizeof(hal_uuid_t))];
+  uint8_t outbuf[nargs(11 + attributes_len * 2) + attributes_buffer_len + pad(sizeof(hal_uuid_t))];
   uint8_t *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(4) + pad(result_max * sizeof(hal_uuid_t))];
+  uint8_t inbuf[nargs(5) + pad(result_max * sizeof(hal_uuid_t))];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   hal_error_t rpc_ret;
 
@@ -796,6 +796,7 @@ static hal_error_t pkey_remote_match(const hal_client_handle_t client,
   check(hal_xdr_encode_int(&optr, olimit, session.handle));
   check(hal_xdr_encode_int(&optr, olimit, type));
   check(hal_xdr_encode_int(&optr, olimit, curve));
+  check(hal_xdr_encode_int(&optr, olimit, mask));
   check(hal_xdr_encode_int(&optr, olimit, flags));
   check(hal_xdr_encode_int(&optr, olimit, attributes_len));
   if (attributes != NULL) {
@@ -804,6 +805,7 @@ static hal_error_t pkey_remote_match(const hal_client_handle_t client,
       check(hal_xdr_encode_buffer(&optr, olimit, attributes[i].value, attributes[i].length));
     }
   }
+  check(hal_xdr_encode_int(&optr, olimit, *state));
   check(hal_xdr_encode_int(&optr, olimit, result_max));
   check(hal_xdr_encode_buffer(&optr, olimit, previous_uuid->uuid, sizeof(previous_uuid->uuid)));
   check(hal_rpc_send(outbuf, optr - outbuf));
@@ -812,8 +814,10 @@ static hal_error_t pkey_remote_match(const hal_client_handle_t client,
 
   check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
   if (rpc_ret == HAL_OK) {
-    uint32_t array_len;
+    uint32_t array_len, ustate;
     *result_len = 0;
+    check(hal_xdr_decode_int(&iptr, ilimit, &ustate));
+    *state = ustate;
     check(hal_xdr_decode_int(&iptr, ilimit, &array_len));
     for (int i = 0; i < array_len; ++i) {
       uint32_t uuid_len = sizeof(result[i].uuid);

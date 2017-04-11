@@ -1239,6 +1239,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
                             const hal_session_handle_t session,
                             const hal_key_type_t type,
                             const hal_curve_name_t curve,
+                            const hal_key_flags_t mask,
                             const hal_key_flags_t flags,
                             const hal_pkey_attribute_t *attributes,
                             const unsigned attributes_len,
@@ -1284,7 +1285,8 @@ static hal_error_t ks_match(hal_ks_t *ks,
     if (db.ksi.names[b].chunk == 0) {
       memset(need_attr, 1, sizeof(need_attr));
       possible = ((type == HAL_KEY_TYPE_NONE || type  == block->key.type) &&
-                  (curve == HAL_CURVE_NONE   || curve == block->key.curve));
+                  (curve == HAL_CURVE_NONE   || curve == block->key.curve) &&
+                  ((flags ^ block->key.flags) & mask) == 0);
     }
 
     if (!possible)

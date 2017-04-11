@@ -358,7 +358,7 @@ extern hal_error_t hal_aes_keywrap(hal_core_t *core,
 extern hal_error_t hal_aes_keyunwrap(hal_core_t *core,
                                      const uint8_t *kek, const size_t kek_length,
                                      const uint8_t *ciphertext, const size_t ciphertext_length,
-                                     unsigned char *plaintext, size_t *plaintext_length);
+                                     uint8_t *plaintext, size_t *plaintext_length);
 
 extern size_t hal_aes_keywrap_ciphertext_length(const size_t plaintext_length);
 
@@ -756,8 +756,7 @@ extern hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
 extern hal_error_t hal_rpc_pkey_open(const hal_client_handle_t client,
                                      const hal_session_handle_t session,
                                      hal_pkey_handle_t *pkey,
-                                     const hal_uuid_t * const name,
-                                     const hal_key_flags_t flags);
+                                     const hal_uuid_t * const name);
 
 extern hal_error_t hal_rpc_pkey_generate_rsa(const hal_client_handle_t client,
                                              const hal_session_handle_t session,
@@ -806,9 +805,11 @@ extern hal_error_t hal_rpc_pkey_match(const hal_client_handle_t client,
                                       const hal_session_handle_t session,
                                       const hal_key_type_t type,
                                       const hal_curve_name_t curve,
+                                      const hal_key_flags_t mask,
                                       const hal_key_flags_t flags,
                                       const hal_pkey_attribute_t *attributes,
                                       const unsigned attributes_len,
+                                      unsigned *state,
                                       hal_uuid_t *result,
                                       unsigned *result_len,
                                       const unsigned result_max,

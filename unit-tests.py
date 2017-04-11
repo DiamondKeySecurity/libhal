@@ -550,43 +550,54 @@ class TestPKeyMatch(TestCaseLoggedIn):
     Tests involving PKey list and match functions.
     """
 
+    @staticmethod
+    def key_flag_names(flags):
+        names = dict(digitalsignature = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE,
+                     keyencipherment  = HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT,
+                     dataencipherment = HAL_KEY_FLAG_USAGE_DATAENCIPHERMENT,
+                     token            = HAL_KEY_FLAG_TOKEN,
+                     public           = HAL_KEY_FLAG_PUBLIC,
+                     exportable       = HAL_KEY_FLAG_EXPORTABLE)
+        return ", ".join(sorted(k for k, v in names.iteritems() if (flags & v) != 0))
+
     def load_keys(self, flags):
         uuids = set()
         for obj in PreloadedKey.db.itervalues():
             with hsm.pkey_load(obj.der, flags) as k:
-                self.addCleanup(lambda uuid: hsm.pkey_open(uuid, flags = flags).delete(), k.uuid)
+                self.addCleanup(lambda uuid: hsm.pkey_open(uuid).delete(), k.uuid)
                 uuids.add(k.uuid)
+                #print k.uuid, k.key_type, k.key_curve, self.key_flag_names(k.key_flags)
                 k.set_attributes(dict((i, a) for i, a in enumerate((str(obj.keytype), str(obj.fn2)))))
         return uuids
 
-    def match(self, flags, **kwargs):
-        uuids = kwargs.pop("uuids", None)
-        kwargs.update(flags = flags)
+    def match(self, uuids, **kwargs):
         n = 0
         for uuid in hsm.pkey_match(**kwargs):
-            if uuids is None or uuid in uuids:
-                with hsm.pkey_open(uuid, flags) as k:
+            if uuid in uuids:
+                with hsm.pkey_open(uuid) as k:
                     n += 1
                     yield n, k
 
-    def ks_match(self, flags):
+    def ks_match(self, mask, flags):
         tags  = []
         uuids = set()
         for i in xrange(2):
-            uuids |= self.load_keys(flags)
+            uuids |= self.load_keys(flags if mask else HAL_KEY_FLAG_TOKEN * i)
             tags.extend(PreloadedKey.db)
         self.assertEqual(len(tags), len(uuids))
 
-        self.assertEqual(uuids, set(k.uuid for n, k in self.match(flags = flags, uuids = uuids)))
+        self.assertEqual(uuids, set(k.uuid for n, k in self.match(mask  = mask,
+                                                                  flags = flags,
+                                                                  uuids = uuids)))
 
         for keytype in set(HALKeyType.index.itervalues()) - {HAL_KEY_TYPE_NONE}:
-            for n, k in self.match(flags = flags, uuids = uuids, type = keytype):
+            for n, k in self.match(mask = mask, flags = flags, uuids = uuids, type = keytype):
                 self.assertEqual(k.key_type, keytype)
                 self.assertEqual(k.get_attributes({0}).pop(0), str(keytype))
             self.assertEqual(n, sum(1 for t1, t2 in tags if t1 == keytype))
 
         for curve in set(HALCurve.index.itervalues()) - {HAL_CURVE_NONE}:
-            for n, k in self.match(flags = flags, uuids = uuids, curve = curve):
+            for n, k in self.match(mask = mask, flags = flags, uuids = uuids, curve = curve):
                 self.assertEqual(k.key_curve, curve)
                 self.assertEqual(k.get_attributes({1}).pop(1), str(curve))
                 self.assertIn(k.key_type, (HAL_KEY_TYPE_EC_PUBLIC,
@@ -594,7 +605,7 @@ class TestPKeyMatch(TestCaseLoggedIn):
             self.assertEqual(n, sum(1 for t1, t2 in tags if t2 == curve))
 
         for keylen in set(kl for kt, kl in tags if not isinstance(kl, Enum)):
-            for n, k in self.match(flags = flags, uuids = uuids,
+            for n, k in self.match(mask = mask, flags = flags, uuids = uuids,
                                    attributes = {1 : str(keylen)}):
                 self.assertEqual(keylen, int(k.get_attributes({1}).pop(1)))
                 self.assertIn(k.key_type, (HAL_KEY_TYPE_RSA_PUBLIC,
@@ -602,17 +613,20 @@ class TestPKeyMatch(TestCaseLoggedIn):
             self.assertEqual(n, sum(1 for t1, t2 in tags
                                     if not isinstance(t2, Enum) and  t2 == keylen))
 
-        for n, k in self.match(flags = flags, uuids = uuids,
+        for n, k in self.match(mask = mask, flags = flags, uuids = uuids,
                                type = HAL_KEY_TYPE_RSA_PUBLIC, attributes = {1 : "2048"}):
             self.assertEqual(k.key_type, HAL_KEY_TYPE_RSA_PUBLIC)
         self.assertEqual(n, sum(1 for t1, t2 in tags
                                 if t1 == HAL_KEY_TYPE_RSA_PUBLIC and t2 == 2048))
 
     def test_ks_match_token(self):
-        self.ks_match(HAL_KEY_FLAG_TOKEN)
+        self.ks_match(mask = HAL_KEY_FLAG_TOKEN, flags = HAL_KEY_FLAG_TOKEN)
 
     def test_ks_match_volatile(self):
-        self.ks_match(0)
+        self.ks_match(mask = HAL_KEY_FLAG_TOKEN, flags = 0)
+
+    def test_ks_match_all(self):
+        self.ks_match(mask = 0, flags = 0)
 
 
 class TestPKeyAttribute(TestCaseLoggedIn):
@@ -626,7 +640,7 @@ class TestPKeyAttribute(TestCaseLoggedIn):
             for obj in PreloadedKey.db.itervalues():
                 with hsm.pkey_load(obj.der, flags) as k:
                     pinwheel()
-                    self.addCleanup(lambda uuid: hsm.pkey_open(uuid, flags = flags).delete(), k.uuid)
+                    self.addCleanup(lambda uuid: hsm.pkey_open(uuid).delete(), k.uuid)
                     k.set_attributes(dict((j, "Attribute {}{}".format(j, "*" * n_fill))
                                           for j in xrange(n_attrs)))
                     pinwheel()

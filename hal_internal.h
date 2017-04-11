@@ -199,8 +199,7 @@ typedef struct {
   hal_error_t  (*open)(const hal_client_handle_t client,
                        const hal_session_handle_t session,
                        hal_pkey_handle_t *pkey,
-                       const hal_uuid_t * const name,
-                       const hal_key_flags_t flags);
+                       const hal_uuid_t * const name);
 
   hal_error_t  (*generate_rsa)(const hal_client_handle_t client,
                                const hal_session_handle_t session,
@@ -249,9 +248,11 @@ typedef struct {
                        const hal_session_handle_t session,
                        const hal_key_type_t type,
                        const hal_curve_name_t curve,
+                       const hal_key_flags_t mask,
                        const hal_key_flags_t flags,
                        const hal_pkey_attribute_t *attributes,
                        const unsigned attributes_len,
+                       unsigned *state,
                        hal_uuid_t *result,
                        unsigned *result_len,
                        const unsigned result_max,
@@ -485,6 +486,7 @@ struct hal_ks_driver {
                        const hal_session_handle_t session,
                        const hal_key_type_t type,
                        const hal_curve_name_t curve,
+                       const hal_key_flags_t mask,
                        const hal_key_flags_t flags,
                        const hal_pkey_attribute_t *attributes,
                        const unsigned attributes_len,
@@ -614,6 +616,7 @@ static inline hal_error_t hal_ks_match(hal_ks_t *ks,
                                        const hal_session_handle_t session,
                                        const hal_key_type_t type,
                                        const hal_curve_name_t curve,
+                                       const hal_key_flags_t mask,
                                        const hal_key_flags_t flags,
                                        const hal_pkey_attribute_t *attributes,
                                        const unsigned attributes_len,
@@ -628,7 +631,7 @@ static inline hal_error_t hal_ks_match(hal_ks_t *ks,
   if (ks->driver->match == NULL)
     return HAL_ERROR_NOT_IMPLEMENTED;
 
-  return ks->driver->match(ks, client, session, type, curve, flags, attributes, attributes_len,
+  return ks->driver->match(ks, client, session, type, curve, mask, flags, attributes, attributes_len,
                            result, result_len, result_max, previous_uuid);
 }
 

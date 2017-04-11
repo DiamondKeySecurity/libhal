@@ -230,12 +230,11 @@ hal_error_t hal_rpc_pkey_load(const hal_client_handle_t client,
 hal_error_t hal_rpc_pkey_open(const hal_client_handle_t client,
                               const hal_session_handle_t session,
                               hal_pkey_handle_t *pkey,
-                              const hal_uuid_t * const name,
-                              const hal_key_flags_t flags)
+                              const hal_uuid_t * const name)
 {
   if (pkey == NULL || name == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
-  return hal_rpc_pkey_dispatch->open(client, session, pkey, name, flags);
+  return hal_rpc_pkey_dispatch->open(client, session, pkey, name);
 }
 
 hal_error_t hal_rpc_pkey_generate_rsa(const hal_client_handle_t client,
@@ -338,16 +337,18 @@ hal_error_t hal_rpc_pkey_match(const hal_client_handle_t client,
                                const hal_session_handle_t session,
                                const hal_key_type_t type,
                                const hal_curve_name_t curve,
+                               const hal_key_flags_t mask,
                                const hal_key_flags_t flags,
                                const hal_pkey_attribute_t *attributes,
                                const unsigned attributes_len,
+                               unsigned *state,
                                hal_uuid_t *result,
                                unsigned *result_len,
                                const unsigned result_max,
                                const hal_uuid_t * const previous_uuid)
 {
   if ((attributes == NULL && attributes_len > 0) || previous_uuid == NULL ||
-      result == NULL || result_len == NULL || result_max == 0)
+      state == NULL || result == NULL || result_len == NULL || result_max == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   if (attributes != NULL)
@@ -355,9 +356,9 @@ hal_error_t hal_rpc_pkey_match(const hal_client_handle_t client,
       if (attributes[i].value == NULL)
         return HAL_ERROR_BAD_ARGUMENTS;
 
-  return hal_rpc_pkey_dispatch->match(client, session, type, curve, flags,
+  return hal_rpc_pkey_dispatch->match(client, session, type, curve, mask, flags,
                                       attributes, attributes_len,
-                                      result, result_len, result_max, previous_uuid);
+                                      state, result, result_len, result_max, previous_uuid);
 }
 
 hal_error_t hal_rpc_pkey_set_attributes(const hal_pkey_handle_t pkey,

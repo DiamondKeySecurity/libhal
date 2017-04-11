@@ -1315,7 +1315,7 @@ hal_error_t hal_ecdsa_private_key_to_der(const hal_ecdsa_key_t * const key,
                                                   NULL, hlen + vlen,
                                                   NULL, der_len, der_max)) != HAL_OK)
     return err;
-                                                  
+
   if (der == NULL)
     return HAL_OK;
 

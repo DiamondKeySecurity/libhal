@@ -124,7 +124,10 @@ static inline int key_visible_to_session(const ks_t * const ksv,
                                          const hal_session_handle_t session,
                                          const ks_key_t * const k)
 {
-  return !ksv->per_session || client.handle == HAL_HANDLE_NONE || k->client.handle  == client.handle;
+  return (!ksv->per_session ||
+          client.handle == HAL_HANDLE_NONE ||
+          k->client.handle  == client.handle ||
+          hal_rpc_is_logged_in(client, HAL_USER_WHEEL) == HAL_OK);
 }
 
 static inline void *gnaw(uint8_t **mem, size_t *len, const size_t size)
@@ -385,6 +388,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
                             hal_session_handle_t session,
                             const hal_key_type_t type,
                             const hal_curve_name_t curve,
+                            const hal_key_flags_t mask,
                             const hal_key_flags_t flags,
                             const hal_pkey_attribute_t *attributes,
                             const unsigned attributes_len,
@@ -427,6 +431,9 @@ static hal_error_t ks_match(hal_ks_t *ks,
       continue;
 
     if (curve != HAL_CURVE_NONE && curve != ksv->db->keys[b].curve)
+      continue;
+
+    if (((flags ^ ksv->db->keys[b].flags) & mask) != 0)
       continue;
 
     if (!key_visible_to_session(ksv, client, session, &ksv->db->keys[b]))

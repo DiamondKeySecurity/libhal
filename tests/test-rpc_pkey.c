@@ -98,25 +98,27 @@ static int test_attributes(const hal_pkey_handle_t pkey,
     const hal_client_handle_t client = {HAL_HANDLE_NONE};
     const hal_session_handle_t session = {HAL_HANDLE_NONE};
     hal_uuid_t result[10], previous_uuid = {{0}};
-    unsigned result_len;
+    unsigned result_len, state;
 
-    if ((err = hal_rpc_pkey_match(client, session, HAL_KEY_TYPE_NONE, HAL_CURVE_NONE, flags, NULL, 0,
-                                  result, &result_len, sizeof(result)/sizeof(*result),
+    state = 0;
+    if ((err = hal_rpc_pkey_match(client, session, HAL_KEY_TYPE_NONE, HAL_CURVE_NONE, 0, 0, NULL, 0,
+                                  &state, result, &result_len, sizeof(result)/sizeof(*result),
                                   &previous_uuid)) != HAL_OK)
       lose("Unrestricted match() failed: %s\n", hal_error_string(err));
 
     if (result_len == 0)
       lose("Unrestricted match found no results\n");
 
+    state = 0;
     for (const size_t *size = sizes; *size; size++) {
       uint8_t buf[*size];
       memset(buf, 0x55, sizeof(buf));
       snprintf((char *) buf, sizeof(buf), format, (unsigned long) *size);
       hal_pkey_attribute_t attribute[1] = {{ *size, sizeof(buf), buf }};
 
-      if ((err = hal_rpc_pkey_match(client, session, HAL_KEY_TYPE_NONE, HAL_CURVE_NONE, flags,
+      if ((err = hal_rpc_pkey_match(client, session, HAL_KEY_TYPE_NONE, HAL_CURVE_NONE, 0, 0,
                                     attribute, sizeof(attribute)/sizeof(*attribute),
-                                    result, &result_len, sizeof(result)/sizeof(*result),
+                                    &state, result, &result_len, sizeof(result)/sizeof(*result),
                                     &previous_uuid)) != HAL_OK)
         lose("Restricted match() for attribute %lu failed: %s\n",
              (unsigned long) *size, hal_error_string(err));

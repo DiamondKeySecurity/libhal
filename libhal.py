@@ -420,7 +420,8 @@ class HSM(object):
         if status != 0:
             raise HALError.table[status]()
 
-    def __init__(self, sockname = os.getenv("CRYPTECH_RPC_CLIENT_SOCKET_NAME", "/tmp/.cryptech_muxd.rpc")):
+    def __init__(self, sockname = os.getenv("CRYPTECH_RPC_CLIENT_SOCKET_NAME",
+                                            "/tmp/.cryptech_muxd.rpc")):
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.socket.connect(sockname)
         self.sockfile = self.socket.makefile("rb")
@@ -561,8 +562,8 @@ class HSM(object):
             logger.debug("Loaded pkey %s", pkey.uuid)
             return pkey
 
-    def pkey_open(self, uuid, flags = 0, client = 0, session = 0):
-        with self.rpc(RPC_FUNC_PKEY_OPEN, session, uuid, flags, client = client) as r:
+    def pkey_open(self, uuid, client = 0, session = 0):
+        with self.rpc(RPC_FUNC_PKEY_OPEN, session, uuid, client = client) as r:
             pkey = PKey(self, r.unpack_uint(), uuid)
             logger.debug("Opened pkey %s", pkey.uuid)
             return pkey
@@ -631,13 +632,15 @@ class HSM(object):
         with self.rpc(RPC_FUNC_PKEY_VERIFY, pkey, hash, data, signature):
             return
 
-    def pkey_match(self, type = 0, curve = 0, flags = 0, attributes = {},
-                   length = 64, client = 0, session = 0):
+    def pkey_match(self, type = 0, curve = 0, mask = 0, flags = 0,
+                   attributes = {}, length = 64, client = 0, session = 0):
         u = UUID(int = 0)
         n = length
+        s = 0
         while n == length:
-            with self.rpc(RPC_FUNC_PKEY_MATCH, session, type, curve, flags,
-                          attributes, length, u, client = client) as r:
+            with self.rpc(RPC_FUNC_PKEY_MATCH, session, type, curve, mask, flags,
+                          attributes, s, length, u, client = client) as r:
+                s = r.unpack_uint()
                 n = r.unpack_uint()
                 for i in xrange(n):
                     u = UUID(bytes = r.unpack_bytes())

@@ -8,22 +8,10 @@
 #
 #   Load KEKEK public   <----------------  Export KEKEK public
 #
-#                       {
-#                               "kekek-uuid":   "[UUID]",
-#                               "kekek":        "[Base64]"
-#                       }
-#
 #       hal_rpc_pkey_load()
 #       hal_rpc_pkey_export()
 #
-#   Export PKCS #8 and KEK   ---------->   Load PKCS #8 and KEK, import key:
-#
-#                       {
-#                               "kekek-uuid":   "[UUID]",
-#                               "pkey":         "[Base64]",
-#                               "kek":          "[Base64]"
-#                       }
-#
+#   Export PKCS #8 and KEK   ---------->   Load PKCS #8 and KEK, import key
 #
 #                                               hal_rpc_pkey_import()
 
@@ -125,10 +113,11 @@ def cmd_setup(args, hsm):
     elif not args.new:
         uuids.extend(hsm.pkey_match(
             type  = HAL_KEY_TYPE_RSA_PRIVATE,
+            mask  = HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT | HAL_KEY_FLAG_TOKEN,
             flags = HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT | HAL_KEY_FLAG_TOKEN))
 
     for uuid in uuids:
-        with hsm.pkey_open(uuid, HAL_KEY_FLAG_TOKEN) as kekek:
+        with hsm.pkey_open(uuid) as kekek:
             if kekek.key_type != HAL_KEY_TYPE_RSA_PRIVATE:
                 sys.stderr.write("Key {} is not an RSA private key\n".format(uuid))
             elif (kekek.key_flags & HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT) == 0:
@@ -179,31 +168,26 @@ def cmd_export(args, hsm):
         kekek = hsm.pkey_load(der   = b64join(db["kekek_pubkey"]),
                               flags = HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT)
 
-        # What we *should* do here is a single .pkey_match() loop
-        # matching exactly the keys we want, but the current semantics
-        # of .pkey_match() are a bit confused.  While that yak is
-        # waiting for its shave, we do this the dumb way by iterating
-        # over all keys then skipping the ones we don't want.
+        for uuid in hsm.pkey_match(mask  = HAL_KEY_FLAG_EXPORTABLE,
+                                   flags = HAL_KEY_FLAG_EXPORTABLE):
+            with hsm.pkey_open(uuid) as pkey:
 
-        for flags in (0, HAL_KEY_FLAG_TOKEN):
-            for uuid in hsm.pkey_match(flags = flags):
-                with hsm.pkey_open(uuid, flags) as pkey:
-                    if (pkey.key_flags & HAL_KEY_FLAG_EXPORTABLE) == 0:
-                        continue
-                    if pkey.key_type in (HAL_KEY_TYPE_RSA_PRIVATE, HAL_KEY_TYPE_EC_PRIVATE):
-                        pkcs8, kek = kekek.export_pkey(pkey)
-                        result.append(dict(
-                            comment = "Encrypted private key",
-                            pkcs8   = b64(pkcs8),
-                            kek     = b64(kek),
-                            uuid    = str(pkey.uuid),
-                            flags   = pkey.key_flags))
-                    elif pkey.key_type in (HAL_KEY_TYPE_RSA_PUBLIC, HAL_KEY_TYPE_EC_PUBLIC):
-                        result.append(dict(
-                            comment = "Public key",
-                            spki    = b64(pkey.public_key),
-                            uuid    = str(pkey.uuid),
-                            flags   = pkey.key_flags))
+                if pkey.key_type in (HAL_KEY_TYPE_RSA_PRIVATE, HAL_KEY_TYPE_EC_PRIVATE):
+                    pkcs8, kek = kekek.export_pkey(pkey)
+                    result.append(dict(
+                        comment = "Encrypted private key",
+                        pkcs8   = b64(pkcs8),
+                        kek     = b64(kek),
+                        uuid    = str(pkey.uuid),
+                        flags   = pkey.key_flags))
+
+                elif pkey.key_type in (HAL_KEY_TYPE_RSA_PUBLIC, HAL_KEY_TYPE_EC_PUBLIC):
+                    result.append(dict(
+                        comment = "Public key",
+                        spki    = b64(pkey.public_key),
+                        uuid    = str(pkey.uuid),
+                        flags   = pkey.key_flags))
+
     finally:
         if kekek is not None:
             kekek.delete()
@@ -222,7 +206,7 @@ def cmd_import(args, hsm):
     """
 
     db = json.load(args.input)
-    with hsm.pkey_open(uuid.UUID(db["kekek_uuid"]).bytes, HAL_KEY_FLAG_TOKEN) as kekek:
+    with hsm.pkey_open(uuid.UUID(db["kekek_uuid"]).bytes) as kekek:
         for k in db["keys"]:
             pkcs8 = b64join(k.get("pkcs8", ""))
             spki  = b64join(k.get("spki",  ""))
