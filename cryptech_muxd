@@ -164,10 +164,13 @@ class RPCIOStream(SerialIOStream):
                     q.put_nowait(None)
                 return
             logger.debug("RPC recv: %s", ":".join("{:02x}".format(ord(c)) for c in reply))
+            if reply == SLIP_END:
+                continue
             try:
                 handle = client_handle_get(slip_decode(reply))
                 queue  = self.queues[handle]
             except:
+                logger.debug("RPC skipping bad packet")
                 continue
             logger.debug("RPC queue put: handle 0x%x, qsize %s, maxsize %s",
                          handle, queue.qsize(), queue.maxsize)
