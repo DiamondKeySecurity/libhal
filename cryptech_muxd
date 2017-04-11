@@ -166,11 +166,12 @@ class RPCIOStream(SerialIOStream):
             logger.debug("RPC recv: %s", ":".join("{:02x}".format(ord(c)) for c in reply))
             try:
                 handle = client_handle_get(slip_decode(reply))
+                queue  = self.queues[handle]
             except:
                 continue
             logger.debug("RPC queue put: handle 0x%x, qsize %s, maxsize %s",
-                         handle, self.queues[handle].qsize(), self.queues[handle].maxsize)
-            self.queues[handle].put_nowait(reply)
+                         handle, queue.qsize(), queue.maxsize)
+            queue.put_nowait(reply)
 
 
 class QueuedStreamClosedError(tornado.iostream.StreamClosedError):
