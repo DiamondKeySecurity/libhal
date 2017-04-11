@@ -197,12 +197,15 @@ class TestPIN(TestCase):
                 self.assertRaises(HAL_ERROR_FORBIDDEN, hsm.is_logged_in, user2)
         hsm.logout()
 
+    @unittest.skipUnless(args.all_tests, "Slow")
     def test_login_wheel(self):
         self.login_logout(HAL_USER_WHEEL)
 
+    @unittest.skipUnless(args.all_tests, "Slow")
     def test_login_so(self):
         self.login_logout(HAL_USER_SO)
 
+    @unittest.skipUnless(args.all_tests, "Slow")
     def test_login_user(self):
         self.login_logout(HAL_USER_NORMAL)
 
