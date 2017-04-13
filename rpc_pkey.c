@@ -1026,8 +1026,7 @@ static inline hal_error_t match_one_keystore(const hal_ks_driver_t * const drive
 
   if ((err = hal_ks_match(ks, client, session, type, curve,
                           mask, flags, attributes, attributes_len,
-                          *result, &len, result_max - *result_len,
-                          previous_uuid)) != HAL_OK) {
+                          *result, &len, result_max, previous_uuid)) != HAL_OK) {
     (void) hal_ks_close(ks);
     return err;
   }
