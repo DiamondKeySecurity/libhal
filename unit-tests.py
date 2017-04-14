@@ -44,7 +44,7 @@ import sys
 
 from struct import pack, unpack
 
-from libhal import *
+from cryptech.libhal import *
 
 try:
     from Crypto.Util.number             import inverse

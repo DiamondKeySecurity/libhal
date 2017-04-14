@@ -22,7 +22,7 @@ import atexit
 import getpass
 import argparse
 
-from libhal import *
+from cryptech.libhal import *
 
 def main():
 
