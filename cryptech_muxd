@@ -217,9 +217,10 @@ class CTYIOStream(SerialIOStream):
     Tornado IOStream for a serial console channel.
     """
 
-    def __init__(self, device):
+    def __init__(self, device, console_log = None):
         super(CTYIOStream, self).__init__(device)
         self.attached_cty = None
+        self.console_log  = console_log
 
     @tornado.gen.coroutine
     def cty_output_loop(self):
@@ -231,6 +232,11 @@ class CTYIOStream(SerialIOStream):
                 if self.attached_cty is not None:
                     self.attached_cty.close()
                 return
+            try:
+                if self.console_log is not None:
+                    self.console_log.write(buffer)
+            except:
+                pass
             try:
                 if self.attached_cty is not None:
                     yield self.attached_cty.write(buffer)
@@ -359,6 +365,10 @@ def main():
     parser.add_argument("-l", "--log-file",
                         help = "log to file instead of stderr")
 
+    parser.add_argument("-L", "--console-log",
+                        type = argparse.FileType("w"),
+                        help = "log console output to file")
+
     parser.add_argument("-p", "--probe",
                         nargs = "*",
                         metavar = "DEVICE",
@@ -409,7 +419,7 @@ def main():
     if args.cty_device is None:
         logger.warn("No CTY device found")
     else:
-        cty_stream = CTYIOStream(device = args.cty_device)
+        cty_stream = CTYIOStream(device = args.cty_device, console_log = args.console_log)
         cty_server = CTYServer(cty_stream, args.cty_socket)
         futures.append(cty_stream.cty_output_loop())
 
