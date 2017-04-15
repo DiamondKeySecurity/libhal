@@ -97,7 +97,7 @@ endif
 # just "building this is harmless even if we don't use it."
 
 OBJ += errorstrings.o hash.o asn1.o ecdsa.o rsa.o xdr.o slip.o
-OBJ += rpc_api.o rpc_hash.o uuid.o rpc_pkcs1.o crc32.o locks.o
+OBJ += rpc_api.o rpc_hash.o uuid.o rpc_pkcs1.o crc32.o locks.o logging.o
 
 # Object files to build when we're on a platform with direct access
 # to our hardware (Verilog) cores.

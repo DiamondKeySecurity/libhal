@@ -99,6 +99,18 @@ extern void hal_ks_lock(void);
 extern void hal_ks_unlock(void);
 
 /*
+ * Logging.
+ */
+
+
+typedef enum {
+  HAL_LOG_DEBUG, HAL_LOG_INFO, HAL_LOG_WARN, HAL_LOG_ERROR, HAL_LOG_SILENT
+} hal_log_level_t;
+
+extern void hal_log_set_level(const hal_log_level_t level);
+extern void hal_log(const hal_log_level_t level, const char *format, ...);
+
+/*
  * Dispatch structures for RPC implementation.
  *
  * The breakdown of which functions go into which dispatch vectors is
