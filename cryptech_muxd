@@ -233,13 +233,13 @@ class CTYIOStream(SerialIOStream):
                     self.attached_cty.close()
                 return
             try:
+                futures = []
                 if self.console_log is not None:
-                    self.console_log.write(buffer)
-            except:
-                pass
-            try:
+                    futures.append(self.console_log.write(buffer))
                 if self.attached_cty is not None:
-                    yield self.attached_cty.write(buffer)
+                    futures.append(self.attached_cty.write(buffer))
+                if futures:
+                    yield futures
             except tornado.iostream.StreamClosedError:
                 pass
 
@@ -366,7 +366,7 @@ def main():
                         help = "log to file instead of stderr")
 
     parser.add_argument("-L", "--console-log",
-                        type = argparse.FileType("w"),
+                        type = argparse.FileType("a"),
                         help = "log console output to file")
 
     parser.add_argument("-p", "--probe",
@@ -407,6 +407,11 @@ def main():
     if args.probe is not None:
         yield ProbeIOStream.run_probes(args)
 
+    if args.console_log is not None:
+        console_log = tornado.iostream.PipeIOStream(args.console_log.fileno())
+    else:
+        console_log = None
+
     futures = []
 
     if args.rpc_device is None:
@@ -419,7 +424,7 @@ def main():
     if args.cty_device is None:
         logger.warn("No CTY device found")
     else:
-        cty_stream = CTYIOStream(device = args.cty_device, console_log = args.console_log)
+        cty_stream = CTYIOStream(device = args.cty_device, console_log = console_log)
         cty_server = CTYServer(cty_stream, args.cty_socket)
         futures.append(cty_stream.cty_output_loop())
 
