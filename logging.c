@@ -70,7 +70,7 @@ WEAK_FUNCTION void hal_log(const hal_log_level_t level, const char *format, ...)
 
   va_list ap;
   va_start(ap, format);
-  vfnprintf(stderr, format, ap);
+  vfprintf(stderr, format, ap);
   va_end(ap);
   fprintf(stderr, "\n");
 }
