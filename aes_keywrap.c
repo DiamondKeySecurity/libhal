@@ -4,7 +4,7 @@
  * Implementation of RFC 5649 over Cryptech AES core.
  *
  * Authors: Rob Austein
- * Copyright (c) 2015, NORDUnet A/S
+ * Copyright (c) 2015-2017, NORDUnet A/S
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -272,18 +272,24 @@ hal_error_t hal_aes_keyunwrap(hal_core_t * core,
     }
   }
 
-  if (Q[0] != 0xA6 || Q[1] != 0x59 || Q[2] != 0x59 || Q[3] != 0xA6)
-    return HAL_ERROR_KEYWRAP_BAD_MAGIC;
+  if (Q[0] != 0xA6 || Q[1] != 0x59 || Q[2] != 0x59 || Q[3] != 0xA6) {
+    err = HAL_ERROR_KEYWRAP_BAD_MAGIC;
+    goto out;
+  }
 
   m = (((((Q[4] << 8) + Q[5]) << 8) + Q[6]) << 8) + Q[7];
 
-  if (m <= 8 * (n - 1) || m > 8 * n)
-    return HAL_ERROR_KEYWRAP_BAD_LENGTH;
+  if (m <= 8 * (n - 1) || m > 8 * n) {
+    err = HAL_ERROR_KEYWRAP_BAD_LENGTH;
+    goto out;
+  }
 
   if (m % 8 != 0)
     for (i = m + 8; i < 8 * (n + 1); i++)
-      if (Q[i] != 0x00)
-        return HAL_ERROR_KEYWRAP_BAD_PADDING;
+      if (Q[i] != 0x00) {
+        err = HAL_ERROR_KEYWRAP_BAD_PADDING;
+        goto out;
+      }
 
   *Q_len = m;
 
