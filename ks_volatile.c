@@ -7,7 +7,7 @@
  *     to survive library exit, eg, for storing PKCS #11 session keys.
  *
  * Authors: Rob Austein
- * Copyright (c) 2015-2016, NORDUnet A/S All rights reserved.
+ * Copyright (c) 2015-2017, NORDUnet A/S All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -330,7 +330,6 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
 
     uint8_t kek[KEK_LENGTH];
     size_t kek_len, der_len_;
-    hal_error_t err;
 
     if (der_len == NULL)
       der_len = &der_len_;
