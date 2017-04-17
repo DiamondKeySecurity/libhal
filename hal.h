@@ -4,7 +4,7 @@
  * Memory map, access functions, and HAL for Cryptech cores.
  *
  * Authors: Joachim Strombergson, Paul Selkirk, Rob Austein
- * Copyright (c) 2015-2016, NORDUnet A/S All rights reserved.
+ * Copyright (c) 2015-2017, NORDUnet A/S All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -849,8 +849,6 @@ extern hal_error_t hal_rpc_server_close(void);
 
 extern hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
                                            uint8_t * const obuf, size_t * const olen);
-
-extern void hal_rpc_server_main(void);
 
 #endif /* _HAL_H_ */
 
