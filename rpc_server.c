@@ -3,7 +3,7 @@
  * ------------
  * Remote procedure call server-side private API implementation.
  *
- * Copyright (c) 2016, NORDUnet A/S All rights reserved.
+ * Copyright (c) 2016-2017, NORDUnet A/S All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -966,7 +966,13 @@ hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ile
     }
 
     if (handler)
-        ret = handler(&iptr, ilimit, &optr, olimit);
+        for (int i = 0; i < 3; ++i) {
+            ret = handler(&iptr, ilimit, &optr, olimit);
+            if (ret != HAL_ERROR_CORE_BUSY)
+                break;
+            iptr = ibuf + 4;
+            optr = obuf + 12;
+        }
     else
         ret = HAL_ERROR_RPC_BAD_FUNCTION;
 
