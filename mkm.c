@@ -201,7 +201,15 @@ hal_error_t hal_mkm_get_kek(uint8_t *kek,
 
 #if HAL_MKM_FLASH_BACKUP_KLUDGE
 
-  if (hal_mkm_flash_read(kek, len) == LIBHAL_OK) {
+  /*
+   * It turns out that, in every case where this function is called,
+   * we already hold the keystore lock, so attempting to grab it again
+   * would deadlock.  This almost never happens when the volatile MKM
+   * is set, but there's a race condition that might drop us here if
+   * hal_mkm_volatile_read() returns HAL_ERROR_CORE_BUSY.  Whee!
+   */
+
+  if (hal_mkm_flash_read_no_lock(kek, len) == LIBHAL_OK) {
     *kek_len = len;
     return LIBHAL_OK;
   }

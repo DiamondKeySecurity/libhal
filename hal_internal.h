@@ -421,6 +421,7 @@ extern hal_error_t hal_mkm_volatile_erase(const size_t len);
 /* #warning MKM flash backup kludge enabled.  Do NOT use this in production! */
 
 extern hal_error_t hal_mkm_flash_read(uint8_t *buf, const size_t len);
+extern hal_error_t hal_mkm_flash_read_no_lock(uint8_t *buf, const size_t len);
 extern hal_error_t hal_mkm_flash_write(const uint8_t * const buf, const size_t len);
 extern hal_error_t hal_mkm_flash_erase(const size_t len);
 
