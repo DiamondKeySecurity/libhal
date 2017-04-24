@@ -129,20 +129,18 @@ static inline hal_pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
 }
 
 /*
- * Clean up key state associated with a client.
+ * Clean up key state associated with a client when logging out.
  */
 
-hal_error_t hal_pkey_client_cleanup(const hal_client_handle_t client)
+hal_error_t hal_pkey_logout(const hal_client_handle_t client)
 {
   if (client.handle == HAL_HANDLE_NONE)
     return HAL_OK;
 
   hal_error_t err;
 
-  if ((err = hal_ks_client_cleanup(hal_ks_volatile_driver, client)) != HAL_OK)
-    return err;
-
-  if ((err = hal_ks_client_cleanup(hal_ks_flash_driver, client)) != HAL_OK)
+  if ((err = hal_ks_logout(hal_ks_volatile_driver, client)) != HAL_OK ||
+      (err = hal_ks_logout(hal_ks_flash_driver,    client)) != HAL_OK)
     return err;
 
   hal_critical_section_start();

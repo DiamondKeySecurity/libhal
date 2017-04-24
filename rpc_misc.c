@@ -133,7 +133,7 @@ static inline void clear_slot(client_slot_t *slot)
   if (slot == NULL)
     return;
 
-  hal_pkey_client_cleanup(slot->handle);
+  hal_pkey_logout(slot->handle);
 
   hal_critical_section_start();
 

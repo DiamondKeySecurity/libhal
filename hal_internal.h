@@ -428,10 +428,10 @@ extern hal_error_t hal_mkm_flash_erase(const size_t len);
 #endif
 
 /*
- * Clean up pkey stuff that's tied to a particular client.
+ * Clean up pkey stuff that's tied to a particular client on logout.
  */
 
-extern hal_error_t hal_pkey_client_cleanup(const hal_client_handle_t client);
+extern hal_error_t hal_pkey_logout(const hal_client_handle_t client);
 
 /*
  * Keystore API for use by the pkey implementation.
@@ -526,8 +526,8 @@ struct hal_ks_driver {
                                 uint8_t *attributes_buffer,
                                 const size_t attributes_buffer_len);
 
-  hal_error_t  (*client_cleanup)(hal_ks_t *ks,
-                                 const hal_client_handle_t client);
+  hal_error_t  (*logout)(hal_ks_t *ks,
+                         const hal_client_handle_t client);
 
 };
 
@@ -690,16 +690,16 @@ static inline hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
                                     attributes_buffer, attributes_buffer_len);
 }
 
-static inline hal_error_t hal_ks_client_cleanup(hal_ks_t *ks,
-                                                const hal_client_handle_t client)
+static inline hal_error_t hal_ks_logout(hal_ks_t *ks,
+                                        const hal_client_handle_t client)
 {
   if (ks == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if (ks->client_cleanup == NULL || client.handle == HAL_HANDLE_NONE)
+  if (ks->logout == NULL || client.handle == HAL_HANDLE_NONE)
     return HAL_OK;
 
-  return ks->driver->client_cleanup(ks, client);
+  return ks->driver->logout(ks, client);
 }
 
 /*
