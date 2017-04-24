@@ -614,6 +614,33 @@ static hal_error_t ks_get_attributes(hal_ks_t *ks,
   return err;
 }
 
+static void ks_client_cleanup(hal_ks_t *ks,
+                              hal_client_handle_t client)
+{
+  if (ks == NULL || client.handle = HAL_HANDLE_NONE)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  ks_t *ksv = ks_to_ksv(ks);
+  hal_error_t err = HAL_OK;
+
+  hal_ks_lock();
+
+  for (int i = 0; i < ksv->db->ksi.used; i++) {
+    unsigned b = ksv->db->ksi.index[i];
+    if (ksv->db->keys[b].client.handle == client.handle) {
+      int hint = i;
+      if ((err = hal_ks_index_delete(&ksv->db->ksi, &ksv->db->ksi.names[b].name, 0, NULL, &hint)) != HAL_OK)
+        goto done;
+      memset(&ksv->db->keys[b], 0, sizeof(ksv->db->keys[b]));
+      i--;
+    }
+  }
+
+ done:
+  hal_ks_unlock();
+  return err;
+}
+
 const hal_ks_driver_t hal_ks_volatile_driver[1] = {{
   .init                 = ks_volatile_init,
   .shutdown             = ks_volatile_shutdown,
@@ -624,7 +651,8 @@ const hal_ks_driver_t hal_ks_volatile_driver[1] = {{
   .delete               = ks_delete,
   .match                = ks_match,
   .set_attributes       = ks_set_attributes,
-  .get_attributes       = ks_get_attributes
+  .get_attributes       = ks_get_attributes,
+  .client_cleanup	= ks_client_cleanup
 }};
 
 #endif /* STATIC_KS_VOLATILE_SLOTS > 0 */

@@ -101,19 +101,45 @@ static client_slot_t client_handle[HAL_STATIC_CLIENT_STATE_BLOCKS];
  * them.  HAL_USER_NONE indicates an empty slot in the table.
  */
 
-static inline client_slot_t *alloc_slot(void)
+static inline client_slot_t *alloc_slot(const hal_client_handle_t client,
+                                        const hal_user_t user)
 {
   client_slot_t *slot = NULL;
   hal_critical_section_start();
 
 #if HAL_STATIC_CLIENT_STATE_BLOCKS > 0
+
+  for (int i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
+    if (client_handle[i].logged_in != HAL_USER_NONE && client_handle[i].handle.handle == handle.handle)
+      slot = &client_handle[i];
+
   for (int i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
     if (client_handle[i].logged_in == HAL_USER_NONE)
       slot = &client_handle[i];
+
 #endif
+
+  if (slot != NULL) {
+    slot->handle = client;
+    slot->logged_in = user;
+  }
 
   hal_critical_section_end();
   return slot;
+}
+
+static inline void clear_slot(client_slot_t *slot)
+{
+  if (slot == NULL)
+    return;
+
+  hal_pkey_client_cleanup(slot->handle);
+
+  hal_critical_section_start();
+
+  memset(slot, 0, sizeof(*slot));
+
+  hal_critical_section_end();
 }
 
 static inline client_slot_t *find_handle(const hal_client_handle_t handle)
@@ -158,13 +184,8 @@ static hal_error_t login(const hal_client_handle_t client,
   if (diff != 0)
     return HAL_ERROR_PIN_INCORRECT;
 
-  client_slot_t *slot = find_handle(client);
-
-  if (slot == NULL && (slot = alloc_slot()) == NULL)
+  if (alloc_slot(client, user) == NULL)
     return HAL_ERROR_NO_CLIENT_SLOTS_AVAILABLE;
-
-  slot->handle = client;
-  slot->logged_in = user;
 
   return HAL_OK;
 }
@@ -184,20 +205,38 @@ static hal_error_t is_logged_in(const hal_client_handle_t client,
 
 static hal_error_t logout(const hal_client_handle_t client)
 {
-  client_slot_t *slot = find_handle(client);
-
-  if (slot != NULL)
-    slot->logged_in = HAL_USER_NONE;
-
-  return HAL_OK;
+  return clear_slot(find_handle(client));
 }
 
 static hal_error_t logout_all(void)
 {
+  /*
+   * This is a bit inefficient, but it lets us keep the control
+   * structure simple.
+   */
+
+  client_slot_t *slot;
+  hal_error_t err;
+
+  do {
+    slot = NULL;
+
 #if HAL_STATIC_CLIENT_STATE_BLOCKS > 0
-  for (int i = 0; i < sizeof(client_handle)/sizeof(*client_handle); i++)
-    client_handle[i].logged_in = HAL_USER_NONE;
+
+    hal_critical_section_start();
+
+    for (int i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
+      if (client_handle[i].logged_in != HAL_USER_NONE)
+        slot = &client_handle[i];
+
+    hal_critical_section_end();
+
 #endif
+
+    if ((err = clear_slot(slot)) != HAL_OK)
+      return err;
+
+  } while (slot != NULL);
 
   return HAL_OK;
 }
