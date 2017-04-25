@@ -110,7 +110,8 @@ static inline client_slot_t *alloc_slot(const hal_client_handle_t client,
 #if HAL_STATIC_CLIENT_STATE_BLOCKS > 0
 
   for (int i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
-    if (client_handle[i].logged_in != HAL_USER_NONE && client_handle[i].handle.handle == handle.handle)
+    if (client_handle[i].logged_in != HAL_USER_NONE &&
+        client_handle[i].handle.handle == client.handle)
       slot = &client_handle[i];
 
   for (int i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
@@ -128,18 +129,23 @@ static inline client_slot_t *alloc_slot(const hal_client_handle_t client,
   return slot;
 }
 
-static inline void clear_slot(client_slot_t *slot)
+static inline hal_error_t clear_slot(client_slot_t *slot)
 {
   if (slot == NULL)
-    return;
+    return HAL_OK;
 
-  hal_pkey_logout(slot->handle);
+  hal_error_t err;
+
+  if ((err = hal_pkey_logout(slot->handle)) != HAL_OK)
+    return err;
 
   hal_critical_section_start();
 
   memset(slot, 0, sizeof(*slot));
 
   hal_critical_section_end();
+
+  return HAL_OK;
 }
 
 static inline client_slot_t *find_handle(const hal_client_handle_t handle)

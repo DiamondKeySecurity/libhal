@@ -138,9 +138,24 @@ hal_error_t hal_pkey_logout(const hal_client_handle_t client)
     return HAL_OK;
 
   hal_error_t err;
+  hal_ks_t *ks;
 
-  if ((err = hal_ks_logout(hal_ks_volatile_driver, client)) != HAL_OK ||
-      (err = hal_ks_logout(hal_ks_flash_driver,    client)) != HAL_OK)
+  if ((err = hal_ks_open(hal_ks_volatile_driver, &ks)) != HAL_OK)
+    return err;
+  if ((err = hal_ks_logout(ks, client)) == HAL_OK)
+    err = hal_ks_close(ks);
+  else
+    (void) hal_ks_close(ks);
+  if (err != HAL_OK)
+    return err;
+
+  if ((err = hal_ks_open(hal_ks_token_driver, &ks)) != HAL_OK)
+    return err;
+  if ((err = hal_ks_logout(ks, client)) == HAL_OK)
+    err = hal_ks_close(ks);
+  else
+    (void) hal_ks_close(ks);
+  if (err != HAL_OK)
     return err;
 
   hal_critical_section_start();

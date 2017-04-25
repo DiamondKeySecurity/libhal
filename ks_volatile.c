@@ -614,10 +614,10 @@ static hal_error_t ks_get_attributes(hal_ks_t *ks,
   return err;
 }
 
-static void ks_logout(hal_ks_t *ks,
-                      hal_client_handle_t client)
+static hal_error_t ks_logout(hal_ks_t *ks,
+                             hal_client_handle_t client)
 {
-  if (ks == NULL || client.handle = HAL_HANDLE_NONE)
+  if (ks == NULL || client.handle == HAL_HANDLE_NONE)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   ks_t *ksv = ks_to_ksv(ks);

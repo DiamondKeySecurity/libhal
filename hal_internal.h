@@ -696,7 +696,7 @@ static inline hal_error_t hal_ks_logout(hal_ks_t *ks,
   if (ks == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if (ks->logout == NULL || client.handle == HAL_HANDLE_NONE)
+  if (ks->driver->logout == NULL || client.handle == HAL_HANDLE_NONE)
     return HAL_OK;
 
   return ks->driver->logout(ks, client);
