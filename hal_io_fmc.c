@@ -159,6 +159,8 @@ hal_error_t hal_io_wait(const hal_core_t *core, uint8_t status, int *count)
     if (count && (*count > 0) && (i >= *count))
       return HAL_ERROR_IO_TIMEOUT;
 
+    hal_task_yield();
+
     if ((err = hal_io_read(core, ADDR_STATUS, buf, sizeof(buf))) != HAL_OK)
       return err;
 

@@ -97,6 +97,7 @@ extern void hal_critical_section_start(void);
 extern void hal_critical_section_end(void);
 extern void hal_ks_lock(void);
 extern void hal_ks_unlock(void);
+extern void hal_task_yield(void);
 
 /*
  * Logging.

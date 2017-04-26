@@ -966,13 +966,7 @@ hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ile
     }
 
     if (handler)
-        for (int i = 0; i < 3; ++i) {
-            ret = handler(&iptr, ilimit, &optr, olimit);
-            if (ret != HAL_ERROR_CORE_BUSY)
-                break;
-            iptr = ibuf + 4;
-            optr = obuf + 12;
-        }
+        ret = handler(&iptr, ilimit, &optr, olimit);
     else
         ret = HAL_ERROR_RPC_BAD_FUNCTION;
 

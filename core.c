@@ -213,31 +213,39 @@ hal_error_t hal_core_alloc(const char *name, hal_core_t **pcore)
   if (name == NULL)
     name = core->info.name;
 
-  hal_critical_section_start();
   if (core != NULL) {
     /* if we can reallocate the same core, do it now */
     if (!core->busy) {
+      hal_critical_section_start();
       core->busy = 1;
       hal_critical_section_end();
       return HAL_OK;
     }
     /* else fall through to search */
   }
-  for (core = hal_core_iterate(NULL); core != NULL; core = core->next) {
-    if (name_matches(core, name)) {
-      if (core->busy) {
-        err = HAL_ERROR_CORE_BUSY;
-        continue;
-      }
-      else {
-        err = HAL_OK;
-        *pcore = core;
-        core->busy = 1;
-        break;
+
+  while (1) {
+    hal_critical_section_start();
+    for (core = hal_core_iterate(NULL); core != NULL; core = core->next) {
+      if (name_matches(core, name)) {
+        if (core->busy) {
+          err = HAL_ERROR_CORE_BUSY;
+          continue;
+        }
+        else {
+          err = HAL_OK;
+          *pcore = core;
+          core->busy = 1;
+          break;
+        }
       }
     }
-  }
-  hal_critical_section_end();
+    hal_critical_section_end();
+    if (err == HAL_ERROR_CORE_BUSY)
+      hal_task_yield();
+    else
+      break;
+  } 
 
   return err;
 }
@@ -248,6 +256,7 @@ void hal_core_free(hal_core_t *core)
     hal_critical_section_start();
     core->busy = 0;
     hal_critical_section_end();
+    hal_task_yield();
   }
 }
 

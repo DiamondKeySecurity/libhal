@@ -101,6 +101,11 @@ WEAK_FUNCTION void hal_ks_unlock(void)
   return;
 }
 
+WEAK_FUNCTION void hal_task_yield(void)
+{
+  return;
+}
+
 /*
  * Local variables:
  * indent-tabs-mode: nil
