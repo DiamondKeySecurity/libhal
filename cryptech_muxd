@@ -437,8 +437,8 @@ def main():
 if __name__ == "__main__":
     try:
         tornado.ioloop.IOLoop.current().run_sync(main)
-    except KeyboardInterrupt:
-        logger.debug("Normal SIGTERM exit")
+    except (SystemExit, KeyboardInterrupt):
+        pass
     except:
         logger.exception("Unhandled exception")
     else:
