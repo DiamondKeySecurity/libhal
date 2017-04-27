@@ -78,14 +78,22 @@ typedef struct {
 } client_slot_t;
 
 #ifndef HAL_PIN_MINIMUM_ITERATIONS
-#define HAL_PIN_MINIMUM_ITERATIONS 10000
+#define HAL_PIN_MINIMUM_ITERATIONS 1000
 #endif
 
 #ifndef HAL_PIN_DEFAULT_ITERATIONS
-#define HAL_PIN_DEFAULT_ITERATIONS 20000
+#define HAL_PIN_DEFAULT_ITERATIONS 2000
 #endif
 
 static uint32_t hal_pin_default_iterations = HAL_PIN_DEFAULT_ITERATIONS;
+
+/*
+ * Seconds to delay when given a bad PIN.
+ */
+
+#ifndef HAL_PIN_DELAY_ON_FAILURE
+#define HAL_PIN_DELAY_ON_FAILURE 5
+#endif
 
 #ifndef HAL_STATIC_CLIENT_STATE_BLOCKS
 #define HAL_STATIC_CLIENT_STATE_BLOCKS	10
@@ -155,8 +163,10 @@ static hal_error_t login(const hal_client_handle_t client,
   for (int i = 0; i < sizeof(buf); i++)
     diff |= buf[i] ^ p->pin[i];
 
-  if (diff != 0)
+  if (diff != 0) {
+    hal_sleep(HAL_PIN_DELAY_ON_FAILURE);
     return HAL_ERROR_PIN_INCORRECT;
+  }
 
   client_slot_t *slot = find_handle(client);
 

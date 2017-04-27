@@ -99,9 +99,14 @@ extern void hal_ks_lock(void);
 extern void hal_ks_unlock(void);
 
 /*
- * Logging.
+ * Thread sleep.  Currently used only for bad-PIN delays.
  */
 
+extern void hal_sleep(const unsigned seconds);
+
+/*
+ * Logging.
+ */
 
 typedef enum {
   HAL_LOG_DEBUG, HAL_LOG_INFO, HAL_LOG_WARN, HAL_LOG_ERROR, HAL_LOG_SILENT
