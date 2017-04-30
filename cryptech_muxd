@@ -437,5 +437,9 @@ def main():
 if __name__ == "__main__":
     try:
         tornado.ioloop.IOLoop.current().run_sync(main)
-    except KeyboardInterrupt:
+    except (SystemExit, KeyboardInterrupt):
         pass
+    except:
+        logger.exception("Unhandled exception")
+    else:
+        logger.debug("Main loop exited")

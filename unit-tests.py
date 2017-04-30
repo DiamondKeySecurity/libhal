@@ -132,6 +132,10 @@ class TestCase(unittest.TestCase):
         self.endTime = datetime.datetime.now()
         super(TestCase, self).tearDown()
 
+    def skipUnlessAll(self, reason):
+        if not args.all_tests:
+            self.skipTest(reason)
+
 class TextTestResult(unittest.TextTestResult):
 
     def addSuccess(self, test):
@@ -197,15 +201,12 @@ class TestPIN(TestCase):
                 self.assertRaises(HAL_ERROR_FORBIDDEN, hsm.is_logged_in, user2)
         hsm.logout()
 
-    @unittest.skipUnless(args.all_tests, "Slow")
     def test_login_wheel(self):
         self.login_logout(HAL_USER_WHEEL)
 
-    @unittest.skipUnless(args.all_tests, "Slow")
     def test_login_so(self):
         self.login_logout(HAL_USER_SO)
 
-    @unittest.skipUnless(args.all_tests, "Slow")
     def test_login_user(self):
         self.login_logout(HAL_USER_NORMAL)
 
@@ -292,17 +293,18 @@ class TestPKeyGen(TestCaseLoggedIn):
     def test_gen_sign_verify_rsa_1024_sha256(self):
         self.gen_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA256, 1024)
 
-    @unittest.skipUnless(args.all_tests, "Slow")
     def test_gen_sign_verify_rsa_2048_sha384(self):
+        self.skipUnlessAll("Slow")
         self.gen_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA384, 2048)
 
-    @unittest.skipUnless(args.all_tests, "Hideously slow")
     def test_gen_sign_verify_rsa_4096_sha512(self):
+        self.skipUnlessAll("Hideously slow")
         self.gen_sign_verify_rsa(HAL_DIGEST_ALGORITHM_SHA512, 4096)
 
     def test_gen_unsupported_length(self):
         with self.assertRaises(HAL_ERROR_BAD_ARGUMENTS):
             hsm.pkey_generate_rsa(1028).delete()
+
 
 class TestPKeyHashing(TestCaseLoggedIn):
     """
@@ -563,11 +565,19 @@ class TestPKeyMatch(TestCaseLoggedIn):
                      exportable       = HAL_KEY_FLAG_EXPORTABLE)
         return ", ".join(sorted(k for k, v in names.iteritems() if (flags & v) != 0))
 
+    @staticmethod
+    def cleanup_key(uuid):
+        try:
+            with hsm.pkey_open(uuid) as pkey:
+                pkey.delete()
+        except Exception as e:
+            logger.debug("Problem deleting key %s: %s", uuid, e)
+
     def load_keys(self, flags):
         uuids = set()
         for obj in PreloadedKey.db.itervalues():
             with hsm.pkey_load(obj.der, flags) as k:
-                self.addCleanup(lambda uuid: hsm.pkey_open(uuid).delete(), k.uuid)
+                self.addCleanup(self.cleanup_key, k.uuid)
                 uuids.add(k.uuid)
                 #print k.uuid, k.key_type, k.key_curve, self.key_flag_names(k.key_flags)
                 k.set_attributes(dict((i, a) for i, a in enumerate((str(obj.keytype), str(obj.fn2)))))
@@ -637,13 +647,21 @@ class TestPKeyAttribute(TestCaseLoggedIn):
     Attribute creation/lookup/deletion tests.
     """
 
+    @staticmethod
+    def cleanup_key(uuid):
+        try:
+            with hsm.pkey_open(uuid) as pkey:
+                pkey.delete()
+        except:
+            logger.debug("Problem deleting key %s: %s", uuid, e)
+
     def load_and_fill(self, flags, n_keys = 1, n_attrs = 2, n_fill = 0):
         pinwheel = Pinwheel()
         for i in xrange(n_keys):
             for obj in PreloadedKey.db.itervalues():
                 with hsm.pkey_load(obj.der, flags) as k:
                     pinwheel()
-                    self.addCleanup(lambda uuid: hsm.pkey_open(uuid).delete(), k.uuid)
+                    self.addCleanup(self.cleanup_key, k.uuid)
                     k.set_attributes(dict((j, "Attribute {}{}".format(j, "*" * n_fill))
                                           for j in xrange(n_attrs)))
                     pinwheel()

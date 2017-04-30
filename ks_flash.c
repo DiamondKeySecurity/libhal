@@ -2119,7 +2119,7 @@ hal_error_t hal_set_pin(const hal_user_t user,
  * while re-implementing it on top of the new keystore.
  */
 
-hal_error_t hal_mkm_flash_read(uint8_t *buf, const size_t len)
+hal_error_t hal_mkm_flash_read_no_lock(uint8_t *buf, const size_t len)
 {
   if (buf != NULL && len != KEK_LENGTH)
     return HAL_ERROR_MASTERKEY_BAD_LENGTH;
@@ -2128,18 +2128,22 @@ hal_error_t hal_mkm_flash_read(uint8_t *buf, const size_t len)
   hal_error_t err;
   unsigned b;
 
-  hal_ks_lock();
-
   if ((err = fetch_pin_block(&b, &block)) != HAL_OK)
-    goto done;
+    return err;
 
   if (block->pin.kek_set != FLASH_KEK_SET)
-    err = HAL_ERROR_MASTERKEY_NOT_SET;
+    return HAL_ERROR_MASTERKEY_NOT_SET;
 
-  else if (buf != NULL)
+  if (buf != NULL)
     memcpy(buf, block->pin.kek, len);
 
- done:
+  return HAL_OK;
+}
+
+hal_error_t hal_mkm_flash_read(uint8_t *buf, const size_t len)
+{
+  hal_ks_lock();
+  const hal_error_t err = hal_mkm_flash_read_no_lock(buf, len);
   hal_ks_unlock();
   return err;
 }

@@ -93,6 +93,21 @@ static inline hal_pkey_slot_t *alloc_slot(const hal_key_flags_t flags)
 }
 
 /*
+ * Clear a slot.  Probably not necessary to do this in a critical
+ * section, but be safe.
+ */
+
+static inline void clear_slot(hal_pkey_slot_t *slot)
+{
+  hal_critical_section_start();
+
+  if (slot != NULL)
+    memset(slot, 0, sizeof(*slot));
+
+  hal_critical_section_end();
+}
+
+/*
  * Check a caller-supplied handle.  Must be in range, in use, and have
  * the right glop.  Returns slot pointer on success, NULL otherwise.
  */
@@ -395,7 +410,7 @@ static hal_error_t pkey_local_open(const hal_client_handle_t client,
   return HAL_OK;
 
  fail:
-  memset(slot, 0, sizeof(*slot));
+  clear_slot(slot);
   return err;
 }
 
@@ -537,7 +552,7 @@ static hal_error_t pkey_local_close(const hal_pkey_handle_t pkey)
   if ((slot = find_handle(pkey)) == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
 
-  memset(slot, 0, sizeof(*slot));
+  clear_slot(slot);
 
   return HAL_OK;
 }
@@ -566,7 +581,7 @@ static hal_error_t pkey_local_delete(const hal_pkey_handle_t pkey)
     (void) hal_ks_close(ks);
 
   if (err == HAL_OK || err == HAL_ERROR_KEY_NOT_FOUND)
-    memset(slot, 0, sizeof(*slot));
+    clear_slot(slot);
 
   return err;
 }
