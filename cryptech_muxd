@@ -94,8 +94,22 @@ class SerialIOStream(tornado.iostream.BaseIOStream):
     Implementation of a Tornado IOStream over a PySerial device.
     """
 
+    # In theory, we want zero (non-blocking mode) for both the read
+    # and write timeouts here so that PySerial will let Tornado handle
+    # all the select()/poll()/epoll()/kqueue() fun, delivering maximum
+    # throughput to all.  In practice, this has always worked for the
+    # author, but another developer reports that on some (not all)
+    # platforms this fails consistently with Tornado reporting write
+    # timeout errors, presumably as the result of receiving an IOError
+    # or OSError exception from PySerial.  For reasons we don't really
+    # understand, setting a PySerial write timeout on the order of
+    # 50-100 ms "solves" this problem.  Again in theory, this will
+    # result in lower throughput if PySerial spends too much time
+    # blocking on a single serial device when Tornado could be doing
+    # something useful elsewhere, but such is life.
+
     def __init__(self, device):
-        self.serial = serial.Serial(device, 921600, timeout = 0, write_timeout = 0)
+        self.serial = serial.Serial(device, 921600, timeout = 0, write_timeout = 0.1)
         self.serial_device = device
         super(SerialIOStream, self).__init__()
 
