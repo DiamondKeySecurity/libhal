@@ -787,7 +787,7 @@ static hal_error_t pkey_remote_match(const hal_client_handle_t client,
 
   uint8_t outbuf[nargs(11 + attributes_len * 2) + attributes_buffer_len + pad(sizeof(hal_uuid_t))];
   uint8_t *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(5) + pad(result_max * sizeof(hal_uuid_t))];
+  uint8_t inbuf[nargs(5 + result_max) + pad(result_max * sizeof(hal_uuid_t))];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   hal_error_t rpc_ret;
 
