@@ -905,11 +905,19 @@ class TestPKeyBackup(TestCaseLoggedIn):
         encryptedPrivateKeyInfo = DerSequence()
         encryptedPrivateKeyInfo.decode(der)
         encryptionAlgorithm = DerSequence()
-        encryptionAlgorithm.decode(encryptedPrivateKeyInfo[0])
         algorithm = DerObjectId()
-        algorithm.decode(encryptionAlgorithm[0])
         encryptedData = DerOctetString()
-        encryptedData.decode(encryptedPrivateKeyInfo[1])
+        encryptionAlgorithm.decode(encryptedPrivateKeyInfo[0])
+        # <kludge>
+        # Sigh, bugs in PyCrypto ASN.1 code.  Should do:
+        #
+        #algorithm.decode(encryptionAlgorithm[0])
+        #encryptedData.decode(encryptedPrivateKeyInfo[1])
+        #
+        # but due to bugs in those methods we must instead do:
+        DerObject.decode(algorithm, encryptionAlgorithm[0])
+        DerObject.decode(encryptedData, encryptedPrivateKeyInfo[1])
+        # </kludge>
         if algorithm.payload != oid:
             raise ValueError
         return encryptedData.payload
