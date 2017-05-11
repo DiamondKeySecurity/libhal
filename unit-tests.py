@@ -599,17 +599,20 @@ class TestPKeyMatch(TestCaseLoggedIn):
             tags.extend(PreloadedKey.db)
         self.assertEqual(len(tags), len(uuids))
 
+        n = 0
         self.assertEqual(uuids, set(k.uuid for n, k in self.match(mask  = mask,
                                                                   flags = flags,
                                                                   uuids = uuids)))
 
         for keytype in set(HALKeyType.index.itervalues()) - {HAL_KEY_TYPE_NONE}:
+            n = 0
             for n, k in self.match(mask = mask, flags = flags, uuids = uuids, type = keytype):
                 self.assertEqual(k.key_type, keytype)
                 self.assertEqual(k.get_attributes({0}).pop(0), str(keytype))
             self.assertEqual(n, sum(1 for t1, t2 in tags if t1 == keytype))
 
         for curve in set(HALCurve.index.itervalues()) - {HAL_CURVE_NONE}:
+            n = 0
             for n, k in self.match(mask = mask, flags = flags, uuids = uuids, curve = curve):
                 self.assertEqual(k.key_curve, curve)
                 self.assertEqual(k.get_attributes({1}).pop(1), str(curve))
@@ -618,6 +621,7 @@ class TestPKeyMatch(TestCaseLoggedIn):
             self.assertEqual(n, sum(1 for t1, t2 in tags if t2 == curve))
 
         for keylen in set(kl for kt, kl in tags if not isinstance(kl, Enum)):
+            n = 0
             for n, k in self.match(mask = mask, flags = flags, uuids = uuids,
                                    attributes = {1 : str(keylen)}):
                 self.assertEqual(keylen, int(k.get_attributes({1}).pop(1)))
@@ -626,6 +630,7 @@ class TestPKeyMatch(TestCaseLoggedIn):
             self.assertEqual(n, sum(1 for t1, t2 in tags
                                     if not isinstance(t2, Enum) and  t2 == keylen))
 
+        n = 0
         for n, k in self.match(mask = mask, flags = flags, uuids = uuids,
                                type = HAL_KEY_TYPE_RSA_PUBLIC, attributes = {1 : "2048"}):
             self.assertEqual(k.key_type, HAL_KEY_TYPE_RSA_PUBLIC)
