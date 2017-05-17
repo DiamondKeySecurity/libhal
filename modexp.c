@@ -226,6 +226,7 @@ hal_error_t hal_modexp(hal_core_t *core,
   /* Extract result */
   check(get_buffer(core, MODEXPS6_ADDR_RESULT, result, mod_len));
 
+  hal_core_free(core);
   return HAL_OK;
 }
 
