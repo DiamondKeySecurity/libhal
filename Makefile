@@ -47,7 +47,7 @@ IO_BUS		?= none
 KS		?= flash
 RPC_MODE	?= none
 RPC_TRANSPORT	?= none
-MODEXP_CORE	?= no
+MODEXP_CORE	?= yes
 HASH_CORES	?= no
 ECDSA_CORES	?= yes
 
