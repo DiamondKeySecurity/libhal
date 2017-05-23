@@ -969,7 +969,7 @@ static int point_is_on_curve(const ec_point_t * const P,
  * Generate a new ECDSA key.
  */
 
-hal_error_t hal_ecdsa_key_gen(const hal_core_t *core,
+hal_error_t hal_ecdsa_key_gen(hal_core_t *core,
                               hal_ecdsa_key_t **key_,
                               void *keybuf, const size_t keybuf_len,
                               const hal_curve_name_t curve_)
@@ -1608,7 +1608,7 @@ static hal_error_t decode_signature_pkcs11(const ecdsa_curve_t * const curve,
  * Sign a caller-supplied hash.
  */
 
-hal_error_t hal_ecdsa_sign(const hal_core_t *core,
+hal_error_t hal_ecdsa_sign(hal_core_t *core,
                            const hal_ecdsa_key_t * const key,
                            const uint8_t * const hash, const size_t hash_len,
                            uint8_t *signature, size_t *signature_len, const size_t signature_max)
@@ -1689,7 +1689,7 @@ hal_error_t hal_ecdsa_sign(const hal_core_t *core,
  * Verify a signature using a caller-supplied hash.
  */
 
-hal_error_t hal_ecdsa_verify(const hal_core_t *core,
+hal_error_t hal_ecdsa_verify(hal_core_t *core,
                              const hal_ecdsa_key_t * const key,
                              const uint8_t * const hash, const size_t hash_len,
                              const uint8_t * const signature, const size_t signature_len)

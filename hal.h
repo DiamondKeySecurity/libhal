@@ -458,17 +458,17 @@ extern hal_error_t hal_rsa_key_get_public_exponent(const hal_rsa_key_t * const k
 
 extern void hal_rsa_key_clear(hal_rsa_key_t *key);
 
-extern hal_error_t hal_rsa_encrypt(const hal_core_t *core,
+extern hal_error_t hal_rsa_encrypt(hal_core_t *core,
                                    const hal_rsa_key_t * const key,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * output, const size_t output_len);
 
-extern hal_error_t hal_rsa_decrypt(const hal_core_t *core,
+extern hal_error_t hal_rsa_decrypt(hal_core_t *core,
                                    const hal_rsa_key_t * const key,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * output, const size_t output_len);
 
-extern hal_error_t hal_rsa_key_gen(const hal_core_t *core,
+extern hal_error_t hal_rsa_key_gen(hal_core_t *core,
                                    hal_rsa_key_t **key,
                                    void *keybuf, const size_t keybuf_len,
                                    const unsigned key_length,
@@ -531,7 +531,7 @@ extern hal_error_t hal_ecdsa_key_get_public(const hal_ecdsa_key_t * const key,
 
 extern void hal_ecdsa_key_clear(hal_ecdsa_key_t *key);
 
-extern hal_error_t hal_ecdsa_key_gen(const hal_core_t *core,
+extern hal_error_t hal_ecdsa_key_gen(hal_core_t *core,
                                      hal_ecdsa_key_t **key,
                                      void *keybuf, const size_t keybuf_len,
                                      const hal_curve_name_t curve);
@@ -564,12 +564,12 @@ extern hal_error_t hal_ecdsa_key_from_ecpoint(hal_ecdsa_key_t **key,
                                               const uint8_t * const der, const size_t der_len,
                                               const hal_curve_name_t curve);
 
-extern hal_error_t hal_ecdsa_sign(const hal_core_t *core,
+extern hal_error_t hal_ecdsa_sign(hal_core_t *core,
                                   const hal_ecdsa_key_t * const key,
                                   const uint8_t * const hash, const size_t hash_len,
                                   uint8_t *signature, size_t *signature_len, const size_t signature_max);
 
-extern hal_error_t hal_ecdsa_verify(const hal_core_t *core,
+extern hal_error_t hal_ecdsa_verify(hal_core_t *core,
                                     const hal_ecdsa_key_t * const key,
                                     const uint8_t * const hash, const size_t hash_len,
                                     const uint8_t * const signature, const size_t signature_len);
