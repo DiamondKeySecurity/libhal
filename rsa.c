@@ -189,7 +189,7 @@ static hal_error_t unpack_fp(const fp_int * const bn, uint8_t *buffer, const siz
  * wrap result back up as a bignum.
  */
 
-static hal_error_t modexp(const hal_core_t *core,
+static hal_error_t modexp(hal_core_t *core,
                           const fp_int * msg,
                           const fp_int * const exp,
                           const fp_int * const mod,
@@ -277,7 +277,7 @@ static hal_error_t modexp(const hal_core_t *core, /* ignored */
  * try.  Come back to this if it looks like a bottleneck.
  */
 
-static hal_error_t create_blinding_factors(const hal_core_t *core, const hal_rsa_key_t * const key, fp_int *bf, fp_int *ubf)
+static hal_error_t create_blinding_factors(hal_core_t *core, const hal_rsa_key_t * const key, fp_int *bf, fp_int *ubf)
 {
   assert(key != NULL && bf != NULL && ubf != NULL);
 
@@ -305,7 +305,7 @@ static hal_error_t create_blinding_factors(const hal_core_t *core, const hal_rsa
  * RSA decryption via Chinese Remainder Theorem (Garner's formula).
  */
 
-static hal_error_t rsa_crt(const hal_core_t *core, const hal_rsa_key_t * const key, fp_int *msg, fp_int *sig)
+static hal_error_t rsa_crt(hal_core_t *core, const hal_rsa_key_t * const key, fp_int *msg, fp_int *sig)
 {
   assert(key != NULL && msg != NULL && sig != NULL);
 
@@ -376,7 +376,7 @@ static hal_error_t rsa_crt(const hal_core_t *core, const hal_rsa_key_t * const k
  * to the caller.
  */
 
-hal_error_t hal_rsa_encrypt(const hal_core_t *core,
+hal_error_t hal_rsa_encrypt(hal_core_t *core,
                             const hal_rsa_key_t * const key,
                             const uint8_t * const input,  const size_t input_len,
                             uint8_t * output, const size_t output_len)
@@ -401,7 +401,7 @@ hal_error_t hal_rsa_encrypt(const hal_core_t *core,
   return err;
 }
 
-hal_error_t hal_rsa_decrypt(const hal_core_t *core,
+hal_error_t hal_rsa_decrypt(hal_core_t *core,
                             const hal_rsa_key_t * const key,
                             const uint8_t * const input,  const size_t input_len,
                             uint8_t * output, const size_t output_len)
@@ -614,7 +614,7 @@ static hal_error_t find_prime(const unsigned prime_length,
  * Generate a new RSA keypair.
  */
 
-hal_error_t hal_rsa_key_gen(const hal_core_t *core,
+hal_error_t hal_rsa_key_gen(hal_core_t *core,
                             hal_rsa_key_t **key_,
                             void *keybuf, const size_t keybuf_len,
                             const unsigned key_length,
