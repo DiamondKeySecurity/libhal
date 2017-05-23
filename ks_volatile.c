@@ -53,9 +53,9 @@
 #endif
 
 /*
- * In-memory keystore database.  This should also be usable for
- * mmap(), if and when we get around to rewriting that driver (and in
- * which case this driver probably ought to be renamed ks_memory).
+ * In-memory keystore database.  This is a bit more complicated than
+ * necessary because originally I though we would want to continue
+ * supporting an mmap()-based keystore as well.  Needs cleaning up.
  */
 
 typedef struct {

@@ -689,9 +689,8 @@ static inline hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
 
 /*
  * Keystore index.  This is intended to be usable by both memory-based
- * (in-memory, mmap(), ...) keystores and keystores based on raw flash.
- * Some of the features aren't really necessary for memory-based keystores,
- * but should be harmless.
+ * and flash-based keystores.  Some of the features aren't really
+ * necessary for memory-based keystores, but should be harmless.
  *
  * General approach is multiple arrays, all but one of which are
  * indexed by "block" numbers, where a block number might be a slot in
