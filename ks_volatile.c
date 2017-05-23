@@ -423,9 +423,6 @@ static hal_error_t ks_match(hal_ks_t *ks,
 
     unsigned b = ksv->db->ksi.index[i];
 
-    if (ksv->db->ksi.names[b].chunk > 0)
-      continue;
-
     if (type != HAL_KEY_TYPE_NONE && type != ksv->db->keys[b].type)
       continue;
 

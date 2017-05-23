@@ -158,9 +158,6 @@
   DEFINE_HAL_ERROR(HAL_ERROR_ATTRIBUTE_NOT_FOUND,       "Attribute not found")                          \
   DEFINE_HAL_ERROR(HAL_ERROR_NO_KEY_INDEX_SLOTS,        "No key index slots available")                 \
   DEFINE_HAL_ERROR(HAL_ERROR_KSI_INDEX_UUID_MISORDERED, "Key index UUID misordered")                    \
-  DEFINE_HAL_ERROR(HAL_ERROR_KSI_INDEX_CHUNK_ORPHANED,  "Key index chunk orphaned")                     \
-  DEFINE_HAL_ERROR(HAL_ERROR_KSI_INDEX_CHUNK_MISSING,   "Key index chunk missing")                      \
-  DEFINE_HAL_ERROR(HAL_ERROR_KSI_INDEX_CHUNK_OVERLAPS,  "Key index chunk overlaps")                     \
   DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_WRONG_BLOCK_TYPE, "Wrong block type in keystore")                 \
   DEFINE_HAL_ERROR(HAL_ERROR_RPC_PROTOCOL_ERROR,        "RPC protocol error")                           \
   DEFINE_HAL_ERROR(HAL_ERROR_NOT_IMPLEMENTED,           "Not implemented")                              \

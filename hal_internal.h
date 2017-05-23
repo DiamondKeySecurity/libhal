@@ -708,13 +708,6 @@ static inline hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
  * support a simplistic form of wear leveling in flash-based keystores.
  *
  * Key names are kept in a separate array, indexed by block number.
- * Key names here are a composite of the key's UUID and a "chunk"
- * number; the latter allows storage of keys whose total size exceeds
- * one block (whatever a block is).  For the moment we keep the UUID
- * and the chunk number in a single array, which may provide (very)
- * slightly better performance due to reference locality in SDRAM, but
- * this may change if we need to reclaim the space wasted by structure
- * size rounding.
  *
  * The all-zeros UUID, which (by definition) cannot be a valid key
  * UUID, is reserved for the (non-key) block used to stash PINs and
@@ -727,15 +720,10 @@ static inline hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
  */
 
 typedef struct {
-  hal_uuid_t name;              /* Key name */
-  uint8_t chunk;                /* Key chunk number */
-} hal_ks_name_t;
-
-typedef struct {
   unsigned size;                /* Array length */
   unsigned used;                /* How many blocks are in use */
   uint16_t *index;              /* Index/freelist array */
-  hal_ks_name_t *names;         /* Keyname array */
+  hal_uuid_t *names;            /* Keyname array */
 } hal_ks_index_t;
 
 /*
@@ -755,27 +743,14 @@ extern hal_error_t hal_ks_index_setup(hal_ks_index_t *ksi);
  */
 extern hal_error_t hal_ks_index_find(hal_ks_index_t *ksi,
                                      const hal_uuid_t * const name,
-                                     const unsigned chunk,
                                      unsigned *blockno,
                                      int *hint);
-
-/*
- * Find all the blocks in a key, return the block numbers.
- */
-extern hal_error_t hal_ks_index_find_range(hal_ks_index_t *ksi,
-                                           const hal_uuid_t * const name,
-                                           const unsigned max_blocks,
-                                           unsigned *n_blocks,
-                                           unsigned *blocknos,
-                                           int *hint,
-                                           const int strict);
 
 /*
  * Add a key block, return its block number.
  */
 extern hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
                                     const hal_uuid_t * const name,
-                                    const unsigned chunk,
                                     unsigned *blockno,
                                     int *hint);
 
@@ -784,20 +759,8 @@ extern hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
  */
 extern hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
                                        const hal_uuid_t * const name,
-                                       const unsigned chunk,
                                        unsigned *blockno,
                                        int *hint);
-
-/*
- * Delete all of blocks in a key, returning the block numbers.
- */
-
-extern hal_error_t hal_ks_index_delete_range(hal_ks_index_t *ksi,
-                                             const hal_uuid_t * const name,
-                                             const unsigned max_blocks,
-                                             unsigned *n_blocks,
-                                             unsigned *blocknos,
-                                             int *hint);
 
 /*
  * Replace a key block with a new one, return new block number.
@@ -807,7 +770,6 @@ extern hal_error_t hal_ks_index_delete_range(hal_ks_index_t *ksi,
 
 extern hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
                                         const hal_uuid_t * const name,
-                                        const unsigned chunk,
                                         unsigned *blockno,
                                         int *hint);
 

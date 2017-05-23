@@ -39,22 +39,6 @@
 #include "hal_internal.h"
 
 /*
- * Compare two hal_ks_name_t objects.
- */
-
-static inline int ks_name_cmp(const hal_ks_name_t * const name1, const hal_ks_name_t * const name2)
-{
-  assert(name1 != NULL && name2 != NULL);
-
-  int cmp = hal_uuid_cmp(&name1->name, &name2->name);
-
-  if (cmp == 0)
-    cmp = ((int) name1->chunk) - ((int) name2->chunk);
-
-  return cmp;
-}
-
-/*
  * Find a block in the index, return true (found) or false (not found).
  * "where" indicates the name's position, or the position of the first free block.
  *
@@ -64,16 +48,13 @@ static inline int ks_name_cmp(const hal_ks_name_t * const name1, const hal_ks_na
 
 static int ks_find(const hal_ks_index_t * const ksi,
 		   const hal_uuid_t * const uuid,
-                   const uint8_t chunk,
                    const int * const hint,
 		   int *where)
 {
   assert(ksi != NULL && ksi->index != NULL && ksi->names != NULL && uuid != NULL && where != NULL);
 
-  const hal_ks_name_t name = { *uuid, chunk };
-
   if (hint != NULL && *hint >= 0 && *hint < ksi->used &&
-      ks_name_cmp(&name, &ksi->names[ksi->index[*hint]]) == 0) {
+      hal_uuid_cmp(uuid, &ksi->names[ksi->index[*hint]]) == 0) {
     *where = *hint;
     return 1;
   }
@@ -87,7 +68,7 @@ static int ks_find(const hal_ks_index_t * const ksi,
       *where = hi;
       return 0;
     }
-    const int cmp = ks_name_cmp(&name, &ksi->names[ksi->index[m]]);
+    const int cmp = hal_uuid_cmp(uuid, &ksi->names[ksi->index[m]]);
     if (cmp < 0)
       hi = m;
     else if (cmp > 0)
@@ -115,11 +96,11 @@ static inline void ks_heapsift(hal_ks_index_t *ksi, int parent, const int end)
     const int left_child  = parent * 2 + 1;
     const int right_child = parent * 2 + 2;
     int biggest = parent;
-    if (left_child  <= end && ks_name_cmp(&ksi->names[ksi->index[biggest]],
-                                          &ksi->names[ksi->index[left_child]])  < 0)
+    if (left_child  <= end && hal_uuid_cmp(&ksi->names[ksi->index[biggest]],
+                                           &ksi->names[ksi->index[left_child]])  < 0)
       biggest = left_child;
-    if (right_child <= end && ks_name_cmp(&ksi->names[ksi->index[biggest]],
-                                          &ksi->names[ksi->index[right_child]]) < 0)
+    if (right_child <= end && hal_uuid_cmp(&ksi->names[ksi->index[biggest]],
+                                           &ksi->names[ksi->index[right_child]]) < 0)
       biggest = right_child;
     if (biggest == parent)
       return;
@@ -159,26 +140,9 @@ hal_error_t hal_ks_index_fsck(hal_ks_index_t *ksi)
       ksi->size == 0 || ksi->used > ksi->size)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  for (int i = 0; i < ksi->used; i++) {
-
-    const int cmp = i == 0 ? -1 : hal_uuid_cmp(&ksi->names[ksi->index[i - 1]].name,
-                                               &ksi->names[ksi->index[i    ]].name);
-
-    const uint8_t prev_chunk = i == 0 ? 0 : ksi->names[ksi->index[i - 1]].chunk;
-    const uint8_t cur_chunk  =              ksi->names[ksi->index[i    ]].chunk;
-
-    if (cmp > 0)
+  for (int i = 1; i < ksi->used; i++)
+    if (hal_uuid_cmp(&ksi->names[ksi->index[i - 1]].name, &ksi->names[ksi->index[i]].name) >= 0)
       return HAL_ERROR_KSI_INDEX_UUID_MISORDERED;
-
-    if (cur_chunk > 0 && cmp != 0)
-      return HAL_ERROR_KSI_INDEX_CHUNK_ORPHANED;
-
-    if (cur_chunk > 0 && prev_chunk + 1 < cur_chunk)
-      return HAL_ERROR_KSI_INDEX_CHUNK_MISSING;
-
-    if (cur_chunk > 0 && prev_chunk + 1 > cur_chunk)
-      return HAL_ERROR_KSI_INDEX_CHUNK_OVERLAPS;
-  }
 
   return HAL_OK;
 }
@@ -205,12 +169,11 @@ hal_error_t hal_ks_index_setup(hal_ks_index_t *ksi)
 }
 
 /*
- * Find a single block by name and chunk number.
+ * Find a single block by name.
  */
 
 hal_error_t hal_ks_index_find(hal_ks_index_t *ksi,
 			      const hal_uuid_t * const name,
-                              const unsigned chunk,
 			      unsigned *blockno,
                               int *hint)
 {
@@ -222,7 +185,7 @@ hal_error_t hal_ks_index_find(hal_ks_index_t *ksi,
 
   fsck(ksi);
 
-  int ok = ks_find(ksi, name, chunk, hint, &where);
+  int ok = ks_find(ksi, name, hint, &where);
 
   if (blockno != NULL)
     *blockno = ksi->index[where];
@@ -234,58 +197,11 @@ hal_error_t hal_ks_index_find(hal_ks_index_t *ksi,
 }
 
 /*
- * Find all blocks with the given name.
- * If 'strict' is set, expect it to be a well-ordered set of chunks.
- */
-
-hal_error_t hal_ks_index_find_range(hal_ks_index_t *ksi,
-                                    const hal_uuid_t * const name,
-                                    const unsigned max_blocks,
-                                    unsigned *n_blocks,
-                                    unsigned *blocknos,
-                                    int *hint,
-                                    const int strict)
-{
-  if (ksi == NULL || ksi->index == NULL || ksi->names == NULL ||
-      ksi->size == 0 || ksi->used > ksi->size || name == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  int where;
-
-  fsck(ksi);
-
-  if (!ks_find(ksi, name, 0, hint, &where))
-    return HAL_ERROR_KEY_NOT_FOUND;
-
-  int n = 0;
-
-  for (int i = where; i < ksi->used && !hal_uuid_cmp(name, &ksi->names[ksi->index[i]].name); i++) {
-    if (strict && n != ksi->names[ksi->index[i]].chunk)
-      return HAL_ERROR_IMPOSSIBLE;
-    if (blocknos != NULL && n < max_blocks)
-      blocknos[n] = ksi->index[i];
-    n++;
-  }
-
-  if (n_blocks != NULL)
-    *n_blocks = n;
-
-  if (hint != NULL)
-    *hint = where;
-
-  if (blocknos != NULL && n > max_blocks)
-    return HAL_ERROR_RESULT_TOO_LONG;
-
-  return HAL_OK;
-}
-
-/*
  * Add a single block to the index.
  */
 
 hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
 			     const hal_uuid_t * const name,
-                             const unsigned chunk,
 			     unsigned *blockno,
                              int *hint)
 {
@@ -300,7 +216,7 @@ hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
 
   fsck(ksi);
 
-  if (ks_find(ksi, name, chunk, hint, &where))
+  if (ks_find(ksi, name, hint, &where))
     return HAL_ERROR_KEY_NAME_IN_USE;
 
   /*
@@ -313,7 +229,6 @@ hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
   memmove(&ksi->index[where + 1], &ksi->index[where], len);
   ksi->index[where] = b;
   ksi->names[b].name = *name;
-  ksi->names[b].chunk = chunk;
 
   if (blockno != NULL)
     *blockno = b;
@@ -332,7 +247,6 @@ hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
 
 hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
 				const hal_uuid_t * const name,
-                                const unsigned chunk,
 				unsigned *blockno,
                                 int *hint)
 {
@@ -344,7 +258,7 @@ hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
 
   fsck(ksi);
 
-  if (ksi->used == 0 || !ks_find(ksi, name, chunk, hint, &where))
+  if (ksi->used == 0 || !ks_find(ksi, name, hint, &where))
     return HAL_ERROR_KEY_NOT_FOUND;
 
   /*
@@ -370,73 +284,11 @@ hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
 }
 
 /*
- * Delete all blocks with the given name. If blocknos is NULL, return a
- * count of the matching blocks without deleting anything.
- */
-
-hal_error_t hal_ks_index_delete_range(hal_ks_index_t *ksi,
-                                      const hal_uuid_t * const name,
-                                      const unsigned max_blocks,
-                                      unsigned *n_blocks,
-                                      unsigned *blocknos,
-                                      int *hint)
-{
-  if (ksi == NULL || ksi->index == NULL || ksi->names == NULL ||
-      ksi->size == 0 || ksi->used > ksi->size || name == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  int where;
-
-  fsck(ksi);
-
-  if (ksi->used == 0 || !ks_find(ksi, name, 0, hint, &where))
-    return HAL_ERROR_KEY_NOT_FOUND;
-
-  int n = 0;
-
-  for (int i = where; i < ksi->used && !hal_uuid_cmp(name, &ksi->names[ksi->index[i]].name); i++) {
-    if (n != ksi->names[ksi->index[i]].chunk)
-      return HAL_ERROR_IMPOSSIBLE;
-    if (blocknos != NULL && n < max_blocks)
-      blocknos[n] = ksi->index[i];
-    n++;
-  }
-
-  if (n_blocks != NULL)
-    *n_blocks = n;
-
-  /*
-   * Free the blocks and stuff them at the end of the free list.
-   */
-
-  if (blocknos != NULL) {
-    if (n > max_blocks)
-      return HAL_ERROR_RESULT_TOO_LONG;
-    const size_t len = (ksi->size - where - n) * sizeof(*ksi->index);
-    memmove(&ksi->index[where], &ksi->index[where + n], len);
-    ksi->used -= n;
-    for (int i = 0; i < n; i++) {
-      ksi->index[ksi->size - n + i] = blocknos[i];
-      memset(&ksi->names[blocknos[i]], 0, sizeof(ksi->names[blocknos[i]]));
-    }
-    where = -1;
-  }
-
-  if (hint != NULL)
-    *hint = where;
-
-  fsck(ksi);
-
-  return HAL_OK;
-}
-
-/*
  * Replace a single block in the index.
  */
 
 hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
                                  const hal_uuid_t * const name,
-                                 const unsigned chunk,
                                  unsigned *blockno,
                                  int *hint)
 {
@@ -451,7 +303,7 @@ hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
 
   fsck(ksi);
 
-  if (ksi->used == 0 || !ks_find(ksi, name, chunk, hint, &where))
+  if (ksi->used == 0 || !ks_find(ksi, name, hint, &where))
     return HAL_ERROR_KEY_NOT_FOUND;
 
   /*
@@ -466,7 +318,6 @@ hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
   ksi->index[ksi->size - 1] = b1;
   ksi->index[where] = b2;
   ksi->names[b2].name = *name;
-  ksi->names[b2].chunk = chunk;
   memset(&ksi->names[b1], 0, sizeof(ksi->names[b1]));
 
   if (blockno != NULL)
