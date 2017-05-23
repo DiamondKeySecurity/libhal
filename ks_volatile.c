@@ -261,7 +261,7 @@ static hal_error_t ks_store(hal_ks_t *ks,
     goto done;
   }
 
-  if ((err = hal_ks_index_add(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
+  if ((err = hal_ks_index_add(&ksv->db->ksi, &slot->name, &b, &slot->hint)) != HAL_OK)
     goto done;
 
   uint8_t kek[KEK_LENGTH];
@@ -284,7 +284,7 @@ static hal_error_t ks_store(hal_ks_t *ks,
   if (err == HAL_OK)
     ksv->db->keys[b] = k;
   else
-    (void) hal_ks_index_delete(&ksv->db->ksi, &slot->name, 0, NULL, &slot->hint);
+    (void) hal_ks_index_delete(&ksv->db->ksi, &slot->name, NULL, &slot->hint);
 
  done:
   hal_ks_unlock();
@@ -309,7 +309,7 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
     goto done;
   }
 
-  if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
+  if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, &b, &slot->hint)) != HAL_OK)
     goto done;
 
   const ks_key_t * const k = &ksv->db->keys[b];
@@ -364,7 +364,7 @@ static hal_error_t ks_delete(hal_ks_t *ks,
     goto done;
   }
 
-  if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
+  if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, &b, &slot->hint)) != HAL_OK)
     goto done;
 
   if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, &ksv->db->keys[b])) {
@@ -372,7 +372,7 @@ static hal_error_t ks_delete(hal_ks_t *ks,
     goto done;
   }
 
-  if ((err = hal_ks_index_delete(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
+  if ((err = hal_ks_index_delete(&ksv->db->ksi, &slot->name, &b, &slot->hint)) != HAL_OK)
     goto done;
 
   memset(&ksv->db->keys[b], 0, sizeof(ksv->db->keys[b]));
@@ -412,7 +412,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
 
   *result_len = 0;
 
-  err = hal_ks_index_find(&ksv->db->ksi, previous_uuid, 0, NULL, &i);
+  err = hal_ks_index_find(&ksv->db->ksi, previous_uuid, NULL, &i);
 
   if (err == HAL_ERROR_KEY_NOT_FOUND)
     i--;
@@ -464,7 +464,7 @@ static hal_error_t ks_match(hal_ks_t *ks,
         continue;
     }
 
-    result[*result_len] = ksv->db->ksi.names[b].name;
+    result[*result_len] = ksv->db->ksi.names[b];
     ++*result_len;
   }
 
@@ -495,7 +495,7 @@ static hal_error_t ks_set_attributes(hal_ks_t *ks,
       goto done;
     }
 
-    if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
+    if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, &b, &slot->hint)) != HAL_OK)
       goto done;
 
     ks_key_t * const k = &ksv->db->keys[b];
@@ -556,7 +556,7 @@ static hal_error_t ks_get_attributes(hal_ks_t *ks,
       goto done;
     }
 
-    if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, 0, &b, &slot->hint)) != HAL_OK)
+    if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, &b, &slot->hint)) != HAL_OK)
       goto done;
 
     const ks_key_t * const k = &ksv->db->keys[b];

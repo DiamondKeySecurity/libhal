@@ -141,7 +141,7 @@ hal_error_t hal_ks_index_fsck(hal_ks_index_t *ksi)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   for (int i = 1; i < ksi->used; i++)
-    if (hal_uuid_cmp(&ksi->names[ksi->index[i - 1]].name, &ksi->names[ksi->index[i]].name) >= 0)
+    if (hal_uuid_cmp(&ksi->names[ksi->index[i - 1]], &ksi->names[ksi->index[i]]) >= 0)
       return HAL_ERROR_KSI_INDEX_UUID_MISORDERED;
 
   return HAL_OK;
@@ -228,7 +228,7 @@ hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
   const uint16_t b = ksi->index[ksi->used++];
   memmove(&ksi->index[where + 1], &ksi->index[where], len);
   ksi->index[where] = b;
-  ksi->names[b].name = *name;
+  ksi->names[b] = *name;
 
   if (blockno != NULL)
     *blockno = b;
@@ -317,7 +317,7 @@ hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
   memmove(&ksi->index[ksi->used], &ksi->index[ksi->used + 1], len);
   ksi->index[ksi->size - 1] = b1;
   ksi->index[where] = b2;
-  ksi->names[b2].name = *name;
+  ksi->names[b2] = *name;
   memset(&ksi->names[b1], 0, sizeof(ksi->names[b1]));
 
   if (blockno != NULL)
