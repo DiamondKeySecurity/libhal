@@ -173,18 +173,37 @@ struct hal_ks {
   int per_session;              /* Whether objects have per-session semantics (PKCS #11, sigh) */
 };
 
-struct hal_ks_driver {
-  hal_error_t (*init)           (hal_ks_t *, const int alloc);
-  hal_error_t (*shutdown)       (hal_ks_t *);
-  hal_error_t (*read)           (hal_ks_t *, const unsigned blockno, hal_ks_block_t *);
-  hal_error_t (*write)          (hal_ks_t *, const unsigned blockno, hal_ks_block_t *)
-  hal_error_t (*deprecate)      (hal_ks_t *, const unsigned blockno);
-  hal_error_t (*zero)           (hal_ks_t *, const unsigned blockno);
-  hal_error_t (*erase)          (hal_ks_t *, const unsigned blockno);
-  hal_error_t (*erase_maybe)    (hal_ks_t *, const unsigned blockno);
-  hal_error_t (*set_owner)      (hal_ks_t *, const unsigned blockno, const hal_client_handle_t, const hal_session_handle_t);
-  hal_error_t (*test_owner)     (hal_ks_t *, const unsigned blockno, const hal_client_handle_t, const hal_session_handle_t);
-};
+#define KS_DRIVER_END_LIST
+#define KS_DRIVER_METHODS                                                                               \
+  KS_DRIVER_METHOD(read,        hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)            \
+  KS_DRIVER_METHOD(write,       hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)            \
+  KS_DRIVER_METHOD(deprecate,   hal_ks_t *ks, const unsigned blockno)                                   \
+  KS_DRIVER_METHOD(zero,        hal_ks_t *ks, const unsigned blockno)                                   \
+  KS_DRIVER_METHOD(erase,       hal_ks_t *ks, const unsigned blockno)                                   \
+  KS_DRIVER_METHOD(erase_maybe, hal_ks_t *ks, const unsigned blockno)                                   \
+  KS_DRIVER_METHOD(set_owner,   hal_ks_t *ks, const unsigned blockno,                                   \
+                                const hal_client_handle_t client, const hal_session_handle_t session)   \
+  KS_DRIVER_METHOD(test_owner,  hal_ks_t *ks, const unsigned blockno,                                   \
+                                const hal_client_handle_t client, const hal_session_handle_t session)   \
+  KS_DRIVER_END_LIST
+
+#define KS_DRIVER_METHOD(_name_, ...) hal_error_t (*_name_)(__VA_ARGS__)
+struct hal_ks_driver { KS_DRIVER_METHODS };
+#undef  KS_DRIVER_METHOD
+
+#define KS_DRIVER_METHOD(_name_, ...)                                   \
+  static inline hal_error_t hal_ks_block_##_name_(__VA_ARGS__)		\
+  {									\
+    return                                                              \
+      ks == NULL || ks->driver == NULL  ? HAL_ERROR_BAD_ARGUMENTS   :	\
+      ks->driver->_name_ == NULL        ? HAL_ERROR_NOT_IMPLEMENTED :	\
+      ks->driver->_name_(__VA_ARGS__);					\
+  }
+KS_DRIVER_METHODS
+#undef  KS_DRIVER_METHOD
+
+#undef  KS_DRIVER_METHODS
+#undef  KS_DRIVER_END_LIST
 
 #endif /* _KS_H_ */
 

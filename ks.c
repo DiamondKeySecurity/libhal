@@ -422,7 +422,7 @@ static hal_error_t block_read_cached(hal_ks_t *ks, const unsigned blockno, hal_k
   if ((*block = cache_pick_lru(ks)) == NULL)
     return HAL_ERROR_IMPOSSIBLE;
 
-  return block_read(ks, blockno, *block);
+  return hal_ks_block_read(ks, blockno, *block);
 }
 
 /*
@@ -446,10 +446,10 @@ static hal_error_t block_update(hal_ks_t *ks,
   hal_error_t err;
   unsigned b2;
 
-  if ((err = block_deprecate(ks, b1))                   != HAL_OK ||
+  if ((err = hal_ks_block_deprecate(ks, b1))            != HAL_OK ||
       (err = hal_ks_index_replace(ks, uuid, &b2, hint)) != HAL_OK ||
-      (err = block_write(ks, b2, block))                != HAL_OK ||
-      (err = block_zero(ks, b1))                        != HAL_OK)
+      (err = hal_ks_block_write(ks, b2, block))         != HAL_OK ||
+      (err = hal_ks_block_zero(ks, b1))                 != HAL_OK)
     return err;
 
   cache_mark_used(ks, block, b2);
@@ -459,7 +459,7 @@ static hal_error_t block_update(hal_ks_t *ks,
    * puts the block back at the head of the free list.
    */
 
-  return block_erase_maybe(ks, ks->index[ks->used]);
+  return hal_ks_block_erase_maybe(ks, ks->index[ks->used]);
 }
 
 /*
@@ -546,7 +546,7 @@ hal_error_t hal_ks_init_common(hal_ks_t *ks, const hal_ks_driver_t * const drive
      * we want the block to end up near the end of the free list.
      */
 
-    err = block_read(ks, i, block);
+    err = hal_ks_block_read(ks, i, block);
 
     if (err == HAL_ERROR_KEYSTORE_BAD_CRC || err == HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE)
       block_types[i] = BLOCK_TYPE_UNKNOWN;
@@ -679,16 +679,16 @@ hal_error_t hal_ks_init_common(hal_ks_t *ks, const hal_ks_driver_t * const drive
 
     else {
       unsigned b_live;
-      if ((err = block_read(ks, b_tomb, block)) != HAL_OK)
+      if ((err = hal_ks_block_read(ks, b_tomb, block)) != HAL_OK)
         return err;
       block->header.block_status = BLOCK_STATUS_LIVE;
       if ((err = hal_ks_index_replace(ks, &name, &b_live, &where)) != HAL_OK ||
-          (err = block_write(ks, b_live, block)) != HAL_OK)
+          (err = hal_ks_block_write(ks, b_live, block))            != HAL_OK)
         return err;
       block_status[b_live] = BLOCK_STATUS_LIVE;
     }
 
-    if ((err = block_zero(ks, b_tomb)) != HAL_OK)
+    if ((err = hal_ks_block_zero(ks, b_tomb)) != HAL_OK)
       return err;
     block_types[ b_tomb] = BLOCK_TYPE_ZEROED;
     block_status[b_tomb] = BLOCK_STATUS_UNKNOWN;
@@ -699,7 +699,7 @@ hal_error_t hal_ks_init_common(hal_ks_t *ks, const hal_ks_driver_t * const drive
    */
 
   if (ks->used < ks->size &&
-      (err = block_erase_maybe(ks, ks->index[ks->used])) != HAL_OK)
+      (err = hal_ks_block_erase_maybe(ks, ks->index[ks->used])) != HAL_OK)
     return err;
 
   /*
@@ -758,7 +758,7 @@ static inline hal_error_t key_visible(const hal_ks_t * const ks,
 
   hal_error_t err;
 
-  if ((err = hal_ks_test_owner(ks, client, session)) != HAL_OK)
+  if ((err = hal_ks_block_test_owner(ks, client, session)) != HAL_OK)
     return err;
 
   err = hal_rpc_is_logged_in(client, HAL_USER_WHEEL);
@@ -810,7 +810,7 @@ hal_error_t hal_ks_store(hal_ks_t *ks,
   k->attributes_len = 0;
 
   if (ks->used < ks->size)
-    err = block_erase_maybe(ks, ks->index[ks->used]);
+    err = hal_ks_block_erase_maybe(ks, ks->index[ks->used]);
 
   if (err == HAL_OK)
     err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek));
@@ -821,10 +821,10 @@ hal_error_t hal_ks_store(hal_ks_t *ks,
   memset(kek, 0, sizeof(kek));
 
   if (err == HAL_OK)
-    err = block_write(ks, b, block);
+    err = hal_ks_block_write(ks, b, block);
 
   if (err == HAL_OK)
-    err = hal_ks_set_owner(ks, b, slot->client_handle, slot->session_handle);
+    err = hal_ks_block_set_owner(ks, b, slot->client_handle, slot->session_handle);
 
   if (err == HAL_OK)
     goto done;
@@ -853,7 +853,7 @@ hal_error_t hal_ks_fetch(hal_ks_t *ks,
 
   if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint))           != HAL_OK ||
       (err = key_visible(ks, slot->client_handle, slot->session_handle, b)) != HAL_OK ||
-      (err = block_read_cached(ks, b, &block))                              != HAL_OK)
+      (err = hal_ks_block_read_cached(ks, b, &block))                       != HAL_OK)
     goto done;
 
   if (block_get_type(block) != BLOCK_TYPE_KEY) {
@@ -911,10 +911,10 @@ hal_error_t hal_ks_delete(hal_ks_t *ks,
 
   cache_release(ks, cache_find_block(ks, b));
 
-  if ((err = block_zero(ks, b)) != HAL_OK)
+  if ((err = hal_ks_block_zero(ks, b)) != HAL_OK)
     goto done;
 
-  err = block_erase_maybe(ks, ks->index[ks->used]);
+  err = hal_ks_block_erase_maybe(ks, ks->index[ks->used]);
 
  done:
   hal_ks_unlock();
@@ -975,7 +975,7 @@ hal_error_t hal_ks_match(hal_ks_t *ks,
 
     unsigned b = ks->index[i];
 
-    if ((err = block_read_cached(ks, b, &block)) != HAL_OK)
+    if ((err = hal_ks_block_read_cached(ks, b, &block)) != HAL_OK)
       goto done;
 
     if ((err = key_visible(ks, client, session, b)) == HAL_ERROR_KEY_NOT_FOUND)
@@ -1054,7 +1054,7 @@ hal_error_t hal_ks_set_attributes(hal_ks_t *ks,
   {
     if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint))             != HAL_OK ||
         (err = key_visibile(ks, slot->client_handle, slot->session_handle, b))  != HAL_OK ||
-        (err = block_read_cached(ks, b, &block))                                != HAL_OK)
+        (err = hal_ks_block_read_cached(ks, b, &block))                         != HAL_OK)
       goto done;
 
     cache_mark_used(ks, block, b);
@@ -1120,7 +1120,7 @@ hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
   {
     if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint))             != HAL_OK ||
         (err = key_visibile(ks, slot->client_handle, slot->session_handle, b))  != HAL_OK ||
-        (err = block_read_cached(ks, b, &block))                                != HAL_OK)
+        (err = hal_ks_block_read_cached(ks, b, &block))				!= HAL_OK)
       goto done;
 
     cache_mark_used(ks, block, b);
