@@ -245,7 +245,7 @@ hal_error_t hal_core_alloc(const char *name, hal_core_t **pcore)
       hal_task_yield();
     else
       break;
-  } 
+  }
 
   return err;
 }

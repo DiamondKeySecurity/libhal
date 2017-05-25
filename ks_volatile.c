@@ -41,432 +41,174 @@
 
 #include "hal.h"
 #include "hal_internal.h"
-
-#define KEK_LENGTH (bitsToBytes(256))
+#include "ks.h"
 
 #ifndef STATIC_KS_VOLATILE_SLOTS
 #define STATIC_KS_VOLATILE_SLOTS HAL_STATIC_PKEY_STATE_BLOCKS
 #endif
 
-#ifndef STATIC_KS_VOLATILE_ATTRIBUTE_SPACE
-#define STATIC_KS_VOLATILE_ATTRIBUTE_SPACE 4096
+#ifndef KS_VOLATILE_CACHE_SIZE
+#define KS_VOLATILE_CACHE_SIZE 4
 #endif
 
-/*
- * In-memory keystore database.  This is a bit more complicated than
- * necessary because originally I though we would want to continue
- * supporting an mmap()-based keystore as well.  Needs cleaning up.
- */
-
 typedef struct {
-  hal_key_type_t        type;
-  hal_curve_name_t      curve;
-  hal_key_flags_t       flags;
   hal_client_handle_t   client;
   hal_session_handle_t  session;
-  size_t                der_len;
-  unsigned              attributes_len;
-  uint8_t               der[HAL_KS_WRAPPED_KEYSIZE + STATIC_KS_VOLATILE_ATTRIBUTE_SPACE];
-} ks_key_t;
+  hal_ks_block_t	block;
+} volatile_key_t;
 
-typedef struct {
-  hal_ks_index_t        ksi;
-  ks_key_t              *keys;
-} db_t;
-
-/*
- * "Subclass" (well, what one can do in C) of hal_ks_t.  This is
- * separate from db_t primarily to simplify things like rewriting the
- * old ks_mmap driver to piggy-back on the ks_volatile driver: we
- * wouldn't want the hal_ks_t into the mmap()ed file.
- */
-
-typedef struct {
+static struct db {
   hal_ks_t ks;              /* Must be first */
-  db_t *db;                 /* Which memory-based keystore database */
-  int per_session;          /* Whether objects are per-session */
-} ks_t;
+  volatile_key_t *keys;
+} db;
 
 /*
- * If we also supported mmap, there would be a separate definition for
- * HAL_KS_MMAP_SLOTS above, and the bulk of the code would be under a
- * conditional testing whether either HAL_KS_*_SLOTS were nonzero.
+ * Read a block.  CRC probably not necessary for RAM.
  */
 
-#if STATIC_KS_VOLATILE_SLOTS > 0
-
-static ks_t volatile_ks;
-
-static inline ks_t *ks_to_ksv(hal_ks_t *ks)
+static hal_error_t block_read(hal_k_t *ks, const unsigned blockno, ks_block_t *block)
 {
-  return (ks_t *) ks;
+  if (ks != &db.ks || db.keys == NULL || block == NULL || blockno >= ks->size)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  memcpy(block, &db.keys[blockno].block, sizeof(*block));
+
+  return HAL_OK;
 }
 
 /*
- * Check whether the current session can see a particular key.  One
- * might expect this to be based on whether the session matches, and
- * indeed it would be in a sane world, but in the world of PKCS #11,
- * keys belong to sessions, are visible to other sessions, and may
- * even be modifiable by other sessions, but softly and silently
- * vanish away when the original creating session is destroyed.
- *
- * In our terms, this means that visibility of session objects is
- * determined only by the client handle, so taking the session handle
- * as an argument here isn't really necessary, but we've flipflopped
- * on that enough times that at least for now I'd prefer to leave the
- * session handle here and not have to revise all the RPC calls again.
- * Remove it at some later date and redo the RPC calls if we manage to
- * avoid revising this yet again.
+ * Convert a live block into a tombstone.
  */
 
-static inline int key_visible_to_session(const ks_t * const ksv,
-                                         const hal_client_handle_t client,
-                                         const hal_session_handle_t session,
-                                         const ks_key_t * const k)
+static hal_error_t block_deprecate(hal_k_t *ks, const unsigned blockno)
 {
-  return (!ksv->per_session ||
-          client.handle == HAL_HANDLE_NONE ||
-          k->client.handle  == client.handle ||
-          hal_rpc_is_logged_in(client, HAL_USER_WHEEL) == HAL_OK);
-}
-
-static inline void *gnaw(uint8_t **mem, size_t *len, const size_t size)
-{
-  if (mem == NULL || *mem == NULL || len == NULL || size > *len)
-    return NULL;
-  void *ret = *mem;
-  *mem += size;
-  *len -= size;
-  return ret;
-}
-
-static hal_error_t ks_init(const hal_ks_driver_t * const driver,
-                           const int per_session,
-                           ks_t *ksv,
-                           uint8_t *mem,
-                           size_t len)
-{
-  if (ksv == NULL)
+  if (ks != &db.ks || db.keys == NULL || blockno >= ks->size)
     return HAL_ERROR_IMPOSSIBLE;
 
-  if (mem != NULL) {
-    memset(ksv, 0, sizeof(*ksv));
-    memset(mem, 0, len);
+  db.keys[blockno].block.header->block_status = BLOCK_STATUS_TOMBSTONE;
 
-    ksv->db            = gnaw(&mem, &len, sizeof(*ksv->db));
-    ksv->db->ksi.index = gnaw(&mem, &len, sizeof(*ksv->db->ksi.index) * STATIC_KS_VOLATILE_SLOTS);
-    ksv->db->ksi.names = gnaw(&mem, &len, sizeof(*ksv->db->ksi.names) * STATIC_KS_VOLATILE_SLOTS);
-    ksv->db->keys      = gnaw(&mem, &len, sizeof(*ksv->db->keys)      * STATIC_KS_VOLATILE_SLOTS);
-    ksv->db->ksi.size  = STATIC_KS_VOLATILE_SLOTS;
-  }
-
-  if (ksv->db            == NULL ||
-      ksv->db->ksi.index == NULL ||
-      ksv->db->ksi.names == NULL ||
-      ksv->db->keys      == NULL)
-    return HAL_ERROR_IMPOSSIBLE;
-
-  if (mem == NULL) {
-    memset(ksv->db->ksi.index, 0, sizeof(*ksv->db->ksi.index) * STATIC_KS_VOLATILE_SLOTS);
-    memset(ksv->db->ksi.names, 0, sizeof(*ksv->db->ksi.names) * STATIC_KS_VOLATILE_SLOTS);
-    memset(ksv->db->keys,      0, sizeof(*ksv->db->keys)      * STATIC_KS_VOLATILE_SLOTS);
-  }
-
-  ksv->ks.driver     = driver;
-  ksv->per_session   = per_session;
-  ksv->db->ksi.used  = 0;
-
-  /*
-   * Set up keystore with empty index and full free list.
-   * Since this driver doesn't care about wear leveling,
-   * just populate the free list in block numerical order.
-   */
-
-  for (int i = 0; i < STATIC_KS_VOLATILE_SLOTS; i++)
-    ksv->db->ksi.index[i] = i;
-
-  return hal_ks_index_setup(&ksv->db->ksi);
+  return HAL_OK;
 }
 
-static hal_error_t ks_volatile_init(const hal_ks_driver_t * const driver, const int alloc)
+/*
+ * Zero (not erase) a flash block.
+ */
+
+static hal_error_t block_zero(hal_k_t *ks, const unsigned blockno)
+{
+  if (ks != &db.ks || db.keys == NULL || blockno >= ks->size)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  memset(db.keys[blockno].block, 0x00, sizeof(db.keys[blockno].block));
+  db.keys[blockno].client.handle = HAL_HANDLE_NONE;
+  db.keys[blockno].session.handle = HAL_HANDLE_NONE;
+
+  return HAL_OK;
+}
+
+/*
+ * Erase a flash block.
+ */
+
+static hal_error_t block_erase(hal_k_t *ks, const unsigned blockno)
+{
+  if (ks != &db.ks || db.keys == NULL || blockno >= ks->size)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  memset(db.keys[blockno].block, 0xFF, sizeof(db.keys[blockno].block));
+  db.keys[blockno].client.handle = HAL_HANDLE_NONE;
+  db.keys[blockno].session.handle = HAL_HANDLE_NONE;
+
+  return HAL_OK;
+}
+
+/*
+ * Write a flash block.  CRC probably not necessary for RAM.
+ */
+
+static hal_error_t block_write(hal_k_t *ks, const unsigned blockno, ks_block_t *block)
+{
+  if (ks != &db.ks || db.keys == NULL || block == NULL || blockno >= ks->size)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  memcpy(&db.keys[blockno].block, block, sizeof(*block));
+
+  return HAL_OK;
+}
+
+/*
+ * Set key ownership.
+ */
+
+static hal_error_t block_set_owner(hal_ks_t *ks,
+                                   const unsigned blockno,
+                                   const hal_client_handle_t client,
+                                   const hal_session_handle_t session)
+{
+  if (ks != &db.ks || db.keys == NULL || blockno >= ks->size)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  db.keys[blockno].client = client;
+  db.keys[blockno].session = session;
+
+  return HAL_OK;
+}
+
+/*
+ * Test key ownership.
+ */
+
+static hal_error_t block_test_owner(hal_ks_t *ks, const
+                                    unsigned blockno,
+                                    const hal_client_handle_t client,
+                                    const hal_session_handle_t session)
+{
+  if (ks != &db.ks || db.keys == NULL || blockno >= ks->size)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  if (db.keys[blockno].client.handle  == client.handle &&
+      db.keys[blockno].session.handle == session.handle)
+    return HAL_OK;
+  else
+    return HAL_ERROR_KEY_NOT_FOUND;
+}
+
+/*
+ * Initialize keystore.
+ */
+
+static const hal_ks_driver_t hal_ks_volatile_driver[1] = {{
+  .read               	= block_read,
+  .write                = block_write,
+  .deprecate		= block_deprecate,
+  .zero                 = block_zero,
+  .erase                = block_erase,
+  .erase_maybe		= block_erase, /* sic */
+  .set_owner            = block_set_owner,
+  .test_owner           = block_test_owner
+}};
+
+ hal_error_t hal_ks_volatile_init(const int alloc)
 {
   hal_error_t err = HAL_OK;
 
   hal_ks_lock();
 
-  const size_t len = (sizeof(*volatile_ks.db) +
-                      sizeof(*volatile_ks.db->ksi.index) * STATIC_KS_VOLATILE_SLOTS +
-                      sizeof(*volatile_ks.db->ksi.names) * STATIC_KS_VOLATILE_SLOTS +
-                      sizeof(*volatile_ks.db->keys)      * STATIC_KS_VOLATILE_SLOTS);
 
-  uint8_t *mem = NULL;
+  if (alloc && (err = hal_ks_alloc_common(&db.ks, STATIC_KS_VOLATILE_SLOTS, KS_VOLATILE_CACHE_SIZE)) != HAL_OK)
+    goto done;
 
-  if (alloc && (mem = hal_allocate_static_memory(len)) == NULL)
+  if ((err = hal_ks_init_common(&db.ks, hal_ks_volatile_driver)) != HAL_OK)
+    goto done;
+
+  if (alloc && (db.keys = hal_allocate_static_memory(sizeof(*db.keys) * db.ks.size)) == NULL) {
     err = HAL_ERROR_ALLOCATION_FAILURE;
-  else
-    err = ks_init(driver, 1, &volatile_ks, mem, len);
-
-  hal_ks_unlock();
-  return err;
-}
-
-static hal_error_t ks_volatile_shutdown(const hal_ks_driver_t * const driver)
-{
-  if (volatile_ks.ks.driver != driver)
-    return HAL_ERROR_KEYSTORE_ACCESS;
-  return HAL_OK;
-}
-
-static hal_error_t ks_volatile_open(const hal_ks_driver_t * const driver,
-                                    hal_ks_t **ks)
-{
-  assert(driver != NULL && ks != NULL);
-  *ks = &volatile_ks.ks;
-  return HAL_OK;
-}
-
-static hal_error_t ks_volatile_close(hal_ks_t *ks)
-{
-  return HAL_OK;
-}
-
-static inline int acceptable_key_type(const hal_key_type_t type)
-{
-  switch (type) {
-  case HAL_KEY_TYPE_RSA_PRIVATE:
-  case HAL_KEY_TYPE_EC_PRIVATE:
-  case HAL_KEY_TYPE_RSA_PUBLIC:
-  case HAL_KEY_TYPE_EC_PUBLIC:
-    return 1;
-  default:
-    return 0;
-  }
-}
-
-static hal_error_t ks_store(hal_ks_t *ks,
-                            hal_pkey_slot_t *slot,
-                            const uint8_t * const der, const size_t der_len)
-{
-  if (ks == NULL || slot == NULL || der == NULL || der_len == 0 || !acceptable_key_type(slot->type))
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  ks_t *ksv = ks_to_ksv(ks);
-  hal_error_t err = HAL_OK;
-  unsigned b;
-
-  hal_ks_lock();
-
-  if (ksv->db == NULL) {
-    err = HAL_ERROR_KEYSTORE_ACCESS;
     goto done;
   }
 
-  if ((err = hal_ks_index_add(&ksv->db->ksi, &slot->name, &b, &slot->hint)) != HAL_OK)
-    goto done;
-
-  uint8_t kek[KEK_LENGTH];
-  size_t kek_len;
-  ks_key_t k;
-
-  memset(&k, 0, sizeof(k));
-  k.der_len = sizeof(k.der);
-  k.type    = slot->type;
-  k.curve   = slot->curve;
-  k.flags   = slot->flags;
-  k.client  = slot->client_handle;
-  k.session = slot->session_handle;
-
-  if ((err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
-    err = hal_aes_keywrap(NULL, kek, kek_len, der, der_len, k.der, &k.der_len);
-
-  memset(kek, 0, sizeof(kek));
-
-  if (err == HAL_OK)
-    ksv->db->keys[b] = k;
-  else
-    (void) hal_ks_index_delete(&ksv->db->ksi, &slot->name, NULL, &slot->hint);
-
- done:
-  hal_ks_unlock();
-  return err;
-}
-
-static hal_error_t ks_fetch(hal_ks_t *ks,
-                            hal_pkey_slot_t *slot,
-                            uint8_t *der, size_t *der_len, const size_t der_max)
-{
-  if (ks == NULL || slot == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  ks_t *ksv = ks_to_ksv(ks);
-  hal_error_t err = HAL_OK;
-  unsigned b;
-
-  hal_ks_lock();
-
-  if (ksv->db == NULL) {
-    err = HAL_ERROR_KEYSTORE_ACCESS;
-    goto done;
-  }
-
-  if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, &b, &slot->hint)) != HAL_OK)
-    goto done;
-
-  const ks_key_t * const k = &ksv->db->keys[b];
-
-  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k)) {
-    err = HAL_ERROR_KEY_NOT_FOUND;
-    goto done;
-  }
-
-  slot->type  = k->type;
-  slot->curve = k->curve;
-  slot->flags = k->flags;
-
-  if (der == NULL && der_len != NULL)
-    *der_len = k->der_len;
-
-  if (der != NULL) {
-
-    uint8_t kek[KEK_LENGTH];
-    size_t kek_len, der_len_;
-
-    if (der_len == NULL)
-      der_len = &der_len_;
-
-    *der_len = der_max;
-
-    if ((err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
-      err = hal_aes_keyunwrap(NULL, kek, kek_len, k->der, k->der_len, der, der_len);
-
-    memset(kek, 0, sizeof(kek));
-  }
-
- done:
-  hal_ks_unlock();
-  return err;
-}
-
-static hal_error_t ks_delete(hal_ks_t *ks,
-                             hal_pkey_slot_t *slot)
-{
-  if (ks == NULL || slot == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  ks_t *ksv = ks_to_ksv(ks);
-  hal_error_t err = HAL_OK;
-  unsigned b;
-
-  hal_ks_lock();
-
-  if (ksv->db == NULL) {
-    err = HAL_ERROR_KEYSTORE_ACCESS;
-    goto done;
-  }
-
-  if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, &b, &slot->hint)) != HAL_OK)
-    goto done;
-
-  if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, &ksv->db->keys[b])) {
-    err = HAL_ERROR_KEY_NOT_FOUND;
-    goto done;
-  }
-
-  if ((err = hal_ks_index_delete(&ksv->db->ksi, &slot->name, &b, &slot->hint)) != HAL_OK)
-    goto done;
-
-  memset(&ksv->db->keys[b], 0, sizeof(ksv->db->keys[b]));
-
- done:
-  hal_ks_unlock();
-  return err;
-}
-
-static hal_error_t ks_match(hal_ks_t *ks,
-                            hal_client_handle_t client,
-                            hal_session_handle_t session,
-                            const hal_key_type_t type,
-                            const hal_curve_name_t curve,
-                            const hal_key_flags_t mask,
-                            const hal_key_flags_t flags,
-                            const hal_pkey_attribute_t *attributes,
-                            const unsigned attributes_len,
-                            hal_uuid_t *result,
-                            unsigned *result_len,
-                            const unsigned result_max,
-                            const hal_uuid_t * const previous_uuid)
-{
-  if (ks == NULL || (attributes == NULL && attributes_len > 0) ||
-      result == NULL || result_len == NULL || previous_uuid == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  ks_t *ksv = ks_to_ksv(ks);
-
-  if (ksv->db == NULL)
-    return HAL_ERROR_KEYSTORE_ACCESS;
-
-  hal_error_t err = HAL_OK;
-  int i = -1;
-
-  hal_ks_lock();
-
-  *result_len = 0;
-
-  err = hal_ks_index_find(&ksv->db->ksi, previous_uuid, NULL, &i);
-
-  if (err == HAL_ERROR_KEY_NOT_FOUND)
-    i--;
-  else if (err != HAL_OK)
-    goto done;
-
-  while (*result_len < result_max && ++i < ksv->db->ksi.used) {
-
-    unsigned b = ksv->db->ksi.index[i];
-
-    if (type != HAL_KEY_TYPE_NONE && type != ksv->db->keys[b].type)
-      continue;
-
-    if (curve != HAL_CURVE_NONE && curve != ksv->db->keys[b].curve)
-      continue;
-
-    if (((flags ^ ksv->db->keys[b].flags) & mask) != 0)
-      continue;
-
-    if (!key_visible_to_session(ksv, client, session, &ksv->db->keys[b]))
-      continue;
-
-    if (attributes_len > 0) {
-      const ks_key_t * const k = &ksv->db->keys[b];
-      int ok = 1;
-
-      if (k->attributes_len == 0)
-        continue;
-
-      hal_pkey_attribute_t key_attrs[k->attributes_len];
-
-      if ((err = hal_ks_attribute_scan(k->der + k->der_len, sizeof(k->der) - k->der_len,
-                                       key_attrs, k->attributes_len, NULL)) != HAL_OK)
-        goto done;
-
-      for (const hal_pkey_attribute_t *required = attributes;
-           ok && required < attributes + attributes_len; required++) {
-
-        hal_pkey_attribute_t *present = key_attrs;
-        while (ok && present->type != required->type)
-          ok = ++present < key_attrs + k->attributes_len;
-
-        if (ok)
-          ok = (present->length == required->length &&
-                !memcmp(present->value, required->value, present->length));
-      }
-
-      if (!ok)
-        continue;
-    }
-
-    result[*result_len] = ksv->db->ksi.names[b];
-    ++*result_len;
-  }
+  for (unsigned b = 0; b < db.ks.size; i++)
+    if ((err = block_erase(&db.ks, b)) != HAL_OK)
+      goto done;
 
   err = HAL_OK;
 
@@ -474,157 +216,6 @@ static hal_error_t ks_match(hal_ks_t *ks,
   hal_ks_unlock();
   return err;
 }
-
-static hal_error_t ks_set_attributes(hal_ks_t *ks,
-                                     hal_pkey_slot_t *slot,
-                                     const hal_pkey_attribute_t *attributes,
-                                     const unsigned attributes_len)
-{
-  if (ks == NULL || slot == NULL || attributes == NULL || attributes_len == 0)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  ks_t *ksv = ks_to_ksv(ks);
-  hal_error_t err = HAL_OK;
-  unsigned b;
-
-  hal_ks_lock();
-
-  {
-    if (ksv->db == NULL) {
-      err = HAL_ERROR_KEYSTORE_ACCESS;
-      goto done;
-    }
-
-    if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, &b, &slot->hint)) != HAL_OK)
-      goto done;
-
-    ks_key_t * const k = &ksv->db->keys[b];
-
-    if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k)) {
-      err = HAL_ERROR_KEY_NOT_FOUND;
-      goto done;
-    }
-
-    hal_pkey_attribute_t attrs[k->attributes_len + attributes_len];
-    uint8_t *bytes = k->der + k->der_len;
-    size_t bytes_len = sizeof(k->der) - k->der_len;
-    size_t total_len;
-
-    if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, k->attributes_len, &total_len)) != HAL_OK)
-      goto done;
-
-    for (const hal_pkey_attribute_t *a = attributes; a < attributes + attributes_len; a++) {
-      if (a->length == HAL_PKEY_ATTRIBUTE_NIL)
-        err =  hal_ks_attribute_delete(bytes, bytes_len, attrs, &k->attributes_len, &total_len,
-                                       a->type);
-      else
-        err =  hal_ks_attribute_insert(bytes, bytes_len, attrs, &k->attributes_len, &total_len,
-                                       a->type, a->value, a->length);
-      if (err != HAL_OK)
-        goto done;
-    }
-
-    err = HAL_OK;
-
-  }
-
- done:
-  hal_ks_unlock();
-  return err;
-}
-
-static hal_error_t ks_get_attributes(hal_ks_t *ks,
-                                     hal_pkey_slot_t *slot,
-                                     hal_pkey_attribute_t *attributes,
-                                     const unsigned attributes_len,
-                                     uint8_t *attributes_buffer,
-                                     const size_t attributes_buffer_len)
-{
-  if (ks == NULL || slot == NULL || attributes == NULL || attributes_len == 0 ||
-      attributes_buffer == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  ks_t *ksv = ks_to_ksv(ks);
-  hal_error_t err = HAL_OK;
-  unsigned b;
-
-  hal_ks_lock();
-
-  {
-    if (ksv->db == NULL) {
-      err = HAL_ERROR_KEYSTORE_ACCESS;
-      goto done;
-    }
-
-    if ((err = hal_ks_index_find(&ksv->db->ksi, &slot->name, &b, &slot->hint)) != HAL_OK)
-      goto done;
-
-    const ks_key_t * const k = &ksv->db->keys[b];
-
-    if (!key_visible_to_session(ksv, slot->client_handle, slot->session_handle, k)) {
-      err = HAL_ERROR_KEY_NOT_FOUND;
-      goto done;
-    }
-
-    hal_pkey_attribute_t attrs[k->attributes_len > 0 ? k->attributes_len : 1];
-
-    if ((err = hal_ks_attribute_scan(k->der + k->der_len, sizeof(k->der) - k->der_len,
-                                     attrs, k->attributes_len, NULL)) != HAL_OK)
-      goto done;
-
-    uint8_t *abuf = attributes_buffer;
-
-    for (int i = 0; i < attributes_len; i++) {
-      int j = 0;
-      while (j < k->attributes_len && attrs[j].type != attributes[i].type)
-        j++;
-      const int found = j < k->attributes_len;
-
-      if (attributes_buffer_len == 0) {
-        attributes[i].value  = NULL;
-        attributes[i].length = found ? attrs[j].length : 0;
-        continue;
-      }
-
-      if (!found) {
-        err = HAL_ERROR_ATTRIBUTE_NOT_FOUND;
-        goto done;
-      }
-
-      if (attrs[j].length > attributes_buffer + attributes_buffer_len - abuf) {
-        err = HAL_ERROR_RESULT_TOO_LONG;
-        goto done;
-      }
-
-      memcpy(abuf, attrs[j].value, attrs[j].length);
-      attributes[i].value  = abuf;
-      attributes[i].length = attrs[j].length;
-      abuf += attrs[j].length;
-    }
-
-    err = HAL_OK;
-
-  }
-
- done:
-  hal_ks_unlock();
-  return err;
-}
-
-const hal_ks_driver_t hal_ks_volatile_driver[1] = {{
-  .init                 = ks_volatile_init,
-  .shutdown             = ks_volatile_shutdown,
-  .open                 = ks_volatile_open,
-  .close                = ks_volatile_close,
-  .store                = ks_store,
-  .fetch                = ks_fetch,
-  .delete               = ks_delete,
-  .match                = ks_match,
-  .set_attributes       = ks_set_attributes,
-  .get_attributes       = ks_get_attributes
-}};
-
-#endif /* STATIC_KS_VOLATILE_SLOTS > 0 */
 
 /*
  * Local variables:

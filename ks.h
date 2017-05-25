@@ -147,19 +147,44 @@ typedef struct {
 } hal_ks_cache_block_t;
 
 /*
- * Medium-specific driver and in-memory database.
+ * Keystore object.  hal_internal.h typedefs this to hal_ks_t.
  *
- * The top-level structure is a static variable; the arrays are
- * allocated at runtime using hal_allocate_static_memory() because
- * they can get kind of large.
+ * We expect this to be a static variable, but we expect the arrays in
+ * it to be allocated at runtime using hal_allocate_static_memory()
+ * because they can get kind of large.
  *
  * Driver-specific stuff is handled by a form of subclassing: the
  * driver embeds the hal_ks_t structure at the head of whatever else
  * it needs, and performs (controlled, type-safe) casts as needed.
+ *
+ * Core of this is the keystore index.  This is intended to be usable
+ * by both memory-based and flash-based keystores.  Some of the
+ * features aren't necessary for memory-based keystores, but should be
+ * harmless, and let us keep the drivers simple.
+ *
+ * General approach is multiple arrays, all but one of which are
+ * indexed by "block" numbers, where a block number might be a slot in
+ * yet another static array, the number of a flash sub-sector, or
+ * whatever is the appropriate unit for holding one keystore record.
+ *
+ * The index array only contains block numbers.  This is a small data
+ * structure so that moving data within it is relatively cheap.
+ *
+ * The index array is divided into two portions: the index proper, and
+ * the free queue.  The index proper is ordered according to the names
+ * (UUIDs) of the corresponding blocks; the free queue is a FIFO, to
+ * support a simplistic form of wear leveling in flash-based keystores.
+ *
+ * Key names are kept in a separate array, indexed by block number.
+ *
+ * The all-zeros UUID, which (by definition) cannot be a valid key
+ * UUID, is reserved for the (non-key) block used to stash PINs and
+ * other small data which aren't really part of the keystore proper
+ * but are kept with it because the keystore is the flash we have.
+ *
+ * Note that this API deliberately says nothing about how the keys
+ * themselves are stored, that's up to the keystore driver.
  */
-
-typedef struct hal_ks_driver    hal_ks_driver_t;
-typedef struct hal_ks           hal_ks_t;
 
 struct hal_ks {
   const hal_ks_driver_t *driver;
@@ -172,6 +197,19 @@ struct hal_ks {
   hal_ks_cache_block_t *cache;  /* Cache */
   int per_session;              /* Whether objects have per-session semantics (PKCS #11, sigh) */
 };
+
+/*
+ * Keystore driver.  This is just a dispatch vector for low-level
+ * keystore operations, and the code is very repetitive.  We opt for
+ * expressing this in a terse form via C macros over expressing it
+ * as huge chunks of repetitive code: both are difficult to read, but
+ * the terse form has the advantage of fitting in a single screen.
+ * The KS_DRIVER_METHODS macro is the protein, the rest is just the
+ * machinery to expand the method definitions into a struct of typed
+ * function pointers and a set of static inline wrapper functions.
+ */
+
+typedef struct hal_ks_driver hal_ks_driver_t;
 
 #define KS_DRIVER_END_LIST
 #define KS_DRIVER_METHODS                                                                               \
@@ -187,7 +225,7 @@ struct hal_ks {
                                 const hal_client_handle_t client, const hal_session_handle_t session)   \
   KS_DRIVER_END_LIST
 
-#define KS_DRIVER_METHOD(_name_, ...) hal_error_t (*_name_)(__VA_ARGS__)
+#define KS_DRIVER_METHOD(_name_, ...)   hal_error_t (*_name_)(__VA_ARGS__);
 struct hal_ks_driver { KS_DRIVER_METHODS };
 #undef  KS_DRIVER_METHOD
 
@@ -206,6 +244,65 @@ KS_DRIVER_METHODS
 #undef  KS_DRIVER_END_LIST
 
 #endif /* _KS_H_ */
+
+/*
+ * Keystore utilities.  Some or all of these may end up static within ks.c.
+ */
+
+extern hal_error_t hal_ks_alloc_common(hal_ks_t *ks,
+                                       const unsigned ks_blocks,
+                                       const unsigned cache_blocks);
+
+extern hal_error_t hal_ks_init_common(hal_ks_t *ks,
+                                      const hal_ks_driver_t * const driver);
+
+extern hal_error_t hal_ks_index_heapsort(hal_ks_t *ks);
+
+extern hal_error_t hal_ks_index_find(hal_ks_t *ks,
+                                     const hal_uuid_t * const name,
+                                     unsigned *blockno,
+                                     int *hint);
+
+extern hal_error_t hal_ks_index_add(hal_ks_t *ks,
+                                    const hal_uuid_t * const name,
+                                    unsigned *blockno,
+                                    int *hint);
+
+extern hal_error_t hal_ks_index_delete(hal_ks_t *ks,
+                                       const hal_uuid_t * const name,
+                                       unsigned *blockno,
+                                       int *hint);
+
+extern hal_error_t hal_ks_index_replace(hal_ks_t *ks,
+                                        const hal_uuid_t * const name,
+                                        unsigned *blockno,
+                                        int *hint);
+
+extern hal_error_t hal_ks_index_fsck(hal_ks_t *ks);
+
+extern const size_t hal_ks_attribute_header_size;
+
+extern hal_error_t hal_ks_attribute_scan(const uint8_t * const bytes,
+                                         const size_t bytes_len,
+                                         hal_pkey_attribute_t *attributes,
+                                         const unsigned attributes_len,
+                                         size_t *total_len);
+
+extern hal_error_t hal_ks_attribute_delete(uint8_t *bytes,
+                                           const size_t bytes_len,
+                                           hal_pkey_attribute_t *attributes,
+                                           unsigned *attributes_len,
+                                           size_t *total_len,
+                                           const uint32_t type);
+
+extern hal_error_t hal_ks_attribute_insert(uint8_t *bytes, const size_t bytes_len,
+                                           hal_pkey_attribute_t *attributes,
+                                           unsigned *attributes_len,
+                                           size_t *total_len,
+                                           const uint32_t type,
+                                           const uint8_t * const value,
+                                           const size_t value_len);
+
 
 /*
  * Local variables:

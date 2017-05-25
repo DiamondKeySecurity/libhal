@@ -137,7 +137,7 @@ endif
 # volatile keystore is always present, to support things like PKCS #11
 # "session" objects.
 
-KS_OBJ = ks_index.o ks_attribute.o ks_volatile.o ks_flash.o mkm.o
+KS_OBJ = ks.o ks_index.o ks_attribute.o ks_volatile.o ks_flash.o mkm.o
 
 # RPC_MODE = none | server | client-simple | client-mixed
 #   none:		Build without RPC client, use cores directly.
