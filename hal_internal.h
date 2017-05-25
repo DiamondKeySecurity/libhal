@@ -98,6 +98,7 @@ extern void hal_critical_section_end(void);
 extern void hal_ks_lock(void);
 extern void hal_ks_unlock(void);
 extern void hal_task_yield(void);
+extern void hal_task_yield_maybe(void);
 
 /*
  * Thread sleep.  Currently used only for bad-PIN delays.

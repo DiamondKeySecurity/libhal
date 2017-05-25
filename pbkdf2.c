@@ -108,13 +108,6 @@ hal_error_t hal_pbkdf2(hal_core_t *core,
   memset(result, 0, sizeof(result));
   memset(mac,    0, sizeof(mac));
 
-#if 1
-  /* HACK - find the second sha256 core, to avoid interfering with rpc.
-   */
-  core = hal_core_find(descriptor->core_name, NULL);
-  core = hal_core_find(descriptor->core_name, core);
-#endif
-
   /*
    * We probably should check here to see whether the password is
    * longer than the HMAC block size, and, if so, we should hash the
@@ -147,6 +140,8 @@ hal_error_t hal_pbkdf2(hal_core_t *core,
      */
 
     for (iteration = 2; iteration <= iterations_desired; iteration++) {
+
+      hal_task_yield_maybe();
 
       if ((err = do_hmac(core, descriptor, password, password_length,
                          mac, descriptor->digest_length,
