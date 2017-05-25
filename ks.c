@@ -321,7 +321,7 @@ hal_error_t hal_ks_index_replace(hal_ks_t *ks,
  * result, leave the lru values alone and the right thing will happen.
  */
 
-static inline ks_block_t *cache_pick_lru(hal_ks_t *ks)
+static inline hal_ks_block_t *cache_pick_lru(hal_ks_t *ks)
 {
   uint32_t best_delta = 0;
   int      best_index = 0;
@@ -347,7 +347,7 @@ static inline ks_block_t *cache_pick_lru(hal_ks_t *ks)
  * Find a block in our in-memory cache; return block or NULL if not present.
  */
 
-static inline ks_block_t *cache_find_block(const hal_ks_t * const ks, const unsigned blockno)
+static inline hal_ks_block_t *cache_find_block(const hal_ks_t * const ks, const unsigned blockno)
 {
   for (int i = 0; i < ks->cache_size; i++)
     if (ks->cache[i].blockno == blockno)
@@ -359,7 +359,7 @@ static inline ks_block_t *cache_find_block(const hal_ks_t * const ks, const unsi
  * Mark a block in our in-memory cache as being in current use.
  */
 
-static inline void cache_mark_used(hal_ks_t *ks, const ks_block_t * const block, const unsigned blockno)
+static inline void cache_mark_used(hal_ks_t *ks, const hal_ks_block_t * const block, const unsigned blockno)
 {
   for (int i = 0; i < ks->cache_size; i++) {
     if (&ks->cache[i].block == block) {
@@ -374,7 +374,7 @@ static inline void cache_mark_used(hal_ks_t *ks, const ks_block_t * const block,
  * Release a block from the in-memory cache.
  */
 
-static inline void cache_release(hal_ks_t *ks, const ks_block_t * const block)
+static inline void cache_release(hal_ks_t *ks, const hal_ks_block_t * const block)
 {
   if (block != NULL)
     cache_mark_used(block, ~0);
@@ -383,12 +383,12 @@ static inline void cache_release(hal_ks_t *ks, const ks_block_t * const block)
 /*
  * Generate CRC-32 for a block.
  *
- * This function needs to understand the structure of
- * ks_block_header_t, so that it can skip over fields that
+ * This function needs to understand the structure of the
+ * hal_ks_block_header_t, so that it can skip over fields that
  * shouldn't be included in the CRC.
  */
 
-static hal_crc32_t calculate_block_crc(const ks_block_t * const block)
+static hal_crc32_t calculate_block_crc(const hal_ks_block_t * const block)
 {
   hal_crc32_t crc = hal_crc32_init();
 
@@ -398,8 +398,8 @@ static hal_crc32_t calculate_block_crc(const ks_block_t * const block)
                            sizeof(block->header.block_type));
 
     crc = hal_crc32_update(crc,
-                           block->bytes   + sizeof(ks_block_header_t),
-                           sizeof(*block) - sizeof(ks_block_header_t));
+                           block->bytes   + sizeof(hal_ks_block_header_t),
+                           sizeof(*block) - sizeof(hal_ks_block_header_t));
   }
 
   return hal_crc32_finalize(crc);
@@ -408,10 +408,10 @@ static hal_crc32_t calculate_block_crc(const ks_block_t * const block)
 /*
  * Read a block using the cache.  Marking the block as used is left
  * for the caller, so we can avoid blowing out the cache when we
- * perform a ks_match() operation.
+ * perform a hal_ks_match() operation.
  */
 
-static hal_error_t block_read_cached(hal_ks_t *ks, const unsigned blockno, ks_block_t **block)
+static hal_error_t block_read_cached(hal_ks_t *ks, const unsigned blockno, hal_ks_block_t **block)
 {
   if (block == NULL)
     return HAL_ERROR_IMPOSSIBLE;
@@ -431,7 +431,7 @@ static hal_error_t block_read_cached(hal_ks_t *ks, const unsigned blockno, ks_bl
 
 static hal_error_t block_update(hal_ks_t *ks,
                                 const unsigned b1,
-                                ks_block_t *block,
+                                hal_ks_block_t *block,
                                 const hal_uuid_t * const uuid,
                                 int *hint)
 {
@@ -479,9 +479,9 @@ static inline void *gnaw(uint8_t **mem, size_t *len, const size_t size)
   return ret;
 }
 
-#warning Call ks_alloc_common() and ks_init_common() while holding hal_ks_lock(); !
+#warning Call hal_ks_alloc_common() and hal_ks_init_common() while holding hal_ks_lock(); !
 
-hal_error_t ks_alloc_common(hal_ks_t *ks, const unsigned ks_blocks, const unsigned cache_blocks)
+hal_error_t hal_ks_alloc_common(hal_ks_t *ks, const unsigned ks_blocks, const unsigned cache_blocks)
 {
   /*
    * We allocate a single big chunk of memory rather than three
@@ -511,7 +511,7 @@ hal_error_t ks_alloc_common(hal_ks_t *ks, const unsigned ks_blocks, const unsign
   return HAL_OK;
 }
 
-hal_error_t ks_init_common(hal_ks_t *ks, const hal_ks_driver_t * const driver)
+hal_error_t hal_ks_init_common(hal_ks_t *ks, const hal_ks_driver_t * const driver)
 {
   if (ks->index == NULL || ks->names == NULL || ks->cache == NULL)
     return HAL_ERROR_IMPOSSIBLE;
@@ -527,9 +527,9 @@ hal_error_t ks_init_common(hal_ks_t *ks, const hal_ks_driver_t * const driver)
    * like power failures at inconvenient times.
    */
 
-  ks_block_type_t   block_types[ks->size];
-  ks_block_status_t block_status[ks->size];
-  ks_block_t *block = cache_pick_lru(ks);
+  hal_ks_block_type_t   block_types[ks->size];
+  hal_ks_block_status_t block_status[ks->size];
+  hal_ks_block_t *block = cache_pick_lru(ks);
   int first_erased = -1;
   hal_error_t err;
   uint16_t n = 0;
@@ -711,6 +711,10 @@ hal_error_t ks_init_common(hal_ks_t *ks, const hal_ks_driver_t * const driver)
   return HAL_OK;
 }
 
+/*
+ * Test whether we like a particular key type.
+ */
+
 static inline int acceptable_key_type(const hal_key_type_t type)
 {
   switch (type) {
@@ -724,15 +728,56 @@ static inline int acceptable_key_type(const hal_key_type_t type)
   }
 }
 
-hal_error_t ks_store(hal_ks_t *ks,
-                     hal_pkey_slot_t *slot,
-                     const uint8_t * const der, const size_t der_len)
+/*
+ * Test whether the current session can see a particular key.  One
+ * might expect this to be based on whether the session matches, and
+ * indeed it would be in a sane world, but in the world of PKCS #11,
+ * keys belong to sessions, are visible to other sessions, and may
+ * even be modifiable by other sessions, but softly and silently
+ * vanish away when the original creating session is destroyed.
+ *
+ * In our terms, this means that visibility of session objects is
+ * determined only by the client handle, so taking the session handle
+ * as an argument here isn't really necessary, but we've flipflopped
+ * on that enough times that at least for now I'd prefer to leave the
+ * session handle here and not have to revise all the RPC calls again.
+ * Remove it at some later date and redo the RPC calls if we manage to
+ * avoid revising this yet again.
+ */
+
+static inline hal_error_t key_visible(const hal_ks_t * const ks,
+                                      const hal_client_handle_t client,
+                                      const hal_session_handle_t session,
+                                      const unsigned blockno)
+{
+  if (ks == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  if (!ks->per_session)
+    return HAL_OK;
+
+  hal_error_t err;
+
+  if ((err = hal_ks_test_owner(ks, client, session)) != HAL_OK)
+    return err;
+
+  err = hal_rpc_is_logged_in(client, HAL_USER_WHEEL);
+
+  if (err == HAL_ERROR_FORBIDDEN)
+    err = HAL_ERROR_KEY_NOT_FOUND;
+
+  return err;
+}
+
+hal_error_t hal_ks_store(hal_ks_t *ks,
+                         hal_pkey_slot_t *slot,
+                         const uint8_t * const der, const size_t der_len)
 {
   if (ks == NULL || slot == NULL || der == NULL || der_len == 0 || !acceptable_key_type(slot->type))
     return HAL_ERROR_BAD_ARGUMENTS;
 
   hal_error_t err = HAL_OK;
-  ks_block_t *block;
+  hal_ks_block_t *block;
   flash_key_block_t *k;
   uint8_t kek[KEK_LENGTH];
   size_t kek_len;
@@ -779,6 +824,9 @@ hal_error_t ks_store(hal_ks_t *ks,
     err = block_write(ks, b, block);
 
   if (err == HAL_OK)
+    err = hal_ks_set_owner(ks, b, slot->client_handle, slot->session_handle);
+
+  if (err == HAL_OK)
     goto done;
 
   memset(block, 0, sizeof(*block));
@@ -790,21 +838,22 @@ hal_error_t ks_store(hal_ks_t *ks,
   return err;
 }
 
-static hal_error_t ks_fetch(hal_ks_t *ks,
-                            hal_pkey_slot_t *slot,
-                            uint8_t *der, size_t *der_len, const size_t der_max)
+hal_error_t hal_ks_fetch(hal_ks_t *ks,
+                         hal_pkey_slot_t *slot,
+                         uint8_t *der, size_t *der_len, const size_t der_max)
 {
   if (ks == NULL || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   hal_error_t err = HAL_OK;
-  ks_block_t *block;
+  hal_ks_block_t *block;
   unsigned b;
 
   hal_ks_lock();
 
-  if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint)) != HAL_OK ||
-      (err = block_read_cached(ks, b, &block))                    != HAL_OK)
+  if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint))           != HAL_OK ||
+      (err = key_visible(ks, slot->client_handle, slot->session_handle, b)) != HAL_OK ||
+      (err = block_read_cached(ks, b, &block))                              != HAL_OK)
     goto done;
 
   if (block_get_type(block) != BLOCK_TYPE_KEY) {
@@ -845,8 +894,8 @@ static hal_error_t ks_fetch(hal_ks_t *ks,
   return err;
 }
 
-static hal_error_t ks_delete(hal_ks_t *ks,
-                             hal_pkey_slot_t *slot)
+hal_error_t hal_ks_delete(hal_ks_t *ks,
+                          hal_pkey_slot_t *slot)
 {
   if (ks == NULL || slot == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -856,7 +905,8 @@ static hal_error_t ks_delete(hal_ks_t *ks,
 
   hal_ks_lock();
 
-  if ((err = hal_ks_index_delete(ks, &slot->name, &b, &slot->hint)) != HAL_OK)
+  if ((err = hal_ks_index_delete(ks, &slot->name, &b, &slot->hint))         != HAL_OK ||
+      (err = key_visible(ks, slot->client_handle, slot->session_handle, b)) != HAL_OK)
     goto done;
 
   cache_release(ks, cache_find_block(ks, b));
@@ -871,7 +921,7 @@ static hal_error_t ks_delete(hal_ks_t *ks,
   return err;
 }
 
-static inline hal_error_t locate_attributes(ks_block_t *block,
+static inline hal_error_t locate_attributes(hal_ks_block_t *block,
                                             uint8_t **bytes, size_t *bytes_len,
                                             unsigned **attrs_len)
 {
@@ -888,26 +938,26 @@ static inline hal_error_t locate_attributes(ks_block_t *block,
   return HAL_OK;
 }
 
-static hal_error_t ks_match(hal_ks_t *ks,
-                            const hal_client_handle_t client,
-                            const hal_session_handle_t session,
-                            const hal_key_type_t type,
-                            const hal_curve_name_t curve,
-                            const hal_key_flags_t mask,
-                            const hal_key_flags_t flags,
-                            const hal_pkey_attribute_t *attributes,
-                            const unsigned attributes_len,
-                            hal_uuid_t *result,
-                            unsigned *result_len,
-                            const unsigned result_max,
-                            const hal_uuid_t * const previous_uuid)
+hal_error_t hal_ks_match(hal_ks_t *ks,
+                         const hal_client_handle_t client,
+                         const hal_session_handle_t session,
+                         const hal_key_type_t type,
+                         const hal_curve_name_t curve,
+                         const hal_key_flags_t mask,
+                         const hal_key_flags_t flags,
+                         const hal_pkey_attribute_t *attributes,
+                         const unsigned attributes_len,
+                         hal_uuid_t *result,
+                         unsigned *result_len,
+                         const unsigned result_max,
+                         const hal_uuid_t * const previous_uuid)
 {
   if (ks == NULL || (attributes == NULL && attributes_len > 0) ||
       result == NULL || result_len == NULL || previous_uuid == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   hal_error_t err = HAL_OK;
-  ks_block_t *block;
+  hal_ks_block_t *block;
   int i = -1;
 
   hal_ks_lock();
@@ -926,6 +976,11 @@ static hal_error_t ks_match(hal_ks_t *ks,
     unsigned b = ks->index[i];
 
     if ((err = block_read_cached(ks, b, &block)) != HAL_OK)
+      goto done;
+
+    if ((err = key_visible(ks, client, session, b)) == HAL_ERROR_KEY_NOT_FOUND)
+      continue;
+    else if (err != HAL_OK)
       goto done;
 
     if ((type  != HAL_KEY_TYPE_NONE && type  != block->key.type)  ||
@@ -982,23 +1037,24 @@ static hal_error_t ks_match(hal_ks_t *ks,
   return err;
 }
 
-static  hal_error_t ks_set_attributes(hal_ks_t *ks,
-                                      hal_pkey_slot_t *slot,
-                                      const hal_pkey_attribute_t *attributes,
-                                      const unsigned attributes_len)
+hal_error_t hal_ks_set_attributes(hal_ks_t *ks,
+                                  hal_pkey_slot_t *slot,
+                                  const hal_pkey_attribute_t *attributes,
+                                  const unsigned attributes_len)
 {
   if (ks == NULL || slot == NULL || attributes == NULL || attributes_len == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   hal_error_t err = HAL_OK;
-  ks_block_t *block;
+  hal_ks_block_t *block;
   unsigned b;
 
   hal_ks_lock();
 
   {
-    if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint)) != HAL_OK ||
-        (err = block_read_cached(ks, b, &block))                    != HAL_OK)
+    if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint))             != HAL_OK ||
+        (err = key_visibile(ks, slot->client_handle, slot->session_handle, b))  != HAL_OK ||
+        (err = block_read_cached(ks, b, &block))                                != HAL_OK)
       goto done;
 
     cache_mark_used(ks, block, b);
@@ -1037,12 +1093,12 @@ static  hal_error_t ks_set_attributes(hal_ks_t *ks,
   return err;
 }
 
-static  hal_error_t ks_get_attributes(hal_ks_t *ks,
-                                      hal_pkey_slot_t *slot,
-                                      hal_pkey_attribute_t *attributes,
-                                      const unsigned attributes_len,
-                                      uint8_t *attributes_buffer,
-                                      const size_t attributes_buffer_len)
+hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
+                                  hal_pkey_slot_t *slot,
+                                  hal_pkey_attribute_t *attributes,
+                                  const unsigned attributes_len,
+                                  uint8_t *attributes_buffer,
+                                  const size_t attributes_buffer_len)
 {
   if (ks == NULL || slot == NULL || attributes == NULL || attributes_len == 0 ||
       attributes_buffer == NULL)
@@ -1054,7 +1110,7 @@ static  hal_error_t ks_get_attributes(hal_ks_t *ks,
   }
 
   uint8_t *abuf = attributes_buffer;
-  ks_block_t *block = NULL;
+  hal_ks_block_t *block = NULL;
   hal_error_t err = HAL_OK;
   unsigned found = 0;
   unsigned b;
@@ -1062,8 +1118,9 @@ static  hal_error_t ks_get_attributes(hal_ks_t *ks,
   hal_ks_lock();
 
   {
-    if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint)) != HAL_OK ||
-        (err = block_read_cached(ks, b, &block))                    != HAL_OK)
+    if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint))             != HAL_OK ||
+        (err = key_visibile(ks, slot->client_handle, slot->session_handle, b))  != HAL_OK ||
+        (err = block_read_cached(ks, b, &block))                                != HAL_OK)
       goto done;
 
     cache_mark_used(ks, block, b);
