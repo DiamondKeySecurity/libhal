@@ -479,24 +479,8 @@ typedef struct {
 
 typedef struct hal_ks hal_ks_t;
 
-#error Minor re-think needed on keystore init
-
-// I like current hal_ks_*_init() setup method, but how does anything
-// get a handle on the keystore?  Make the keystores global variables?
-// Right now they're hidden in larger, driver-specific structures, but
-// it would be easy enough to break them out.  Have already forgotten
-// how the old API handled this, except that it involved an init
-// method via the driver.  Init is going to be special in any case,
-// since we can't dispatch through a driver pointer in the keystore
-// object, so either we expose the keystore and the driver or we
-// expose the keystore and the init function.  The latter may be
-// simpler.
-//
-// Another variation would be to keep the current nesting, add global
-// pointer variables for the keystores, and have the init functions
-// set the pointers.  Only real advantage there is that it would give
-// us an easy test for whether the keystore had been initialized...but
-// we already have several of those, not clear what value another adds.
+extern hal_ks_t * const hal_ks_token;
+extern hal_ks_t * const hal_ks_volatile;
 
 /*
  * RPC lowest-level send and receive routines. These are blocking, and

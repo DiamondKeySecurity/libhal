@@ -186,8 +186,10 @@ typedef struct {
  * themselves are stored, that's up to the keystore driver.
  */
 
+typedef struct hal_ks_driver hal_ks_driver_t;
+
 struct hal_ks {
-  const hal_ks_driver_t *driver;
+  const hal_ks_driver_t *driver;/* Must be first */
   unsigned size;                /* Blocks in keystore */
   unsigned used;                /* How many blocks are in use */
   uint16_t *index;              /* Index/freelist array */
@@ -209,10 +211,9 @@ struct hal_ks {
  * function pointers and a set of static inline wrapper functions.
  */
 
-typedef struct hal_ks_driver hal_ks_driver_t;
-
 #define KS_DRIVER_END_LIST
 #define KS_DRIVER_METHODS                                                                               \
+  KS_DRIVER_METHOD(init,        hal_ks_t *ks, const int alloc)                                          \
   KS_DRIVER_METHOD(read,        hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)            \
   KS_DRIVER_METHOD(write,       hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)            \
   KS_DRIVER_METHOD(deprecate,   hal_ks_t *ks, const unsigned blockno)                                   \

@@ -51,27 +51,38 @@
 #define KS_VOLATILE_CACHE_SIZE 4
 #endif
 
+/*
+ * Keystore database.
+ */
+
 typedef struct {
   hal_client_handle_t   client;
   hal_session_handle_t  session;
   hal_ks_block_t	block;
-} volatile_key_t;
+} ks_volatile_key_t;
 
-static struct db {
+typedef struct {
   hal_ks_t ks;              /* Must be first */
-  volatile_key_t *keys;
-} db;
+  ks_volatile_key_t *keys;
+} ks_volatile_db_t;
+
+/*
+ * This is a bit silly, but it's safe enough, and it lets us avoid a
+ * nasty mess of forward references.
+ */
+
+#define db      ((ks_volatile_db_t * const) hal_ks_volatile)
 
 /*
  * Read a block.  CRC probably not necessary for RAM.
  */
 
-static hal_error_t block_read(hal_k_t *ks, const unsigned blockno, ks_block_t *block)
+static hal_error_t ks_volatile_read(hal_k_t *ks, const unsigned blockno, ks_block_t *block)
 {
-  if (ks != &db.ks || db.keys == NULL || block == NULL || blockno >= ks->size)
+  if (ks != hal_ks_volatile || db->keys == NULL || block == NULL || blockno >= ks->size)
     return HAL_ERROR_IMPOSSIBLE;
 
-  memcpy(block, &db.keys[blockno].block, sizeof(*block));
+  memcpy(block, &db->keys[blockno].block, sizeof(*block));
 
   return HAL_OK;
 }
@@ -80,12 +91,12 @@ static hal_error_t block_read(hal_k_t *ks, const unsigned blockno, ks_block_t *b
  * Convert a live block into a tombstone.
  */
 
-static hal_error_t block_deprecate(hal_k_t *ks, const unsigned blockno)
+static hal_error_t ks_volatile_deprecate(hal_k_t *ks, const unsigned blockno)
 {
-  if (ks != &db.ks || db.keys == NULL || blockno >= ks->size)
+  if (ks != hal_ks_volatile || db->keys == NULL || blockno >= ks->size)
     return HAL_ERROR_IMPOSSIBLE;
 
-  db.keys[blockno].block.header->block_status = BLOCK_STATUS_TOMBSTONE;
+  db->keys[blockno].block.header->block_status = BLOCK_STATUS_TOMBSTONE;
 
   return HAL_OK;
 }
@@ -94,14 +105,14 @@ static hal_error_t block_deprecate(hal_k_t *ks, const unsigned blockno)
  * Zero (not erase) a flash block.
  */
 
-static hal_error_t block_zero(hal_k_t *ks, const unsigned blockno)
+static hal_error_t ks_volatile_zero(hal_k_t *ks, const unsigned blockno)
 {
-  if (ks != &db.ks || db.keys == NULL || blockno >= ks->size)
+  if (ks != hal_ks_volatile || db->keys == NULL || blockno >= ks->size)
     return HAL_ERROR_IMPOSSIBLE;
 
-  memset(db.keys[blockno].block, 0x00, sizeof(db.keys[blockno].block));
-  db.keys[blockno].client.handle = HAL_HANDLE_NONE;
-  db.keys[blockno].session.handle = HAL_HANDLE_NONE;
+  memset(db->keys[blockno].block, 0x00, sizeof(db->keys[blockno].block));
+  db->keys[blockno].client.handle = HAL_HANDLE_NONE;
+  db->keys[blockno].session.handle = HAL_HANDLE_NONE;
 
   return HAL_OK;
 }
@@ -110,14 +121,14 @@ static hal_error_t block_zero(hal_k_t *ks, const unsigned blockno)
  * Erase a flash block.
  */
 
-static hal_error_t block_erase(hal_k_t *ks, const unsigned blockno)
+static hal_error_t ks_volatile_erase(hal_k_t *ks, const unsigned blockno)
 {
-  if (ks != &db.ks || db.keys == NULL || blockno >= ks->size)
+  if (ks != hal_ks_volatile || db->keys == NULL || blockno >= ks->size)
     return HAL_ERROR_IMPOSSIBLE;
 
-  memset(db.keys[blockno].block, 0xFF, sizeof(db.keys[blockno].block));
-  db.keys[blockno].client.handle = HAL_HANDLE_NONE;
-  db.keys[blockno].session.handle = HAL_HANDLE_NONE;
+  memset(db->keys[blockno].block, 0xFF, sizeof(db->keys[blockno].block));
+  db->keys[blockno].client.handle = HAL_HANDLE_NONE;
+  db->keys[blockno].session.handle = HAL_HANDLE_NONE;
 
   return HAL_OK;
 }
@@ -126,12 +137,12 @@ static hal_error_t block_erase(hal_k_t *ks, const unsigned blockno)
  * Write a flash block.  CRC probably not necessary for RAM.
  */
 
-static hal_error_t block_write(hal_k_t *ks, const unsigned blockno, ks_block_t *block)
+static hal_error_t ks_volatile_write(hal_k_t *ks, const unsigned blockno, ks_block_t *block)
 {
-  if (ks != &db.ks || db.keys == NULL || block == NULL || blockno >= ks->size)
+  if (ks != hal_ks_volatile || db->keys == NULL || block == NULL || blockno >= ks->size)
     return HAL_ERROR_IMPOSSIBLE;
 
-  memcpy(&db.keys[blockno].block, block, sizeof(*block));
+  memcpy(&db->keys[blockno].block, block, sizeof(*block));
 
   return HAL_OK;
 }
@@ -140,16 +151,16 @@ static hal_error_t block_write(hal_k_t *ks, const unsigned blockno, ks_block_t *
  * Set key ownership.
  */
 
-static hal_error_t block_set_owner(hal_ks_t *ks,
-                                   const unsigned blockno,
-                                   const hal_client_handle_t client,
-                                   const hal_session_handle_t session)
+static hal_error_t ks_volatile_set_owner(hal_ks_t *ks,
+                                         const unsigned blockno,
+                                         const hal_client_handle_t client,
+                                         const hal_session_handle_t session)
 {
-  if (ks != &db.ks || db.keys == NULL || blockno >= ks->size)
+  if (ks != hal_ks_volatile || db->keys == NULL || blockno >= ks->size)
     return HAL_ERROR_IMPOSSIBLE;
 
-  db.keys[blockno].client = client;
-  db.keys[blockno].session = session;
+  db->keys[blockno].client = client;
+  db->keys[blockno].session = session;
 
   return HAL_OK;
 }
@@ -158,16 +169,16 @@ static hal_error_t block_set_owner(hal_ks_t *ks,
  * Test key ownership.
  */
 
-static hal_error_t block_test_owner(hal_ks_t *ks, const
-                                    unsigned blockno,
-                                    const hal_client_handle_t client,
-                                    const hal_session_handle_t session)
+static hal_error_t ks_volatile_test_owner(hal_ks_t *ks, const
+                                          unsigned blockno,
+                                          const hal_client_handle_t client,
+                                          const hal_session_handle_t session)
 {
-  if (ks != &db.ks || db.keys == NULL || blockno >= ks->size)
+  if (ks != hal_ks_volatile || db->keys == NULL || blockno >= ks->size)
     return HAL_ERROR_IMPOSSIBLE;
 
-  if (db.keys[blockno].client.handle  == client.handle &&
-      db.keys[blockno].session.handle == session.handle)
+  if (db->keys[blockno].client.handle  == client.handle &&
+      db->keys[blockno].session.handle == session.handle)
     return HAL_OK;
   else
     return HAL_ERROR_KEY_NOT_FOUND;
@@ -177,37 +188,28 @@ static hal_error_t block_test_owner(hal_ks_t *ks, const
  * Initialize keystore.
  */
 
-static const hal_ks_driver_t hal_ks_volatile_driver[1] = {{
-  .read               	= block_read,
-  .write                = block_write,
-  .deprecate		= block_deprecate,
-  .zero                 = block_zero,
-  .erase                = block_erase,
-  .erase_maybe		= block_erase, /* sic */
-  .set_owner            = block_set_owner,
-  .test_owner           = block_test_owner
-}};
-
- hal_error_t hal_ks_volatile_init(const int alloc)
+static hal_error_t ks_volatile_init(hal_ks_t *ks, const int alloc)
 {
+  if (ks != hal_ks_volatile)
+    return HAL_ERROR_IMPOSSIBLE;
+
   hal_error_t err = HAL_OK;
+  void *mem = NULL;
 
   hal_ks_lock();
 
-
-  if (alloc && (err = hal_ks_alloc_common(&db.ks, STATIC_KS_VOLATILE_SLOTS, KS_VOLATILE_CACHE_SIZE)) != HAL_OK)
-    goto done;
-
-  if ((err = hal_ks_init_common(&db.ks, hal_ks_volatile_driver)) != HAL_OK)
-    goto done;
-
-  if (alloc && (db.keys = hal_allocate_static_memory(sizeof(*db.keys) * db.ks.size)) == NULL) {
-    err = HAL_ERROR_ALLOCATION_FAILURE;
-    goto done;
+  if (alloc) {
+    if ((err = hal_ks_alloc_common(ks, STATIC_KS_VOLATILE_SLOTS, KS_VOLATILE_CACHE_SIZE,
+                                   &mem, sizeof(*db->keys) * STATIC_KS_VOLATILE_SLOTS)) != HAL_OK)
+      goto done;
+    db->keys = mem;
   }
 
-  for (unsigned b = 0; b < db.ks.size; i++)
-    if ((err = block_erase(&db.ks, b)) != HAL_OK)
+  if ((err = hal_ks_init_common(ks)) != HAL_OK)
+    goto done;
+
+  for (unsigned b = 0; b < db->ks.size; i++)
+    if ((err = block_erase(ks, b)) != HAL_OK)
       goto done;
 
   err = HAL_OK;
@@ -216,6 +218,27 @@ static const hal_ks_driver_t hal_ks_volatile_driver[1] = {{
   hal_ks_unlock();
   return err;
 }
+
+/*
+ * Dispatch vector and keystore definition, now that we've defined all
+ * the driver functions.
+ */
+
+static const hal_ks_driver_t hal_ks_volatile_driver = {
+  .init                 = ks_volatile_init,
+  .read               	= ks_volatile_read,
+  .write                = ks_volatile_write,
+  .deprecate		= ks_volatile_deprecate,
+  .zero                 = ks_volatile_zero,
+  .erase                = ks_volatile_erase,
+  .erase_maybe		= ks_volatile_erase, /* sic */
+  .set_owner            = ks_volatile_set_owner,
+  .test_owner           = ks_volatile_test_owner
+};
+
+static ks_volatile_db_t _db = { .ks.driver = &ks_volatile_driver };
+
+hal_ks_t * const hal_ks_volatile = &_db.ks;
 
 /*
  * Local variables:

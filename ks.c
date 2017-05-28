@@ -221,24 +221,31 @@ static inline void *gnaw(uint8_t **mem, size_t *len, const size_t size)
 
 #warning Call hal_ks_alloc_common() and hal_ks_init_common() while holding hal_ks_lock(); !
 
-hal_error_t hal_ks_alloc_common(hal_ks_t *ks, const unsigned ks_blocks, const unsigned cache_blocks)
+hal_error_t hal_ks_alloc_common(hal_ks_t *ks,
+                                const unsigned ks_blocks,
+                                const unsigned cache_blocks,
+                                void **extra,
+                                const size_t extra_len)
 {
   /*
-   * We allocate a single big chunk of memory rather than three
-   * smaller chunks to make it atomic.  We need all three, so this way
-   * either all succeed or all fail.
+   * We allocate a single big chunk of memory to make it atomic.  We
+   * need all three of our blocks, so this way either all succeed or
+   * all fail; we allow our caller to piggyback its own memory needs
+   * (if any) on ours for the same reason.
    */
 
   size_t len = (sizeof(*ks->index) * ks_blocks +
                 sizeof(*ks->names) * ks_blocks +
-                sizeof(*ks->cache) * cache_blocks);
+                sizeof(*ks->cache) * cache_blocks +
+                extra_len);
 
   uint8_t *mem = hal_allocate_static_memory(len);
 
   if (mem == NULL)
     return HAL_ERROR_ALLOCATION_FAILURE;
 
-  memset(ks,  0, sizeof(*ks));
+  memset(((uint8_t *) ks) + sizeof(hal_ks_driver_t), 0,
+         sizeof(hal_ks_t) - sizeof(hal_ks_driver_t));
   memset(mem, 0, len);
 
   ks->index = gnaw(&mem, &len, sizeof(*ks->index) * ks_blocks);
@@ -248,10 +255,13 @@ hal_error_t hal_ks_alloc_common(hal_ks_t *ks, const unsigned ks_blocks, const un
   ks->size       = ks_blocks;
   ks->cache_size = cache_blocks;
 
+  if (extra != NULL)
+    *extra = mem;
+
   return HAL_OK;
 }
 
-hal_error_t hal_ks_init_common(hal_ks_t *ks, const hal_ks_driver_t * const driver)
+hal_error_t hal_ks_init_common(hal_ks_t *ks)
 {
   if (ks->index == NULL || ks->names == NULL || ks->cache == NULL)
     return HAL_ERROR_IMPOSSIBLE;
@@ -446,8 +456,6 @@ hal_error_t hal_ks_init_common(hal_ks_t *ks, const hal_ks_driver_t * const drive
   /*
    * And we're finally done.
    */
-
-  ks->driver = driver;
 
   return HAL_OK;
 }

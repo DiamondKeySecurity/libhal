@@ -137,7 +137,7 @@ endif
 # volatile keystore is always present, to support things like PKCS #11
 # "session" objects.
 
-KS_OBJ = ks.o ks_index.o ks_attribute.o ks_volatile.o ks_flash.o mkm.o
+KS_OBJ = ks.o ks_index.o ks_attribute.o ks_volatile.o ks_token.o mkm.o
 
 # RPC_MODE = none | server | client-simple | client-mixed
 #   none:		Build without RPC client, use cores directly.
@@ -268,7 +268,7 @@ asn1.o rsa.o ecdsa.o:				asn1_internal.h
 ecdsa.o:					ecdsa_curves.h
 novena-eim.o hal_io_eim.o:			novena-eim.h
 slip.o rpc_client_serial.o rpc_server_serial.o:	slip_internal.h
-ks_flash.o:					last_gasp_pin_internal.h
+ks_token.o:					last_gasp_pin_internal.h
 
 last_gasp_pin_internal.h:
 	./utils/last_gasp_default_pin >$@
