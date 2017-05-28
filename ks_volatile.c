@@ -205,12 +205,17 @@ static hal_error_t ks_volatile_init(hal_ks_t *ks, const int alloc)
     db->keys = mem;
   }
 
-  if ((err = hal_ks_init_common(ks)) != HAL_OK)
+  if (db->keys == NULL) {
+    err = HAL_ERROR_IMPOSSIBLE;
     goto done;
+  }
 
   for (unsigned b = 0; b < db->ks.size; b++)
     if ((err = hal_ks_block_erase(ks, b)) != HAL_OK)
       goto done;
+
+  if ((err = hal_ks_init_common(ks)) != HAL_OK)
+    goto done;
 
   err = HAL_OK;
 

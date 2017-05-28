@@ -338,6 +338,11 @@ static hal_error_t ks_token_init(hal_ks_t *ks, const int alloc)
 
     unsigned b;
 
+    if ((block = hal_ks_cache_pick_lru(ks)) == NULL) {
+      err = HAL_ERROR_IMPOSSIBLE;
+      goto done;
+    }
+
     memset(block, 0xFF, sizeof(*block));
 
     block->header.block_type   = HAL_KS_BLOCK_TYPE_PIN;
