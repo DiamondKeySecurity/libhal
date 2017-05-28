@@ -397,8 +397,6 @@ extern hal_error_t hal_get_pin(const hal_user_t user,
 extern hal_error_t hal_set_pin(const hal_user_t user,
                                const hal_ks_pin_t * const pin);
 
-extern void hal_ks_init_read_only_pins_only(void);
-
 /*
  * Master key memory (MKM) and key-encryption-key (KEK).
  *
@@ -481,6 +479,48 @@ typedef struct hal_ks hal_ks_t;
 
 extern hal_ks_t * const hal_ks_token;
 extern hal_ks_t * const hal_ks_volatile;
+
+extern hal_error_t hal_ks_init(hal_ks_t *ks,
+                               const int alloc);
+
+extern void hal_ks_init_read_only_pins_only(void);
+
+extern hal_error_t hal_ks_store(hal_ks_t *ks,
+                                hal_pkey_slot_t *slot,
+                                const uint8_t * const der, const size_t der_len);
+
+extern hal_error_t hal_ks_fetch(hal_ks_t *ks,
+                                hal_pkey_slot_t *slot,
+                                uint8_t *der, size_t *der_len, const size_t der_max);
+
+extern hal_error_t hal_ks_delete(hal_ks_t *ks,
+                                 hal_pkey_slot_t *slot);
+
+extern hal_error_t hal_ks_match(hal_ks_t *ks,
+                                const hal_client_handle_t client,
+                                const hal_session_handle_t session,
+                                const hal_key_type_t type,
+                                const hal_curve_name_t curve,
+                                const hal_key_flags_t mask,
+                                const hal_key_flags_t flags,
+                                const hal_pkey_attribute_t *attributes,
+                                const unsigned attributes_len,
+                                hal_uuid_t *result,
+                                unsigned *result_len,
+                                const unsigned result_max,
+                                const hal_uuid_t * const previous_uuid);
+
+extern hal_error_t hal_ks_set_attributes(hal_ks_t *ks,
+                                         hal_pkey_slot_t *slot,
+                                         const hal_pkey_attribute_t *attributes,
+                                         const unsigned attributes_len);
+
+extern hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
+                                         hal_pkey_slot_t *slot,
+                                         hal_pkey_attribute_t *attributes,
+                                         const unsigned attributes_len,
+                                         uint8_t *attributes_buffer,
+                                         const size_t attributes_buffer_len);
 
 /*
  * RPC lowest-level send and receive routines. These are blocking, and

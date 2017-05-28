@@ -114,7 +114,7 @@ static inline hal_error_t ks_heapsift(hal_ks_t *ks, int parent, const int end)
   }
 }
 
-hal_ks_error_t hal_ks_index_heapsort(hal_ks_t *ks)
+hal_error_t hal_ks_index_heapsort(hal_ks_t *ks)
 {
   if (ks == NULL || ks->index == NULL || ks->names == NULL)
     return HAL_ERROR_IMPOSSIBLE;

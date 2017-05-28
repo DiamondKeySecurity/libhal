@@ -46,8 +46,15 @@
  */
 
 #ifndef HAL_KS_BLOCK_SIZE
-#define HAL_KS_BLOCK_SIZE       (KEYSTORE_SUBSECTOR_SIZE * 1)
+#define HAL_KS_BLOCK_SIZE       (4096)
 #endif
+
+/*
+ * PIN block gets the all-zeros UUID, which will never be returned by
+ * the UUID generation code (by definition -- it's not a version 4 UUID).
+ */
+
+const hal_uuid_t hal_ks_pin_uuid;
 
 /*
  * Known block states.
@@ -94,7 +101,7 @@ typedef struct {
  */
 
 typedef struct {
-  hal_ks_block_header_t	header;
+  hal_ks_block_header_t header;
   hal_uuid_t            name;
   hal_key_type_t        type;
   hal_curve_name_t      curve;
@@ -102,10 +109,10 @@ typedef struct {
   size_t                der_len;
   unsigned              attributes_len;
   uint8_t               der[];  /* Must be last field -- C99 "flexible array member" */
-} hal_ks_blockkey_block_t;
+} hal_ks_key_block_t;
 
-#define SIZEOF_KS_BLOCKKEY_BLOCK_DER \
-  (HAL_KS_BLOCK_SIZE - offsetof(hal_ks_blockkey_block_t, der))
+#define SIZEOF_KS_KEY_BLOCK_DER \
+  (HAL_KS_BLOCK_SIZE - offsetof(hal_ks_key_block_t, der))
 
 /*
  * PIN block.  Also includes space for backing up the KEK when
@@ -113,7 +120,7 @@ typedef struct {
  */
 
 typedef struct {
-  hal_ks_block_header_t	header;
+  hal_ks_block_header_t header;
   hal_ks_pin_t          wheel_pin;
   hal_ks_pin_t          so_pin;
   hal_ks_pin_t          user_pin;
@@ -121,7 +128,7 @@ typedef struct {
   uint32_t              kek_set;
   uint8_t               kek[KEK_LENGTH];
 #endif
-} hal_ks_blockpin_block_t;
+} hal_ks_pin_block_t;
 
 #define FLASH_KEK_SET   0x33333333
 
@@ -130,10 +137,10 @@ typedef struct {
  */
 
 typedef union {
-  uint8_t		    bytes[HAL_KS_BLOCK_SIZE];
+  uint8_t                   bytes[HAL_KS_BLOCK_SIZE];
   hal_ks_block_header_t     header;
-  hal_ks_blockkey_block_t   key;
-  hal_ks_blockpin_block_t   pin;
+  hal_ks_key_block_t   key;
+  hal_ks_pin_block_t   pin;
 } hal_ks_block_t;
 
 /*
@@ -143,7 +150,7 @@ typedef union {
 typedef struct {
   unsigned              blockno;
   unsigned              lru;
-  hal_ks_block_t	block;
+  hal_ks_block_t        block;
 } hal_ks_cache_block_t;
 
 /*
@@ -201,50 +208,112 @@ struct hal_ks {
 };
 
 /*
- * Keystore driver.  This is just a dispatch vector for low-level
- * keystore operations, and the code is very repetitive.  We opt for
- * expressing this in a terse form via C macros over expressing it
- * as huge chunks of repetitive code: both are difficult to read, but
- * the terse form has the advantage of fitting in a single screen.
- * The KS_DRIVER_METHODS macro is the protein, the rest is just the
- * machinery to expand the method definitions into a struct of typed
- * function pointers and a set of static inline wrapper functions.
+ * Keystore driver.
  */
 
-#define KS_DRIVER_END_LIST
-#define KS_DRIVER_METHODS                                                                               \
-  KS_DRIVER_METHOD(init,        hal_ks_t *ks, const int alloc)                                          \
-  KS_DRIVER_METHOD(read,        hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)            \
-  KS_DRIVER_METHOD(write,       hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)            \
-  KS_DRIVER_METHOD(deprecate,   hal_ks_t *ks, const unsigned blockno)                                   \
-  KS_DRIVER_METHOD(zero,        hal_ks_t *ks, const unsigned blockno)                                   \
-  KS_DRIVER_METHOD(erase,       hal_ks_t *ks, const unsigned blockno)                                   \
-  KS_DRIVER_METHOD(erase_maybe, hal_ks_t *ks, const unsigned blockno)                                   \
-  KS_DRIVER_METHOD(set_owner,   hal_ks_t *ks, const unsigned blockno,                                   \
-                                const hal_client_handle_t client, const hal_session_handle_t session)   \
-  KS_DRIVER_METHOD(test_owner,  hal_ks_t *ks, const unsigned blockno,                                   \
-                                const hal_client_handle_t client, const hal_session_handle_t session)   \
-  KS_DRIVER_END_LIST
+struct hal_ks_driver {
+  hal_error_t (*init)        (hal_ks_t *ks, const int alloc);
+  hal_error_t (*read)        (hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block);
+  hal_error_t (*write)       (hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block);
+  hal_error_t (*deprecate)   (hal_ks_t *ks, const unsigned blockno);
+  hal_error_t (*zero)        (hal_ks_t *ks, const unsigned blockno);
+  hal_error_t (*erase)       (hal_ks_t *ks, const unsigned blockno);
+  hal_error_t (*erase_maybe) (hal_ks_t *ks, const unsigned blockno);
+  hal_error_t (*set_owner)   (hal_ks_t *ks, const unsigned blockno,
+                              const hal_client_handle_t client, const hal_session_handle_t session);
+  hal_error_t (*test_owner)  (hal_ks_t *ks, const unsigned blockno,
+                              const hal_client_handle_t client, const hal_session_handle_t session);
+};
 
-#define KS_DRIVER_METHOD(_name_, ...)   hal_error_t (*_name_)(__VA_ARGS__);
-struct hal_ks_driver { KS_DRIVER_METHODS };
-#undef  KS_DRIVER_METHOD
+/*
+ * Wrappers around keystore driver methods.
+ *
+ * hal_ks_init() is missing here because we expose it to the rest of libhal.
+ */
 
-#define KS_DRIVER_METHOD(_name_, ...)                                   \
-  static inline hal_error_t hal_ks_block_##_name_(__VA_ARGS__)		\
-  {									\
-    return                                                              \
-      ks == NULL || ks->driver == NULL  ? HAL_ERROR_BAD_ARGUMENTS   :	\
-      ks->driver->_name_ == NULL        ? HAL_ERROR_NOT_IMPLEMENTED :	\
-      ks->driver->_name_(__VA_ARGS__);					\
-  }
-KS_DRIVER_METHODS
-#undef  KS_DRIVER_METHOD
+static inline hal_error_t hal_ks_block_read(hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)
+{
+  return
+    ks == NULL || ks->driver == NULL  ? HAL_ERROR_BAD_ARGUMENTS   :
+    ks->driver->read == NULL          ? HAL_ERROR_NOT_IMPLEMENTED :
+    ks->driver->read(ks, blockno, block);
+}
 
-#undef  KS_DRIVER_METHODS
-#undef  KS_DRIVER_END_LIST
+static inline hal_error_t hal_ks_block_write(hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)
+{
+  return
+    ks == NULL || ks->driver == NULL  ? HAL_ERROR_BAD_ARGUMENTS   :
+    ks->driver->write == NULL         ? HAL_ERROR_NOT_IMPLEMENTED :
+    ks->driver->write(ks, blockno, block);
+}
 
-#endif /* _KS_H_ */
+static inline hal_error_t hal_ks_block_deprecate(hal_ks_t *ks, const unsigned blockno)
+{
+  return
+    ks == NULL || ks->driver == NULL  ? HAL_ERROR_BAD_ARGUMENTS   :
+    ks->driver->deprecate == NULL     ? HAL_ERROR_NOT_IMPLEMENTED :
+    ks->driver->deprecate(ks, blockno);
+}
+
+static inline hal_error_t hal_ks_block_zero(hal_ks_t *ks, const unsigned blockno)
+{
+  return
+    ks == NULL || ks->driver == NULL  ? HAL_ERROR_BAD_ARGUMENTS   :
+    ks->driver->zero == NULL          ? HAL_ERROR_NOT_IMPLEMENTED :
+    ks->driver->zero(ks, blockno);
+}
+
+static inline hal_error_t hal_ks_block_erase(hal_ks_t *ks, const unsigned blockno)
+{
+  return
+    ks == NULL || ks->driver == NULL  ? HAL_ERROR_BAD_ARGUMENTS   :
+    ks->driver->erase == NULL         ? HAL_ERROR_NOT_IMPLEMENTED :
+    ks->driver->erase(ks, blockno);
+}
+
+static inline hal_error_t hal_ks_block_erase_maybe(hal_ks_t *ks, const unsigned blockno)
+{
+  return
+    ks == NULL || ks->driver == NULL  ? HAL_ERROR_BAD_ARGUMENTS   :
+    ks->driver->erase_maybe == NULL   ? HAL_ERROR_NOT_IMPLEMENTED :
+    ks->driver->erase_maybe(ks, blockno);
+}
+
+static inline hal_error_t hal_ks_block_set_owner(hal_ks_t *ks, const unsigned blockno,
+                                                 const hal_client_handle_t  client,
+                                                 const hal_session_handle_t session)
+{
+  return
+    ks == NULL || ks->driver == NULL  ? HAL_ERROR_BAD_ARGUMENTS   :
+    ks->driver->set_owner == NULL     ? HAL_ERROR_NOT_IMPLEMENTED :
+    ks->driver->set_owner(ks, blockno, client, session);
+}
+
+static inline hal_error_t hal_ks_block_test_owner(hal_ks_t *ks, const unsigned blockno,
+                                                  const hal_client_handle_t  client,
+                                                  const hal_session_handle_t session)
+{
+  return
+    ks == NULL || ks->driver == NULL  ? HAL_ERROR_BAD_ARGUMENTS   :
+    ks->driver->test_owner == NULL    ? HAL_ERROR_NOT_IMPLEMENTED :
+    ks->driver->test_owner(ks, blockno, client, session);
+}
+
+/*
+ * Type safe casts.
+ */
+
+static inline hal_ks_block_type_t hal_ks_block_get_type(const hal_ks_block_t * const block)
+{
+  return block == NULL ? HAL_KS_BLOCK_TYPE_UNKNOWN :
+    (hal_ks_block_type_t) block->header.block_type;
+}
+
+static inline hal_ks_block_status_t hal_ks_block_get_status(const hal_ks_block_t * const block)
+{
+  return block == NULL ? HAL_KS_BLOCK_STATUS_UNKNOWN :
+    (hal_ks_block_status_t) block->header.block_status;
+}
 
 /*
  * Keystore utilities.  Some or all of these may end up static within ks.c.
@@ -252,10 +321,13 @@ KS_DRIVER_METHODS
 
 extern hal_error_t hal_ks_alloc_common(hal_ks_t *ks,
                                        const unsigned ks_blocks,
-                                       const unsigned cache_blocks);
+                                       const unsigned cache_blocks,
+                                       void **extra,
+                                       const size_t extra_len);
 
-extern hal_error_t hal_ks_init_common(hal_ks_t *ks,
-                                      const hal_ks_driver_t * const driver);
+extern hal_error_t hal_ks_init_common(hal_ks_t *ks);
+
+extern hal_crc32_t hal_ks_block_calculate_crc(const hal_ks_block_t * const block);
 
 extern hal_error_t hal_ks_index_heapsort(hal_ks_t *ks);
 
@@ -304,6 +376,29 @@ extern hal_error_t hal_ks_attribute_insert(uint8_t *bytes, const size_t bytes_le
                                            const uint8_t * const value,
                                            const size_t value_len);
 
+extern hal_ks_block_t *hal_ks_cache_pick_lru(hal_ks_t *ks);
+
+extern hal_ks_block_t *hal_ks_cache_find_block(const hal_ks_t * const ks,
+                                        const unsigned blockno);
+
+extern void hal_ks_cache_mark_used(hal_ks_t *ks,
+                            const hal_ks_block_t * const block,
+                            const unsigned blockno);
+
+extern void hal_ks_cache_release(hal_ks_t *ks,
+                          const hal_ks_block_t * const block);
+
+extern hal_error_t hal_ks_block_read_cached(hal_ks_t *ks,
+                                            const unsigned blockno,
+                                            hal_ks_block_t **block);
+
+extern hal_error_t hal_ks_block_update(hal_ks_t *ks,
+                                       const unsigned b1,
+                                       hal_ks_block_t *block,
+                                       const hal_uuid_t * const uuid,
+                                       int *hint);
+
+#endif /* _KS_H_ */
 
 /*
  * Local variables:

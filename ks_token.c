@@ -62,6 +62,10 @@
 
 #define NUM_FLASH_BLOCKS        KEYSTORE_NUM_SUBSECTORS
 
+#if HAL_KS_BLOCK_SIZE % KEYSTORE_SUBSECTOR_SIZE != 0
+#error Keystore block size is not a multiple of flash subsector size
+#endif
+
 /*
  * Keystore database.
  */
@@ -81,13 +85,6 @@ typedef struct {
 #define db      ((ks_token_db_t * const) hal_ks_token)
 
 /*
- * PIN block gets the all-zeros UUID, which will never be returned by
- * the UUID generation code (by definition -- it's not a version 4 UUID).
- */
-
-const static hal_uuid_t pin_uuid = {{0}};
-
-/*
  * Calculate offset of the block in the flash address space.
  */
 
@@ -103,18 +100,18 @@ static inline uint32_t ks_token_offset(const unsigned blockno)
  * first page before reading the rest of the block.
  */
 
-static hal_error_t ks_token_read(hal_k_t *ks, const unsigned blockno, ks_block_t *block)
+static hal_error_t ks_token_read(hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)
 {
   if (ks != hal_ks_token || block == NULL || blockno >= NUM_FLASH_BLOCKS || sizeof(*block) != KEYSTORE_SUBSECTOR_SIZE)
     return HAL_ERROR_IMPOSSIBLE;
 
   /* Sigh, magic numeric return codes */
-  if (keystore_read_data(block_offset(blockno),
+  if (keystore_read_data(ks_token_offset(blockno),
                          block->bytes,
                          KEYSTORE_PAGE_SIZE) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
-  switch (block_get_type(block)) {
+  switch (hal_ks_block_get_type(block)) {
   case HAL_KS_BLOCK_TYPE_ERASED:
   case HAL_KS_BLOCK_TYPE_ZEROED:
     return HAL_OK;
@@ -125,7 +122,7 @@ static hal_error_t ks_token_read(hal_k_t *ks, const unsigned blockno, ks_block_t
     return HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE;
   }
 
-  switch (block_get_status(block)) {
+  switch (hal_ks_block_get_status(block)) {
   case HAL_KS_BLOCK_STATUS_LIVE:
   case HAL_KS_BLOCK_STATUS_TOMBSTONE:
     break;
@@ -134,12 +131,12 @@ static hal_error_t ks_token_read(hal_k_t *ks, const unsigned blockno, ks_block_t
   }
 
   /* Sigh, magic numeric return codes */
-  if (keystore_read_data(block_offset(blockno) + KEYSTORE_PAGE_SIZE,
+  if (keystore_read_data(ks_token_offset(blockno) + KEYSTORE_PAGE_SIZE,
                          block->bytes + KEYSTORE_PAGE_SIZE,
                          sizeof(*block) - KEYSTORE_PAGE_SIZE) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
-  if (calculate_block_crc(block) != block->header.crc)
+  if (hal_ks_block_calculate_crc(block) != block->header.crc)
     return HAL_ERROR_KEYSTORE_BAD_CRC;
 
   return HAL_OK;
@@ -151,13 +148,13 @@ static hal_error_t ks_token_read(hal_k_t *ks, const unsigned blockno, ks_block_t
  * need to update the CRC for this, we just modify the first page.
  */
 
-static hal_error_t ks_token_deprecate(hal_k_t *ks, const unsigned blockno)
+static hal_error_t ks_token_deprecate(hal_ks_t *ks, const unsigned blockno)
 {
   if (ks != hal_ks_token || blockno >= NUM_FLASH_BLOCKS)
     return HAL_ERROR_IMPOSSIBLE;
 
   uint8_t page[KEYSTORE_PAGE_SIZE];
-  flash_block_header_t *header = (void *) page;
+  hal_ks_block_header_t *header = (void *) page;
   uint32_t offset = ks_token_offset(blockno);
 
   /* Sigh, magic numeric return codes */
@@ -177,7 +174,7 @@ static hal_error_t ks_token_deprecate(hal_k_t *ks, const unsigned blockno)
  * Zero (not erase) a flash block.  Just need to zero the first page.
  */
 
-static hal_error_t ks_token_zero(hal_k_t *ks, const unsigned blockno)
+static hal_error_t ks_token_zero(hal_ks_t *ks, const unsigned blockno)
 {
   if (ks != hal_ks_token || blockno >= NUM_FLASH_BLOCKS)
     return HAL_ERROR_IMPOSSIBLE;
@@ -185,7 +182,7 @@ static hal_error_t ks_token_zero(hal_k_t *ks, const unsigned blockno)
   uint8_t page[KEYSTORE_PAGE_SIZE] = {0};
 
   /* Sigh, magic numeric return codes */
-  if (keystore_write_data(block_offset(blockno), page, sizeof(page)) != 1)
+  if (keystore_write_data(ks_token_offset(blockno), page, sizeof(page)) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   return HAL_OK;
@@ -195,7 +192,7 @@ static hal_error_t ks_token_zero(hal_k_t *ks, const unsigned blockno)
  * Erase a flash block.  Also see ks_token_erase_maybe(), below.
  */
 
-static hal_error_t ks_token_erase(hal_k_t *ks, const unsigned blockno)
+static hal_error_t ks_token_erase(hal_ks_t *ks, const unsigned blockno)
 {
   if (ks != hal_ks_token || blockno >= NUM_FLASH_BLOCKS)
     return HAL_ERROR_IMPOSSIBLE;
@@ -217,7 +214,7 @@ static hal_error_t ks_token_erase(hal_k_t *ks, const unsigned blockno)
  * leak information about, eg, key length, so we do constant time.
  */
 
-static hal_error_t ks_token_erase_maybe(hal_k_t *ks, const unsigned blockno)
+static hal_error_t ks_token_erase_maybe(hal_ks_t *ks, const unsigned blockno)
 {
   if (ks != hal_ks_token || blockno >= NUM_FLASH_BLOCKS)
     return HAL_ERROR_IMPOSSIBLE;
@@ -232,34 +229,34 @@ static hal_error_t ks_token_erase_maybe(hal_k_t *ks, const unsigned blockno)
       mask &= page[i];
   }
 
-  return mask == 0xFF ? HAL_OK : ks_token_erase(blockno);
+  return mask == 0xFF ? HAL_OK : ks_token_erase(ks, blockno);
 }
 
 /*
  * Write a flash block, calculating CRC when appropriate.
  */
 
-static hal_error_t ks_token_write(hal_k_t *ks, const unsigned blockno, ks_block_t *block)
+static hal_error_t ks_token_write(hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)
 {
   if (ks != hal_ks_token || block == NULL || blockno >= NUM_FLASH_BLOCKS || sizeof(*block) != KEYSTORE_SUBSECTOR_SIZE)
     return HAL_ERROR_IMPOSSIBLE;
 
-  hal_error_t err = ks_token_erase_maybe(blockno);
+  hal_error_t err = ks_token_erase_maybe(ks, blockno);
 
   if (err != HAL_OK)
     return err;
 
-  switch (block_get_type(block)) {
+  switch (hal_ks_block_get_type(block)) {
   case HAL_KS_BLOCK_TYPE_KEY:
   case HAL_KS_BLOCK_TYPE_PIN:
-    block->header.crc = calculate_block_crc(block);
+    block->header.crc = hal_ks_block_calculate_crc(block);
     break;
   default:
     break;
   }
 
   /* Sigh, magic numeric return codes */
-  if (keystore_write_data(block_offset(blockno), block->bytes, sizeof(*block)) != 1)
+  if (keystore_write_data(ks_token_offset(blockno), block->bytes, sizeof(*block)) != 1)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   return HAL_OK;
@@ -289,7 +286,7 @@ static hal_error_t ks_token_test_owner(hal_ks_t *ks, const
  * Forward reference.
  */
 
-static hal_error_t fetch_pin_block(unsigned *b, ks_block_t **block);
+static hal_error_t fetch_pin_block(unsigned *b, hal_ks_block_t **block);
 
 /*
  * Initialize keystore.
@@ -300,6 +297,7 @@ static hal_error_t ks_token_init(hal_ks_t *ks, const int alloc)
   if (ks != hal_ks_token)
     return HAL_ERROR_IMPOSSIBLE;
 
+  hal_ks_block_t *block = NULL;
   hal_error_t err = HAL_OK;
 
   hal_ks_lock();
@@ -349,14 +347,14 @@ static hal_error_t ks_token_init(hal_ks_t *ks, const int alloc)
     block->pin.so_pin    = db->so_pin;
     block->pin.user_pin  = db->user_pin;
 
-    if ((err = hal_ks_index_add(ks, &pin_uuid, &b, NULL)) != HAL_OK)
+    if ((err = hal_ks_index_add(ks, &hal_ks_pin_uuid, &b, NULL)) != HAL_OK)
       goto done;
 
-    cache_mark_used(block, b);
+    hal_ks_cache_mark_used(ks, block, b);
 
-    err = ks_token_write(b, block);
+    err = ks_token_write(ks, b, block);
 
-    cache_release(block);
+    hal_ks_cache_release(ks, block);
 
     if (err != HAL_OK)
       goto done;
@@ -376,12 +374,12 @@ static hal_error_t ks_token_init(hal_ks_t *ks, const int alloc)
 
 static const hal_ks_driver_t ks_token_driver = {
   .init                 = ks_token_init,
-  .read               	= ks_token_read,
+  .read                 = ks_token_read,
   .write                = ks_token_write,
-  .deprecate		= ks_token_deprecate,
+  .deprecate            = ks_token_deprecate,
   .zero                 = ks_token_zero,
   .erase                = ks_token_erase,
-  .erase_maybe		= ks_token_erase_maybe,
+  .erase_maybe          = ks_token_erase_maybe,
   .set_owner            = ks_token_set_owner,
   .test_owner           = ks_token_test_owner
 };
@@ -408,19 +406,21 @@ hal_ks_t * const hal_ks_token = &_db.ks;
 void hal_ks_init_read_only_pins_only(void)
 {
   unsigned b, best_seen = ~0;
-  ks_block_t block[1];
+  hal_ks_block_t block[1];
 
   hal_ks_lock();
 
   for (b = 0; b < NUM_FLASH_BLOCKS; b++) {
-    if (block_read(b, block) != HAL_OK || ks_token_get_type(block) != HAL_KS_BLOCK_TYPE_PIN)
+    if (hal_ks_block_read(hal_ks_token, b, block) != HAL_OK ||
+        hal_ks_block_get_type(block) != HAL_KS_BLOCK_TYPE_PIN)
       continue;
     best_seen = b;
-    if (block_get_status(block) == HAL_KS_BLOCK_STATUS_LIVE)
+    if (hal_ks_block_get_status(block) == HAL_KS_BLOCK_STATUS_LIVE)
       break;
   }
 
-  if (b != best_seen && best_seen != ~0 && ks_token_read(best_seen, block) != HAL_OK)
+  if (b != best_seen && best_seen != ~0 &&
+      hal_ks_block_read(hal_ks_token, best_seen, block) != HAL_OK)
     best_seen = ~0;
 
   if (best_seen == ~0) {
@@ -466,7 +466,7 @@ hal_error_t hal_get_pin(const hal_user_t user,
  * should always sort to first slot in the index.
  */
 
-static hal_error_t fetch_pin_block(unsigned *b, ks_block_t **block)
+static hal_error_t fetch_pin_block(unsigned *b, hal_ks_block_t **block)
 {
   if (block == NULL)
     return HAL_ERROR_IMPOSSIBLE;
@@ -478,13 +478,13 @@ static hal_error_t fetch_pin_block(unsigned *b, ks_block_t **block)
   if (b == NULL)
     b = &b_;
 
-  if ((err = hal_ks_index_find(hal_ks_token, &pin_uuid, b, &hint)) != HAL_OK ||
-      (err = ks_token_read_cached(*b, block))                      != HAL_OK)
+  if ((err = hal_ks_index_find(hal_ks_token, &hal_ks_pin_uuid, b, &hint)) != HAL_OK ||
+      (err = hal_ks_block_read_cached(hal_ks_token, *b, block))           != HAL_OK)
     return err;
 
-  cache_mark_used(*block, *b);
+  hal_ks_cache_mark_used(hal_ks_token, *block, *b);
 
-  if (block_get_type(*block) != HAL_KS_BLOCK_TYPE_PIN)
+  if (hal_ks_block_get_type(*block) != HAL_KS_BLOCK_TYPE_PIN)
     return HAL_ERROR_IMPOSSIBLE;
 
   return HAL_OK;
@@ -498,17 +498,17 @@ static hal_error_t fetch_pin_block(unsigned *b, ks_block_t **block)
  */
 
 static hal_error_t update_pin_block(const unsigned b,
-                                    ks_block_t *block,
-                                    const flash_pin_block_t * const new_data)
+                                    hal_ks_block_t *block,
+                                    const hal_ks_pin_block_t * const new_data)
 {
-  if (block == NULL || new_data == NULL || ks_token_get_type(block) != HAL_KS_BLOCK_TYPE_PIN)
+  if (block == NULL || new_data == NULL || hal_ks_block_get_type(block) != HAL_KS_BLOCK_TYPE_PIN)
     return HAL_ERROR_IMPOSSIBLE;
 
   int hint = 0;
 
   block->pin = *new_data;
 
-  return ks_token_update(b, block, &pin_uuid, &hint);
+  return hal_ks_block_update(hal_ks_token, b, block, &hal_ks_pin_uuid, &hint);
 }
 
 /*
@@ -521,7 +521,7 @@ hal_error_t hal_set_pin(const hal_user_t user,
   if (pin == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  ks_block_t *block;
+  hal_ks_block_t *block;
   hal_error_t err;
   unsigned b;
 
@@ -530,7 +530,7 @@ hal_error_t hal_set_pin(const hal_user_t user,
   if ((err = fetch_pin_block(&b, &block)) != HAL_OK)
     goto done;
 
-  flash_pin_block_t new_data = block->pin;
+  hal_ks_pin_block_t new_data = block->pin;
   hal_ks_pin_t *dp, *bp;
 
   switch (user) {
@@ -572,7 +572,7 @@ hal_error_t hal_mkm_flash_read_no_lock(uint8_t *buf, const size_t len)
   if (buf != NULL && len != KEK_LENGTH)
     return HAL_ERROR_MASTERKEY_BAD_LENGTH;
 
-  ks_block_t *block;
+  hal_ks_block_t *block;
   hal_error_t err;
   unsigned b;
 
@@ -604,7 +604,7 @@ hal_error_t hal_mkm_flash_write(const uint8_t * const buf, const size_t len)
   if (len != KEK_LENGTH)
     return HAL_ERROR_MASTERKEY_BAD_LENGTH;
 
-  ks_block_t *block;
+  hal_ks_block_t *block;
   hal_error_t err;
   unsigned b;
 
@@ -613,7 +613,7 @@ hal_error_t hal_mkm_flash_write(const uint8_t * const buf, const size_t len)
   if ((err = fetch_pin_block(&b, &block)) != HAL_OK)
     goto done;
 
-  flash_pin_block_t new_data = block->pin;
+  hal_ks_pin_block_t new_data = block->pin;
 
   new_data.kek_set = FLASH_KEK_SET;
   memcpy(new_data.kek, buf, len);
@@ -630,7 +630,7 @@ hal_error_t hal_mkm_flash_erase(const size_t len)
   if (len != KEK_LENGTH)
     return HAL_ERROR_MASTERKEY_BAD_LENGTH;
 
-  ks_block_t *block;
+  hal_ks_block_t *block;
   hal_error_t err;
   unsigned b;
 
@@ -639,7 +639,7 @@ hal_error_t hal_mkm_flash_erase(const size_t len)
   if ((err = fetch_pin_block(&b, &block)) != HAL_OK)
     goto done;
 
-  flash_pin_block_t new_data = block->pin;
+  hal_ks_pin_block_t new_data = block->pin;
 
   new_data.kek_set = FLASH_KEK_SET;
   memset(new_data.kek, 0, len);
@@ -652,7 +652,6 @@ hal_error_t hal_mkm_flash_erase(const size_t len)
 }
 
 #endif /* HAL_MKM_FLASH_BACKUP_KLUDGE */
-
 
 /*
  * Local variables:

@@ -58,7 +58,7 @@
 typedef struct {
   hal_client_handle_t   client;
   hal_session_handle_t  session;
-  hal_ks_block_t	block;
+  hal_ks_block_t        block;
 } ks_volatile_key_t;
 
 typedef struct {
@@ -77,7 +77,7 @@ typedef struct {
  * Read a block.  CRC probably not necessary for RAM.
  */
 
-static hal_error_t ks_volatile_read(hal_k_t *ks, const unsigned blockno, ks_block_t *block)
+static hal_error_t ks_volatile_read(hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)
 {
   if (ks != hal_ks_volatile || db->keys == NULL || block == NULL || blockno >= ks->size)
     return HAL_ERROR_IMPOSSIBLE;
@@ -91,12 +91,12 @@ static hal_error_t ks_volatile_read(hal_k_t *ks, const unsigned blockno, ks_bloc
  * Convert a live block into a tombstone.
  */
 
-static hal_error_t ks_volatile_deprecate(hal_k_t *ks, const unsigned blockno)
+static hal_error_t ks_volatile_deprecate(hal_ks_t *ks, const unsigned blockno)
 {
   if (ks != hal_ks_volatile || db->keys == NULL || blockno >= ks->size)
     return HAL_ERROR_IMPOSSIBLE;
 
-  db->keys[blockno].block.header->block_status = BLOCK_STATUS_TOMBSTONE;
+  db->keys[blockno].block.header.block_status = HAL_KS_BLOCK_STATUS_TOMBSTONE;
 
   return HAL_OK;
 }
@@ -105,12 +105,12 @@ static hal_error_t ks_volatile_deprecate(hal_k_t *ks, const unsigned blockno)
  * Zero (not erase) a flash block.
  */
 
-static hal_error_t ks_volatile_zero(hal_k_t *ks, const unsigned blockno)
+static hal_error_t ks_volatile_zero(hal_ks_t *ks, const unsigned blockno)
 {
   if (ks != hal_ks_volatile || db->keys == NULL || blockno >= ks->size)
     return HAL_ERROR_IMPOSSIBLE;
 
-  memset(db->keys[blockno].block, 0x00, sizeof(db->keys[blockno].block));
+  memset(&db->keys[blockno].block, 0x00, sizeof(db->keys[blockno].block));
   db->keys[blockno].client.handle = HAL_HANDLE_NONE;
   db->keys[blockno].session.handle = HAL_HANDLE_NONE;
 
@@ -121,12 +121,12 @@ static hal_error_t ks_volatile_zero(hal_k_t *ks, const unsigned blockno)
  * Erase a flash block.
  */
 
-static hal_error_t ks_volatile_erase(hal_k_t *ks, const unsigned blockno)
+static hal_error_t ks_volatile_erase(hal_ks_t *ks, const unsigned blockno)
 {
   if (ks != hal_ks_volatile || db->keys == NULL || blockno >= ks->size)
     return HAL_ERROR_IMPOSSIBLE;
 
-  memset(db->keys[blockno].block, 0xFF, sizeof(db->keys[blockno].block));
+  memset(&db->keys[blockno].block, 0xFF, sizeof(db->keys[blockno].block));
   db->keys[blockno].client.handle = HAL_HANDLE_NONE;
   db->keys[blockno].session.handle = HAL_HANDLE_NONE;
 
@@ -137,7 +137,7 @@ static hal_error_t ks_volatile_erase(hal_k_t *ks, const unsigned blockno)
  * Write a flash block.  CRC probably not necessary for RAM.
  */
 
-static hal_error_t ks_volatile_write(hal_k_t *ks, const unsigned blockno, ks_block_t *block)
+static hal_error_t ks_volatile_write(hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)
 {
   if (ks != hal_ks_volatile || db->keys == NULL || block == NULL || blockno >= ks->size)
     return HAL_ERROR_IMPOSSIBLE;
@@ -208,8 +208,8 @@ static hal_error_t ks_volatile_init(hal_ks_t *ks, const int alloc)
   if ((err = hal_ks_init_common(ks)) != HAL_OK)
     goto done;
 
-  for (unsigned b = 0; b < db->ks.size; i++)
-    if ((err = block_erase(ks, b)) != HAL_OK)
+  for (unsigned b = 0; b < db->ks.size; b++)
+    if ((err = hal_ks_block_erase(ks, b)) != HAL_OK)
       goto done;
 
   err = HAL_OK;
@@ -224,14 +224,14 @@ static hal_error_t ks_volatile_init(hal_ks_t *ks, const int alloc)
  * the driver functions.
  */
 
-static const hal_ks_driver_t hal_ks_volatile_driver = {
+static const hal_ks_driver_t ks_volatile_driver = {
   .init                 = ks_volatile_init,
-  .read               	= ks_volatile_read,
+  .read                 = ks_volatile_read,
   .write                = ks_volatile_write,
-  .deprecate		= ks_volatile_deprecate,
+  .deprecate            = ks_volatile_deprecate,
   .zero                 = ks_volatile_zero,
   .erase                = ks_volatile_erase,
-  .erase_maybe		= ks_volatile_erase, /* sic */
+  .erase_maybe          = ks_volatile_erase, /* sic */
   .set_owner            = ks_volatile_set_owner,
   .test_owner           = ks_volatile_test_owner
 };
