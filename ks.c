@@ -163,10 +163,10 @@ hal_error_t hal_ks_block_read_cached(hal_ks_t *ks, const unsigned blockno, hal_k
  */
 
 hal_error_t hal_ks_block_update(hal_ks_t *ks,
-                         const unsigned b1,
-                         hal_ks_block_t *block,
-                         const hal_uuid_t * const uuid,
-                         int *hint)
+                                const unsigned b1,
+                                hal_ks_block_t *block,
+                                const hal_uuid_t * const uuid,
+                                int *hint)
 {
   if (block == NULL)
     return HAL_ERROR_IMPOSSIBLE;

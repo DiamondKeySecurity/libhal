@@ -111,7 +111,7 @@ typedef struct {
   uint8_t               der[];  /* Must be last field -- C99 "flexible array member" */
 } hal_ks_key_block_t;
 
-#define SIZEOF_KS_KEY_BLOCK_DER \
+#define SIZEOF_KS_KEY_BLOCK_DER                                 \
   (HAL_KS_BLOCK_SIZE - offsetof(hal_ks_key_block_t, der))
 
 /*
@@ -390,14 +390,14 @@ extern hal_error_t hal_ks_attribute_insert(uint8_t *bytes, const size_t bytes_le
 extern hal_ks_block_t *hal_ks_cache_pick_lru(hal_ks_t *ks);
 
 extern hal_ks_block_t *hal_ks_cache_find_block(const hal_ks_t * const ks,
-                                        const unsigned blockno);
+                                               const unsigned blockno);
 
 extern void hal_ks_cache_mark_used(hal_ks_t *ks,
-                            const hal_ks_block_t * const block,
-                            const unsigned blockno);
+                                   const hal_ks_block_t * const block,
+                                   const unsigned blockno);
 
 extern void hal_ks_cache_release(hal_ks_t *ks,
-                          const hal_ks_block_t * const block);
+                                 const hal_ks_block_t * const block);
 
 extern hal_error_t hal_ks_block_read_cached(hal_ks_t *ks,
                                             const unsigned blockno,
