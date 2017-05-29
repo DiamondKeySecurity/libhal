@@ -182,6 +182,7 @@ hal_error_t hal_ks_block_update(hal_ks_t *ks,
   if ((err = hal_ks_block_deprecate(ks, b1))            != HAL_OK ||
       (err = hal_ks_index_replace(ks, uuid, &b2, hint)) != HAL_OK ||
       (err = hal_ks_block_write(ks, b2, block))         != HAL_OK ||
+      (err = hal_ks_block_copy_owner(ks, b1, b2))       != HAL_OK ||
       (err = hal_ks_block_zero(ks, b1))                 != HAL_OK)
     return err;
 
@@ -243,8 +244,8 @@ hal_error_t hal_ks_alloc_common(hal_ks_t *ks,
   if (mem == NULL)
     return HAL_ERROR_ALLOCATION_FAILURE;
 
-  memset(((uint8_t *) ks) + sizeof(hal_ks_driver_t), 0,
-         sizeof(hal_ks_t) - sizeof(hal_ks_driver_t));
+  memset(((uint8_t *) ks) + sizeof(ks->driver), 0,
+         sizeof(hal_ks_t) - sizeof(ks->driver));
   memset(mem, 0, len);
 
   ks->index = gnaw(&mem, &len, sizeof(*ks->index) * ks_blocks);
@@ -498,23 +499,21 @@ static inline hal_error_t key_visible(hal_ks_t * const ks,
                                       const hal_session_handle_t session,
                                       const unsigned blockno)
 {
+  hal_error_t err;
+
   if (ks == NULL)
     return HAL_ERROR_IMPOSSIBLE;
 
   if (!ks->per_session)
     return HAL_OK;
 
-  hal_error_t err;
-
-  if ((err = hal_ks_block_test_owner(ks, blockno, client, session)) != HAL_OK)
+  if ((err = hal_ks_block_test_owner(ks, blockno, client, session)) != HAL_ERROR_KEY_NOT_FOUND)
     return err;
 
-  err = hal_rpc_is_logged_in(client, HAL_USER_WHEEL);
+  if ((err = hal_rpc_is_logged_in(client, HAL_USER_WHEEL)) != HAL_ERROR_FORBIDDEN)
+    return err;
 
-  if (err == HAL_ERROR_FORBIDDEN)
-    err = HAL_ERROR_KEY_NOT_FOUND;
-
-  return err;
+  return HAL_ERROR_KEY_NOT_FOUND;
 }
 
 hal_error_t hal_ks_store(hal_ks_t *ks,

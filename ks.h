@@ -223,6 +223,7 @@ struct hal_ks_driver {
                               const hal_client_handle_t client, const hal_session_handle_t session);
   hal_error_t (*test_owner)  (hal_ks_t *ks, const unsigned blockno,
                               const hal_client_handle_t client, const hal_session_handle_t session);
+  hal_error_t (*copy_owner)  (hal_ks_t *ks, const unsigned source, const unsigned target);
 };
 
 /*
@@ -297,6 +298,16 @@ static inline hal_error_t hal_ks_block_test_owner(hal_ks_t *ks, const unsigned b
     ks == NULL || ks->driver == NULL  ? HAL_ERROR_BAD_ARGUMENTS   :
     ks->driver->test_owner == NULL    ? HAL_ERROR_NOT_IMPLEMENTED :
     ks->driver->test_owner(ks, blockno, client, session);
+}
+
+static inline hal_error_t hal_ks_block_copy_owner(hal_ks_t *ks,
+                                                  const unsigned source,
+                                                  const unsigned target)
+{
+  return
+    ks == NULL || ks->driver == NULL  ? HAL_ERROR_BAD_ARGUMENTS   :
+    ks->driver->copy_owner == NULL    ? HAL_ERROR_NOT_IMPLEMENTED :
+    ks->driver->copy_owner(ks, source, target);
 }
 
 /*

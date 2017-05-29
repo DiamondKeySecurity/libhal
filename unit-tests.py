@@ -657,7 +657,7 @@ class TestPKeyAttribute(TestCaseLoggedIn):
         try:
             with hsm.pkey_open(uuid) as pkey:
                 pkey.delete()
-        except:
+        except Exception as e:
             logger.debug("Problem deleting key %s: %s", uuid, e)
 
     def load_and_fill(self, flags, n_keys = 1, n_attrs = 2, n_fill = 0):

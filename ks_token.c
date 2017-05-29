@@ -267,17 +267,24 @@ static hal_error_t ks_token_write(hal_ks_t *ks, const unsigned blockno, hal_ks_b
  */
 
 static hal_error_t ks_token_set_owner(hal_ks_t *ks,
-                                   const unsigned blockno,
-                                   const hal_client_handle_t client,
-                                   const hal_session_handle_t session)
+                                      const unsigned blockno,
+                                      const hal_client_handle_t client,
+                                      const hal_session_handle_t session)
 {
   return HAL_OK;
 }
 
-static hal_error_t ks_token_test_owner(hal_ks_t *ks, const
-                                    unsigned blockno,
-                                    const hal_client_handle_t client,
-                                    const hal_session_handle_t session)
+static hal_error_t ks_token_test_owner(hal_ks_t *ks,
+                                       const unsigned blockno,
+                                       const hal_client_handle_t client,
+                                       const hal_session_handle_t session)
+{
+  return HAL_OK;
+}
+
+static hal_error_t ks_token_copy_owner(hal_ks_t *ks,
+                                       const unsigned source,
+                                       const unsigned target)
 {
   return HAL_OK;
 }
@@ -386,7 +393,8 @@ static const hal_ks_driver_t ks_token_driver = {
   .erase                = ks_token_erase,
   .erase_maybe          = ks_token_erase_maybe,
   .set_owner            = ks_token_set_owner,
-  .test_owner           = ks_token_test_owner
+  .test_owner           = ks_token_test_owner,
+  .copy_owner           = ks_token_copy_owner
 };
 
 static ks_token_db_t _db = { .ks.driver = &ks_token_driver };

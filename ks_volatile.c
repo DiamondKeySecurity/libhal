@@ -169,8 +169,8 @@ static hal_error_t ks_volatile_set_owner(hal_ks_t *ks,
  * Test key ownership.
  */
 
-static hal_error_t ks_volatile_test_owner(hal_ks_t *ks, const
-                                          unsigned blockno,
+static hal_error_t ks_volatile_test_owner(hal_ks_t *ks,
+                                          const unsigned blockno,
                                           const hal_client_handle_t client,
                                           const hal_session_handle_t session)
 {
@@ -182,6 +182,22 @@ static hal_error_t ks_volatile_test_owner(hal_ks_t *ks, const
     return HAL_OK;
   else
     return HAL_ERROR_KEY_NOT_FOUND;
+}
+
+/*
+ * Copy key ownership.
+ */
+
+static hal_error_t ks_volatile_copy_owner(hal_ks_t *ks,
+                                          const unsigned source,
+                                          const unsigned target)
+{
+  if (ks != hal_ks_volatile || db->keys == NULL || source >= ks->size || target >= ks->size)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  db->keys[target].client  = db->keys[source].client;
+  db->keys[target].session = db->keys[source].session;
+  return HAL_OK;
 }
 
 /*
@@ -217,6 +233,8 @@ static hal_error_t ks_volatile_init(hal_ks_t *ks, const int alloc)
   if ((err = hal_ks_init_common(ks)) != HAL_OK)
     goto done;
 
+  ks->per_session = 1;
+
   err = HAL_OK;
 
  done:
@@ -238,7 +256,8 @@ static const hal_ks_driver_t ks_volatile_driver = {
   .erase                = ks_volatile_erase,
   .erase_maybe          = ks_volatile_erase, /* sic */
   .set_owner            = ks_volatile_set_owner,
-  .test_owner           = ks_volatile_test_owner
+  .test_owner           = ks_volatile_test_owner,
+  .copy_owner           = ks_volatile_copy_owner
 };
 
 static ks_volatile_db_t _db = { .ks.driver = &ks_volatile_driver };
