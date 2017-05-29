@@ -477,45 +477,6 @@ static inline int acceptable_key_type(const hal_key_type_t type)
   }
 }
 
-/*
- * Test whether the current session can see a particular key.  One
- * might expect this to be based on whether the session matches, and
- * indeed it would be in a sane world, but in the world of PKCS #11,
- * keys belong to sessions, are visible to other sessions, and may
- * even be modifiable by other sessions, but softly and silently
- * vanish away when the original creating session is destroyed.
- *
- * In our terms, this means that visibility of session objects is
- * determined only by the client handle, so taking the session handle
- * as an argument here isn't really necessary, but we've flipflopped
- * on that enough times that at least for now I'd prefer to leave the
- * session handle here and not have to revise all the RPC calls again.
- * Remove it at some later date and redo the RPC calls if we manage to
- * avoid revising this yet again.
- */
-
-static inline hal_error_t key_visible(hal_ks_t * const ks,
-                                      const hal_client_handle_t client,
-                                      const hal_session_handle_t session,
-                                      const unsigned blockno)
-{
-  hal_error_t err;
-
-  if (ks == NULL)
-    return HAL_ERROR_IMPOSSIBLE;
-
-  if (!ks->per_session)
-    return HAL_OK;
-
-  if ((err = hal_ks_block_test_owner(ks, blockno, client, session)) != HAL_ERROR_KEY_NOT_FOUND)
-    return err;
-
-  if ((err = hal_rpc_is_logged_in(client, HAL_USER_WHEEL)) != HAL_ERROR_FORBIDDEN)
-    return err;
-
-  return HAL_ERROR_KEY_NOT_FOUND;
-}
-
 hal_error_t hal_ks_store(hal_ks_t *ks,
                          hal_pkey_slot_t *slot,
                          const uint8_t * const der, const size_t der_len)
@@ -571,7 +532,7 @@ hal_error_t hal_ks_store(hal_ks_t *ks,
     err = hal_ks_block_write(ks, b, block);
 
   if (err == HAL_OK)
-    err = hal_ks_block_set_owner(ks, b, slot->client_handle, slot->session_handle);
+    err = hal_ks_block_set_owner(ks, b, slot->client, slot->session);
 
   if (err == HAL_OK)
     goto done;
@@ -598,9 +559,9 @@ hal_error_t hal_ks_fetch(hal_ks_t *ks,
 
   hal_ks_lock();
 
-  if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint))           != HAL_OK ||
-      (err = key_visible(ks, slot->client_handle, slot->session_handle, b)) != HAL_OK ||
-      (err = hal_ks_block_read_cached(ks, b, &block))                       != HAL_OK)
+  if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint))         != HAL_OK ||
+      (err = hal_ks_block_test_owner(ks, b, slot->client, slot->session)) != HAL_OK ||
+      (err = hal_ks_block_read_cached(ks, b, &block))                     != HAL_OK)
     goto done;
 
   if (hal_ks_block_get_type(block) != HAL_KS_BLOCK_TYPE_KEY) {
@@ -652,8 +613,8 @@ hal_error_t hal_ks_delete(hal_ks_t *ks,
 
   hal_ks_lock();
 
-  if ((err = hal_ks_index_delete(ks, &slot->name, &b, &slot->hint))         != HAL_OK ||
-      (err = key_visible(ks, slot->client_handle, slot->session_handle, b)) != HAL_OK)
+  if ((err = hal_ks_index_delete(ks, &slot->name, &b, &slot->hint))       != HAL_OK ||
+      (err = hal_ks_block_test_owner(ks, b, slot->client, slot->session)) != HAL_OK)
     goto done;
 
   hal_ks_cache_release(ks, hal_ks_cache_find_block(ks, b));
@@ -725,9 +686,10 @@ hal_error_t hal_ks_match(hal_ks_t *ks,
     if ((err = hal_ks_block_read_cached(ks, b, &block)) != HAL_OK)
       goto done;
 
-    if ((err = key_visible(ks, client, session, b)) == HAL_ERROR_KEY_NOT_FOUND)
+    if ((err = hal_ks_block_test_owner(ks, b, client, session)) == HAL_ERROR_KEY_NOT_FOUND)
       continue;
-    else if (err != HAL_OK)
+
+    if (err != HAL_OK)
       goto done;
 
     if ((type  != HAL_KEY_TYPE_NONE && type  != block->key.type)  ||
@@ -799,9 +761,9 @@ hal_error_t hal_ks_set_attributes(hal_ks_t *ks,
   hal_ks_lock();
 
   {
-    if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint))             != HAL_OK ||
-        (err = key_visible(ks, slot->client_handle, slot->session_handle, b))   != HAL_OK ||
-        (err = hal_ks_block_read_cached(ks, b, &block))                         != HAL_OK)
+    if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint))         != HAL_OK ||
+        (err = hal_ks_block_test_owner(ks, b, slot->client, slot->session)) != HAL_OK ||
+        (err = hal_ks_block_read_cached(ks, b, &block))                     != HAL_OK)
       goto done;
 
     hal_ks_cache_mark_used(ks, block, b);
@@ -865,9 +827,9 @@ hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
   hal_ks_lock();
 
   {
-    if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint))             != HAL_OK ||
-        (err = key_visible(ks, slot->client_handle, slot->session_handle, b))   != HAL_OK ||
-        (err = hal_ks_block_read_cached(ks, b, &block))                         != HAL_OK)
+    if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint))         != HAL_OK ||
+        (err = hal_ks_block_test_owner(ks, b, slot->client, slot->session)) != HAL_OK ||
+        (err = hal_ks_block_read_cached(ks, b, &block))                     != HAL_OK)
       goto done;
 
     hal_ks_cache_mark_used(ks, block, b);

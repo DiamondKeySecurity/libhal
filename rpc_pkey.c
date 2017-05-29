@@ -79,10 +79,10 @@ static inline hal_pkey_slot_t *alloc_slot(const hal_key_flags_t flags)
     glop |= HAL_PKEY_HANDLE_TOKEN_FLAG;
 
   for (int i = 0; slot == NULL && i < sizeof(pkey_slot)/sizeof(*pkey_slot); i++) {
-    if (pkey_slot[i].pkey_handle.handle != HAL_HANDLE_NONE)
+    if (pkey_slot[i].pkey.handle != HAL_HANDLE_NONE)
       continue;
     memset(&pkey_slot[i], 0, sizeof(pkey_slot[i]));
-    pkey_slot[i].pkey_handle.handle = i | glop;
+    pkey_slot[i].pkey.handle = i | glop;
     pkey_slot[i].hint = -1;
     slot = &pkey_slot[i];
   }
@@ -120,7 +120,7 @@ static inline hal_pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
 #if HAL_STATIC_PKEY_STATE_BLOCKS > 0
   const int i = (int) (handle.handle & 0xFFFF);
 
-  if (i < sizeof(pkey_slot)/sizeof(*pkey_slot) && pkey_slot[i].pkey_handle.handle == handle.handle)
+  if (i < sizeof(pkey_slot)/sizeof(*pkey_slot) && pkey_slot[i].pkey.handle == handle.handle)
     slot = &pkey_slot[i];
 #endif
 
@@ -334,7 +334,7 @@ static hal_error_t pkey_local_load(const hal_client_handle_t client,
     return err;
   }
 
-  *pkey = slot->pkey_handle;
+  *pkey = slot->pkey;
   *name = slot->name;
   return HAL_OK;
 }
@@ -364,7 +364,7 @@ static hal_error_t pkey_local_open(const hal_client_handle_t client,
   slot->session_handle = session;
 
   if ((err = hal_ks_fetch(hal_ks_token, slot, NULL, NULL, 0)) == HAL_OK)
-    slot->pkey_handle.handle |= HAL_PKEY_HANDLE_TOKEN_FLAG;
+    slot->pkey.handle |= HAL_PKEY_HANDLE_TOKEN_FLAG;
 
   else if (err == HAL_ERROR_KEY_NOT_FOUND)
     err = hal_ks_fetch(hal_ks_volatile, slot, NULL, NULL, 0);
@@ -372,7 +372,7 @@ static hal_error_t pkey_local_open(const hal_client_handle_t client,
   if (err != HAL_OK)
     goto fail;
 
-  *pkey = slot->pkey_handle;
+  *pkey = slot->pkey;
   return HAL_OK;
 
  fail:
@@ -434,7 +434,7 @@ static hal_error_t pkey_local_generate_rsa(const hal_client_handle_t client,
     return err;
   }
 
-  *pkey = slot->pkey_handle;
+  *pkey = slot->pkey;
   *name = slot->name;
   return HAL_OK;
 }
@@ -492,7 +492,7 @@ static hal_error_t pkey_local_generate_ec(const hal_client_handle_t client,
     return err;
   }
 
-  *pkey = slot->pkey_handle;
+  *pkey = slot->pkey;
   *name = slot->name;
   return HAL_OK;
 }

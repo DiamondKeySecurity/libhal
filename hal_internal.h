@@ -449,9 +449,9 @@ extern hal_error_t hal_mkm_flash_erase(const size_t len);
  */
 
 typedef struct {
-  hal_client_handle_t client_handle;
-  hal_session_handle_t session_handle;
-  hal_pkey_handle_t pkey_handle;
+  hal_client_handle_t client;
+  hal_session_handle_t session;
+  hal_pkey_handle_t pkey;
   hal_key_type_t type;
   hal_curve_name_t curve;
   hal_key_flags_t flags;

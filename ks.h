@@ -204,7 +204,6 @@ struct hal_ks {
   unsigned cache_lru;           /* Cache LRU counter */
   unsigned cache_size;          /* Size (how many blocks) in cache */
   hal_ks_cache_block_t *cache;  /* Cache */
-  int per_session;              /* Whether objects have per-session semantics (PKCS #11, sigh) */
 };
 
 /*
@@ -280,7 +279,8 @@ static inline hal_error_t hal_ks_block_erase_maybe(hal_ks_t *ks, const unsigned 
     ks->driver->erase_maybe(ks, blockno);
 }
 
-static inline hal_error_t hal_ks_block_set_owner(hal_ks_t *ks, const unsigned blockno,
+static inline hal_error_t hal_ks_block_set_owner(hal_ks_t *ks,
+                                                 const unsigned blockno,
                                                  const hal_client_handle_t  client,
                                                  const hal_session_handle_t session)
 {
@@ -290,7 +290,8 @@ static inline hal_error_t hal_ks_block_set_owner(hal_ks_t *ks, const unsigned bl
     ks->driver->set_owner(ks, blockno, client, session);
 }
 
-static inline hal_error_t hal_ks_block_test_owner(hal_ks_t *ks, const unsigned blockno,
+static inline hal_error_t hal_ks_block_test_owner(hal_ks_t *ks,
+                                                  const unsigned blockno,
                                                   const hal_client_handle_t  client,
                                                   const hal_session_handle_t session)
 {
