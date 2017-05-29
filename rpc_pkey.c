@@ -323,11 +323,11 @@ static hal_error_t pkey_local_load(const hal_client_handle_t client,
   if ((err = hal_uuid_gen(&slot->name)) != HAL_OK)
     return err;
 
-  slot->client_handle  = client;
-  slot->session_handle = session;
-  slot->type  = type;
-  slot->curve = curve;
-  slot->flags = flags;
+  slot->client  = client;
+  slot->session = session;
+  slot->type    = type;
+  slot->curve   = curve;
+  slot->flags   = flags;
 
   if ((err = hal_ks_store(ks_from_flags(flags), slot, der, der_len)) != HAL_OK) {
     slot->type = HAL_KEY_TYPE_NONE;
@@ -359,9 +359,9 @@ static hal_error_t pkey_local_open(const hal_client_handle_t client,
   if ((slot = alloc_slot(0)) == NULL)
     return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
 
-  slot->name = *name;
-  slot->client_handle = client;
-  slot->session_handle = session;
+  slot->name    = *name;
+  slot->client  = client;
+  slot->session = session;
 
   if ((err = hal_ks_fetch(hal_ks_token, slot, NULL, NULL, 0)) == HAL_OK)
     slot->pkey.handle |= HAL_PKEY_HANDLE_TOKEN_FLAG;
@@ -408,11 +408,11 @@ static hal_error_t pkey_local_generate_rsa(const hal_client_handle_t client,
   if ((err = hal_uuid_gen(&slot->name)) != HAL_OK)
     return err;
 
-  slot->client_handle  = client;
-  slot->session_handle = session;
-  slot->type  = HAL_KEY_TYPE_RSA_PRIVATE;
-  slot->curve = HAL_CURVE_NONE;
-  slot->flags = flags;
+  slot->client  = client;
+  slot->session = session;
+  slot->type    = HAL_KEY_TYPE_RSA_PRIVATE;
+  slot->curve   = HAL_CURVE_NONE;
+  slot->flags   = flags;
 
   if ((err = hal_rsa_key_gen(NULL, &key, keybuf, sizeof(keybuf), key_length / 8,
                              public_exponent, public_exponent_len)) != HAL_OK) {
@@ -467,11 +467,11 @@ static hal_error_t pkey_local_generate_ec(const hal_client_handle_t client,
   if ((err = hal_uuid_gen(&slot->name)) != HAL_OK)
     return err;
 
-  slot->client_handle  = client;
-  slot->session_handle = session;
-  slot->type  = HAL_KEY_TYPE_EC_PRIVATE;
-  slot->curve = curve;
-  slot->flags = flags;
+  slot->client  = client;
+  slot->session = session;
+  slot->type    = HAL_KEY_TYPE_EC_PRIVATE;
+  slot->curve   = curve;
+  slot->flags   = flags;
 
   if ((err = hal_ecdsa_key_gen(NULL, &key, keybuf, sizeof(keybuf), curve)) != HAL_OK) {
     slot->type = HAL_KEY_TYPE_NONE;
@@ -526,7 +526,7 @@ static hal_error_t pkey_local_delete(const hal_pkey_handle_t pkey)
 
   hal_error_t err;
 
-  if ((err = check_writable(slot->client_handle, slot->flags)) != HAL_OK)
+  if ((err = check_writable(slot->client, slot->flags)) != HAL_OK)
     return err;
 
   err = hal_ks_delete(ks_from_flags(slot->flags), slot);
@@ -1077,7 +1077,7 @@ static hal_error_t pkey_local_set_attributes(const hal_pkey_handle_t pkey,
 
   hal_error_t err;
 
-  if ((err = check_writable(slot->client_handle, slot->flags)) != HAL_OK)
+  if ((err = check_writable(slot->client, slot->flags)) != HAL_OK)
     return err;
 
   return hal_ks_set_attributes(ks_from_flags(slot->flags), slot, attributes, attributes_len);
