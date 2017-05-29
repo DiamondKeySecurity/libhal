@@ -671,17 +671,36 @@ class TestPKeyAttribute(TestCaseLoggedIn):
                                           for j in xrange(n_attrs)))
                     pinwheel()
 
+    # These sizes work with a 4096-byte keystore block; if you tweak
+    # the undelrying block size, you may need to tweak these tests too.
+
+    def test_attribute_svelt_volatile_many(self):
+        self.load_and_fill(0, n_attrs = 64)
+
     def test_attribute_bloat_volatile_many(self):
-        self.load_and_fill(0, n_attrs = 128) # 192
+        with self.assertRaises(HAL_ERROR_RESULT_TOO_LONG):
+            self.load_and_fill(0, n_attrs = 128)
+
+    def test_attribute_svelt_volatile_big(self):
+        self.load_and_fill(0, n_attrs = 6, n_fill = 256)
 
     def test_attribute_bloat_volatile_big(self):
-        self.load_and_fill(0, n_attrs = 6, n_fill = 512)
+        with self.assertRaises(HAL_ERROR_RESULT_TOO_LONG):
+            self.load_and_fill(0, n_attrs = 6, n_fill = 512)
+
+    def test_attribute_svelt_token_many(self):
+        self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 64)
 
     def test_attribute_bloat_token_many(self):
-        self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 128)
+        with self.assertRaises(HAL_ERROR_RESULT_TOO_LONG):
+            self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 128)
+
+    def test_attribute_svelt_token_big(self):
+        self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 6, n_fill = 256)
 
     def test_attribute_bloat_token_big(self):
-        self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 4, n_fill = 512) # [16, 1024]
+        with self.assertRaises(HAL_ERROR_RESULT_TOO_LONG):
+            self.load_and_fill(HAL_KEY_FLAG_TOKEN, n_attrs = 6, n_fill = 512)
 
 
 @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
