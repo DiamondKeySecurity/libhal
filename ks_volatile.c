@@ -218,6 +218,34 @@ static hal_error_t ks_volatile_copy_owner(hal_ks_t *ks,
 }
 
 /*
+ * Zero any blocks owned by a client that we're logging out.
+ */
+
+static hal_error_t ks_volatile_logout(hal_ks_t *ks,
+                                      hal_client_handle_t client)
+{
+  if (ks != hal_ks_volatile || client.handle == HAL_HANDLE_NONE)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  for (int i = 0; i < ks->used; i++) {
+    unsigned b = ks->index[i];
+    hal_error_t err;
+    int hint = i;
+
+    if (db->keys[b].client.handle != client.handle)
+      continue;
+
+    if ((err = hal_ks_index_delete(ks, &ks->names[b], 0, NULL, &hint)) != HAL_OK ||
+        (err = hal_ks_block_zero(ks, b))                               != HAL_OK)
+      return err;
+
+    i--;
+  }
+
+  return HAL_OK;
+}
+
+/*
  * Initialize keystore.
  */
 
@@ -272,7 +300,8 @@ static const hal_ks_driver_t ks_volatile_driver = {
   .erase_maybe          = ks_volatile_erase, /* sic */
   .set_owner            = ks_volatile_set_owner,
   .test_owner           = ks_volatile_test_owner,
-  .copy_owner           = ks_volatile_copy_owner
+  .copy_owner           = ks_volatile_copy_owner,
+  .logout               = ks_volatile_logout
 };
 
 static ks_volatile_db_t _db = { .ks.driver = &ks_volatile_driver };

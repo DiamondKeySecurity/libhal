@@ -223,12 +223,14 @@ struct hal_ks_driver {
   hal_error_t (*test_owner)  (hal_ks_t *ks, const unsigned blockno,
                               const hal_client_handle_t client, const hal_session_handle_t session);
   hal_error_t (*copy_owner)  (hal_ks_t *ks, const unsigned source, const unsigned target);
+  hal_error_t (*logout)      (hal_ks_t *ks, const hal_client_handle_t client);
 };
 
 /*
  * Wrappers around keystore driver methods.
  *
- * hal_ks_init() is missing here because we expose it to the rest of libhal.
+ * hal_ks_init() and hal_ks_logout() are missing here because we
+ * expose them to the rest of libhal.
  */
 
 static inline hal_error_t hal_ks_block_read(hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)

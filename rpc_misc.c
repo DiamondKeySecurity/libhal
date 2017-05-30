@@ -33,8 +33,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <assert.h>
-
 #include "hal.h"
 #include "hal_internal.h"
 
@@ -46,7 +44,8 @@ static hal_error_t get_version(uint32_t *version)
 
 static hal_error_t get_random(void *buffer, const size_t length)
 {
-  assert(buffer != NULL && length > 0);
+  if (buffer == NULL || length == 0)
+    return HAL_ERROR_IMPOSSIBLE;
 
   return hal_get_random(NULL, buffer, length);
 }
@@ -96,7 +95,7 @@ static uint32_t hal_pin_default_iterations = HAL_PIN_DEFAULT_ITERATIONS;
 #endif
 
 #ifndef HAL_STATIC_CLIENT_STATE_BLOCKS
-#define HAL_STATIC_CLIENT_STATE_BLOCKS	10
+#define HAL_STATIC_CLIENT_STATE_BLOCKS  10
 #endif
 
 #if HAL_STATIC_CLIENT_STATE_BLOCKS > 0
@@ -109,19 +108,51 @@ static client_slot_t client_handle[HAL_STATIC_CLIENT_STATE_BLOCKS];
  * them.  HAL_USER_NONE indicates an empty slot in the table.
  */
 
-static inline client_slot_t *alloc_slot(void)
+static inline hal_error_t alloc_slot(const hal_client_handle_t client,
+                                     const hal_user_t user)
 {
   client_slot_t *slot = NULL;
   hal_critical_section_start();
 
 #if HAL_STATIC_CLIENT_STATE_BLOCKS > 0
+
+  for (int i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
+    if (client_handle[i].logged_in != HAL_USER_NONE &&
+        client_handle[i].handle.handle == client.handle)
+      slot = &client_handle[i];
+
   for (int i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
     if (client_handle[i].logged_in == HAL_USER_NONE)
       slot = &client_handle[i];
+
 #endif
 
+  if (slot != NULL) {
+    slot->handle = client;
+    slot->logged_in = user;
+  }
+
   hal_critical_section_end();
-  return slot;
+  return slot == NULL ? HAL_ERROR_NO_CLIENT_SLOTS_AVAILABLE : HAL_OK;
+}
+
+static inline hal_error_t clear_slot(client_slot_t *slot)
+{
+  if (slot == NULL)
+    return HAL_OK;
+
+  hal_error_t err;
+
+  if ((err = hal_pkey_logout(slot->handle)) != HAL_OK)
+    return err;
+
+  hal_critical_section_start();
+
+  memset(slot, 0, sizeof(*slot));
+
+  hal_critical_section_end();
+
+  return HAL_OK;
 }
 
 static inline client_slot_t *find_handle(const hal_client_handle_t handle)
@@ -143,8 +174,8 @@ static hal_error_t login(const hal_client_handle_t client,
                          const hal_user_t user,
                          const char * const pin, const size_t pin_len)
 {
-  assert(pin != NULL && pin_len != 0);
-  assert(user == HAL_USER_NORMAL || user == HAL_USER_SO || user == HAL_USER_WHEEL);
+  if (pin == NULL || pin_len == 0 || (user != HAL_USER_NORMAL && user != HAL_USER_SO && user != HAL_USER_WHEEL))
+    return HAL_ERROR_IMPOSSIBLE;
 
   const hal_ks_pin_t *p;
   hal_error_t err;
@@ -168,21 +199,14 @@ static hal_error_t login(const hal_client_handle_t client,
     return HAL_ERROR_PIN_INCORRECT;
   }
 
-  client_slot_t *slot = find_handle(client);
-
-  if (slot == NULL && (slot = alloc_slot()) == NULL)
-    return HAL_ERROR_NO_CLIENT_SLOTS_AVAILABLE;
-
-  slot->handle = client;
-  slot->logged_in = user;
-
-  return HAL_OK;
+  return alloc_slot(client, user);
 }
 
 static hal_error_t is_logged_in(const hal_client_handle_t client,
                                 const hal_user_t user)
 {
-  assert(user == HAL_USER_NORMAL || user == HAL_USER_SO || user == HAL_USER_WHEEL);
+  if (user != HAL_USER_NORMAL && user != HAL_USER_SO && user != HAL_USER_WHEEL)
+    return HAL_ERROR_IMPOSSIBLE;
 
   client_slot_t *slot = find_handle(client);
 
@@ -194,19 +218,32 @@ static hal_error_t is_logged_in(const hal_client_handle_t client,
 
 static hal_error_t logout(const hal_client_handle_t client)
 {
-  client_slot_t *slot = find_handle(client);
-
-  if (slot != NULL)
-    slot->logged_in = HAL_USER_NONE;
-
-  return HAL_OK;
+  return clear_slot(find_handle(client));
 }
 
 static hal_error_t logout_all(void)
 {
 #if HAL_STATIC_CLIENT_STATE_BLOCKS > 0
-  for (int i = 0; i < sizeof(client_handle)/sizeof(*client_handle); i++)
-    client_handle[i].logged_in = HAL_USER_NONE;
+
+  client_slot_t *slot;
+  hal_error_t err;
+  int i = 0;
+
+  do {
+
+    hal_critical_section_start();
+
+    for (slot = NULL; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
+      if (client_handle[i].logged_in != HAL_USER_NONE)
+        slot = &client_handle[i];
+
+    hal_critical_section_end();
+
+    if ((err = clear_slot(slot)) != HAL_OK)
+      return err;
+
+  } while (slot != NULL);
+
 #endif
 
   return HAL_OK;
@@ -216,7 +253,8 @@ static hal_error_t set_pin(const hal_client_handle_t client,
                            const hal_user_t user,
                            const char * const newpin, const size_t newpin_len)
 {
-  assert(newpin != NULL && newpin_len >= hal_rpc_min_pin_length && newpin_len <= hal_rpc_max_pin_length);
+  if (newpin == NULL || newpin_len < hal_rpc_min_pin_length || newpin_len > hal_rpc_max_pin_length)
+    return HAL_ERROR_IMPOSSIBLE;
 
   if ((user != HAL_USER_NORMAL || is_logged_in(client, HAL_USER_SO) != HAL_OK) &&
       is_logged_in(client, HAL_USER_WHEEL) != HAL_OK)

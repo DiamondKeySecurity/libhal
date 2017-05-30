@@ -432,6 +432,12 @@ extern hal_error_t hal_mkm_flash_erase(const size_t len);
 #endif
 
 /*
+ * Clean up pkey stuff that's tied to a particular client on logout.
+ */
+
+extern hal_error_t hal_pkey_logout(const hal_client_handle_t client);
+
+/*
  * Keystore API for use by the pkey implementation.
  *
  * In an attempt to emulate what current theory says will eventually
@@ -521,6 +527,9 @@ extern hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
                                          const unsigned attributes_len,
                                          uint8_t *attributes_buffer,
                                          const size_t attributes_buffer_len);
+
+extern hal_error_t hal_ks_logout(hal_ks_t *ks,
+                                 const hal_client_handle_t client);
 
 /*
  * RPC lowest-level send and receive routines. These are blocking, and

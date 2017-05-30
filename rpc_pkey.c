@@ -129,6 +129,32 @@ static inline hal_pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
 }
 
 /*
+ * Clean up key state associated with a client when logging out.
+ */
+
+hal_error_t hal_pkey_logout(const hal_client_handle_t client)
+{
+  if (client.handle == HAL_HANDLE_NONE)
+    return HAL_OK;
+
+  hal_error_t err;
+
+  if ((err = hal_ks_logout(hal_ks_volatile, client)) != HAL_OK ||
+      (err = hal_ks_logout(hal_ks_token,    client)) != HAL_OK)
+    return err;
+
+  hal_critical_section_start();
+
+  for (int i = 0; i < sizeof(pkey_slot)/sizeof(*pkey_slot); i++)
+    if (pkey_slot[i].pkey.handle == client.handle)
+      memset(&pkey_slot[i], 0, sizeof(pkey_slot[i]));
+
+  hal_critical_section_end();
+
+  return HAL_OK;
+}
+
+/*
  * Access rules are a bit complicated, mostly due to PKCS #11.
  *
  * The simple, obvious rule would be that one must be logged in as

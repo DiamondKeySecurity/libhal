@@ -289,6 +289,12 @@ static hal_error_t ks_token_copy_owner(hal_ks_t *ks,
   return HAL_OK;
 }
 
+static hal_error_t ks_token_logout(hal_ks_t *ks,
+                                   hal_client_handle_t client)
+{
+  return HAL_OK;
+}
+
 /*
  * Forward reference.
  */
@@ -394,7 +400,8 @@ static const hal_ks_driver_t ks_token_driver = {
   .erase_maybe          = ks_token_erase_maybe,
   .set_owner            = ks_token_set_owner,
   .test_owner           = ks_token_test_owner,
-  .copy_owner           = ks_token_copy_owner
+  .copy_owner           = ks_token_copy_owner,
+  .logout               = ks_token_logout
 };
 
 static ks_token_db_t _db = { .ks.driver = &ks_token_driver };

@@ -461,6 +461,18 @@ hal_error_t hal_ks_init_common(hal_ks_t *ks)
 }
 
 /*
+ * Log a client out of a keystore.
+ */
+
+hal_error_t hal_ks_logout(hal_ks_t *ks, const hal_client_handle_t client)
+{
+  return
+    ks == NULL || ks->driver == NULL ? HAL_ERROR_BAD_ARGUMENTS   :
+    ks->driver->logout == NULL       ? HAL_ERROR_NOT_IMPLEMENTED :
+    ks->driver->logout(ks, client);
+}
+
+/*
  * Test whether we like a particular key type.
  */
 
