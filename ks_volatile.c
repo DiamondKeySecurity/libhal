@@ -235,8 +235,8 @@ static hal_error_t ks_volatile_logout(hal_ks_t *ks,
     if (db->keys[b].client.handle != client.handle)
       continue;
 
-    if ((err = hal_ks_index_delete(ks, &ks->names[b], 0, NULL, &hint)) != HAL_OK ||
-        (err = hal_ks_block_zero(ks, b))                               != HAL_OK)
+    if ((err = hal_ks_index_delete(ks, &ks->names[b], NULL, &hint)) != HAL_OK ||
+        (err = hal_ks_block_zero(ks, b))                            != HAL_OK)
       return err;
 
     i--;
