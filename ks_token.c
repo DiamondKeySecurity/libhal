@@ -313,13 +313,11 @@ static hal_error_t ks_token_init(hal_ks_t *ks, const int alloc)
   hal_ks_block_t *block = NULL;
   hal_error_t err = HAL_OK;
 
-  hal_ks_lock();
-
   if (alloc && (err = hal_ks_alloc_common(ks, NUM_FLASH_BLOCKS, KS_TOKEN_CACHE_SIZE, NULL, 0)) != HAL_OK)
-    goto done;
+    return err;
 
   if ((err = hal_ks_init_common(ks)) != HAL_OK)
-    goto done;
+    return err;
 
   /*
    * Fetch or create the PIN block.
@@ -337,10 +335,7 @@ static hal_error_t ks_token_init(hal_ks_t *ks, const int alloc)
     db->user_pin  = block->pin.user_pin;
   }
 
-  else if (err != HAL_ERROR_KEY_NOT_FOUND)
-    goto done;
-
-  else {
+  else if (err == HAL_ERROR_KEY_NOT_FOUND) {
     /*
      * We found no PIN block, so create one, with the user and so PINs
      * cleared and the wheel PIN set to the last-gasp value.  The
@@ -351,10 +346,8 @@ static hal_error_t ks_token_init(hal_ks_t *ks, const int alloc)
 
     unsigned b;
 
-    if ((block = hal_ks_cache_pick_lru(ks)) == NULL) {
-      err = HAL_ERROR_IMPOSSIBLE;
-      goto done;
-    }
+    if ((block = hal_ks_cache_pick_lru(ks)) == NULL)
+      return HAL_ERROR_IMPOSSIBLE;
 
     memset(block, 0xFF, sizeof(*block));
 
@@ -366,22 +359,15 @@ static hal_error_t ks_token_init(hal_ks_t *ks, const int alloc)
     block->pin.user_pin  = db->user_pin;
 
     if ((err = hal_ks_index_add(ks, &hal_ks_pin_uuid, &b, NULL)) != HAL_OK)
-      goto done;
+      return err;
 
     hal_ks_cache_mark_used(ks, block, b);
 
     err = ks_token_write(ks, b, block);
 
     hal_ks_cache_release(ks, block);
-
-    if (err != HAL_OK)
-      goto done;
   }
 
-  err = HAL_OK;
-
- done:
-  hal_ks_unlock();
   return err;
 }
 

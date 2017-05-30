@@ -254,35 +254,28 @@ static hal_error_t ks_volatile_init(hal_ks_t *ks, const int alloc)
   if (ks != hal_ks_volatile)
     return HAL_ERROR_IMPOSSIBLE;
 
-  hal_error_t err = HAL_OK;
   void *mem = NULL;
+  hal_error_t err;
 
-  hal_ks_lock();
+  if (alloc &&
+      (err = hal_ks_alloc_common(ks, STATIC_KS_VOLATILE_SLOTS, KS_VOLATILE_CACHE_SIZE,
+                                 &mem, sizeof(*db->keys) * STATIC_KS_VOLATILE_SLOTS)) != HAL_OK)
+    return err;
 
-  if (alloc) {
-    if ((err = hal_ks_alloc_common(ks, STATIC_KS_VOLATILE_SLOTS, KS_VOLATILE_CACHE_SIZE,
-                                   &mem, sizeof(*db->keys) * STATIC_KS_VOLATILE_SLOTS)) != HAL_OK)
-      goto done;
+  if (alloc)
     db->keys = mem;
-  }
 
-  if (db->keys == NULL) {
-    err = HAL_ERROR_IMPOSSIBLE;
-    goto done;
-  }
+  if (db->keys == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
 
   for (unsigned b = 0; b < db->ks.size; b++)
     if ((err = hal_ks_block_erase(ks, b)) != HAL_OK)
-      goto done;
+      return err;
 
   if ((err = hal_ks_init_common(ks)) != HAL_OK)
-    goto done;
+    return err;
 
-  err = HAL_OK;
-
- done:
-  hal_ks_unlock();
-  return err;
+  return HAL_OK;
 }
 
 /*

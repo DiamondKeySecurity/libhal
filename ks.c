@@ -205,10 +205,19 @@ hal_error_t hal_ks_block_update(hal_ks_t *ks,
 
 hal_error_t hal_ks_init(hal_ks_t *ks, const int alloc)
 {
-  return
-    ks == NULL || ks->driver == NULL  ? HAL_ERROR_BAD_ARGUMENTS   :
-    ks->driver->init == NULL          ? HAL_ERROR_NOT_IMPLEMENTED :
-    ks->driver->init(ks, alloc);
+  if (ks == NULL || ks->driver == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ks->driver->init == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
+
+  hal_ks_lock();
+
+  const hal_error_t err = ks->driver->init(ks, alloc);
+
+  hal_ks_unlock();
+
+  return err;
 }
 
 static inline void *gnaw(uint8_t **mem, size_t *len, const size_t size)
@@ -466,10 +475,19 @@ hal_error_t hal_ks_init_common(hal_ks_t *ks)
 
 hal_error_t hal_ks_logout(hal_ks_t *ks, const hal_client_handle_t client)
 {
-  return
-    ks == NULL || ks->driver == NULL ? HAL_ERROR_BAD_ARGUMENTS   :
-    ks->driver->logout == NULL       ? HAL_ERROR_NOT_IMPLEMENTED :
-    ks->driver->logout(ks, client);
+  if (ks == NULL || ks->driver == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  if (ks->driver->logout == NULL)
+    return HAL_ERROR_NOT_IMPLEMENTED;
+
+  hal_ks_lock();
+
+  const hal_error_t err = ks->driver->logout(ks, client);
+
+  hal_ks_unlock();
+
+  return err;
 }
 
 /*
