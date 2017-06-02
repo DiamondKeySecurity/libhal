@@ -1035,6 +1035,10 @@ class AESKeyWrapWithPadding(object):
         step = -1 if start > stop else 1
         return xrange(start, stop + step, step)
 
+    @staticmethod
+    def _xor(R0, t):
+        return pack(">Q", unpack(">Q", R0)[0] ^ t)
+
     def wrap(self, Q):
         "RFC 5649 section 4.1."
         m = len(Q)                              # Plaintext length
@@ -1051,9 +1055,7 @@ class AESKeyWrapWithPadding(object):
             for j in self._start_stop(0, 5):
                 for i in self._start_stop(1, n):
                     R[0], R[i] = self._encrypt(R[0], R[i])
-                    W0, W1 = unpack(">LL", R[0])
-                    W1 ^= n * j + i
-                    R[0] = pack(">LL", W0, W1)
+                    R[0] = self._xor(R[0], n * j + i)
         assert len(R) == (n + 1) and all(len(r) == 8 for r in R)
         return "".join(R)
 
@@ -1070,9 +1072,7 @@ class AESKeyWrapWithPadding(object):
             # RFC 3394 section 2.2.2 steps (1), (2), and part of (3)
             for j in self._start_stop(5, 0):
                 for i in self._start_stop(n, 1):
-                    W0, W1 = unpack(">LL", R[0])
-                    W1 ^= n * j + i
-                    R[0] = pack(">LL", W0, W1)
+                    R[0] = self._xor(R[0], n * j + i)
                     R[0], R[i] = self._decrypt(R[0], R[i])
         magic, m = unpack(">LL", R[0])
         if magic != 0xa65959a6:
