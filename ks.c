@@ -130,6 +130,12 @@ hal_crc32_t hal_ks_block_calculate_crc(const hal_ks_block_t * const block)
     crc = hal_crc32_update(crc,  &block->header.block_type,
                            sizeof(block->header.block_type));
 
+    crc = hal_crc32_update(crc, &block->header.legacy_1,
+                           sizeof(block->header.legacy_1));
+
+    crc = hal_crc32_update(crc, &block->header.legacy_2,
+                           sizeof(block->header.legacy_2));
+
     crc = hal_crc32_update(crc,
                            block->bytes   + sizeof(hal_ks_block_header_t),
                            sizeof(*block) - sizeof(hal_ks_block_header_t));
@@ -310,11 +316,16 @@ hal_error_t hal_ks_init_common(hal_ks_t *ks)
     if (err == HAL_ERROR_KEYSTORE_BAD_CRC || err == HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE)
       block_types[i] = HAL_KS_BLOCK_TYPE_UNKNOWN;
 
-    else if (err == HAL_OK)
-      block_types[i] = hal_ks_block_get_type(block);
+    else if (err != HAL_OK)
+      return err;
+
+    else if ((block->header.legacy_1 != 0xFF || block->header.legacy_2 != 0xFF) &&
+             (block->header.legacy_1 != 0x01 || block->header.legacy_2 != 0x00))
+      block_types[i] = HAL_KS_BLOCK_TYPE_UNKNOWN;
 
     else
-      return err;
+      block_types[i] = hal_ks_block_get_type(block);
+
 
     switch (block_types[i]) {
     case HAL_KS_BLOCK_TYPE_KEY:

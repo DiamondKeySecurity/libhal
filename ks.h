@@ -86,13 +86,22 @@ typedef enum {
 } hal_ks_block_status_t;
 
 /*
- * Common header for all keystore block types.
- * A few of these fields are deliberately omitted from the CRC.
+ * Common header for all keystore block types.  A few of these fields
+ * are deliberately omitted from the CRC.
+ *
+ * The legacy_1 and legacy_2 fields were used in the more complex
+ * "chunked" layout used in an earlier iteration of this keystore
+ * design, which proved more complex than it was worth.  At the
+ * moment, the only thing we do with these fields is include them in
+ * the CRC and check them for allowed values, to avoid gratuitously
+ * breaking backwards compatability with the earlier design.
  */
 
 typedef struct {
   uint8_t               block_type;
   uint8_t               block_status;
+  uint8_t               legacy_1;
+  uint8_t               legacy_2;
   hal_crc32_t           crc;
 } hal_ks_block_header_t;
 
