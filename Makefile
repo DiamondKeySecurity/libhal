@@ -36,7 +36,6 @@ STATIC_HMAC_STATE_BLOCKS = 16
 STATIC_PKEY_STATE_BLOCKS = 256
 STATIC_KS_VOLATILE_SLOTS = 128
 
-INC		= hal.h hal_internal.h
 LIB		= libhal.a
 
 # Error checking on known control options, some of which allow the user entirely too much rope.
@@ -259,16 +258,19 @@ daemon: mixed
 
 .PHONY: client mixed server serial daemon
 
-${OBJ}: ${INC}
-
 ${LIB}: ${OBJ}
 	${AR} rcs $@ $^
 
-asn1.o rsa.o ecdsa.o:				asn1_internal.h
-ecdsa.o:					ecdsa_curves.h
-novena-eim.o hal_io_eim.o:			novena-eim.h
-slip.o rpc_client_serial.o rpc_server_serial.o:	slip_internal.h
-ks_token.o:					last_gasp_pin_internal.h
+asn1.o rsa.o ecdsa.o:						asn1_internal.h
+ecdsa.o:							ecdsa_curves.h
+${OBJ}:								hal.h
+${OBJ}:								hal_internal.h
+ks.o ks_token.o ks_volatile.o ks_attribute.o ks_index.o:	ks.h
+ks_token.o:							last_gasp_pin_internal.h
+novena-eim.o hal_io_eim.o:					novena-eim.h
+slip.o rpc_client_serial.o rpc_server_serial.o:			slip_internal.h
+${OBJ}:								verilog_constants.h
+rpc_client.o rpc_server.o xdr.o:				xdr_internal.h
 
 last_gasp_pin_internal.h:
 	./utils/last_gasp_default_pin >$@
