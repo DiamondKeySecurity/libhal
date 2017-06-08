@@ -64,6 +64,7 @@ math for ECDSA verification; ECDSA math for key generation and signing
 on the P-256 and P-384 curves is done in the ECDSA base point
 multiplier cores when those are available.
 
+
 ## RSA ##
 
 The RSA implementation includes a compile-time option to bypass the
@@ -71,6 +72,7 @@ ModExp core and do everything in software, because the ModExp core is
 a tad slow at the moment (others are hard at work fixing this).
 
 The RSA implementation includes optional blinding (enabled by default).
+
 
 ## ECDSA ##
 
@@ -112,6 +114,92 @@ point arithmetic is performed in Jacobian projective coordinates, with
 the coordinates themselves in Montgomery form; final mapping back to
 affine coordinates also handles the final Montgomery reduction.
 
+
+## Keystore ##
+
+The keystore is basically a light-weight database intended to be run
+directly over some kind of block-access device, with an internal
+low-level driver interface so that we can use the same API for
+multiple keystore devices (eg, flash for "token objects" and RAM for
+"session objects", in the PKCS #11 senses of those terms).
+
+The available storage is divided up into "blocks" of a fixed size; for
+simplicity, the block size is a multiple of the subsector size of the
+flash chip on the Alpha platform, since that's the minimum erasable
+unit.  All state stored in the keystore itself follows the conventions
+needed for flash devices, whether the device in question is flash or
+not.  The basic rule here is that one can only clear bits, never set
+them: the only way to set a bit is to erase the whole block and start
+over.  So blocks progress from an initial state ("erased") where all
+bits are set to one, through several states where the block contains
+useful data, and ending in a state where all bits are set to zero
+("zeroed"), because that's the way that flash hardware works.
+
+The keystore implementation also applies a light-weight form of wear
+leveling to all keystore devices, whether they're flash devices or
+not.  The wear-leveling mechanism is not particularly sophisticated,
+but should suffice.  The wear-leveling code treats the entirety of a
+particular keystore device as a ring buffer of blocks, and keeps track
+of which blocks have been used recently by zeroing blocks upon freeing
+them rather than erasing them immediately, while also always keeping
+the block at the current head of the free list in the erased state.
+Taken together, this is enough to recover location of the block at the
+head of the free list after a reboot, which is sufficient for a
+round-robin wear leveling strategy.
+
+The block format includes a field for a CRC-32 checksum, which covers
+the entire block except for a few specific fields which need to be
+left out.  On reboot, blocks with bad CRC-32 values are considered
+candidates for reuse, but are placed at the end of the free list,
+preserve their contents for as long as possible in case the real
+problem is a buggy firmware update.
+
+At the moment, the decision about whether to use the CRC-32 mechanism
+is up to the individual driver: the flash driver uses it, the RAM
+driver (which never stores anything across reboots anyway) does not.
+
+Since the flash-like semantics do not allow setting bits, updates to a
+block always consist of allocating a new block and copying the
+modified data.  The keystore code uses a trivial lock-step protocol
+for this: first:
+
+1. The old block is marked as a "tombstone";
+2. The new block (with modified data) is written;
+3. The old block is erased.
+
+This protocol is deliberately as simple as possible, so that there is
+always a simple recovery path on reboot.
+
+Active blocks within a keystore are named by UUIDs.  With one
+exception, these are always type-4 (random) UUIDs, generated directly
+from output of the TRNG.  The one exception is the current PIN block,
+which always uses the reserved all-zeros UUID, which cannot possibly
+conflict with a type-4 UUID (by definition).
+
+The core of the keystore mechanism is the `ks->index[]` array, which
+contains nothing but a list of block numbers.  This array is divided
+into two parts: the first part is the index of active blocks, which is
+kept sorted (by UUID); the second part is the round-robin free list.
+Everything else in the keystore is indexed by these block numbers,
+which means that the index array is the only data structure which the
+keystore code needs to sort or rotate when adding, removing, or
+updating a block.  Because the block numbers themselves are small
+integers, the index array itself is small enough that shuffling data
+within it using `memmove()` is a relatively cheap operation, which in
+turn avoids a lot of complexity that would be involved in managing
+more sophisticated data structures.
+
+The keystore code includes both caching of recently used keystore
+blocks (to avoid unnecessary flash reads) and caching of the location
+of the block corresponding to a particular UUID (to avoid unnecessary
+index searches).  Aside from whatever direct performance benefits this
+might bring, this also frees the pkey layer that sits directly on top
+of the keystore code from needing to keep a lot of active state on
+particular keystore objects, which is important given that this whole
+thing sits under an RPC protocol driven by a client program which can
+impose arbitrary delays between any two operations at the pkey layer.
+
+
 ## Key backup ##
 
 The key backup mechanism is a straightforward three-step process,
@@ -134,6 +222,7 @@ Transfer of the wrapped keys between the two HSMs can be by any
 convenient mechanism; for simplicity, `cryptech_backup` script bundles
 everything up in a text file using JSON and Base64 encoding.
 
+
 ## Multiplexer daemon ##
 
 While the C client library can be built to talk directly to the
@@ -149,12 +238,14 @@ The multiplexer requires two external Python libraries, Tornado
 In the long run, the RPC mechanism will need to be wrapped in some
 kind of secure channel protocol, but we're not there yet.
 
+
 ## API ##
 
 Yeah, we ought to document the API, Real Soon Now, perhaps using
 [Doxygen][].  For the moment, see the function prototypes in hal.h,
 the Python definitions in cryptech.libhal, and and comments in the
 code.
+
 
 [EFD]:		http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html
 [Doxygen]:	http://www.doxygen.org/

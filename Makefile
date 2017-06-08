@@ -36,15 +36,13 @@ STATIC_HMAC_STATE_BLOCKS = 16
 STATIC_PKEY_STATE_BLOCKS = 256
 STATIC_KS_VOLATILE_SLOTS = 128
 
-INC		= hal.h hal_internal.h
 LIB		= libhal.a
 
 # Error checking on known control options, some of which allow the user entirely too much rope.
 
-USAGE := "usage: ${MAKE} [IO_BUS=eim|i2c|fmc] [RPC_MODE=none|server|client-simple|client-mixed] [KS=mmap|flash] [RPC_TRANSPORT=none|loopback|serial|daemon] [MODEXP_CORE=no|yes] [HASH_CORES=no|yes] [ECDSA_CORES=no|yes]"
+USAGE := "usage: ${MAKE} [IO_BUS=eim|i2c|fmc] [RPC_MODE=none|server|client-simple|client-mixed] [RPC_TRANSPORT=none|loopback|serial|daemon] [MODEXP_CORE=no|yes] [HASH_CORES=no|yes] [ECDSA_CORES=no|yes]"
 
 IO_BUS		?= none
-KS		?= flash
 RPC_MODE	?= none
 RPC_TRANSPORT	?= none
 MODEXP_CORE	?= yes
@@ -54,7 +52,6 @@ ECDSA_CORES	?= yes
 ifeq (,$(and \
 	$(filter	none eim i2c fmc			,${IO_BUS}),\
 	$(filter	none server client-simple client-mixed	,${RPC_MODE}),\
-	$(filter	mmap flash				,${KS}),\
 	$(filter	none loopback serial daemon		,${RPC_TRANSPORT}),\
 	$(filter	no yes					,${MODEXP_CORE}),\
 	$(filter	no yes					,${HASH_CORES}),\
@@ -62,7 +59,7 @@ ifeq (,$(and \
   $(error ${USAGE})
 endif
 
-$(info Building libhal with configuration IO_BUS=${IO_BUS} RPC_MODE=${RPC_MODE} KS=${KS} RPC_TRANSPORT=${RPC_TRANSPORT} MODEXP_CORE=${MODEXP_CORE} HASH_CORES=${HASH_CORES} ECDSA_CORES=${ECDSA_CORES})
+$(info Building libhal with configuration IO_BUS=${IO_BUS} RPC_MODE=${RPC_MODE} RPC_TRANSPORT=${RPC_TRANSPORT} MODEXP_CORE=${MODEXP_CORE} HASH_CORES=${HASH_CORES} ECDSA_CORES=${ECDSA_CORES})
 
 # Whether the RSA code should use the ModExp | ModExpS6 | ModExpA7 core.
 
@@ -138,16 +135,8 @@ endif
 # In the new world, all keystores are on the server side, and the
 # volatile keystore is always present, to support things like PKCS #11
 # "session" objects.
-#
-# The mmap keystore hasn't been rewritten for the new API yet.
 
-KS_OBJ = ks_index.o ks_attribute.o ks_volatile.o
-
-ifeq "${KS}" "mmap"
-  KS_OBJ += ks_mmap.o
-else ifeq "${KS}" "flash"
-  KS_OBJ += ks_flash.o mkm.o
-endif
+KS_OBJ = ks.o ks_index.o ks_attribute.o ks_volatile.o ks_token.o mkm.o
 
 # RPC_MODE = none | server | client-simple | client-mixed
 #   none:		Build without RPC client, use cores directly.
@@ -269,16 +258,19 @@ daemon: mixed
 
 .PHONY: client mixed server serial daemon
 
-${OBJ}: ${INC}
-
 ${LIB}: ${OBJ}
 	${AR} rcs $@ $^
 
-asn1.o rsa.o ecdsa.o:				asn1_internal.h
-ecdsa.o:					ecdsa_curves.h
-novena-eim.o hal_io_eim.o:			novena-eim.h
-slip.o rpc_client_serial.o rpc_server_serial.o:	slip_internal.h
-ks_flash.o:					last_gasp_pin_internal.h
+asn1.o rsa.o ecdsa.o:						asn1_internal.h
+ecdsa.o:							ecdsa_curves.h
+${OBJ}:								hal.h
+${OBJ}:								hal_internal.h
+ks.o ks_token.o ks_volatile.o ks_attribute.o ks_index.o:	ks.h
+ks_token.o:							last_gasp_pin_internal.h
+novena-eim.o hal_io_eim.o:					novena-eim.h
+slip.o rpc_client_serial.o rpc_server_serial.o:			slip_internal.h
+${OBJ}:								verilog_constants.h
+rpc_client.o rpc_server.o xdr.o:				xdr_internal.h
 
 last_gasp_pin_internal.h:
 	./utils/last_gasp_default_pin >$@

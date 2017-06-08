@@ -397,8 +397,6 @@ extern hal_error_t hal_get_pin(const hal_user_t user,
 extern hal_error_t hal_set_pin(const hal_user_t user,
                                const hal_ks_pin_t * const pin);
 
-extern void hal_ks_init_read_only_pins_only(void);
-
 /*
  * Master key memory (MKM) and key-encryption-key (KEK).
  *
@@ -434,6 +432,12 @@ extern hal_error_t hal_mkm_flash_erase(const size_t len);
 #endif
 
 /*
+ * Clean up pkey stuff that's tied to a particular client on logout.
+ */
+
+extern hal_error_t hal_pkey_logout(const hal_client_handle_t client);
+
+/*
  * Keystore API for use by the pkey implementation.
  *
  * In an attempt to emulate what current theory says will eventually
@@ -451,9 +455,9 @@ extern hal_error_t hal_mkm_flash_erase(const size_t len);
  */
 
 typedef struct {
-  hal_client_handle_t client_handle;
-  hal_session_handle_t session_handle;
-  hal_pkey_handle_t pkey_handle;
+  hal_client_handle_t client;
+  hal_session_handle_t session;
+  hal_pkey_handle_t pkey;
   hal_key_type_t type;
   hal_curve_name_t curve;
   hal_key_flags_t flags;
@@ -473,377 +477,59 @@ typedef struct {
    */
 } hal_pkey_slot_t;
 
-typedef struct hal_ks_driver hal_ks_driver_t;
+/*
+ * Keystore is an opaque type, we just pass pointers.
+ */
 
 typedef struct hal_ks hal_ks_t;
 
-struct hal_ks_driver {
+extern hal_ks_t * const hal_ks_token;
+extern hal_ks_t * const hal_ks_volatile;
 
-  hal_error_t (*init)(const hal_ks_driver_t * const driver,
-                      const int alloc);
+extern hal_error_t hal_ks_init(hal_ks_t *ks,
+                               const int alloc);
 
-  hal_error_t (*shutdown)(const hal_ks_driver_t * const driver);
+extern void hal_ks_init_read_only_pins_only(void);
 
-  hal_error_t (*open)(const hal_ks_driver_t * const driver,
-                      hal_ks_t **ks);
-
-  hal_error_t (*close)(hal_ks_t *ks);
-
-  hal_error_t (*store)(hal_ks_t *ks,
-                       hal_pkey_slot_t *slot,
-                       const uint8_t * const der,  const size_t der_len);
-
-  hal_error_t (*fetch)(hal_ks_t *ks,
-                       hal_pkey_slot_t *slot,
-                       uint8_t *der, size_t *der_len, const size_t der_max);
-
-  hal_error_t (*delete)(hal_ks_t *ks,
-                        hal_pkey_slot_t *slot);
-
-  hal_error_t (*match)(hal_ks_t *ks,
-                       const hal_client_handle_t client,
-                       const hal_session_handle_t session,
-                       const hal_key_type_t type,
-                       const hal_curve_name_t curve,
-                       const hal_key_flags_t mask,
-                       const hal_key_flags_t flags,
-                       const hal_pkey_attribute_t *attributes,
-                       const unsigned attributes_len,
-                       hal_uuid_t *result,
-                       unsigned *result_len,
-                       const unsigned result_max,
-                       const hal_uuid_t * const previous_uuid);
-
-  hal_error_t (*set_attributes)(hal_ks_t *ks,
+extern hal_error_t hal_ks_store(hal_ks_t *ks,
                                 hal_pkey_slot_t *slot,
+                                const uint8_t * const der, const size_t der_len);
+
+extern hal_error_t hal_ks_fetch(hal_ks_t *ks,
+                                hal_pkey_slot_t *slot,
+                                uint8_t *der, size_t *der_len, const size_t der_max);
+
+extern hal_error_t hal_ks_delete(hal_ks_t *ks,
+                                 hal_pkey_slot_t *slot);
+
+extern hal_error_t hal_ks_match(hal_ks_t *ks,
+                                const hal_client_handle_t client,
+                                const hal_session_handle_t session,
+                                const hal_key_type_t type,
+                                const hal_curve_name_t curve,
+                                const hal_key_flags_t mask,
+                                const hal_key_flags_t flags,
                                 const hal_pkey_attribute_t *attributes,
-                                const unsigned attributes_len);
-
-  hal_error_t (*get_attributes)(hal_ks_t *ks,
-                                hal_pkey_slot_t *slot,
-                                hal_pkey_attribute_t *attributes,
                                 const unsigned attributes_len,
-                                uint8_t *attributes_buffer,
-                                const size_t attributes_buffer_len);
+                                hal_uuid_t *result,
+                                unsigned *result_len,
+                                const unsigned result_max,
+                                const hal_uuid_t * const previous_uuid);
 
-};
+extern hal_error_t hal_ks_set_attributes(hal_ks_t *ks,
+                                         hal_pkey_slot_t *slot,
+                                         const hal_pkey_attribute_t *attributes,
+                                         const unsigned attributes_len);
 
-
-struct hal_ks {
-  const hal_ks_driver_t *driver;
-  /*
-   * Any other common portions of hal_ks_t go here.
-   */
-
-  /*
-   * Driver-specific stuff is handled by a form of subclassing:
-   * driver module embeds this structure at the head of whatever
-   * else it needs, and performs casts as needed.
-   */
-};
-
-extern const hal_ks_driver_t
-   hal_ks_volatile_driver[1],
-   hal_ks_token_driver[1];
-
-static inline hal_error_t hal_ks_init(const hal_ks_driver_t * const driver,
-                                      const int alloc)
-{
-  if (driver == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (driver->init == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return driver->init(driver, alloc);
-}
-
-static inline hal_error_t hal_ks_shutdown(const hal_ks_driver_t * const driver)
-{
-  if (driver == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (driver->shutdown == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return driver->shutdown(driver);
-}
-
-static inline hal_error_t hal_ks_open(const hal_ks_driver_t * const driver,
-                                      hal_ks_t **ks)
-{
-  if (driver == NULL || ks == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (driver->open == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return driver->open(driver, ks);
-}
-
-static inline hal_error_t hal_ks_close(hal_ks_t *ks)
-{
-  if (ks == NULL || ks->driver == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (ks->driver->close == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return ks->driver->close(ks);
-}
-
-static inline hal_error_t hal_ks_store(hal_ks_t *ks,
-                                       hal_pkey_slot_t *slot,
-                                       const uint8_t * const der,  const size_t der_len)
-{
-  if (ks == NULL || ks->driver == NULL || slot == NULL || der == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (ks->driver->store == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return ks->driver->store(ks, slot, der, der_len);
-}
-
-static inline hal_error_t hal_ks_fetch(hal_ks_t *ks,
-                                       hal_pkey_slot_t *slot,
-                                       uint8_t *der, size_t *der_len, const size_t der_max)
-{
-  if (ks == NULL || ks->driver == NULL || slot == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (ks->driver->fetch == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return ks->driver->fetch(ks, slot, der, der_len, der_max);
-}
-
-static inline hal_error_t hal_ks_delete(hal_ks_t *ks,
-                                        hal_pkey_slot_t *slot)
-{
-  if (ks == NULL || ks->driver == NULL || slot == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (ks->driver->delete == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return ks->driver->delete(ks, slot);
-}
-
-static inline hal_error_t hal_ks_match(hal_ks_t *ks,
-                                       const hal_client_handle_t client,
-                                       const hal_session_handle_t session,
-                                       const hal_key_type_t type,
-                                       const hal_curve_name_t curve,
-                                       const hal_key_flags_t mask,
-                                       const hal_key_flags_t flags,
-                                       const hal_pkey_attribute_t *attributes,
-                                       const unsigned attributes_len,
-                                       hal_uuid_t *result,
-                                       unsigned *result_len,
-                                       const unsigned result_max,
-                                       const hal_uuid_t * const previous_uuid)
-{
-  if (ks == NULL || ks->driver == NULL)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (ks->driver->match == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return ks->driver->match(ks, client, session, type, curve, mask, flags, attributes, attributes_len,
-                           result, result_len, result_max, previous_uuid);
-}
-
-static inline  hal_error_t hal_ks_set_attributes(hal_ks_t *ks,
-                                                 hal_pkey_slot_t *slot,
-                                                 const hal_pkey_attribute_t *attributes,
-                                                 const unsigned attributes_len)
-{
-  if (ks == NULL || ks->driver == NULL || slot == NULL ||
-      attributes == NULL || attributes_len == 0)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (ks->driver->set_attributes == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return ks->driver->set_attributes(ks, slot, attributes, attributes_len);
-}
-
-static inline hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
-                                                hal_pkey_slot_t *slot,
-                                                hal_pkey_attribute_t *attributes,
-                                                const unsigned attributes_len,
-                                                uint8_t *attributes_buffer,
-                                                const size_t attributes_buffer_len)
-{
-  if (ks == NULL || ks->driver == NULL || slot == NULL ||
-      attributes == NULL || attributes_len == 0)
-    return HAL_ERROR_BAD_ARGUMENTS;
-
-  if (ks->driver->get_attributes == NULL)
-    return HAL_ERROR_NOT_IMPLEMENTED;
-
-  return ks->driver->get_attributes(ks, slot, attributes, attributes_len,
-                                    attributes_buffer, attributes_buffer_len);
-}
-
-/*
- * Keystore index.  This is intended to be usable by both memory-based
- * (in-memory, mmap(), ...) keystores and keystores based on raw flash.
- * Some of the features aren't really necessary for memory-based keystores,
- * but should be harmless.
- *
- * General approach is multiple arrays, all but one of which are
- * indexed by "block" numbers, where a block number might be a slot in
- * yet another static array, the number of a flash sub-sector, or
- * whatever is the appropriate unit for holding one keystore record.
- *
- * The index array contains nothing but flags and block numbers, and
- * is deliberately a small data structure so that moving data around
- * within it is relatively cheap.
- *
- * The index array is divided into two portions: the index proper, and
- * the free queue.  The index proper is ordered according to the names
- * (UUIDs) of the corresponding blocks; the free queue is a FIFO, to
- * support a simplistic form of wear leveling in flash-based keystores.
- *
- * Key names are kept in a separate array, indexed by block number.
- * Key names here are a composite of the key's UUID and a "chunk"
- * number; the latter allows storage of keys whose total size exceeds
- * one block (whatever a block is).  For the moment we keep the UUID
- * and the chunk number in a single array, which may provide (very)
- * slightly better performance due to reference locality in SDRAM, but
- * this may change if we need to reclaim the space wasted by structure
- * size rounding.
- *
- * The all-zeros UUID, which (by definition) cannot be a valid key
- * UUID, is reserved for the (non-key) block used to stash PINs and
- * other small data which aren't really part of the keystore proper
- * but are kept with it because the keystore is the flash we have.
- *
- * Note that this API deliberately says nothing about how the keys
- * themselves are stored, that's up to the keystore driver.  This
- * portion of the API is only concerned with allocation and naming.
- */
-
-typedef struct {
-  hal_uuid_t name;              /* Key name */
-  uint8_t chunk;                /* Key chunk number */
-} hal_ks_name_t;
-
-typedef struct {
-  unsigned size;                /* Array length */
-  unsigned used;                /* How many blocks are in use */
-  uint16_t *index;              /* Index/freelist array */
-  hal_ks_name_t *names;         /* Keyname array */
-} hal_ks_index_t;
-
-/*
- * Finish setting up key index.  Caller must populate index, free
- * list, and name array.
- *
- * This function checks a few things then sorts the index proper.
- *
- * If driver cares about wear leveling, driver must supply the free
- * list in the desired order (FIFO); figuring out what that order is a
- * problem for the keystore driver.
- */
-extern hal_error_t hal_ks_index_setup(hal_ks_index_t *ksi);
-
-/*
- * Find a key block, return its block number.
- */
-extern hal_error_t hal_ks_index_find(hal_ks_index_t *ksi,
-                                     const hal_uuid_t * const name,
-                                     const unsigned chunk,
-                                     unsigned *blockno,
-                                     int *hint);
-
-/*
- * Find all the blocks in a key, return the block numbers.
- */
-extern hal_error_t hal_ks_index_find_range(hal_ks_index_t *ksi,
-                                           const hal_uuid_t * const name,
-                                           const unsigned max_blocks,
-                                           unsigned *n_blocks,
-                                           unsigned *blocknos,
-                                           int *hint,
-                                           const int strict);
-
-/*
- * Add a key block, return its block number.
- */
-extern hal_error_t hal_ks_index_add(hal_ks_index_t *ksi,
-                                    const hal_uuid_t * const name,
-                                    const unsigned chunk,
-                                    unsigned *blockno,
-                                    int *hint);
-
-/*
- * Delete a key block, returns its block number (driver may need it).
- */
-extern hal_error_t hal_ks_index_delete(hal_ks_index_t *ksi,
-                                       const hal_uuid_t * const name,
-                                       const unsigned chunk,
-                                       unsigned *blockno,
-                                       int *hint);
-
-/*
- * Delete all of blocks in a key, returning the block numbers.
- */
-
-extern hal_error_t hal_ks_index_delete_range(hal_ks_index_t *ksi,
-                                             const hal_uuid_t * const name,
-                                             const unsigned max_blocks,
-                                             unsigned *n_blocks,
-                                             unsigned *blocknos,
-                                             int *hint);
-
-/*
- * Replace a key block with a new one, return new block number.
- * Name of block does not change.  This is an optimization of
- * a delete immediately followed by an add for the same name.
- */
-
-extern hal_error_t hal_ks_index_replace(hal_ks_index_t *ksi,
-                                        const hal_uuid_t * const name,
-                                        const unsigned chunk,
-                                        unsigned *blockno,
-                                        int *hint);
-
-/*
- * Check the index for errors.  At least for the moment, this just
- * reports errors, it doesn't attempt to fix them.
- */
-
-extern hal_error_t hal_ks_index_fsck(hal_ks_index_t *ksi);
-
-/*
- * Keystore attribute utilities, for use by keystore drivers.
- */
-
-extern const size_t hal_ks_attribute_header_size;
-
-extern hal_error_t hal_ks_attribute_scan(const uint8_t * const bytes,
-                                         const size_t bytes_len,
+extern hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
+                                         hal_pkey_slot_t *slot,
                                          hal_pkey_attribute_t *attributes,
                                          const unsigned attributes_len,
-                                         size_t *total_len);
+                                         uint8_t *attributes_buffer,
+                                         const size_t attributes_buffer_len);
 
-extern hal_error_t hal_ks_attribute_delete(uint8_t *bytes,
-                                           const size_t bytes_len,
-                                           hal_pkey_attribute_t *attributes,
-                                           unsigned *attributes_len,
-                                           size_t *total_len,
-                                           const uint32_t type);
-
-extern hal_error_t hal_ks_attribute_insert(uint8_t *bytes, const size_t bytes_len,
-                                           hal_pkey_attribute_t *attributes,
-                                           unsigned *attributes_len,
-                                           size_t *total_len,
-                                           const uint32_t type,
-                                           const uint8_t * const value,
-                                           const size_t value_len);
+extern hal_error_t hal_ks_logout(hal_ks_t *ks,
+                                 const hal_client_handle_t client);
 
 /*
  * RPC lowest-level send and receive routines. These are blocking, and
