@@ -534,7 +534,9 @@ class HSM(object):
         with self.rpc(RPC_FUNC_HASH_GET_ALGORITHM, handle) as r:
             return HALDigestAlgorithm.index[r.unpack_uint()]
 
-    def hash_initialize(self, alg, key = "", client = 0, session = 0, mixed_mode = None):
+    def hash_initialize(self, alg, key = None, client = 0, session = 0, mixed_mode = None):
+        if key is None:
+            key = ""
         if mixed_mode is None:
             mixed_mode = self.mixed_mode
         if mixed_mode:
