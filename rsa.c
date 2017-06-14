@@ -581,15 +581,42 @@ hal_error_t hal_rsa_key_get_public_exponent(const hal_rsa_key_t * const key,
 }
 
 /*
- * Number of Miller-Rabin rounds and table of primes smaller than
- * 2000, per Schneier.
+ * Generate a prime factor for an RSA keypair.
+ *
+ * Get random bytes, munge a few bits, and stuff into a bignum to
+ * construct our initial candidate.
+ *
+ * Initialize table of remainders when dividing candidate by each
+ * entry in corresponding table of small primes.  We'd have to perform
+ * these tests in any case for any succesful candidate, and doing it
+ * up front lets us amortize the cost over the entire search, so we do
+ * this unconditionally before entering the search loop.
+ *
+ * If all of the remainders were non-zero, run the requisite number of
+ * Miller-Rabin tests using the first few entries from that same table
+ * of small primes as the test values.  If we get past Miller-Rabin,
+ * the candidate is (probably) prime, to a confidence level which we
+ * can tune by adjusting the number of Miller-Rabin tests.
+ *
+ * For RSA, we also need (result - 1) to be relatively prime with
+ * respect to the public exponent.  If a (probable) prime passes that
+ * test, we have a winner.
+ *
+ * If any of the above tests failed, we increment the candidate and
+ * all remainders by two, then loop back to the remainder test.  This
+ * is where the table pays off: incrementing remainders is really
+ * cheap, and since most composite numbers fail the small primes test,
+ * making that cheap makes the whole loop run significantly faster.
+ *
+ * General approach suggested by HAC note 4.51.  Range of small prime
+ * table and default number of Miller-Rabin tests suggested by Schneier.
  */
 
-#ifndef HAL_RSA_MILLER_RABIN_ROUNDS
-#define HAL_RSA_MILLER_RABIN_ROUNDS (5)
+#ifndef HAL_RSA_MILLER_RABIN_TESTS
+#define HAL_RSA_MILLER_RABIN_TESTS (5)
 #endif
 
-static uint16_t small_primes[] = {
+static const uint16_t small_prime[] = {
   2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61,
   67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137,
   139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199,
@@ -617,37 +644,11 @@ static uint16_t small_primes[] = {
   1951, 1973, 1979, 1987, 1993, 1997, 1999
 };
 
-/*
- * Generate a prime factor for an RSA keypair.
- *
- * Get random bytes, munge a few bits, and stuff into a bignum to
- * construct our initial candidate.
- *
- * Initialize table of remainders when dividing candidate by each
- * entry in corresponding table of small primes.  We do this
- * unconditionally, as a fixed cost.
- *
- * If all of the remainders were non-zero, run the requisite number of
- * Miller-Rabin tests using the first few entries from that same table
- * of small primes as the test values.
- *
- * If we get past Miller-Rabin, the candidate is (probably) prime.
- * For RSA, we also need (result - 1) to be relatively prime with
- * respect to the public exponent.  If we pass that test, we have a
- * winner.
- *
- * If any of the above tests failed, we bump the candidate and all of
- * the remainders by two, then try again.  This is where the table of
- * remainders pays off: incrementing these remainders is really cheap.
- *
- * Remainder table suggested by HAC Note 4.51.
- */
-
 static hal_error_t find_prime(const unsigned prime_length,
                               const fp_int * const e,
                               fp_int *result)
 {
-  uint16_t remainder[sizeof(small_primes)/sizeof(*small_primes)];
+  uint16_t remainder[sizeof(small_prime)/sizeof(*small_prime)];
   uint8_t buffer[prime_length];
   fp_int t[1] = INIT_FP_INT;
   hal_error_t err;
@@ -655,42 +656,45 @@ static hal_error_t find_prime(const unsigned prime_length,
   if ((err = hal_get_random(NULL, buffer, sizeof(buffer))) != HAL_OK)
     return err;
 
-  buffer[0                 ] |= 0xc0;
-  buffer[sizeof(buffer) - 1] |= 0x01;
+  buffer[0]                  &= ~0x01; /* Headroom for search */
+  buffer[0]                  |=  0xc0; /* Result large enough */
+  buffer[sizeof(buffer) - 1] |=  0x01; /* Candidates are odd  */
+
   fp_read_unsigned_bin(result, buffer, sizeof(buffer));
 
-  for (int i = 0; i < sizeof(small_primes)/sizeof(*small_primes); i++) {
+  for (int i = 0; i < sizeof(small_prime)/sizeof(*small_prime); i++) {
     fp_digit d;
-    fp_mod_d(result, small_primes[i], &d);
+    fp_mod_d(result, small_prime[i], &d);
     remainder[i] = d;
   }
 
   for (;;) {
-    int prime = 1;
+    int possible = 1;
 
-    for (int i = 0; i < sizeof(small_primes)/sizeof(*small_primes); i++)
-      prime &= remainder[i] != 0;
+    for (int i = 0; i < sizeof(small_prime)/sizeof(*small_prime); i++)
+      possible &= remainder[i] != 0;
 
-    for (int i = 0; prime && i < HAL_RSA_MILLER_RABIN_ROUNDS; i++) {
-      fp_set(t, small_primes[i]);
-      fp_prime_miller_rabin(result, t, &prime);
+    for (int i = 0; possible && i < HAL_RSA_MILLER_RABIN_TESTS; i++) {
+      fp_set(t, small_prime[i]);
+      fp_prime_miller_rabin(result, t, &possible);
     }
 
-    if (prime) {
+    if (possible) {
       fp_sub_d(result, 1, t);
       fp_gcd(t, unconst_fp_int(e), t);
-      prime = fp_cmp_d(t, 1) == FP_EQ;
+      possible = fp_cmp_d(t, 1) == FP_EQ;
     }
 
-    if (prime) {
+    if (possible) {
       fp_zero(t);
       return HAL_OK;
     }
 
     fp_add_d(result, 2, result);
 
-    for (int i = 0; i < sizeof(small_primes)/sizeof(*small_primes); i++)
-      remainder[i] = (remainder[i] + 2) % small_primes[i];
+    for (int i = 0; i < sizeof(small_prime)/sizeof(*small_prime); i++)
+      if ((remainder[i] += 2) >= small_prime[i])
+        remainder[i] -= small_prime[i];
   }
 }
 
