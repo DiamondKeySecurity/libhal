@@ -22,7 +22,7 @@ hsm.login(HAL_USER_NORMAL, args.pin)
 flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | (HAL_KEY_FLAG_TOKEN if args.token else 0)
 sum   = timedelta()
 
-for n in xrange(1, args.iterations):
+for n in xrange(1, args.iterations + 1):
 
     t0 = datetime.now()
 
