@@ -78,12 +78,15 @@
 #include "asn1_internal.h"
 
 /*
- * Whether to use ModExp core.  It works, but at the moment it's so
- * slow that a full test run can take more than an hour.
+ * Whether to use ModExp core.  It works, but it's painfully slow.
  */
 
-#ifndef HAL_RSA_USE_MODEXP
-#define HAL_RSA_USE_MODEXP 1
+#ifndef HAL_RSA_SIGN_USE_MODEXP
+#define HAL_RSA_SIGN_USE_MODEXP 1
+#endif
+
+#ifndef HAL_RSA_KEYGEN_USE_MODEXP
+#define HAL_RSA_KEYGEN_USE_MODEXP 0
 #endif
 
 #if defined(RPC_CLIENT) && RPC_CLIENT != RPC_CLIENT_LOCAL
@@ -182,7 +185,7 @@ static hal_error_t unpack_fp(const fp_int * const bn, uint8_t *buffer, const siz
   return err;
 }
 
-#if HAL_RSA_USE_MODEXP
+#if HAL_RSA_SIGN_USE_MODEXP
 
 /*
  * Unwrap bignums into byte arrays, feed them into hal_modexp(), and
@@ -236,27 +239,13 @@ static hal_error_t modexp(hal_core_t *core,
   return err;
 }
 
-/*
- * Wrapper to let us export our modexp function as a replacement for
- * TFM's, to avoid dragging in all of the TFM montgomery code when we
- * use TFM's Miller-Rabin test code.
- *
- * This code is here rather than in a separate module because of the
- * error handling: TFM's error codes aren't really capable of
- * expressing all the things that could go wrong here.
- */
-
-int fp_exptmod(fp_int *a, fp_int *b, fp_int *c, fp_int *d)
-{
-  return modexp(NULL, a, b, c, d) == HAL_OK ? FP_OKAY : FP_VAL;
-}
-
-#else /* HAL_RSA_USE_MODEXP */
+#else /* HAL_RSA_SIGN_USE_MODEXP */
 
 /*
- * Workaround to let us use TFM's software implementation of modular
- * exponentiation when we want to test other things and don't want to
- * wait for the slow FPGA implementation.
+ * Use libtfm's software implementation of modular exponentiation.
+ * Now that the ModExpA7 core performs about as well as the software
+ * implementation, there's probably no need to use this, but we're
+ * still tuning things, so leave the hook here for now.
  */
 
 static hal_error_t modexp(const hal_core_t *core, /* ignored */
@@ -271,7 +260,31 @@ static hal_error_t modexp(const hal_core_t *core, /* ignored */
   return err;
 }
 
-#endif /* HAL_RSA_USE_MODEXP */
+#endif /* HAL_RSA_SIGN_USE_MODEXP */
+
+/*
+ * Wrapper to let us export our modexp function as a replacement for
+ * libtfm's when running libtfm's Miller-Rabin test code.
+ *
+ * At the moment, the libtfm software implementation performs
+ * disproportionately better than our core does for the specific case
+ * of Miller-Rabin tests, for reasons we don't really understand.
+ * So there's not much point in enabling this, except as a test to
+ * confirm this behavior.
+ *
+ * This code is here rather than in a separate module because of the
+ * error handling: libtfm's error codes aren't really capable of
+ * expressing all the things that could go wrong here.
+ */
+
+#if HAL_RSA_SIGN_USE_MODEXP && HAL_RSA_KEYGEN_USE_MODEXP
+
+int fp_exptmod(fp_int *a, fp_int *b, fp_int *c, fp_int *d)
+{
+  return modexp(NULL, a, b, c, d) == HAL_OK ? FP_OKAY : FP_VAL;
+}
+
+#endif /* HAL_RSA_SIGN_USE_MODEXP && HAL_RSA_KEYGEN_USE_MODEXP */
 
 /*
  * Create blinding factors.  There are various schemes for amortizing
