@@ -182,8 +182,9 @@ hal_error_t hal_modexp(hal_core_t *core,
    * We probably ought to take the mode (fast vs constant-time) as an
    * argument, but for the moment we just guess that really short
    * exponent means we're using the public key and can use fast mode,
-   * all other cases are something to do with the private key and
-   * therefore must use constant-time mode.
+   * really short messages are Miller-Rabin tests and can also use
+   * fast mode, all other cases are something to do with the private
+   * key and therefore must use constant-time mode.
    *
    * Unclear whether it's worth trying to figure out exactly how long
    * the operands are: assuming a multiple of eight is safe, but makes
@@ -194,7 +195,7 @@ hal_error_t hal_modexp(hal_core_t *core,
    */
 
   /* Select mode (1 = fast, 0 = safe) */
-  check(set_register(core, MODEXPS6_ADDR_MODE, (exp_len <= 4)));
+  check(set_register(core, MODEXPS6_ADDR_MODE, (exp_len <= 4 || msg_len <= 4)));
 
   /* Set modulus size in bits */
   check(set_register(core, MODEXPS6_ADDR_MODULUS_WIDTH, mod_len * 8));

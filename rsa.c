@@ -207,10 +207,11 @@ static hal_error_t modexp(hal_core_t *core,
     msg = reduced_msg;
   }
 
+  const size_t msg_len = (fp_unsigned_bin_size(unconst_fp_int(msg)) + 3) & ~3;
   const size_t exp_len = (fp_unsigned_bin_size(unconst_fp_int(exp)) + 3) & ~3;
   const size_t mod_len = (fp_unsigned_bin_size(unconst_fp_int(mod)) + 3) & ~3;
 
-  uint8_t msgbuf[mod_len];
+  uint8_t msgbuf[msg_len];
   uint8_t expbuf[exp_len];
   uint8_t modbuf[mod_len];
   uint8_t resbuf[mod_len];
@@ -231,6 +232,7 @@ static hal_error_t modexp(hal_core_t *core,
   memset(msgbuf, 0, sizeof(msgbuf));
   memset(expbuf, 0, sizeof(expbuf));
   memset(modbuf, 0, sizeof(modbuf));
+  memset(resbuf, 0, sizeof(resbuf));
   return err;
 }
 
