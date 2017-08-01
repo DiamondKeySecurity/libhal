@@ -443,10 +443,7 @@ hal_error_t hal_hash_initialize(hal_core_t *core,
   state->descriptor = descriptor;
   state->driver = driver;
   state->core = core;
-  state->flags = flags;
-
-  if (state_buffer == NULL)
-    state->flags |= STATE_FLAG_STATE_ALLOCATED;
+  state->flags = flags | STATE_FLAG_STATE_ALLOCATED;
 
   *state_ = state;
 
@@ -776,9 +773,6 @@ hal_error_t hal_hmac_initialize(hal_core_t *core,
   if ((err = hal_hash_initialize(core, descriptor, &h, &state->hash_state,
                                  sizeof(state->hash_state))) != HAL_OK)
     goto fail;
-
-  if (state_buffer == NULL)
-    h->flags |= STATE_FLAG_STATE_ALLOCATED;
 
   /*
    * If the supplied HMAC key is longer than the hash block length, we
