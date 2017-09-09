@@ -64,7 +64,7 @@ void hal_modexp_set_debug(const int onoff)
 
 static hal_error_t inline get_register(const hal_core_t *core,
                                        const hal_addr_t addr,
-                                       uint32_t &value)
+                                       uint32_t *value)
 {
   hal_error_t err;
   uint8_t w[4];
@@ -143,7 +143,7 @@ static inline hal_error_t set_buffer(const hal_core_t *core,
                                      const uint8_t * const value,
                                      const size_t length)
 {
-  hal_error_t;
+  hal_error_t err;
   size_t i;
 
   if (value == NULL || length % 4 != 0)
@@ -217,7 +217,7 @@ hal_error_t hal_modexp(hal_core_t *core,
    * says it can handle.
    */
 
-  uint32_t operand_max;
+  uint32_t operand_max = 0;
   check(get_register(core, MODEXPA7_ADDR_BUFFER_BITS, &operand_max));
   operand_max /= 8;
 

@@ -56,12 +56,12 @@ static int test_modexp(hal_core_t *core,
                        const rsa_tc_bn_t * const exp, /* Exponent */
                        const rsa_tc_bn_t * const val) /* Expected result */
 {
-  uint8_t result[tc->n.len];
+  uint8_t result[tc->n.len], C[tc->n.len], F[tc->n.len];
 
   printf("%s test for %lu-bit RSA key\n", kind, (unsigned long) tc->size);
 
-  if (hal_modexp(core, msg->val, msg->len, exp->val, exp->len,
-                 tc->n.val, tc->n.len, result, sizeof(result)) != HAL_OK)
+  if (hal_modexp(core, 0, msg->val, msg->len, exp->val, exp->len,
+                 tc->n.val, tc->n.len, result, sizeof(result), C, sizeof(C), F, sizeof(F)) != HAL_OK)
     return printf("ModExp failed\n"), 0;
 
   if (memcmp(result, val->val, val->len))

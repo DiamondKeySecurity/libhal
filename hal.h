@@ -203,36 +203,6 @@ extern hal_error_t hal_io_write(const hal_core_t *core, hal_addr_t offset, const
 extern hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf, size_t len);
 extern hal_error_t hal_io_wait(const hal_core_t *core, uint8_t status, int *count);
 
-static inline hal_error_t hal_io_zero(const hal_core_t *core)
-{
-  const uint8_t buf[4] = { 0, 0, 0, 0 };
-  return hal_io_write(core, ADDR_CTRL, buf, sizeof(buf));
-}
-
-static inline hal_error_t hal_io_init(const hal_core_t *core)
-{
-  const uint8_t buf[4] = { 0, 0, 0, CTRL_INIT };
-  return hal_io_write(core, ADDR_CTRL, buf, sizeof(buf));
-}
-
-static inline hal_error_t hal_io_next(const hal_core_t *core)
-{
-  const uint8_t buf[4] = { 0, 0, 0, CTRL_NEXT };
-  return hal_io_write(core, ADDR_CTRL, buf, sizeof(buf));
-}
-
-static inline hal_error_t hal_io_wait_ready(const hal_core_t *core)
-{
-  int limit = -1;
-  return hal_io_wait(core, STATUS_READY, &limit);
-}
-
-static inline hal_error_t hal_io_wait_valid(const hal_core_t *core)
-{
-  int limit = -1;
-  return hal_io_wait(core, STATUS_VALID, &limit);
-}
-
 /*
  * Core management functions.
  *
@@ -488,12 +458,12 @@ extern hal_error_t hal_rsa_key_get_public_exponent(const hal_rsa_key_t * const k
 extern void hal_rsa_key_clear(hal_rsa_key_t *key);
 
 extern hal_error_t hal_rsa_encrypt(hal_core_t *core,
-                                   const hal_rsa_key_t * const key,
+                                   hal_rsa_key_t *key,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * output, const size_t output_len);
 
 extern hal_error_t hal_rsa_decrypt(hal_core_t *core,
-                                   const hal_rsa_key_t * const key,
+                                   hal_rsa_key_t *key,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * output, const size_t output_len);
 

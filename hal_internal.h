@@ -69,6 +69,41 @@ inline uint32_t htonl(uint32_t w)
 #endif
 
 /*
+ * Low-level I/O convenience functions, moved here from hal.h
+ * because they use symbols defined in verilog_constants.h.
+ */
+
+static inline hal_error_t hal_io_zero(const hal_core_t *core)
+{
+  const uint8_t buf[4] = { 0, 0, 0, 0 };
+  return hal_io_write(core, ADDR_CTRL, buf, sizeof(buf));
+}
+
+static inline hal_error_t hal_io_init(const hal_core_t *core)
+{
+  const uint8_t buf[4] = { 0, 0, 0, CTRL_INIT };
+  return hal_io_write(core, ADDR_CTRL, buf, sizeof(buf));
+}
+
+static inline hal_error_t hal_io_next(const hal_core_t *core)
+{
+  const uint8_t buf[4] = { 0, 0, 0, CTRL_NEXT };
+  return hal_io_write(core, ADDR_CTRL, buf, sizeof(buf));
+}
+
+static inline hal_error_t hal_io_wait_ready(const hal_core_t *core)
+{
+  int limit = -1;
+  return hal_io_wait(core, STATUS_READY, &limit);
+}
+
+static inline hal_error_t hal_io_wait_valid(const hal_core_t *core)
+{
+  int limit = -1;
+  return hal_io_wait(core, STATUS_VALID, &limit);
+}
+
+/*
  * Static memory allocation on start-up.  Don't use this except where
  * really necessary.  By design, there's no way to free this, we don't
  * want to have to manage a heap.  Intent is just to allow allocation

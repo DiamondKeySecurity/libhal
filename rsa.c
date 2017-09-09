@@ -317,7 +317,7 @@ int fp_exptmod(fp_int *a, fp_int *b, fp_int *c, fp_int *d)
  * try.  Come back to this if it looks like a bottleneck.
  */
 
-static hal_error_t create_blinding_factors(hal_core_t *core, const hal_rsa_key_t * const key, fp_int *bf, fp_int *ubf)
+static hal_error_t create_blinding_factors(hal_core_t *core, hal_rsa_key_t *key, fp_int *bf, fp_int *ubf)
 {
   if (key == NULL || bf == NULL || ubf == NULL)
     return HAL_ERROR_IMPOSSIBLE;
@@ -349,7 +349,7 @@ static hal_error_t create_blinding_factors(hal_core_t *core, const hal_rsa_key_t
  * RSA decryption via Chinese Remainder Theorem (Garner's formula).
  */
 
-static hal_error_t rsa_crt(hal_core_t *core, const hal_rsa_key_t * const key, fp_int *msg, fp_int *sig)
+static hal_error_t rsa_crt(hal_core_t *core, hal_rsa_key_t *key, fp_int *msg, fp_int *sig)
 {
   if (key == NULL || msg == NULL || sig == NULL)
     return HAL_ERROR_IMPOSSIBLE;
@@ -429,7 +429,7 @@ static hal_error_t rsa_crt(hal_core_t *core, const hal_rsa_key_t * const key, fp
  */
 
 hal_error_t hal_rsa_encrypt(hal_core_t *core,
-                            const hal_rsa_key_t * const key,
+                            hal_rsa_key_t *key,
                             const uint8_t * const input,  const size_t input_len,
                             uint8_t * output, const size_t output_len)
 {
@@ -455,7 +455,7 @@ hal_error_t hal_rsa_encrypt(hal_core_t *core,
 }
 
 hal_error_t hal_rsa_decrypt(hal_core_t *core,
-                            const hal_rsa_key_t * const key,
+                            hal_rsa_key_t *key,
                             const uint8_t * const input,  const size_t input_len,
                             uint8_t * output, const size_t output_len)
 {
