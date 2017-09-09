@@ -47,7 +47,7 @@ static int inited = 0;
 #define EIM_IO_TIMEOUT  100000000
 #endif
 
-static hal_error_t init(void)
+static inline hal_error_t init(void)
 {
   if (inited)
     return HAL_OK;
@@ -61,7 +61,7 @@ static hal_error_t init(void)
 
 /* translate cryptech register number to EIM address
  */
-static hal_addr_t eim_offset(hal_addr_t offset)
+static inline hal_addr_t eim_offset(hal_addr_t offset)
 {
   return EIM_BASE_ADDR + (offset << 2);
 }
@@ -134,23 +134,14 @@ hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf,
   return HAL_OK;
 }
 
-hal_error_t hal_io_init(const hal_core_t *core)
-{
-  uint8_t buf[4] = { 0, 0, 0, CTRL_INIT };
-  return hal_io_write(core, ADDR_CTRL, buf, sizeof(buf));
-}
-
-hal_error_t hal_io_next(const hal_core_t *core)
-{
-  uint8_t buf[4] = { 0, 0, 0, CTRL_NEXT };
-  return hal_io_write(core, ADDR_CTRL, buf, sizeof(buf));
-}
-
 hal_error_t hal_io_wait(const hal_core_t *core, uint8_t status, int *count)
 {
   hal_error_t err;
   uint8_t buf[4];
   int i;
+
+  if (count && *count == -1)
+    *count = EIM_IO_TIMEOUT;
 
   for (i = 1; ; ++i) {
 
@@ -166,18 +157,6 @@ hal_error_t hal_io_wait(const hal_core_t *core, uint8_t status, int *count)
       return HAL_OK;
     }
   }
-}
-
-hal_error_t hal_io_wait_ready(const hal_core_t *core)
-{
-  int limit = EIM_IO_TIMEOUT;
-  return hal_io_wait(core, STATUS_READY, &limit);
-}
-
-hal_error_t hal_io_wait_valid(const hal_core_t *core)
-{
-  int limit = EIM_IO_TIMEOUT;
-  return hal_io_wait(core, STATUS_VALID, &limit);
 }
 
 /*

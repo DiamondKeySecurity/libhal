@@ -201,11 +201,37 @@ typedef struct hal_core hal_core_t;
 extern void hal_io_set_debug(int onoff);
 extern hal_error_t hal_io_write(const hal_core_t *core, hal_addr_t offset, const uint8_t *buf, size_t len);
 extern hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf, size_t len);
-extern hal_error_t hal_io_init(const hal_core_t *core);
-extern hal_error_t hal_io_next(const hal_core_t *core);
 extern hal_error_t hal_io_wait(const hal_core_t *core, uint8_t status, int *count);
-extern hal_error_t hal_io_wait_ready(const hal_core_t *core);
-extern hal_error_t hal_io_wait_valid(const hal_core_t *core);
+
+static inline hal_error_t hal_io_zero(const hal_core_t *core)
+{
+  const uint8_t buf[4] = { 0, 0, 0, 0 };
+  return hal_io_write(core, ADDR_CTRL, buf, sizeof(buf));
+}
+
+static inline hal_error_t hal_io_init(const hal_core_t *core)
+{
+  const uint8_t buf[4] = { 0, 0, 0, CTRL_INIT };
+  return hal_io_write(core, ADDR_CTRL, buf, sizeof(buf));
+}
+
+static inline hal_error_t hal_io_next(const hal_core_t *core)
+{
+  const uint8_t buf[4] = { 0, 0, 0, CTRL_NEXT };
+  return hal_io_write(core, ADDR_CTRL, buf, sizeof(buf));
+}
+
+static inline hal_error_t hal_io_wait_ready(const hal_core_t *core)
+{
+  int limit = -1;
+  return hal_io_wait(core, STATUS_READY, &limit);
+}
+
+static inline hal_error_t hal_io_wait_valid(const hal_core_t *core)
+{
+  int limit = -1;
+  return hal_io_wait(core, STATUS_VALID, &limit);
+}
 
 /*
  * Core management functions.
@@ -378,10 +404,13 @@ extern hal_error_t hal_pbkdf2(hal_core_t *core,
 extern void hal_modexp_set_debug(const int onoff);
 
 extern hal_error_t hal_modexp(hal_core_t *core,
-                              const uint8_t * const msg, const size_t msg_len, /* Message */
-                              const uint8_t * const exp, const size_t exp_len, /* Exponent */
-                              const uint8_t * const mod, const size_t mod_len, /* Modulus */
-                              uint8_t * result, const size_t result_len);
+                              const int precalc_done,
+                              const uint8_t * const msg, const size_t msg_len,         /* Message */
+                              const uint8_t * const exp, const size_t exp_len,         /* Exponent */
+                              const uint8_t * const mod, const size_t mod_len,         /* Modulus */
+                              uint8_t       *    result, const size_t result_len,      /* Result of exponentiation */
+                              uint8_t       *     coeff, const size_t coeff_len,       /* Modulus coefficient (r/w) */
+                              uint8_t       *      mont, const size_t mont_len);       /* Montgomery factor (r/w)*/
 
 /*
  * Master Key Memory Interface
