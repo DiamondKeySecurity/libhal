@@ -195,13 +195,13 @@ hal_error_t hal_modexp(hal_core_t *core,
    * about 32-bit words).
    */
 
-  if (mod    == NULL ||
-      msg    == NULL || msg_len    >  mod_len * 2 ||
-      exp    == NULL || exp_len    >  mod_len     ||
-      result == NULL || result_len <  mod_len     ||
-      coeff  == NULL || coeff_len  != mod_len     ||
-      mont   == NULL || mont_len   != mod_len     ||
-      ((msg_len | exp_len | mod_len | coeff_len | mont_len) & 3) != 0)
+  if (msg    == NULL || msg_len    > MODEXPA7_OPERAND_BYTES || msg_len    >  mod_len * 2 ||
+      exp    == NULL || exp_len    > MODEXPA7_OPERAND_BYTES || exp_len    >  mod_len     ||
+      mod    == NULL || mod_len    > MODEXPA7_OPERAND_BYTES ||
+      result == NULL || result_len > MODEXPA7_OPERAND_BYTES || result_len <  mod_len     ||
+      coeff  == NULL || coeff_len  > MODEXPA7_OPERAND_BYTES ||
+      mont   == NULL || mont_len   > MODEXPA7_OPERAND_BYTES ||
+      ((msg_len | exp_len | mod_len) & 3) != 0)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   /*
@@ -221,9 +221,11 @@ hal_error_t hal_modexp(hal_core_t *core,
   check(get_register(core, MODEXPA7_ADDR_BUFFER_BITS, &operand_max));
   operand_max /= 8;
 
-  if (msg_len > operand_max || exp_len > operand_max || mod_len > operand_max ||
-      (coeff != NULL && coeff_len > operand_max) ||
-      (mont  != NULL && mont_len  > operand_max)) {
+  if (msg_len   > operand_max ||
+      exp_len   > operand_max ||
+      mod_len   > operand_max ||
+      coeff_len > operand_max ||
+      mont_len  > operand_max) {
     hal_core_free(core);
     return HAL_ERROR_BAD_ARGUMENTS;
   }
@@ -244,13 +246,13 @@ hal_error_t hal_modexp(hal_core_t *core,
     check(hal_io_zero(core));
     check(hal_io_init(core));
     check(hal_io_wait_ready(core));
-    check(get_buffer(core, MODEXPA7_ADDR_MODULUS_COEFF_OUT, coeff, coeff_len));
-    check(get_buffer(core, MODEXPA7_ADDR_MONTGOMERY_FACTOR_OUT, mont, mont_len));
+    check(get_buffer(core, MODEXPA7_ADDR_MODULUS_COEFF_OUT,     coeff, coeff_len));
+    check(get_buffer(core, MODEXPA7_ADDR_MONTGOMERY_FACTOR_OUT, mont,  mont_len));
   }
 
   /* Load modulus-dependent speedup factors (even if we just calculated them) */
-  check(set_buffer(core, MODEXPA7_ADDR_MODULUS_COEFF_IN, coeff, coeff_len));
-  check(set_buffer(core, MODEXPA7_ADDR_MONTGOMERY_FACTOR_IN, mont, mont_len));
+  check(set_buffer(core, MODEXPA7_ADDR_MODULUS_COEFF_IN,     coeff, coeff_len));
+  check(set_buffer(core, MODEXPA7_ADDR_MONTGOMERY_FACTOR_IN, mont,  mont_len));
 
   /* Select CRT mode if and only if message is longer than exponent */
   check(set_register(core, MODEXPA7_ADDR_MODE,
