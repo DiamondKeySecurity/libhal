@@ -177,7 +177,7 @@ static inline hal_error_t set_buffer(const hal_core_t *core,
  */
 
 hal_error_t hal_modexp(hal_core_t *core,
-                       const int precalc_done,
+                       const int precalc,
                        const uint8_t * const msg, const size_t msg_len,         /* Message */
                        const uint8_t * const exp, const size_t exp_len,         /* Exponent */
                        const uint8_t * const mod, const size_t mod_len,         /* Modulus */
@@ -242,7 +242,7 @@ hal_error_t hal_modexp(hal_core_t *core,
    * is edge-triggered by "init" bit going from zero to one.
    */
 
-  if (!precalc_done) {
+  if (precalc) {
     check(hal_io_zero(core));
     check(hal_io_init(core));
     check(hal_io_wait_ready(core));

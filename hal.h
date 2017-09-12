@@ -374,7 +374,7 @@ extern hal_error_t hal_pbkdf2(hal_core_t *core,
 extern void hal_modexp_set_debug(const int onoff);
 
 extern hal_error_t hal_modexp(hal_core_t *core,
-                              const int precalc_done,
+                              const int precalc,
                               const uint8_t * const msg, const size_t msg_len,         /* Message */
                               const uint8_t * const exp, const size_t exp_len,         /* Exponent */
                               const uint8_t * const mod, const size_t mod_len,         /* Modulus */
@@ -476,6 +476,9 @@ extern hal_error_t hal_rsa_key_gen(hal_core_t *core,
 extern hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
                                               uint8_t *der, size_t *der_len, const size_t der_max);
 
+extern hal_error_t hal_rsa_private_key_to_der_extra(const hal_rsa_key_t * const key,
+                                                    uint8_t *der, size_t *der_len, const size_t der_max);
+
 extern size_t hal_rsa_private_key_to_der_len(const hal_rsa_key_t * const key);
 
 extern hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key,
@@ -490,6 +493,8 @@ extern size_t hal_rsa_public_key_to_der_len(const hal_rsa_key_t * const key);
 extern hal_error_t hal_rsa_public_key_from_der(hal_rsa_key_t **key,
                                                void *keybuf, const size_t keybuf_len,
                                                const uint8_t * const der, const size_t der_len);
+
+extern int hal_rsa_key_needs_saving(const hal_rsa_key_t * const key);
 
 /*
  * ECDSA.
