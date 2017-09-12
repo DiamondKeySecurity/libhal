@@ -895,7 +895,7 @@ hal_error_t hal_rsa_private_key_to_der_extra_maybe(const hal_rsa_key_t * const k
 #define _(x,y,z)                                                        \
   if ((key->flags & z) != 0) {                                          \
     size_t n = 0;                                                       \
-    if ((err = hal_asn1_encode_HEADER(x, sizeof(key->y), NULL,          \
+    if ((err = hal_asn1_encode_header(x, sizeof(key->y), NULL,          \
                                       &n, 0)) != HAL_OK)                \
       return err;                                                       \
     vlen += n + sizeof(key->y);                                         \
@@ -1007,7 +1007,7 @@ hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key_,
 #undef _
 
 #define _(x,y,z)                                                        \
-  if (hal_asn1_peek(d, vlen, x) {                                       \
+  if (hal_asn1_peek(x, d, vlen)) {                                      \
     size_t hl = 0, vl = 0;                                              \
     if ((err = hal_asn1_decode_header(x, d, vlen, &hl, &vl)) != HAL_OK) \
       return err;                                                       \
