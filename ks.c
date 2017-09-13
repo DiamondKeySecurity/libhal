@@ -518,33 +518,21 @@ static inline int acceptable_key_type(const hal_key_type_t type)
   }
 }
 
-hal_error_t hal_ks_store(hal_ks_t *ks,
-                         hal_pkey_slot_t *slot,
-                         const uint8_t * const der, const size_t der_len)
-{
-  if (ks == NULL || slot == NULL || der == NULL || der_len == 0 || !acceptable_key_type(slot->type))
-    return HAL_ERROR_BAD_ARGUMENTS;
+/*
+ * Internal bits of constructing a new key block.
+ */
 
+static hal_error_t construct_key_block(hal_ks_block_t *block,
+                                       hal_pkey_slot_t *slot,
+                                       const uint8_t * const der, const size_t der_len)
+{
+  if (block == NULL || slot == NULL || der == NULL || der_len == 0)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  hal_ks_key_block_t *k = &block->key;
   hal_error_t err = HAL_OK;
-  hal_ks_block_t *block;
-  hal_ks_key_block_t *k;
   uint8_t kek[KEK_LENGTH];
   size_t kek_len;
-  unsigned b;
-
-  hal_ks_lock();
-
-  if ((block = hal_ks_cache_pick_lru(ks)) == NULL) {
-    err = HAL_ERROR_IMPOSSIBLE;
-    goto done;
-  }
-
-  k = &block->key;
-
-  if ((err = hal_ks_index_add(ks, &slot->name, &b, &slot->hint)) != HAL_OK)
-    goto done;
-
-  hal_ks_cache_mark_used(ks, block, b);
 
   memset(block, 0xFF, sizeof(*block));
 
@@ -558,16 +546,46 @@ hal_error_t hal_ks_store(hal_ks_t *ks,
   k->der_len = SIZEOF_KS_KEY_BLOCK_DER;
   k->attributes_len = 0;
 
+  if ((err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
+    err = hal_aes_keywrap(NULL, kek, kek_len, der, der_len, k->der, &k->der_len);
+
+  memset(kek, 0, sizeof(kek));
+
+  return err;
+}
+
+/*
+ * Store a key block.
+ */
+
+hal_error_t hal_ks_store(hal_ks_t *ks,
+                         hal_pkey_slot_t *slot,
+                         const uint8_t * const der, const size_t der_len)
+{
+  if (ks == NULL || slot == NULL || der == NULL || der_len == 0 || !acceptable_key_type(slot->type))
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  hal_error_t err = HAL_OK;
+  hal_ks_block_t *block;
+  unsigned b;
+
+  hal_ks_lock();
+
+  if ((block = hal_ks_cache_pick_lru(ks)) == NULL) {
+    err = HAL_ERROR_IMPOSSIBLE;
+    goto done;
+  }
+
+  if ((err = hal_ks_index_add(ks, &slot->name, &b, &slot->hint)) != HAL_OK)
+    goto done;
+
+  hal_ks_cache_mark_used(ks, block, b);
+
   if (ks->used < ks->size)
     err = hal_ks_block_erase_maybe(ks, ks->index[ks->used]);
 
   if (err == HAL_OK)
-    err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek));
-
-  if (err == HAL_OK)
-    err = hal_aes_keywrap(NULL, kek, kek_len, der, der_len, k->der, &k->der_len);
-
-  memset(kek, 0, sizeof(kek));
+    err = construct_key_block(block, slot, der, der_len);
 
   if (err == HAL_OK)
     err = hal_ks_block_write(ks, b, block);
@@ -925,6 +943,65 @@ hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
     err = HAL_ERROR_ATTRIBUTE_NOT_FOUND;
   else
     err = HAL_OK;
+
+ done:
+  hal_ks_unlock();
+  return err;
+}
+
+hal_error_t hal_ks_rewrite_der(hal_ks_t *ks,
+                               hal_pkey_slot_t *slot,
+                               const uint8_t * const der, const size_t der_len)
+{
+  if (ks == NULL || slot == NULL || der == NULL || der_len == 0 || !acceptable_key_type(slot->type))
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  hal_ks_block_t *block = NULL;
+  hal_error_t err = HAL_OK;
+  unsigned b;
+
+  hal_ks_lock();
+
+  {
+    if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint))         != HAL_OK ||
+        (err = hal_ks_block_test_owner(ks, b, slot->client, slot->session)) != HAL_OK ||
+        (err = hal_ks_block_read_cached(ks, b, &block))                     != HAL_OK)
+      goto done;
+
+    hal_ks_cache_mark_used(ks, block, b);
+
+    size_t bytes_len = 0, attributes_len = 0;
+    unsigned *count = NULL;
+    uint8_t *bytes = NULL;
+
+    if ((err = locate_attributes(block, &bytes, &bytes_len,  &count))                  != HAL_OK ||
+        (err = hal_ks_attribute_scan(bytes, bytes_len, NULL, *count, &attributes_len)) != HAL_OK)
+      goto done;
+
+    if (der_len + attributes_len > SIZEOF_KS_KEY_BLOCK_DER) {
+      err = HAL_ERROR_RESULT_TOO_LONG;
+      goto done;
+    }
+
+    uint8_t attributes[attributes_len > 0 ? attributes_len : 1];
+    hal_ks_key_block_t *k = &block->key;
+    unsigned attributes_count = *count;
+
+    memcpy(attributes, bytes, attributes_len);
+
+    if ((err = construct_key_block(block, slot, der, der_len)) != HAL_OK)
+      goto done;
+
+    if (k->der_len + attributes_len > SIZEOF_KS_KEY_BLOCK_DER) {
+      err = HAL_ERROR_IMPOSSIBLE;
+      goto done;
+    }
+
+    memcpy(k->der + k->der_len, attributes, attributes_len);
+    k->attributes_len = attributes_count;
+
+    err = hal_ks_block_update(ks, b, block, &slot->name, &slot->hint);
+  }
 
  done:
   hal_ks_unlock();

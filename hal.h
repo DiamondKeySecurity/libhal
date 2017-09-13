@@ -479,8 +479,6 @@ extern hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
 extern hal_error_t hal_rsa_private_key_to_der_extra(const hal_rsa_key_t * const key,
                                                     uint8_t *der, size_t *der_len, const size_t der_max);
 
-extern size_t hal_rsa_private_key_to_der_len(const hal_rsa_key_t * const key);
-
 extern hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key,
                                                 void *keybuf, const size_t keybuf_len,
                                                 const uint8_t * const der, const size_t der_len);
@@ -495,6 +493,18 @@ extern hal_error_t hal_rsa_public_key_from_der(hal_rsa_key_t **key,
                                                const uint8_t * const der, const size_t der_len);
 
 extern int hal_rsa_key_needs_saving(const hal_rsa_key_t * const key);
+
+static inline size_t hal_rsa_private_key_to_der_len(const hal_rsa_key_t * const key)
+{
+  size_t len = 0;
+  return hal_rsa_private_key_to_der(key, NULL, &len, 0) == HAL_OK ? len : 0;
+}
+
+static inline size_t hal_rsa_private_key_to_der_extra_len(const hal_rsa_key_t * const key)
+{
+  size_t len = 0;
+  return hal_rsa_private_key_to_der_extra(key, NULL, &len, 0) == HAL_OK ? len : 0;
+}
 
 /*
  * ECDSA.

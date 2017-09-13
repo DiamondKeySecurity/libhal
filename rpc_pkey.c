@@ -734,7 +734,8 @@ static hal_error_t pkey_local_get_public_key(const hal_pkey_handle_t pkey,
  * algorithm-specific functions.
  */
 
-static hal_error_t pkey_local_sign_rsa(uint8_t *keybuf, const size_t keybuf_len,
+static hal_error_t pkey_local_sign_rsa(hal_pkey_slot_t *slot,
+                                       uint8_t *keybuf, const size_t keybuf_len,
                                        const uint8_t * const der, const size_t der_len,
                                        const hal_hash_handle_t hash,
                                        const uint8_t * input, size_t input_len,
@@ -763,10 +764,21 @@ static hal_error_t pkey_local_sign_rsa(uint8_t *keybuf, const size_t keybuf_len,
       (err = hal_rsa_decrypt(NULL, key, signature, *signature_len, signature, *signature_len)) != HAL_OK)
     return err;
 
+  if (hal_rsa_key_needs_saving(key)) {
+    uint8_t pkcs8[hal_rsa_private_key_to_der_extra_len(key)];
+    size_t pkcs8_len = 0;
+    if ((err = hal_rsa_private_key_to_der_extra(key, pkcs8, &pkcs8_len, sizeof(pkcs8))) == HAL_OK)
+      err = hal_ks_rewrite_der(ks_from_flags(slot->flags), slot, pkcs8, pkcs8_len);
+    memset(pkcs8, 0, sizeof(pkcs8));
+    if (err != HAL_OK)
+      return err;
+  }
+
   return HAL_OK;
 }
 
-static hal_error_t pkey_local_sign_ecdsa(uint8_t *keybuf, const size_t keybuf_len,
+static hal_error_t pkey_local_sign_ecdsa(hal_pkey_slot_t *slot,
+                                         uint8_t *keybuf, const size_t keybuf_len,
                                          const uint8_t * const der, const size_t der_len,
                                          const hal_hash_handle_t hash,
                                          const uint8_t * input, size_t input_len,
@@ -813,7 +825,8 @@ static hal_error_t pkey_local_sign(const hal_pkey_handle_t pkey,
   if (slot == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
 
-  hal_error_t (*signer)(uint8_t *keybuf, const size_t keybuf_len,
+  hal_error_t (*signer)(hal_pkey_slot_t *slot,
+                        uint8_t *keybuf, const size_t keybuf_len,
                         const uint8_t * const der, const size_t der_len,
                         const hal_hash_handle_t hash,
                         const uint8_t * const input,  const size_t input_len,
@@ -840,7 +853,7 @@ static hal_error_t pkey_local_sign(const hal_pkey_handle_t pkey,
   hal_error_t err;
 
   if ((err = ks_fetch_from_flags(slot, der, &der_len, sizeof(der))) == HAL_OK)
-    err = signer(keybuf, sizeof(keybuf), der, der_len, hash, input, input_len,
+    err = signer(slot, keybuf, sizeof(keybuf), der, der_len, hash, input, input_len,
                  signature, signature_len, signature_max);
 
   memset(keybuf, 0, sizeof(keybuf));

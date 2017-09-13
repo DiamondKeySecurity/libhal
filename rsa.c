@@ -871,9 +871,9 @@ int hal_rsa_key_needs_saving(const hal_rsa_key_t * const key)
   _(ASN1_PRIVATE + 4, qC, RSA_FLAG_PRECALC_PQ_DONE);    \
   _(ASN1_PRIVATE + 5, qF, RSA_FLAG_PRECALC_PQ_DONE);
 
-hal_error_t hal_rsa_private_key_to_der_extra_maybe(const hal_rsa_key_t * const key,
-                                                   const int include_extra,
-                                                   uint8_t *der, size_t *der_len, const size_t der_max)
+hal_error_t hal_rsa_private_key_to_der_internal(const hal_rsa_key_t * const key,
+                                                const int include_extra,
+                                                uint8_t *der, size_t *der_len, const size_t der_max)
 {
   hal_error_t err = HAL_OK;
 
@@ -888,7 +888,15 @@ hal_error_t hal_rsa_private_key_to_der_extra_maybe(const hal_rsa_key_t * const k
 
   size_t hlen = 0, vlen = 0;
 
-#define _(x) { size_t n = 0; if ((err = hal_asn1_encode_integer(x, NULL, &n, der_max - vlen)) != HAL_OK) return err; vlen += n; }
+#define _(x)                                                            \
+  {                                                                     \
+    size_t n = 0;                                                       \
+    err = hal_asn1_encode_integer(x, NULL, &n, der_max - vlen);         \
+    if (err != HAL_OK)                                                  \
+      return err;                                                       \
+    vlen += n;                                                          \
+  }
+
   RSAPrivateKey_fields;
 #undef _
 
@@ -926,7 +934,16 @@ hal_error_t hal_rsa_private_key_to_der_extra_maybe(const hal_rsa_key_t * const k
   uint8_t *d = der + hlen;
   memset(d, 0, vlen);
 
-#define _(x) { size_t n = 0; if ((err = hal_asn1_encode_integer(x, d, &n, vlen)) != HAL_OK) return err; d += n; vlen -= n; }
+#define _(x)                                                            \
+  {                                                                     \
+    size_t n = 0;                                                       \
+    err = hal_asn1_encode_integer(x, d, &n, vlen);                      \
+    if (err != HAL_OK)                                                  \
+      return err;                                                       \
+    d += n;                                                             \
+    vlen -= n;                                                          \
+  }
+
   RSAPrivateKey_fields;
 #undef _
 
@@ -936,8 +953,11 @@ hal_error_t hal_rsa_private_key_to_der_extra_maybe(const hal_rsa_key_t * const k
     if ((err = hal_asn1_encode_header(x, sizeof(key->y), d,             \
                                       &n, vlen)) != HAL_OK)             \
       return err;                                                       \
-    d    += n + sizeof(key->y);                                         \
-    vlen -= n + sizeof(key->y);                                         \
+    d    += n;                                                          \
+    vlen -= n;                                                          \
+    memcpy(d, key->y, sizeof(key->y));                                  \
+    d    += sizeof(key->y);                                             \
+    vlen -= sizeof(key->y);                                             \
   }
 
   if (include_extra) {
@@ -952,19 +972,13 @@ hal_error_t hal_rsa_private_key_to_der_extra_maybe(const hal_rsa_key_t * const k
 hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
                                        uint8_t *der, size_t *der_len, const size_t der_max)
 {
-  return hal_rsa_private_key_to_der_extra_maybe(key, 0, der, der_len, der_max);
+  return hal_rsa_private_key_to_der_internal(key, 0, der, der_len, der_max);
 }
 
 hal_error_t hal_rsa_private_key_to_der_extra(const hal_rsa_key_t * const key,
                                        uint8_t *der, size_t *der_len, const size_t der_max)
 {
-  return hal_rsa_private_key_to_der_extra_maybe(key, 1, der, der_len, der_max);
-}
-
-size_t hal_rsa_private_key_to_der_len(const hal_rsa_key_t * const key)
-{
-  size_t len = 0;
-  return hal_rsa_private_key_to_der(key, NULL, &len, 0) == HAL_OK ? len : 0;
+  return hal_rsa_private_key_to_der_internal(key, 1, der, der_len, der_max);
 }
 
 hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key_,
@@ -1002,7 +1016,16 @@ hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key_,
 
   fp_int version[1] = INIT_FP_INT;
 
-#define _(x) { size_t n; if ((err = hal_asn1_decode_integer(x, d, &n, vlen)) != HAL_OK) return err; d += n; vlen -= n; }
+#define _(x)                                                            \
+  {                                                                     \
+    size_t n;                                                           \
+    err = hal_asn1_decode_integer(x, d, &n, vlen);                      \
+    if (err != HAL_OK)                                                  \
+      return err;                                                       \
+    d += n;                                                             \
+    vlen -= n;                                                          \
+  }
+
   RSAPrivateKey_fields;
 #undef _
 
@@ -1011,8 +1034,11 @@ hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key_,
     size_t hl = 0, vl = 0;                                              \
     if ((err = hal_asn1_decode_header(x, d, vlen, &hl, &vl)) != HAL_OK) \
       return err;                                                       \
-    if (vl > sizeof(key->y))                                            \
+    if (vl > sizeof(key->y)) {                                          \
+      hal_log(HAL_LOG_DEBUG, "extra factor %s too big (%lu > %lu)",     \
+              #y, (unsigned long) vl, (unsigned long) sizeof(key->y));  \
       return HAL_ERROR_ASN1_PARSE_FAILED;                               \
+    }                                                                   \
     memcpy(key->y, d + hl, vl);                                         \
     key->flags |= z;                                                    \
     d    += hl + vl;                                                    \
@@ -1022,8 +1048,16 @@ hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key_,
   RSAPrivateKey_extra_fields;
 #undef _
 
-  if (d != privkey + privkey_len || !fp_iszero(version))
+  if (d != privkey + privkey_len) {
+    hal_log(HAL_LOG_DEBUG, "not at end of buffer (0x%lx != 0x%lx)",
+            (unsigned long) d, (unsigned long) privkey + privkey_len);
     return HAL_ERROR_ASN1_PARSE_FAILED;
+    }
+
+  if (!fp_iszero(version)) {
+    hal_log(HAL_LOG_DEBUG, "nonzero version");
+    return HAL_ERROR_ASN1_PARSE_FAILED;
+  }
 
   *key_ = key;
 

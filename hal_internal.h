@@ -405,7 +405,19 @@ static inline hal_crc32_t hal_crc32_finalize(hal_crc32_t crc)
  * moment we take the easy way out and cap this at 4096-bit RSA.
  */
 
+#if 0
 #define HAL_KS_WRAPPED_KEYSIZE  ((2373 + 15) & ~7)
+#else
+#warning Temporary test hack to HAL_KS_WRAPPED_KEYSIZE, clean this up
+//
+// See how much of the problem we're having with pkey support for the
+// new modexpa7 components is just this buffer size being too small.
+//
+#define HAL_KS_WRAPPED_KEYSIZE  ((2373 + 6 * 4096 / 8 + 6 * 4 + 15) & ~7)
+#if HAL_KS_WRAPPED_KEYSIZE + 8 > 4096
+#warning HAL_KS_WRAPPED_KEYSIZE is too big for a single 4096-octet block
+#endif
+#endif
 
 /*
  * PINs.
@@ -565,6 +577,10 @@ extern hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
 
 extern hal_error_t hal_ks_logout(hal_ks_t *ks,
                                  const hal_client_handle_t client);
+
+extern hal_error_t hal_ks_rewrite_der(hal_ks_t *ks,
+                                      hal_pkey_slot_t *slot,
+                                      const uint8_t * const der, const size_t der_len);
 
 /*
  * RPC lowest-level send and receive routines. These are blocking, and
