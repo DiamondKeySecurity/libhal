@@ -301,32 +301,6 @@ hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf,
   return HAL_OK;
 }
 
-hal_error_t hal_io_wait(const hal_core_t *core, uint8_t status, int *count)
-{
-  hal_error_t err;
-  uint8_t buf[4];
-  int i;
-
-  if (count && *count == -1)
-    *count = 10;
-
-  for (i = 1; ; ++i) {
-
-    if (count && (*count > 0) && (i >= *count))
-      return HAL_ERROR_IO_TIMEOUT;
-
-    if ((err = hal_io_read(core, ADDR_STATUS, buf, 4)) != HAL_OK)
-      return err;
-
-    if (buf[3] & status) {
-      if (count)
-        *count = i;
-      return HAL_OK;
-
-    }
-  }
-}
-
 /*
  * Local variables:
  * indent-tabs-mode: nil

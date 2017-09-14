@@ -103,6 +103,18 @@ static inline hal_error_t hal_io_wait_valid(const hal_core_t *core)
   return hal_io_wait(core, STATUS_VALID, &limit);
 }
 
+static inline hal_error_t hal_io_wait_ready2(const hal_core_t *core1, const hal_core_t *core2)
+{
+  int limit = -1;
+  return hal_io_wait2(core1, core2, STATUS_READY, &limit);
+}
+
+static inline hal_error_t hal_io_wait_valid2(const hal_core_t *core1, const hal_core_t *core2)
+{
+  int limit = -1;
+  return hal_io_wait2(core1, core2, STATUS_VALID, &limit);
+}
+
 /*
  * Static memory allocation on start-up.  Don't use this except where
  * really necessary.  By design, there's no way to free this, we don't

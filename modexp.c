@@ -157,123 +157,172 @@ static inline hal_error_t set_buffer(const hal_core_t *core,
 }
 
 /*
- * Check a result, report on failure if debugging, pass failures up
- * the chain.
+ * Stuff moved out of modexp so we can run two cores in parallel more
+ * easily.  We have to return to the jacket routine every time we kick
+ * a core into doing something, since only the jacket routines know
+ * how many cores we're running for any particular calculation.
+ *
+ * In theory we could do something clever where we don't wait for both
+ * cores to finish precalc before starting either of them on the main
+ * computation, but that way probably lies madness.
  */
 
-#define check(_expr_)                                                                   \
-  do {                                                                                  \
-    hal_error_t _err = (_expr_);                                                        \
-    if (_err != HAL_OK && debug)                                                        \
-      hal_log(HAL_LOG_WARN, "%s failed: %s\n", #_expr_, hal_error_string(_err));        \
-    if (_err != HAL_OK) {                                                               \
-      hal_core_free(core);                                                              \
-      return _err;                                                                      \
-    }                                                                                   \
-  } while (0)
-
-/*
- * Run one modexp operation.
- */
-
-hal_error_t hal_modexp(hal_core_t *core,
-                       const int precalc,
-                       const uint8_t * const msg, const size_t msg_len,         /* Message */
-                       const uint8_t * const exp, const size_t exp_len,         /* Exponent */
-                       const uint8_t * const mod, const size_t mod_len,         /* Modulus */
-                       uint8_t *result,           const size_t result_len,      /* Result of exponentiation */
-                       uint8_t *coeff,            const size_t coeff_len,       /* Modulus coefficient (r/w) */
-                       uint8_t *mont,             const size_t mont_len)        /* Montgomery factor (r/w)*/
+static inline hal_error_t check_args(hal_modexp_arg_t *a)
 {
-  hal_error_t err;
-
   /*
-   * All pointers must be set, exponent may not be longer than
+   * All data pointers must be set, exponent may not be longer than
    * modulus, message may not be longer than twice the modulus (CRT
    * mode), result buffer must not be shorter than modulus, and all
    * input lengths must be a multiple of four bytes (the core is all
    * about 32-bit words).
    */
 
-  if (msg    == NULL || msg_len    > MODEXPA7_OPERAND_BYTES || msg_len    >  mod_len * 2 ||
-      exp    == NULL || exp_len    > MODEXPA7_OPERAND_BYTES || exp_len    >  mod_len     ||
-      mod    == NULL || mod_len    > MODEXPA7_OPERAND_BYTES ||
-      result == NULL || result_len > MODEXPA7_OPERAND_BYTES || result_len <  mod_len     ||
-      coeff  == NULL || coeff_len  > MODEXPA7_OPERAND_BYTES ||
-      mont   == NULL || mont_len   > MODEXPA7_OPERAND_BYTES ||
-      ((msg_len | exp_len | mod_len) & 3) != 0)
+  if (a         == NULL ||
+      a->msg    == NULL || a->msg_len    > MODEXPA7_OPERAND_BYTES || a->msg_len    >  a->mod_len * 2 ||
+      a->exp    == NULL || a->exp_len    > MODEXPA7_OPERAND_BYTES || a->exp_len    >  a->mod_len     ||
+      a->mod    == NULL || a->mod_len    > MODEXPA7_OPERAND_BYTES ||
+      a->result == NULL || a->result_len > MODEXPA7_OPERAND_BYTES || a->result_len <  a->mod_len     ||
+      a->coeff  == NULL || a->coeff_len  > MODEXPA7_OPERAND_BYTES ||
+      a->mont   == NULL || a->mont_len   > MODEXPA7_OPERAND_BYTES ||
+      ((a->msg_len | a->exp_len | a->mod_len) & 3) != 0)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  /*
-   * Gonna need to think about running two modexpa7 cores in parallel
-   * in CRT mode for full speed signature.
-   */
+  return HAL_OK;
+}
 
-  if (((err = hal_core_alloc(MODEXPA7_NAME, &core)) != HAL_OK))
-    return err;
+static inline hal_error_t setup_precalc(const int precalc, hal_modexp_arg_t *a)
+{
+  hal_error_t err;
 
   /*
-   * Now that we have the core, check operand length against what it
-   * says it can handle.
+   * Check that operand size is compatabible with the core.
    */
 
   uint32_t operand_max = 0;
-  check(get_register(core, MODEXPA7_ADDR_BUFFER_BITS, &operand_max));
+
+  if ((err = get_register(a->core, MODEXPA7_ADDR_BUFFER_BITS, &operand_max)) != HAL_OK)
+    return err;
+
   operand_max /= 8;
 
-  if (msg_len   > operand_max ||
-      exp_len   > operand_max ||
-      mod_len   > operand_max ||
-      coeff_len > operand_max ||
-      mont_len  > operand_max) {
-    hal_core_free(core);
+  if (a->msg_len   > operand_max ||
+      a->exp_len   > operand_max ||
+      a->mod_len   > operand_max ||
+      a->coeff_len > operand_max ||
+      a->mont_len  > operand_max)
     return HAL_ERROR_BAD_ARGUMENTS;
-  }
-
-  /* Set modulus */
-
-  check(set_register(core, MODEXPA7_ADDR_MODULUS_BITS, mod_len * 8));
-  check(set_buffer(core, MODEXPA7_ADDR_MODULUS, mod, mod_len));
 
   /*
-   * Calculate modulus-dependent speedup factors if needed.  Buffer
-   * space is always caller's problem (because caller almost certainly
-   * wants to stash these values in the keystore anyway).  Calculation
-   * is edge-triggered by "init" bit going from zero to one.
+   * Set the modulus, then initiate calculation of modulus-dependent
+   * speedup factors if necessary, by edge-triggering the "init" bit,
+   * then return to caller so it can wait for precalc.
    */
 
-  if (precalc) {
-    check(hal_io_zero(core));
-    check(hal_io_init(core));
-    check(hal_io_wait_ready(core));
-    check(get_buffer(core, MODEXPA7_ADDR_MODULUS_COEFF_OUT,     coeff, coeff_len));
-    check(get_buffer(core, MODEXPA7_ADDR_MONTGOMERY_FACTOR_OUT, mont,  mont_len));
-  }
+  if ((err = set_register(a->core, MODEXPA7_ADDR_MODULUS_BITS, a->mod_len * 8)) != HAL_OK  ||
+      (err = set_buffer(a->core, MODEXPA7_ADDR_MODULUS, a->mod, a->mod_len))    != HAL_OK  ||
+      (precalc && (err = hal_io_zero(a->core))                                  != HAL_OK) ||
+      (precalc && (err = hal_io_init(a->core))                                  != HAL_OK))
+    return err;
 
-  /* Load modulus-dependent speedup factors (even if we just calculated them) */
-  check(set_buffer(core, MODEXPA7_ADDR_MODULUS_COEFF_IN,     coeff, coeff_len));
-  check(set_buffer(core, MODEXPA7_ADDR_MONTGOMERY_FACTOR_IN, mont,  mont_len));
-
-  /* Select CRT mode if and only if message is longer than exponent */
-  check(set_register(core, MODEXPA7_ADDR_MODE,
-                     (msg_len > mod_len
-                      ? MODEXPA7_MODE_CRT
-                      : MODEXPA7_MODE_PLAIN)));
-
-  /* Set message and exponent */
-  check(set_buffer(core, MODEXPA7_ADDR_MESSAGE, msg, msg_len));
-  check(set_buffer(core, MODEXPA7_ADDR_EXPONENT, exp, exp_len));
-  check(set_register(core, MODEXPA7_ADDR_EXPONENT_BITS, exp_len * 8));
-
-  /* Edge-trigger the "next" bit to start calculation, then wait for the result */
-  check(hal_io_zero(core));
-  check(hal_io_next(core));
-  check(hal_io_wait_valid(core));
-
-  /* Extract result, clean up, then done */
-  check(get_buffer(core, MODEXPA7_ADDR_RESULT, result, mod_len));
-  hal_core_free(core);
   return HAL_OK;
+}
+
+static inline hal_error_t setup_calc(const int precalc, hal_modexp_arg_t *a)
+{
+  hal_error_t err;
+
+  /*
+   * Select CRT mode if and only if message is longer than exponent.
+   */
+
+  const uint32_t mode = a->msg_len > a->mod_len ? MODEXPA7_MODE_CRT : MODEXPA7_MODE_PLAIN;
+
+  /*
+   * Copy out precalc results if necessary, then load everything and
+   * start the calculation by edge-triggering the "next" bit.  If
+   * everything works, return to caller so it can wait for the
+   * calculation to complete.
+   */
+
+  if ((precalc &&
+       (err = get_buffer(a->core, MODEXPA7_ADDR_MODULUS_COEFF_OUT,     a->coeff, a->coeff_len)) != HAL_OK) ||
+      (precalc &&
+        (err = get_buffer(a->core, MODEXPA7_ADDR_MONTGOMERY_FACTOR_OUT, a->mont,  a->mont_len)) != HAL_OK) ||
+      (err = set_buffer(a->core, MODEXPA7_ADDR_MODULUS_COEFF_IN,     a->coeff, a->coeff_len))   != HAL_OK  ||
+      (err = set_buffer(a->core, MODEXPA7_ADDR_MONTGOMERY_FACTOR_IN, a->mont,  a->mont_len))    != HAL_OK  ||
+      (err = set_register(a->core, MODEXPA7_ADDR_MODE, mode))                                   != HAL_OK  ||
+      (err = set_buffer(a->core, MODEXPA7_ADDR_MESSAGE, a->msg, a->msg_len))                    != HAL_OK  ||
+      (err = set_buffer(a->core, MODEXPA7_ADDR_EXPONENT, a->exp, a->exp_len))                   != HAL_OK  ||
+      (err = set_register(a->core, MODEXPA7_ADDR_EXPONENT_BITS, a->exp_len * 8))                != HAL_OK  ||
+      (err = hal_io_zero(a->core))                                                              != HAL_OK  ||
+      (err = hal_io_next(a->core)) != HAL_OK)
+    return err;
+
+  return HAL_OK;
+}
+
+static inline hal_error_t extract_result(hal_modexp_arg_t *a)
+{
+  /*
+   * Extract results from the main calculation and we're done.
+   * Hardly seems worth making this a separate function.
+   */
+
+  return get_buffer(a->core, MODEXPA7_ADDR_RESULT, a->result, a->mod_len);
+}
+
+/*
+ * Run one modexp operation.
+ */
+
+hal_error_t hal_modexp(const int precalc, hal_modexp_arg_t *a)
+{
+  hal_error_t err;
+
+  if ((err = check_args(a)) != HAL_OK)
+    return err;
+
+  if ((err = hal_core_alloc(MODEXPA7_NAME, &a->core)) == HAL_OK  &&
+      (err = setup_precalc(precalc, a))               == HAL_OK  &&
+      (!precalc ||
+       (err = hal_io_wait_ready(a->core))             == HAL_OK) &&
+      (err = setup_calc(precalc, a))                  == HAL_OK  &&
+      (err = hal_io_wait_valid(a->core))              == HAL_OK  &&
+      (err = extract_result(a))                       == HAL_OK)
+    err = HAL_OK;
+
+  hal_core_free(a->core);
+  return err;
+}
+
+/*
+ * Run two modexp operations in parallel.
+ */
+
+hal_error_t hal_modexp2(const int precalc, hal_modexp_arg_t *a1, hal_modexp_arg_t *a2)
+{
+  hal_error_t err;
+
+  if ((err = check_args(a1)) != HAL_OK ||
+      (err = check_args(a2)) != HAL_OK)
+    return err;
+
+  if ((err = hal_core_alloc(MODEXPA7_NAME, &a1->core)) == HAL_OK  &&
+      (err = hal_core_alloc(MODEXPA7_NAME, &a2->core)) == HAL_OK  &&
+      (err = setup_precalc(precalc, a1))               == HAL_OK  &&
+      (err = setup_precalc(precalc, a2))               == HAL_OK  &&
+      (!precalc ||
+       (err = hal_io_wait_ready2(a1->core, a2->core))  == HAL_OK) &&
+      (err = setup_calc(precalc, a1))                  == HAL_OK  &&
+      (err = setup_calc(precalc, a2))                  == HAL_OK  &&
+      (err = hal_io_wait_valid2(a1->core, a2->core))   == HAL_OK  &&
+      (err = extract_result(a1))                       == HAL_OK  &&
+      (err = extract_result(a2))                       == HAL_OK)
+    err = HAL_OK;
+
+  hal_core_free(a1->core);
+  hal_core_free(a2->core);
+  return err;
 }
 
 /*

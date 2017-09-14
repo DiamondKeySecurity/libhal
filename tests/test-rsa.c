@@ -60,8 +60,17 @@ static int test_modexp(hal_core_t *core,
 
   printf("%s test for %lu-bit RSA key\n", kind, (unsigned long) tc->size);
 
-  if (hal_modexp(core, 0, msg->val, msg->len, exp->val, exp->len,
-                 tc->n.val, tc->n.len, result, sizeof(result), C, sizeof(C), F, sizeof(F)) != HAL_OK)
+  hal_modexp_arg_t args = {
+    .core   = core,
+    .msg    = msg->val, .msg_len = msg->len,
+    .exp    = exp->val, .exp_len = exp->len,
+    .mod    = tc->n.val, .mod_len = tc->n.len,
+    .result = result, .result_len = sizeof(result),
+    .coeff  = C, .coeff_len = sizeof(C),
+    .mont   = F, .mont_len = sizeof(F)
+  };
+
+  if (hal_modexp(1, &args) != HAL_OK)
     return printf("ModExp failed\n"), 0;
 
   if (memcmp(result, val->val, val->len))
@@ -98,7 +107,7 @@ static int test_decrypt(hal_core_t *core,
 
   uint8_t result[tc->n.len];
 
-  if ((err = hal_rsa_decrypt(core, key, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
+  if ((err = hal_rsa_decrypt(core, NULL, key, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
     printf("RSA CRT failed: %s\n", hal_error_string(err));
 
   const int mismatch = (err == HAL_OK && memcmp(result, tc->s.val, tc->s.len) != 0);
@@ -165,7 +174,7 @@ static int test_gen(hal_core_t *core,
 
   uint8_t result[tc->n.len];
 
-  if ((err = hal_rsa_decrypt(core, key1, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
+  if ((err = hal_rsa_decrypt(core, NULL, key1, tc->m.val, tc->m.len, result, sizeof(result))) != HAL_OK)
     printf("RSA CRT failed: %s\n", hal_error_string(err));
 
   snprintf(fn, sizeof(fn), "test-rsa-sig-%04lu.der", (unsigned long) tc->size);

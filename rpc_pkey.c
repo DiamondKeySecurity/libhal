@@ -760,8 +760,8 @@ static hal_error_t pkey_local_sign_rsa(hal_pkey_slot_t *slot,
     input = signature;
   }
 
-  if ((err = pkcs1_5_pad(input, input_len, signature, *signature_len, 0x01))                   != HAL_OK ||
-      (err = hal_rsa_decrypt(NULL, key, signature, *signature_len, signature, *signature_len)) != HAL_OK)
+  if ((err = pkcs1_5_pad(input, input_len, signature, *signature_len, 0x01))                         != HAL_OK ||
+      (err = hal_rsa_decrypt(NULL, NULL, key, signature, *signature_len, signature, *signature_len)) != HAL_OK)
     return err;
 
   if (hal_rsa_key_needs_saving(key)) {
@@ -1276,7 +1276,7 @@ static hal_error_t pkey_local_import(const hal_client_handle_t client,
     goto fail;
   }
 
-  if ((err = hal_rsa_decrypt(NULL, rsa, data, data_len, der, data_len)) != HAL_OK)
+  if ((err = hal_rsa_decrypt(NULL, NULL, rsa, data, data_len, der, data_len)) != HAL_OK)
     goto fail;
 
   if ((err = hal_get_random(NULL, kek, sizeof(kek))) != HAL_OK)

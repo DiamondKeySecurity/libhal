@@ -47,10 +47,6 @@
 static int debug = 0;
 static int inited = 0;
 
-#ifndef FMC_IO_TIMEOUT
-#define FMC_IO_TIMEOUT  100000000
-#endif
-
 static inline hal_error_t init(void)
 {
   if (!inited) {
@@ -134,33 +130,6 @@ hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf,
   dump("read  ", orig_offset + hal_core_base(core), buf, len);
 
   return HAL_OK;
-}
-
-hal_error_t hal_io_wait(const hal_core_t *core, uint8_t status, int *count)
-{
-  hal_error_t err;
-  uint8_t buf[4];
-  int i;
-
-  if (count && *count == -1)
-    *count = FMC_IO_TIMEOUT;
-
-  for (i = 1; ; ++i) {
-
-    if (count && (*count > 0) && (i >= *count))
-      return HAL_ERROR_IO_TIMEOUT;
-
-    hal_task_yield();
-
-    if ((err = hal_io_read(core, ADDR_STATUS, buf, sizeof(buf))) != HAL_OK)
-      return err;
-
-    if ((buf[3] & status) != 0) {
-      if (count)
-        *count = i;
-      return HAL_OK;
-    }
-  }
 }
 
 /*

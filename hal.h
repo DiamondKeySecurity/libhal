@@ -201,7 +201,8 @@ typedef struct hal_core hal_core_t;
 extern void hal_io_set_debug(int onoff);
 extern hal_error_t hal_io_write(const hal_core_t *core, hal_addr_t offset, const uint8_t *buf, size_t len);
 extern hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf, size_t len);
-extern hal_error_t hal_io_wait(const hal_core_t *core, uint8_t status, int *count);
+extern hal_error_t hal_io_wait(const hal_core_t *core, const uint8_t status, int *count);
+extern hal_error_t hal_io_wait2(const hal_core_t *core1, const hal_core_t *core2, const uint8_t status, int *count);
 
 /*
  * Core management functions.
@@ -368,19 +369,25 @@ extern hal_error_t hal_pbkdf2(hal_core_t *core,
 			      unsigned iterations_desired);
 
 /*
- * Modular exponentiation.
+ * Modular exponentiation.  This takes a ridiculous number of
+ * arguments of very similar types, making it easy to confuse them,
+ * particularly when performing two modexp operations in parallel, so
+ * we encapsulate the arguments in a structure.
  */
 
-extern void hal_modexp_set_debug(const int onoff);
+typedef struct {
+  hal_core_t *core;
+  const uint8_t *msg;    size_t msg_len;        /* Message */
+  const uint8_t *exp;    size_t exp_len;        /* Exponent */
+  const uint8_t *mod;    size_t mod_len;        /* Modulus */
+  uint8_t       *result; size_t result_len;     /* Result of exponentiation */
+  uint8_t       *coeff;  size_t coeff_len;      /* Modulus coefficient (r/w) */
+  uint8_t       *mont;   size_t mont_len;       /* Montgomery factor (r/w)*/
+} hal_modexp_arg_t;
 
-extern hal_error_t hal_modexp(hal_core_t *core,
-                              const int precalc,
-                              const uint8_t * const msg, const size_t msg_len,         /* Message */
-                              const uint8_t * const exp, const size_t exp_len,         /* Exponent */
-                              const uint8_t * const mod, const size_t mod_len,         /* Modulus */
-                              uint8_t       *    result, const size_t result_len,      /* Result of exponentiation */
-                              uint8_t       *     coeff, const size_t coeff_len,       /* Modulus coefficient (r/w) */
-                              uint8_t       *      mont, const size_t mont_len);       /* Montgomery factor (r/w)*/
+extern void hal_modexp_set_debug(const int onoff);
+extern hal_error_t hal_modexp( const int precalc, hal_modexp_arg_t *args);
+extern hal_error_t hal_modexp2(const int precalc, hal_modexp_arg_t *args1, hal_modexp_arg_t *args2);
 
 /*
  * Master Key Memory Interface
@@ -462,7 +469,8 @@ extern hal_error_t hal_rsa_encrypt(hal_core_t *core,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * output, const size_t output_len);
 
-extern hal_error_t hal_rsa_decrypt(hal_core_t *core,
+extern hal_error_t hal_rsa_decrypt(hal_core_t *core1,
+                                   hal_core_t *core2,
                                    hal_rsa_key_t *key,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * output, const size_t output_len);
