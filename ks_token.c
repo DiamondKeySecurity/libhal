@@ -60,11 +60,12 @@
 #define KS_TOKEN_CACHE_SIZE 4
 #endif
 
-#define NUM_FLASH_BLOCKS        KEYSTORE_NUM_SUBSECTORS
-
 #if HAL_KS_BLOCK_SIZE % KEYSTORE_SUBSECTOR_SIZE != 0
 #error Keystore block size is not a multiple of flash subsector size
 #endif
+
+#define NUM_FLASH_BLOCKS ((KEYSTORE_NUM_SUBSECTORS * KEYSTORE_SUBSECTOR_SIZE) / HAL_KS_BLOCK_SIZE)
+#define SUBSECTORS_PER_BLOCK (HAL_KS_BLOCK_SIZE / KEYSTORE_SUBSECTOR_SIZE)
 
 /*
  * Keystore database.
@@ -90,7 +91,7 @@ typedef struct {
 
 static inline uint32_t ks_token_offset(const unsigned blockno)
 {
-  return blockno * KEYSTORE_SUBSECTOR_SIZE;
+  return blockno * HAL_KS_BLOCK_SIZE;
 }
 
 /*
@@ -102,7 +103,7 @@ static inline uint32_t ks_token_offset(const unsigned blockno)
 
 static hal_error_t ks_token_read(hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)
 {
-  if (ks != hal_ks_token || block == NULL || blockno >= NUM_FLASH_BLOCKS || sizeof(*block) != KEYSTORE_SUBSECTOR_SIZE)
+  if (ks != hal_ks_token || block == NULL || blockno >= NUM_FLASH_BLOCKS || sizeof(*block) != HAL_KS_BLOCK_SIZE)
     return HAL_ERROR_IMPOSSIBLE;
 
   /* Sigh, magic numeric return codes */
@@ -197,9 +198,14 @@ static hal_error_t ks_token_erase(hal_ks_t *ks, const unsigned blockno)
   if (ks != hal_ks_token || blockno >= NUM_FLASH_BLOCKS)
     return HAL_ERROR_IMPOSSIBLE;
 
-  /* Sigh, magic numeric return codes */
-  if (keystore_erase_subsector(blockno) != 1)
-    return HAL_ERROR_KEYSTORE_ACCESS;
+  unsigned subsector =  blockno      * SUBSECTORS_PER_BLOCK;
+  const unsigned end = (blockno + 1) * SUBSECTORS_PER_BLOCK;
+
+  do {
+    /* Sigh, magic numeric return codes */
+    if (keystore_erase_subsector(subsector) != 1)
+      return HAL_ERROR_KEYSTORE_ACCESS;
+  } while (++subsector < end);
 
   return HAL_OK;
 }
@@ -238,7 +244,7 @@ static hal_error_t ks_token_erase_maybe(hal_ks_t *ks, const unsigned blockno)
 
 static hal_error_t ks_token_write(hal_ks_t *ks, const unsigned blockno, hal_ks_block_t *block)
 {
-  if (ks != hal_ks_token || block == NULL || blockno >= NUM_FLASH_BLOCKS || sizeof(*block) != KEYSTORE_SUBSECTOR_SIZE)
+  if (ks != hal_ks_token || block == NULL || blockno >= NUM_FLASH_BLOCKS || sizeof(*block) != HAL_KS_BLOCK_SIZE)
     return HAL_ERROR_IMPOSSIBLE;
 
   hal_error_t err = ks_token_erase_maybe(ks, blockno);

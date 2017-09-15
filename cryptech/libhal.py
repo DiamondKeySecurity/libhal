@@ -403,7 +403,7 @@ class PKey(Handle):
         return result
 
     def export_pkey(self, pkey):
-        return self.hsm.pkey_export(pkey = pkey, kekek = self, pkcs8_max = 2560, kek_max = 512)
+        return self.hsm.pkey_export(pkey = pkey, kekek = self, pkcs8_max = 5480, kek_max = 512)
 
     def import_pkey(self, pkcs8, kek, flags = 0):
         return self.hsm.pkey_import(kekek = self, pkcs8 = pkcs8, kek = kek, flags = flags)
