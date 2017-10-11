@@ -199,7 +199,7 @@ const size_t hal_ecdsa_key_t_size = sizeof(struct hal_ecdsa_key);
  * first time anything asks for any of them.
  */
 
-static const ecdsa_curve_t * const get_curve(const hal_curve_name_t curve)
+static const ecdsa_curve_t * get_curve(const hal_curve_name_t curve)
 {
   static ecdsa_curve_t curve_p256, curve_p384, curve_p521;
   static int initialized = 0;

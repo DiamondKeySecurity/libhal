@@ -270,7 +270,7 @@ const hal_core_info_t *hal_core_info(const hal_core_t *core)
   return core == NULL ? NULL : &core->info;
 }
 
-const int hal_core_busy(const hal_core_t *core)
+int hal_core_busy(const hal_core_t *core)
 {
   return (int)core->busy;
 }

@@ -232,7 +232,7 @@ extern hal_error_t hal_core_alloc(const char *name, hal_core_t **core);
 extern void hal_core_free(hal_core_t *core);
 extern void hal_critical_section_start(void);
 extern void hal_critical_section_end(void);
-extern const int hal_core_busy(const hal_core_t *core);
+extern int hal_core_busy(const hal_core_t *core);
 
 /*
  * Slightly higher level public API, still working directly with cores.
