@@ -640,7 +640,7 @@ hal_error_t hal_mkm_flash_erase(const size_t len)
 
   hal_ks_pin_block_t new_data = block->pin;
 
-  new_data.kek_set = FLASH_KEK_SET;
+  new_data.kek_set = FLASH_KEK_NOT_SET;
   memset(new_data.kek, 0, len);
 
   err = update_pin_block(b, block, &new_data);

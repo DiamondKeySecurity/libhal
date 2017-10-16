@@ -139,6 +139,7 @@ typedef struct {
 #endif
 } hal_ks_pin_block_t;
 
+#define FLASH_KEK_NOT_SET 0
 #define FLASH_KEK_SET   0x33333333
 
 /*
