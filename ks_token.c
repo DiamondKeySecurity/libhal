@@ -52,7 +52,7 @@
 
 #include "last_gasp_pin_internal.h"
 
-#define HAL_OK CMIS_HAL_OK
+#define HAL_OK CMSIS_HAL_OK
 #include "stm-keystore.h"
 #undef HAL_OK
 
@@ -105,10 +105,9 @@ static hal_error_t ks_token_read(hal_ks_t *ks, const unsigned blockno, hal_ks_bl
   if (ks != hal_ks_token || block == NULL || blockno >= NUM_FLASH_BLOCKS || sizeof(*block) != KEYSTORE_SUBSECTOR_SIZE)
     return HAL_ERROR_IMPOSSIBLE;
 
-  /* Sigh, magic numeric return codes */
   if (keystore_read_data(ks_token_offset(blockno),
                          block->bytes,
-                         KEYSTORE_PAGE_SIZE) != 1)
+                         KEYSTORE_PAGE_SIZE) != CMSIS_HAL_OK)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   switch (hal_ks_block_get_type(block)) {
@@ -130,10 +129,9 @@ static hal_error_t ks_token_read(hal_ks_t *ks, const unsigned blockno, hal_ks_bl
     return HAL_ERROR_KEYSTORE_BAD_BLOCK_TYPE;
   }
 
-  /* Sigh, magic numeric return codes */
   if (keystore_read_data(ks_token_offset(blockno) + KEYSTORE_PAGE_SIZE,
                          block->bytes + KEYSTORE_PAGE_SIZE,
-                         sizeof(*block) - KEYSTORE_PAGE_SIZE) != 1)
+                         sizeof(*block) - KEYSTORE_PAGE_SIZE) != CMSIS_HAL_OK)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   if (hal_ks_block_calculate_crc(block) != block->header.crc)
@@ -157,14 +155,12 @@ static hal_error_t ks_token_deprecate(hal_ks_t *ks, const unsigned blockno)
   hal_ks_block_header_t *header = (void *) page;
   uint32_t offset = ks_token_offset(blockno);
 
-  /* Sigh, magic numeric return codes */
-  if (keystore_read_data(offset, page, sizeof(page)) != 1)
+  if (keystore_read_data(offset, page, sizeof(page)) != CMSIS_HAL_OK)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   header->block_status = HAL_KS_BLOCK_STATUS_TOMBSTONE;
 
-  /* Sigh, magic numeric return codes */
-  if (keystore_write_data(offset, page, sizeof(page)) != 1)
+  if (keystore_write_data(offset, page, sizeof(page)) != CMSIS_HAL_OK)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   return HAL_OK;
@@ -181,8 +177,7 @@ static hal_error_t ks_token_zero(hal_ks_t *ks, const unsigned blockno)
 
   uint8_t page[KEYSTORE_PAGE_SIZE] = {0};
 
-  /* Sigh, magic numeric return codes */
-  if (keystore_write_data(ks_token_offset(blockno), page, sizeof(page)) != 1)
+  if (keystore_write_data(ks_token_offset(blockno), page, sizeof(page)) != CMSIS_HAL_OK)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   return HAL_OK;
@@ -197,8 +192,7 @@ static hal_error_t ks_token_erase(hal_ks_t *ks, const unsigned blockno)
   if (ks != hal_ks_token || blockno >= NUM_FLASH_BLOCKS)
     return HAL_ERROR_IMPOSSIBLE;
 
-  /* Sigh, magic numeric return codes */
-  if (keystore_erase_subsector(blockno) != 1)
+  if (keystore_erase_subsector(blockno) != CMSIS_HAL_OK)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   return HAL_OK;
@@ -223,7 +217,7 @@ static hal_error_t ks_token_erase_maybe(hal_ks_t *ks, const unsigned blockno)
 
   for (uint32_t a = ks_token_offset(blockno); a < ks_token_offset(blockno + 1); a += KEYSTORE_PAGE_SIZE) {
     uint8_t page[KEYSTORE_PAGE_SIZE];
-    if (keystore_read_data(a, page, sizeof(page)) != 1)
+    if (keystore_read_data(a, page, sizeof(page)) != CMSIS_HAL_OK)
       return HAL_ERROR_KEYSTORE_ACCESS;
     for (int i = 0; i < KEYSTORE_PAGE_SIZE; i++)
       mask &= page[i];
@@ -255,8 +249,7 @@ static hal_error_t ks_token_write(hal_ks_t *ks, const unsigned blockno, hal_ks_b
     break;
   }
 
-  /* Sigh, magic numeric return codes */
-  if (keystore_write_data(ks_token_offset(blockno), block->bytes, sizeof(*block)) != 1)
+  if (keystore_write_data(ks_token_offset(blockno), block->bytes, sizeof(*block)) != CMSIS_HAL_OK)
     return HAL_ERROR_KEYSTORE_ACCESS;
 
   return HAL_OK;
