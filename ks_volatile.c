@@ -227,7 +227,7 @@ static hal_error_t ks_volatile_logout(hal_ks_t *ks,
   if (ks != hal_ks_volatile || client.handle == HAL_HANDLE_NONE)
     return HAL_ERROR_IMPOSSIBLE;
 
-  for (int i = 0; i < ks->used; i++) {
+  for (unsigned i = 0; i < ks->used; i++) {
     unsigned b = ks->index[i];
     hal_error_t err;
     int hint = i;

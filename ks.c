@@ -54,14 +54,19 @@ const hal_uuid_t hal_ks_pin_uuid = {{0}};
  * result, leave the lru values alone and the right thing will happen.
  */
 
+#define BLOCK_UNUSED ((unsigned) -1)
+/* Previous code used one's-complement ~0, which is exactly equal to
+ * two's-complement -1, but more obscure.
+ */
+
 hal_ks_block_t *hal_ks_cache_pick_lru(hal_ks_t *ks)
 {
   uint32_t best_delta = 0;
   int      best_index = 0;
 
-  for (int i = 0; i < ks->cache_size; i++) {
+  for (unsigned i = 0; i < ks->cache_size; i++) {
 
-    if (ks->cache[i].blockno == ~0)
+    if (ks->cache[i].blockno == BLOCK_UNUSED)
       return &ks->cache[i].block;
 
     const unsigned delta = ks->cache_lru - ks->cache[i].lru;
@@ -72,7 +77,7 @@ hal_ks_block_t *hal_ks_cache_pick_lru(hal_ks_t *ks)
 
   }
 
-  ks->cache[best_index].blockno = ~0;
+  ks->cache[best_index].blockno = BLOCK_UNUSED;
   return &ks->cache[best_index].block;
 }
 
@@ -82,7 +87,7 @@ hal_ks_block_t *hal_ks_cache_pick_lru(hal_ks_t *ks)
 
 hal_ks_block_t *hal_ks_cache_find_block(const hal_ks_t * const ks, const unsigned blockno)
 {
-  for (int i = 0; i < ks->cache_size; i++)
+  for (unsigned i = 0; i < ks->cache_size; i++)
     if (ks->cache[i].blockno == blockno)
       return &ks->cache[i].block;
   return NULL;
@@ -94,7 +99,7 @@ hal_ks_block_t *hal_ks_cache_find_block(const hal_ks_t * const ks, const unsigne
 
 void hal_ks_cache_mark_used(hal_ks_t *ks, const hal_ks_block_t * const block, const unsigned blockno)
 {
-  for (int i = 0; i < ks->cache_size; i++) {
+  for (unsigned i = 0; i < ks->cache_size; i++) {
     if (&ks->cache[i].block == block) {
       ks->cache[i].blockno = blockno;
       ks->cache[i].lru = ++ks->cache_lru;
@@ -110,7 +115,7 @@ void hal_ks_cache_mark_used(hal_ks_t *ks, const hal_ks_block_t * const block, co
 void hal_ks_cache_release(hal_ks_t *ks, const hal_ks_block_t * const block)
 {
   if (block != NULL)
-    hal_ks_cache_mark_used(ks, block, ~0);
+    hal_ks_cache_mark_used(ks, block, BLOCK_UNUSED);
 }
 
 /*
@@ -283,8 +288,8 @@ hal_error_t hal_ks_init_common(hal_ks_t *ks)
 
   ks->used = 0;
 
-  for (int i = 0; i < ks->cache_size; i++)
-    ks->cache[i].blockno = ~0;
+  for (unsigned i = 0; i < ks->cache_size; i++)
+    ks->cache[i].blockno = BLOCK_UNUSED;
 
   /*
    * Scan existing content of keystore to figure out what we've got.
@@ -295,14 +300,14 @@ hal_error_t hal_ks_init_common(hal_ks_t *ks)
   hal_ks_block_type_t   block_types[ks->size];
   hal_ks_block_status_t block_status[ks->size];
   hal_ks_block_t *block = hal_ks_cache_pick_lru(ks);
-  int first_erased = -1;
+  unsigned first_erased = BLOCK_UNUSED;
   hal_error_t err;
   uint16_t n = 0;
 
   if (block == NULL)
     return HAL_ERROR_IMPOSSIBLE;
 
-  for (int i = 0; i < ks->size; i++) {
+  for (unsigned i = 0; i < ks->size; i++) {
 
     /*
      * Read one block.  If the CRC is bad or the block type is
@@ -340,7 +345,7 @@ hal_error_t hal_ks_init_common(hal_ks_t *ks)
      * First erased block we see is head of the free list.
      */
 
-    if (block_types[i] == HAL_KS_BLOCK_TYPE_ERASED && first_erased < 0)
+    if (block_types[i] == HAL_KS_BLOCK_TYPE_ERASED && first_erased == BLOCK_UNUSED)
       first_erased = i;
 
     /*
@@ -378,22 +383,22 @@ hal_error_t hal_ks_init_common(hal_ks_t *ks)
    */
 
   if (n < ks->size)
-    for (int i = 0; i < ks->size; i++)
+    for (unsigned i = 0; i < ks->size; i++)
       if (block_types[i] == HAL_KS_BLOCK_TYPE_ERASED)
         ks->index[n++] = i;
 
-  if (n < ks->size)
-    for (int i = first_erased; i < ks->size; i++)
+  if (n < ks->size && first_erased != BLOCK_UNUSED)
+    for (unsigned i = first_erased; i < ks->size; i++)
+      if (block_types[i] == HAL_KS_BLOCK_TYPE_ZEROED)
+        ks->index[n++] = i;
+
+  if (n < ks->size && first_erased != BLOCK_UNUSED)
+    for (unsigned i = 0; i < first_erased; i++)
       if (block_types[i] == HAL_KS_BLOCK_TYPE_ZEROED)
         ks->index[n++] = i;
 
   if (n < ks->size)
-    for (int i = 0; i < first_erased; i++)
-      if (block_types[i] == HAL_KS_BLOCK_TYPE_ZEROED)
-        ks->index[n++] = i;
-
-  if (n < ks->size)
-    for (int i = 0; i < ks->size; i++)
+    for (unsigned i = 0; i < ks->size; i++)
       if (block_types[i] == HAL_KS_BLOCK_TYPE_UNKNOWN)
         ks->index[n++] = i;
 
@@ -427,16 +432,16 @@ hal_error_t hal_ks_init_common(hal_ks_t *ks)
       return err;
 
     if (b_tomb != ks->index[where]) {
-      if (ks->used > where + 1 && b_tomb == ks->index[where + 1])
+      if ((int)ks->used > where + 1 && b_tomb == ks->index[where + 1])
         where = where + 1;
-      else if (0     <= where - 1 && b_tomb == ks->index[where - 1])
+      else if (0       <= where - 1 && b_tomb == ks->index[where - 1])
         where = where - 1;
       else
         return HAL_ERROR_IMPOSSIBLE;
     }
 
-    const int matches_next = where + 1 < ks->used && !hal_uuid_cmp(&name, &ks->names[ks->index[where + 1]]);
-    const int matches_prev = where - 1 >= 0       && !hal_uuid_cmp(&name, &ks->names[ks->index[where - 1]]);
+    const int matches_next = where + 1 < (int)ks->used && !hal_uuid_cmp(&name, &ks->names[ks->index[where + 1]]);
+    const int matches_prev = where - 1 >= 0            && !hal_uuid_cmp(&name, &ks->names[ks->index[where - 1]]);
 
     if ((matches_prev && matches_next) ||
         (matches_prev && block_status[ks->index[b_tomb - 1]] != HAL_KS_BLOCK_STATUS_LIVE) ||
@@ -720,7 +725,7 @@ hal_error_t hal_ks_match(hal_ks_t *ks,
   else if (err != HAL_OK)
     goto done;
 
-  while (*result_len < result_max && ++i < ks->used) {
+  while (*result_len < result_max && ++i < (int)ks->used) {
 
     unsigned b = ks->index[i];
 
@@ -756,7 +761,7 @@ hal_error_t hal_ks_match(hal_ks_t *ks,
         if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, NULL)) != HAL_OK)
           goto done;
 
-        for (int j = 0; possible && j < attributes_len; j++) {
+        for (unsigned j = 0; possible && j < attributes_len; j++) {
 
           if (!need_attr[j])
             continue;
@@ -822,7 +827,7 @@ hal_error_t hal_ks_set_attributes(hal_ks_t *ks,
     if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, &total)) != HAL_OK)
       goto done;
 
-    for (int i = 0; err == HAL_OK && i < attributes_len; i++)
+    for (unsigned i = 0; err == HAL_OK && i < attributes_len; i++)
       if (attributes[i].length == HAL_PKEY_ATTRIBUTE_NIL)
         err = hal_ks_attribute_delete(bytes, bytes_len, attrs, attrs_len, &total,
                                       attributes[i].type);
@@ -854,7 +859,7 @@ hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
       attributes_buffer == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  for (int i = 0; i < attributes_len; i++) {
+  for (unsigned i = 0; i < attributes_len; i++) {
     attributes[i].length = 0;
     attributes[i].value  = NULL;
   }
@@ -892,12 +897,12 @@ hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
     if ((err = hal_ks_attribute_scan(bytes, bytes_len, attrs, *attrs_len, NULL)) != HAL_OK)
       goto done;
 
-    for (int i = 0; i < attributes_len; i++) {
+    for (unsigned i = 0; i < attributes_len; i++) {
 
       if (attributes[i].length > 0)
         continue;
 
-      int j = 0;
+      unsigned j = 0;
       while (j < *attrs_len && attrs[j].type != attributes[i].type)
         j++;
       if (j >= *attrs_len)
@@ -909,7 +914,7 @@ hal_error_t hal_ks_get_attributes(hal_ks_t *ks,
       if (attributes_buffer_len == 0)
         continue;
 
-      if (attrs[j].length > attributes_buffer + attributes_buffer_len - abuf) {
+      if (attrs[j].length > (size_t)(attributes_buffer + attributes_buffer_len - abuf)) {
         err = HAL_ERROR_RESULT_TOO_LONG;
         goto done;
       }

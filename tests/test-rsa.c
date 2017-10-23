@@ -296,7 +296,7 @@ static int test_rsa(hal_core_t *core, const rsa_tc_t * const tc)
   return ok;
 }
 
-int main(int argc, char *argv[])
+int main(void)
 {
   hal_core_t *core = hal_core_find(MODEXPS6_NAME, NULL);
   if (core == NULL)
@@ -314,7 +314,7 @@ int main(int argc, char *argv[])
 
   /* Normal test */
 
-  for (int i = 0; i < (sizeof(rsa_tc)/sizeof(*rsa_tc)); i++)
+  for (size_t i = 0; i < (sizeof(rsa_tc)/sizeof(*rsa_tc)); i++)
     if (!test_rsa(core, &rsa_tc[i]))
       return 1;
 

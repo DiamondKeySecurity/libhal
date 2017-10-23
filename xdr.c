@@ -34,6 +34,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stddef.h>		/* ptrdiff_t */
 #include <string.h>             /* memcpy, memset */
 
 #include "hal.h"
@@ -52,7 +53,7 @@ hal_error_t hal_xdr_encode_int(uint8_t ** const outbuf, const uint8_t * const li
         return HAL_ERROR_BAD_ARGUMENTS;
 
     /* buffer overflow check */
-    if (limit - *outbuf < sizeof(value))
+    if (limit - *outbuf < (ptrdiff_t)sizeof(value))
         return HAL_ERROR_XDR_BUFFER_OVERFLOW;
 
     **(uint32_t **)outbuf = htonl(value);
@@ -67,7 +68,7 @@ hal_error_t hal_xdr_decode_int(const uint8_t ** const inbuf, const uint8_t * con
         return HAL_ERROR_BAD_ARGUMENTS;
 
     /* buffer overflow check */
-    if (limit - *inbuf < sizeof(*value))
+    if (limit - *inbuf < (ptrdiff_t)sizeof(*value))
         return HAL_ERROR_XDR_BUFFER_OVERFLOW;
 
     *value = ntohl(**(uint32_t **)inbuf);
@@ -101,7 +102,7 @@ hal_error_t hal_xdr_encode_buffer(uint8_t **outbuf, const uint8_t * const limit,
         return HAL_ERROR_BAD_ARGUMENTS;
 
     /* buffer overflow check */
-    if ((limit - *outbuf) < (((len + 3) & ~3) + sizeof(len)))
+    if (limit - *outbuf < (ptrdiff_t)(((len + 3) & ~3) + sizeof(len)))
         return HAL_ERROR_XDR_BUFFER_OVERFLOW;
 
     /* encode length */
@@ -144,7 +145,7 @@ hal_error_t hal_xdr_decode_buffer_in_place(const uint8_t **inbuf, const uint8_t 
     /* decoded length is past the end of the input buffer;
      * we're probably out of sync, but nothing we can do now
      */
-    if (limit - *inbuf < xdr_len) {
+    if (limit - *inbuf < (ptrdiff_t)xdr_len) {
         /* undo read of length */
         *inbuf = orig_inbuf;
         return HAL_ERROR_XDR_BUFFER_OVERFLOW;

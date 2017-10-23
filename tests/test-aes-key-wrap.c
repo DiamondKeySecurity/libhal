@@ -163,7 +163,7 @@ static int run_test(hal_core_t *core,
   return ok1 && ok2;
 }
 
-int main (int argc, char *argv[])
+int main(void)
 {
   int failures = 0;
 

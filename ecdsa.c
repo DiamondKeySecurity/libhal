@@ -805,18 +805,18 @@ static hal_error_t verilog_point_pick_random(const verilog_ecdsa_driver_t * cons
   memset(b, 0, sizeof(b));
   fp_to_unsigned_bin(k, b + sizeof(b) - len);
 
-  for (int i = 0; i < sizeof(b); i += 4)
+  for (size_t i = 0; i < sizeof(b); i += 4)
     check(hal_io_write(core, driver->k_addr + i/4, &b[sizeof(b) - 4 - i], 4));
 
   check(hal_io_write(core, ADDR_CTRL, zero, sizeof(zero)));
   check(hal_io_next(core));
   check(hal_io_wait_valid(core));
 
-  for (int i = 0; i < sizeof(b); i += 4)
+  for (size_t i = 0; i < sizeof(b); i += 4)
     check(hal_io_read(core, driver->x_addr + i/4, &b[sizeof(b) - 4 - i], 4));
   fp_read_unsigned_bin(P->x, b, sizeof(b));
 
-  for (int i = 0; i < sizeof(b); i += 4)
+  for (size_t i = 0; i < sizeof(b); i += 4)
     check(hal_io_read(core, driver->y_addr + i/4, &b[sizeof(b) - 4 - i], 4));
   fp_read_unsigned_bin(P->y, b, sizeof(b));
 
@@ -1421,7 +1421,7 @@ hal_error_t hal_ecdsa_private_key_from_der(hal_ecdsa_key_t **key_,
   if ((err = hal_asn1_decode_header(ASN1_EXPLICIT_1, d, der_end - d, &hlen, &vlen)) != HAL_OK)
     goto fail;
   d += hlen;
-  if (vlen > der_end - d)
+  if (vlen > (size_t)(der_end - d))
     lose(HAL_ERROR_ASN1_PARSE_FAILED);
   if ((err = hal_asn1_decode_header(ASN1_BIT_STRING, d, vlen, &hlen, &vlen)) != HAL_OK)
     goto fail;
@@ -1529,7 +1529,7 @@ hal_error_t hal_ecdsa_public_key_from_der(hal_ecdsa_key_t **key_,
       memcmp(alg_oid, hal_asn1_oid_ecPublicKey, alg_oid_len) != 0 ||
       hal_ecdsa_oid_to_curve(&key->curve, curve_oid, curve_oid_len) != HAL_OK ||
       pubkey_len < 3 || (pubkey_len & 1) == 0 || pubkey[0] != 0x04 ||
-      pubkey_len / 2 != fp_unsigned_bin_size(unconst_fp_int(get_curve(key->curve)->q)))
+      pubkey_len / 2 != (size_t)(fp_unsigned_bin_size(unconst_fp_int(get_curve(key->curve)->q))))
     return HAL_ERROR_ASN1_PARSE_FAILED;
 
   const uint8_t * const Qx = pubkey + 1;
@@ -1595,7 +1595,7 @@ static hal_error_t decode_signature_pkcs11(const ecdsa_curve_t * const curve,
 
   const size_t n_len = signature_len / 2;
 
-  if (n_len > fp_unsigned_bin_size(unconst_fp_int(curve->n)))
+  if (n_len > (size_t)(fp_unsigned_bin_size(unconst_fp_int(curve->n))))
     return HAL_ERROR_BAD_ARGUMENTS;
 
   fp_read_unsigned_bin(r, unconst_uint8_t(signature) + 0 * n_len, n_len);

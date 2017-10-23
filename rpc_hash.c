@@ -93,7 +93,7 @@ static inline handle_slot_t *alloc_handle(const int is_hmac)
 
 #if HAL_STATIC_HASH_STATE_BLOCKS > 0
   if (!is_hmac) {
-    for (int i = 0; i < sizeof(hash_handle)/sizeof(*hash_handle); i++) {
+    for (size_t i = 0; i < sizeof(hash_handle)/sizeof(*hash_handle); i++) {
       if (hash_handle[i].state.hash != NULL)
         continue;
       hash_handle[i].hash_handle.handle = i | glop;
@@ -104,7 +104,7 @@ static inline handle_slot_t *alloc_handle(const int is_hmac)
 
 #if HAL_STATIC_HMAC_STATE_BLOCKS > 0
   if (is_hmac) {
-    for (int i = 0; i < sizeof(hmac_handle)/sizeof(*hmac_handle); i++) {
+    for (size_t i = 0; i < sizeof(hmac_handle)/sizeof(*hmac_handle); i++) {
       if (hmac_handle[i].state.hmac != NULL)
         continue;
       hmac_handle[i].hash_handle.handle = i | glop | HANDLE_FLAG_HMAC;
@@ -124,7 +124,7 @@ static inline handle_slot_t *alloc_handle(const int is_hmac)
 static inline handle_slot_t *find_handle(const hal_hash_handle_t handle)
 {
 #if HAL_STATIC_HASH_STATE_BLOCKS > 0 || HAL_STATIC_HMAC_STATE_BLOCKS > 0
-  const int i = (int) (handle.handle & 0xFFFF);
+  const size_t i = (size_t) (handle.handle & 0xFFFF);
   const int is_hmac = (handle.handle & HANDLE_FLAG_HMAC) != 0;
 #endif
 

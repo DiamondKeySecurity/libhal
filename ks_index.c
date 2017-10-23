@@ -55,7 +55,7 @@ static int ks_find(const hal_ks_t * const ks,
   if (ks == NULL || ks->index == NULL || ks->names == NULL || uuid == NULL || where == NULL)
     return 0;
 
-  if (hint != NULL && *hint >= 0 && *hint < ks->used &&
+  if (hint != NULL && *hint >= 0 && *hint < (int)ks->used &&
       hal_uuid_cmp(uuid, &ks->names[ks->index[*hint]]) == 0) {
     *where = *hint;
     return 1;
@@ -153,7 +153,7 @@ hal_error_t hal_ks_index_fsck(hal_ks_t *ks)
       ks->size == 0 || ks->used > ks->size)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  for (int i = 1; i < ks->used; i++)
+  for (unsigned i = 1; i < ks->used; i++)
     if (hal_uuid_cmp(&ks->names[ks->index[i - 1]], &ks->names[ks->index[i]]) >= 0)
       return HAL_ERROR_KS_INDEX_UUID_MISORDERED;
 

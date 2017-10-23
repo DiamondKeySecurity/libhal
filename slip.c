@@ -85,7 +85,7 @@ hal_error_t hal_slip_send(const uint8_t * const buf, const size_t len)
     /* for each byte in the packet, send the appropriate character
      * sequence
      */
-    for (int i = 0; i < len; ++i) {
+    for (size_t i = 0; i < len; ++i) {
         hal_error_t ret;
         if ((ret = hal_slip_send_char(buf[i])) != HAL_OK)
             return ret;

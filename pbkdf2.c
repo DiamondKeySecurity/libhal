@@ -90,7 +90,6 @@ hal_error_t hal_pbkdf2(hal_core_t *core,
   unsigned iteration;
   hal_error_t err;
   uint32_t block;
-  int i;
 
   if (descriptor == NULL || password == NULL || salt == NULL ||
       derived_key == NULL || derived_key_length == 0 ||
@@ -107,13 +106,6 @@ hal_error_t hal_pbkdf2(hal_core_t *core,
 
   memset(result, 0, sizeof(result));
   memset(mac,    0, sizeof(mac));
-
-#if 1
-  /* HACK - find the second sha256 core, to avoid interfering with rpc.
-   */
-  core = hal_core_find(descriptor->core_name, NULL);
-  core = hal_core_find(descriptor->core_name, core);
-#endif
 
   /*
    * We probably should check here to see whether the password is
@@ -153,7 +145,7 @@ hal_error_t hal_pbkdf2(hal_core_t *core,
                          0, mac, sizeof(mac))) != HAL_OK)
         return err;
 
-      for (i = 0; i < descriptor->digest_length; i++)
+      for (size_t i = 0; i < descriptor->digest_length; i++)
         result[i] ^= mac[i];
     }
 

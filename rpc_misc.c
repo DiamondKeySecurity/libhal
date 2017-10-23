@@ -116,12 +116,12 @@ static inline hal_error_t alloc_slot(const hal_client_handle_t client,
 
 #if HAL_STATIC_CLIENT_STATE_BLOCKS > 0
 
-  for (int i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
+  for (size_t i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
     if (client_handle[i].logged_in != HAL_USER_NONE &&
         client_handle[i].handle.handle == client.handle)
       slot = &client_handle[i];
 
-  for (int i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
+  for (size_t i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
     if (client_handle[i].logged_in == HAL_USER_NONE)
       slot = &client_handle[i];
 
@@ -161,7 +161,7 @@ static inline client_slot_t *find_handle(const hal_client_handle_t handle)
   hal_critical_section_start();
 
 #if HAL_STATIC_CLIENT_STATE_BLOCKS > 0
-  for (int i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
+  for (size_t i = 0; slot == NULL && i < sizeof(client_handle)/sizeof(*client_handle); i++)
     if (client_handle[i].logged_in != HAL_USER_NONE && client_handle[i].handle.handle == handle.handle)
       slot = &client_handle[i];
 #endif
@@ -191,7 +191,7 @@ static hal_error_t login(const hal_client_handle_t client,
     return err;
 
   unsigned diff = 0;
-  for (int i = 0; i < sizeof(buf); i++)
+  for (size_t i = 0; i < sizeof(buf); i++)
     diff |= buf[i] ^ p->pin[i];
 
   if (diff != 0) {
@@ -227,7 +227,7 @@ static hal_error_t logout_all(void)
 
   client_slot_t *slot;
   hal_error_t err;
-  int i = 0;
+  size_t i = 0;
 
   do {
 

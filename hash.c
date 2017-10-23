@@ -302,7 +302,7 @@ static inline hal_hash_state_t *alloc_static_hash_state(void)
 
 #if HAL_STATIC_HASH_STATE_BLOCKS > 0
 
-  for (int i = 0; i < sizeof(static_hash_state)/sizeof(*static_hash_state); i++)
+  for (size_t i = 0; i < sizeof(static_hash_state)/sizeof(*static_hash_state); i++)
     if ((static_hash_state[i].flags & STATE_FLAG_STATE_ALLOCATED) == 0)
       return &static_hash_state[i];
 
@@ -316,7 +316,7 @@ static inline hal_hmac_state_t *alloc_static_hmac_state(void)
 
 #if HAL_STATIC_HMAC_STATE_BLOCKS > 0
 
-  for (int i = 0; i < sizeof(static_hmac_state)/sizeof(*static_hmac_state); i++)
+  for (size_t i = 0; i < sizeof(static_hmac_state)/sizeof(*static_hmac_state); i++)
     if ((static_hmac_state[i].hash_state.flags & STATE_FLAG_STATE_ALLOCATED) == 0)
       return &static_hmac_state[i];
 
@@ -347,8 +347,8 @@ static inline void swytebop(void *out_, const void * const in_, const size_t n, 
     return;
 
   case 0x04030201:
-    for (int i = 0; i < n; i += w)
-      for (int j = 0; j < w && i + j < n; j++)
+    for (size_t i = 0; i < n; i += w)
+      for (size_t j = 0; j < w && i + j < n; j++)
         out[i + j] = in[i + w - j - 1];
     return;
 
@@ -647,7 +647,7 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
   hal_error_t err;
   uint8_t *p;
   size_t n;
-  int i;
+  size_t i;
 
   if (state == NULL || digest_buffer == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -745,7 +745,7 @@ hal_error_t hal_hmac_initialize(hal_core_t *core,
   const hal_hash_driver_t * const driver = check_driver(descriptor);
   hal_hmac_state_t *state = state_buffer;
   hal_error_t err;
-  int i;
+  size_t i;
 
   if (descriptor == NULL || driver == NULL || state_ == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;

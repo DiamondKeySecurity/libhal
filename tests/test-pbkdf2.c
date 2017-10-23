@@ -196,7 +196,7 @@ static int _test_pbkdf2(hal_core_t *core,
                pbkdf2_tc_##_n_##_DK,       sizeof(pbkdf2_tc_##_n_##_DK),        \
                pbkdf2_tc_##_n_##_count,    #_n_)
 
-int main (int argc, char *argv[])
+int main(void)
 {
   hal_core_t *core = hal_core_find(SHA1_NAME, NULL);
   int ok = 1;

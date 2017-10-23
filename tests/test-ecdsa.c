@@ -359,7 +359,7 @@ static void show_core(const hal_core_t *core, const char *whinge)
     printf("%s core not present\n", whinge);
 }
 
-int main(int argc, char *argv[])
+int main(void)
 {
   const hal_core_t *sha256_core = hal_core_find(SHA256_NAME, NULL);
   const hal_core_t *sha512_core = hal_core_find(SHA512_NAME, NULL);

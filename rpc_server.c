@@ -74,7 +74,7 @@ static hal_error_t get_random(const uint8_t **iptr, const uint8_t * const ilimit
     check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &length));
     /* sanity check length */
-    if (length == 0 || length > olimit - *optr - 4)
+    if (length == 0 || length > (uint32_t)(olimit - *optr - 4))
         return HAL_ERROR_RPC_PACKET_OVERFLOW;
 
     /* call the local function */
@@ -206,7 +206,7 @@ static hal_error_t hash_get_digest_algorithm_id(const uint8_t **iptr, const uint
     check(hal_xdr_decode_int(iptr, ilimit, &alg));
     check(hal_xdr_decode_int(iptr, ilimit, &len_max));
     /* sanity check len_max */
-    if (len_max > olimit - *optr - 4)
+    if (len_max > (uint32_t)(olimit - *optr - 4))
         return HAL_ERROR_RPC_PACKET_OVERFLOW;
 
     /* call the local function */
@@ -301,7 +301,7 @@ static hal_error_t hash_finalize(const uint8_t **iptr, const uint8_t * const ili
     check(hal_xdr_decode_int(iptr, ilimit, &hash.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &length));
     /* sanity check length */
-    if (length == 0 || length > olimit - *optr - 4)
+    if (length == 0 || length > (uint32_t)(olimit - *optr - 4))
         return HAL_ERROR_RPC_PACKET_OVERFLOW;
 
     /* call the local function */
@@ -559,7 +559,7 @@ static hal_error_t pkey_get_public_key(const uint8_t **iptr, const uint8_t * con
     check(hal_xdr_decode_int(iptr, ilimit, &pkey.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &len_max));
     /* sanity check len_max */
-    if (len_max > olimit - *optr - 4)
+    if (len_max > (uint32_t)(olimit - *optr - 4))
         return HAL_ERROR_RPC_PACKET_OVERFLOW;
 
     /* call the local function */
@@ -597,7 +597,7 @@ static hal_error_t pkey_sign(const uint8_t **iptr, const uint8_t * const ilimit,
     check(hal_xdr_decode_buffer_in_place(iptr, ilimit, &input, &input_len));
     check(hal_xdr_decode_int(iptr, ilimit, &sig_max));
     /* sanity check sig_max */
-    if (sig_max > olimit - *optr - 4)
+    if (sig_max > (uint32_t)(olimit - *optr - 4))
         return HAL_ERROR_RPC_PACKET_OVERFLOW;
 
     /* call the local function */
@@ -657,7 +657,7 @@ static hal_error_t pkey_match(const uint8_t **iptr, const uint8_t * const ilimit
 
     hal_pkey_attribute_t attributes[attributes_len > 0 ? attributes_len : 1];
 
-    for (int i = 0; i < attributes_len; i++) {
+    for (size_t i = 0; i < attributes_len; i++) {
         hal_pkey_attribute_t *a = &attributes[i];
         const uint8_t *value;
         uint32_t value_len;
@@ -690,7 +690,7 @@ static hal_error_t pkey_match(const uint8_t **iptr, const uint8_t * const ilimit
     if (ret == HAL_OK)
         ret = hal_xdr_encode_int(optr, olimit, result_len);
 
-    for (int i = 0; ret == HAL_OK && i < result_len; ++i)
+    for (size_t i = 0; ret == HAL_OK && i < result_len; ++i)
         ret = hal_xdr_encode_buffer(optr, olimit, result[i].uuid,
                                     sizeof(result[i].uuid));
     if (ret != HAL_OK)
@@ -713,7 +713,7 @@ static hal_error_t pkey_set_attributes(const uint8_t **iptr, const uint8_t * con
 
     hal_pkey_attribute_t attributes[attributes_len > 0 ? attributes_len : 1];
 
-    for (int i = 0; i < attributes_len; i++) {
+    for (size_t i = 0; i < attributes_len; i++) {
         hal_pkey_attribute_t *a = &attributes[i];
         check(hal_xdr_decode_int(iptr, ilimit, &a->type));
         const uint8_t *iptr_prior_to_decoding_length = *iptr;
@@ -749,14 +749,14 @@ static hal_error_t pkey_get_attributes(const uint8_t **iptr, const uint8_t * con
 
     hal_pkey_attribute_t attributes[attributes_len > 0 ? attributes_len : 1];
 
-    for (int i = 0; i < attributes_len; i++)
+    for (size_t i = 0; i < attributes_len; i++)
         check(hal_xdr_decode_int(iptr, ilimit, &attributes[i].type));
 
     check(hal_xdr_decode_int(iptr, ilimit, &u32));
 
     const size_t attributes_buffer_len = u32;
 
-    if (nargs(1 + 2 * attributes_len) + attributes_buffer_len > olimit - *optr)
+    if (nargs(1 + 2 * attributes_len) + attributes_buffer_len > (uint32_t)(olimit - *optr))
         return HAL_ERROR_RPC_PACKET_OVERFLOW;
 
     uint8_t attributes_buffer[attributes_buffer_len > 0 ? attributes_buffer_len : 1];
@@ -766,7 +766,7 @@ static hal_error_t pkey_get_attributes(const uint8_t **iptr, const uint8_t * con
 
     if (ret == HAL_OK) {
         ret = hal_xdr_encode_int(optr, olimit, attributes_len);
-        for (int i = 0; ret == HAL_OK && i < attributes_len; i++) {
+        for (size_t i = 0; ret == HAL_OK && i < attributes_len; i++) {
             ret = hal_xdr_encode_int(optr, olimit, attributes[i].type);
             if (ret != HAL_OK)
                 break;

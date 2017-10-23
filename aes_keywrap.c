@@ -165,8 +165,7 @@ hal_error_t hal_aes_keywrap(hal_core_t *core,
 {
   const size_t calculated_C_len = hal_aes_keywrap_ciphertext_length(m);
   hal_error_t err;
-  uint32_t n;
-  long i, j;
+  size_t n;
 
   assert(calculated_C_len % 8 == 0);
 
@@ -202,8 +201,8 @@ hal_error_t hal_aes_keywrap(hal_core_t *core,
   }
 
   else {
-    for (j = 0; j <= 5; j++) {
-      for (i = 1; i <= n; i++) {
+    for (size_t j = 0; j <= 5; j++) {
+      for (size_t i = 1; i <= n; i++) {
         uint32_t t = n * j + i;
         if ((err = do_block(core, C, C + i * 8)) != HAL_OK)
             goto out;
@@ -235,8 +234,7 @@ hal_error_t hal_aes_keyunwrap(hal_core_t * core,
                               size_t *Q_len)
 {
   hal_error_t err;
-  uint32_t n;
-  long i, j;
+  size_t n;
   size_t m;
 
   if (C == NULL || Q == NULL || C_len % 8 != 0 || C_len < 16 || Q_len == NULL || *Q_len < C_len)
@@ -259,8 +257,8 @@ hal_error_t hal_aes_keyunwrap(hal_core_t * core,
   }
 
   else {
-    for (j = 5; j >= 0; j--) {
-      for (i = n; i >= 1; i--) {
+    for (long j = 5; j >= 0; j--) {
+      for (size_t i = n; i >= 1; i--) {
         uint32_t t = n * j + i;
         Q[7] ^= t & 0xFF; t >>= 8;
         Q[6] ^= t & 0xFF; t >>= 8;
@@ -285,7 +283,7 @@ hal_error_t hal_aes_keyunwrap(hal_core_t * core,
   }
 
   if (m % 8 != 0)
-    for (i = m + 8; i < 8 * (n + 1); i++)
+    for (size_t i = m + 8; i < 8 * (n + 1); i++)
       if (Q[i] != 0x00) {
         err = HAL_ERROR_KEYWRAP_BAD_PADDING;
         goto out;

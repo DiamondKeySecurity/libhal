@@ -89,7 +89,7 @@ hal_error_t hal_ks_attribute_scan(const uint8_t * const bytes, const size_t byte
   const uint8_t *b = bytes;
   const uint8_t * const end = bytes + bytes_len;
 
-  for (int i = 0; i < attributes_len; i++) {
+  for (unsigned i = 0; i < attributes_len; i++) {
     uint32_t type;
     size_t length;
     hal_error_t err = read_header(b, end - b, &type, &length);
@@ -125,7 +125,7 @@ hal_error_t hal_ks_attribute_delete(uint8_t *bytes, const size_t bytes_len,
    * attribute of any given type.
    */
 
-  int i = 0;
+  unsigned i = 0;
 
   while (i < *attributes_len && attributes[i].type != type)
     i++;

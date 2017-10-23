@@ -352,7 +352,7 @@ hal_error_t hal_rpc_pkey_match(const hal_client_handle_t client,
     return HAL_ERROR_BAD_ARGUMENTS;
 
   if (attributes != NULL)
-    for (int i = 0; i < attributes_len; i++)
+    for (size_t i = 0; i < attributes_len; i++)
       if (attributes[i].value == NULL)
         return HAL_ERROR_BAD_ARGUMENTS;
 

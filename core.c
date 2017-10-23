@@ -135,7 +135,7 @@ static hal_core_t *probe_cores(void)
     if (core->info.name[0] == 0x00 || core->info.name[0] == 0xff)
       continue;
 
-    for (int i = 0; i < sizeof(gaps)/sizeof(*gaps); i++) {
+    for (size_t i = 0; i < sizeof(gaps)/sizeof(*gaps); i++) {
       if (name_matches(core, gaps[i].name)) {
         addr += gaps[i].extra;
         break;

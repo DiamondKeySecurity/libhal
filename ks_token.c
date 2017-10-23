@@ -404,7 +404,7 @@ hal_ks_t * const hal_ks_token = &_db.ks;
 
 void hal_ks_init_read_only_pins_only(void)
 {
-  unsigned b, best_seen = ~0;
+  unsigned b, best_seen = NUM_FLASH_BLOCKS;
   hal_ks_block_t block[1];
 
   hal_ks_lock();
@@ -418,11 +418,11 @@ void hal_ks_init_read_only_pins_only(void)
       break;
   }
 
-  if (b != best_seen && best_seen != ~0 &&
+  if (b != best_seen && best_seen != NUM_FLASH_BLOCKS &&
       hal_ks_block_read(hal_ks_token, best_seen, block) != HAL_OK)
-    best_seen = ~0;
+    best_seen = NUM_FLASH_BLOCKS;
 
-  if (best_seen == ~0) {
+  if (best_seen == NUM_FLASH_BLOCKS) {
     memset(block, 0xFF, sizeof(*block));
     block->pin.wheel_pin = hal_last_gasp_pin;
   }

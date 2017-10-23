@@ -517,7 +517,7 @@ hal_error_t hal_asn1_decode_spki(const uint8_t **alg_oid,   size_t *alg_oid_len,
   if ((err = hal_asn1_decode_header(ASN1_OBJECT_IDENTIFIER, d, algid_end - d, &hlen, &vlen)) != HAL_OK)
     return err;
   d += hlen;
-  if (vlen > algid_end - d)
+  if (vlen > (size_t)(algid_end - d))
     return HAL_ERROR_ASN1_PARSE_FAILED;
   if (alg_oid != NULL)
     *alg_oid = d;
@@ -537,7 +537,7 @@ hal_error_t hal_asn1_decode_spki(const uint8_t **alg_oid,   size_t *alg_oid_len,
       if ((err = hal_asn1_decode_header(ASN1_OBJECT_IDENTIFIER, d, algid_end - d, &hlen, &vlen)) != HAL_OK)
         return err;
       d += hlen;
-      if (vlen > algid_end - d)
+      if (vlen > (size_t)(algid_end - d))
         return HAL_ERROR_ASN1_PARSE_FAILED;
       if (curve_oid != NULL)
         *curve_oid = d;
@@ -564,7 +564,7 @@ hal_error_t hal_asn1_decode_spki(const uint8_t **alg_oid,   size_t *alg_oid_len,
   if ((err = hal_asn1_decode_header(ASN1_BIT_STRING, d, der_end - d, &hlen, &vlen)) != HAL_OK)
     return err;
   d += hlen;
-  if (vlen >= algid_end - d || vlen == 0 || *d != 0x00)
+  if (vlen >= (size_t)(algid_end - d) || vlen == 0 || *d != 0x00)
     return HAL_ERROR_ASN1_PARSE_FAILED;
   ++d; --vlen;
   if (pubkey != NULL)
@@ -620,7 +620,7 @@ hal_error_t hal_asn1_decode_pkcs8_privatekeyinfo(const uint8_t **alg_oid,   size
   if ((err = hal_asn1_decode_header(ASN1_OBJECT_IDENTIFIER, d, algid_end - d, &hlen, &vlen)) != HAL_OK)
     return err;
   d += hlen;
-  if (vlen > algid_end - d)
+  if (vlen > (size_t)(algid_end - d))
     return HAL_ERROR_ASN1_PARSE_FAILED;
   if (alg_oid != NULL)
     *alg_oid = d;
@@ -640,7 +640,7 @@ hal_error_t hal_asn1_decode_pkcs8_privatekeyinfo(const uint8_t **alg_oid,   size
       if ((err = hal_asn1_decode_header(ASN1_OBJECT_IDENTIFIER, d, algid_end - d, &hlen, &vlen)) != HAL_OK)
         return err;
       d += hlen;
-      if (vlen > algid_end - d)
+      if (vlen > (size_t)(algid_end - d))
         return HAL_ERROR_ASN1_PARSE_FAILED;
       if (curve_oid != NULL)
         *curve_oid = d;
@@ -667,7 +667,7 @@ hal_error_t hal_asn1_decode_pkcs8_privatekeyinfo(const uint8_t **alg_oid,   size
   if ((err = hal_asn1_decode_header(ASN1_OCTET_STRING, d, der_end - d, &hlen, &vlen)) != HAL_OK)
     return err;
   d += hlen;
-  if (vlen >= algid_end - d)
+  if (vlen >= (size_t)(algid_end - d))
     return HAL_ERROR_ASN1_PARSE_FAILED;
   if (privkey != NULL)
     *privkey = d;
@@ -714,7 +714,7 @@ hal_error_t hal_asn1_decode_pkcs8_encryptedprivatekeyinfo(const uint8_t **alg_oi
   if ((err = hal_asn1_decode_header(ASN1_OBJECT_IDENTIFIER, d, algid_end - d, &hlen, &vlen)) != HAL_OK)
     return err;
   d += hlen;
-  if (vlen > algid_end - d)
+  if (vlen > (size_t)(algid_end - d))
     return HAL_ERROR_ASN1_PARSE_FAILED;
   if (alg_oid != NULL)
     *alg_oid = d;
@@ -736,7 +736,7 @@ hal_error_t hal_asn1_decode_pkcs8_encryptedprivatekeyinfo(const uint8_t **alg_oi
   if ((err = hal_asn1_decode_header(ASN1_OCTET_STRING, d, der_end - d, &hlen, &vlen)) != HAL_OK)
     return err;
   d += hlen;
-  if (vlen >= algid_end - d)
+  if (vlen >= (size_t)(algid_end - d))
     return HAL_ERROR_ASN1_PARSE_FAILED;
   if (data != NULL)
     *data = d;

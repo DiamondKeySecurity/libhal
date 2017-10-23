@@ -78,7 +78,7 @@ static inline hal_pkey_slot_t *alloc_slot(const hal_key_flags_t flags)
   if ((flags & HAL_KEY_FLAG_TOKEN) != 0)
     glop |= HAL_PKEY_HANDLE_TOKEN_FLAG;
 
-  for (int i = 0; slot == NULL && i < sizeof(pkey_slot)/sizeof(*pkey_slot); i++) {
+  for (size_t i = 0; slot == NULL && i < sizeof(pkey_slot)/sizeof(*pkey_slot); i++) {
     if (pkey_slot[i].pkey.handle != HAL_HANDLE_NONE)
       continue;
     memset(&pkey_slot[i], 0, sizeof(pkey_slot[i]));
@@ -118,7 +118,7 @@ static inline hal_pkey_slot_t *find_handle(const hal_pkey_handle_t handle)
   hal_critical_section_start();
 
 #if HAL_STATIC_PKEY_STATE_BLOCKS > 0
-  const int i = (int) (handle.handle & 0xFFFF);
+  const size_t i = handle.handle & 0xFFFF;
 
   if (i < sizeof(pkey_slot)/sizeof(*pkey_slot) && pkey_slot[i].pkey.handle == handle.handle)
     slot = &pkey_slot[i];
@@ -145,7 +145,7 @@ hal_error_t hal_pkey_logout(const hal_client_handle_t client)
 
   hal_critical_section_start();
 
-  for (int i = 0; i < sizeof(pkey_slot)/sizeof(*pkey_slot); i++)
+  for (size_t i = 0; i < sizeof(pkey_slot)/sizeof(*pkey_slot); i++)
     if (pkey_slot[i].pkey.handle == client.handle)
       memset(&pkey_slot[i], 0, sizeof(pkey_slot[i]));
 
@@ -894,7 +894,7 @@ static hal_error_t pkey_local_verify_rsa(uint8_t *keybuf, const size_t keybuf_le
     return err;
 
   unsigned diff = 0;
-  for (int i = 0; i < signature_len; i++)
+  for (size_t i = 0; i < signature_len; i++)
     diff |= expected[i] ^ received[i + sizeof(received) - sizeof(expected)];
 
   if (diff != 0)

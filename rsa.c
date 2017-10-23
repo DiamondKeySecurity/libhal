@@ -677,7 +677,7 @@ static hal_error_t find_prime(const unsigned prime_length,
 
   fp_read_unsigned_bin(result, buffer, sizeof(buffer));
 
-  for (int i = 0; i < sizeof(small_prime)/sizeof(*small_prime); i++) {
+  for (size_t i = 0; i < sizeof(small_prime)/sizeof(*small_prime); i++) {
     fp_digit d;
     fp_mod_d(result, small_prime[i], &d);
     remainder[i] = d;
@@ -686,10 +686,10 @@ static hal_error_t find_prime(const unsigned prime_length,
   for (;;) {
     int possible = 1;
 
-    for (int i = 0; i < sizeof(small_prime)/sizeof(*small_prime); i++)
+    for (size_t i = 0; i < sizeof(small_prime)/sizeof(*small_prime); i++)
       possible &= remainder[i] != 0;
 
-    for (int i = 0; possible && i < HAL_RSA_MILLER_RABIN_TESTS; i++) {
+    for (size_t i = 0; possible && i < HAL_RSA_MILLER_RABIN_TESTS; i++) {
       fp_set(t, small_prime[i]);
       fp_prime_miller_rabin(result, t, &possible);
     }
@@ -707,7 +707,7 @@ static hal_error_t find_prime(const unsigned prime_length,
 
     fp_add_d(result, 2, result);
 
-    for (int i = 0; i < sizeof(small_prime)/sizeof(*small_prime); i++)
+    for (size_t i = 0; i < sizeof(small_prime)/sizeof(*small_prime); i++)
       if ((remainder[i] += 2) >= small_prime[i])
         remainder[i] -= small_prime[i];
   }

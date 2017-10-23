@@ -42,7 +42,7 @@
 #include <hal.h>
 #include <verilog_constants.h>
 
-int main(int argc, char *argv[])
+int main(void)
 {
     hal_core_t *core;
     const hal_core_info_t *info;
