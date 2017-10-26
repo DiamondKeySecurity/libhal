@@ -54,10 +54,7 @@ const hal_uuid_t hal_ks_pin_uuid = {{0}};
  * result, leave the lru values alone and the right thing will happen.
  */
 
-#define BLOCK_UNUSED ((unsigned) -1)
-/* Previous code used one's-complement ~0, which is exactly equal to
- * two's-complement -1, but more obscure.
- */
+#define BLOCK_UNUSED (~0U)
 
 hal_ks_block_t *hal_ks_cache_pick_lru(hal_ks_t *ks)
 {
