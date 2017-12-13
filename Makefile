@@ -109,12 +109,13 @@ CORE_OBJ = core.o csprng.o pbkdf2.o aes_keywrap.o modexp.o mkmif.o ${IO_OBJ}
 #   i2c:	Older I2C bus from Novena
 #   fmc:	FMC bus from dev-bridge and alpha boards
 
+IO_OBJ = hal_io.o
 ifeq "${IO_BUS}" "eim"
-  IO_OBJ = hal_io_eim.o novena-eim.o
+  IO_OBJ += hal_io_eim.o novena-eim.o
 else ifeq "${IO_BUS}" "i2c"
-  IO_OBJ = hal_io_i2c.o
+  IO_OBJ += hal_io_i2c.o
 else ifeq "${IO_BUS}" "fmc"
-  IO_OBJ = hal_io_fmc.o
+  IO_OBJ += hal_io_fmc.o
 endif
 
 # If we're building for STM32, position-independent code leads to some

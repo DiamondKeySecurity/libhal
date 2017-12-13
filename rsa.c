@@ -70,7 +70,6 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
-#include <assert.h>
 
 #include "hal.h"
 #include "hal_internal.h"
@@ -91,6 +90,15 @@
 
 #if defined(RPC_CLIENT) && RPC_CLIENT != RPC_CLIENT_LOCAL
 #define hal_get_random(core, buffer, length) hal_rpc_get_random(buffer, length)
+#endif
+
+/*
+ * How big to make the buffers for the modulus coefficient and
+ * Montgomery factor.  This will almost certainly want tuning.
+ */
+
+#ifndef HAL_RSA_MAX_OPERAND_LENGTH
+#define HAL_RSA_MAX_OPERAND_LENGTH MODEXPA7_OPERAND_BYTES
 #endif
 
 /*
@@ -123,7 +131,7 @@ void hal_rsa_set_blinding(const int onoff)
  */
 
 struct hal_rsa_key {
-  hal_key_type_t type;      /* What kind of key this is */
+  hal_key_type_t type;          /* What kind of key this is */
   fp_int n[1];                  /* The modulus */
   fp_int e[1];                  /* Public exponent */
   fp_int d[1];                  /* Private exponent */
@@ -132,7 +140,16 @@ struct hal_rsa_key {
   fp_int u[1];                  /* 1/q mod p */
   fp_int dP[1];                 /* d mod (p - 1) */
   fp_int dQ[1];                 /* d mod (q - 1) */
+  unsigned flags;               /* Internal key flags */
+  uint8_t                       /* ModExpA7 speedup factors */
+    nC[HAL_RSA_MAX_OPERAND_LENGTH],   nF[HAL_RSA_MAX_OPERAND_LENGTH],
+    pC[HAL_RSA_MAX_OPERAND_LENGTH/2], pF[HAL_RSA_MAX_OPERAND_LENGTH/2],
+    qC[HAL_RSA_MAX_OPERAND_LENGTH/2], qF[HAL_RSA_MAX_OPERAND_LENGTH/2];
 };
+
+#define RSA_FLAG_NEEDS_SAVING    (1 << 0)
+#define RSA_FLAG_PRECALC_N_DONE  (1 << 1)
+#define RSA_FLAG_PRECALC_PQ_DONE (1 << 2)
 
 const size_t hal_rsa_key_t_size = sizeof(hal_rsa_key_t);
 
@@ -158,7 +175,7 @@ const size_t hal_rsa_key_t_size = sizeof(hal_rsa_key_t);
     case FP_OKAY: break;                                \
     case FP_VAL:  lose(HAL_ERROR_BAD_ARGUMENTS);        \
     case FP_MEM:  lose(HAL_ERROR_ALLOCATION_FAILURE);   \
-    default:      lose(HAL_ERROR_IMPOSSIBLE);  		\
+    default:      lose(HAL_ERROR_IMPOSSIBLE);           \
     }                                                   \
   } while (0)
 
@@ -171,7 +188,8 @@ static hal_error_t unpack_fp(const fp_int * const bn, uint8_t *buffer, const siz
 {
   hal_error_t err = HAL_OK;
 
-  assert(bn != NULL && buffer != NULL);
+  if (bn == NULL || buffer == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
 
   const size_t bytes = fp_unsigned_bin_size(unconst_fp_int(bn));
 
@@ -193,22 +211,18 @@ static hal_error_t unpack_fp(const fp_int * const bn, uint8_t *buffer, const siz
  */
 
 static hal_error_t modexp(hal_core_t *core,
-                          const fp_int * msg,
+                          const int precalc,
+                          const fp_int * const msg,
                           const fp_int * const exp,
                           const fp_int * const mod,
-                          fp_int *res)
+                          fp_int *res,
+                          uint8_t *coeff, const size_t coeff_len,
+                          uint8_t *mont,  const size_t mont_len)
 {
   hal_error_t err = HAL_OK;
 
-  assert(msg != NULL && exp != NULL && mod != NULL && res != NULL);
-
-  fp_int reduced_msg[1] = INIT_FP_INT;
-
-  if (fp_cmp_mag(unconst_fp_int(msg), unconst_fp_int(mod)) != FP_LT) {
-    fp_init(reduced_msg);
-    fp_mod(unconst_fp_int(msg), unconst_fp_int(mod), reduced_msg);
-    msg = reduced_msg;
-  }
+  if (msg == NULL || exp == NULL || mod == NULL || res == NULL || coeff == NULL || mont == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
 
   const size_t msg_len = (fp_unsigned_bin_size(unconst_fp_int(msg)) + 3) & ~3;
   const size_t exp_len = (fp_unsigned_bin_size(unconst_fp_int(exp)) + 3) & ~3;
@@ -219,14 +233,20 @@ static hal_error_t modexp(hal_core_t *core,
   uint8_t modbuf[mod_len];
   uint8_t resbuf[mod_len];
 
+  hal_modexp_arg_t args = {
+    .core   = core,
+    .msg    = msgbuf, .msg_len    = sizeof(msgbuf),
+    .exp    = expbuf, .exp_len    = sizeof(expbuf),
+    .mod    = modbuf, .mod_len    = sizeof(modbuf),
+    .result = resbuf, .result_len = sizeof(resbuf),
+    .coeff  = coeff,  .coeff_len  = coeff_len,
+    .mont   = mont,   .mont_len   = mont_len
+  };
+
   if ((err = unpack_fp(msg, msgbuf, sizeof(msgbuf))) != HAL_OK ||
       (err = unpack_fp(exp, expbuf, sizeof(expbuf))) != HAL_OK ||
       (err = unpack_fp(mod, modbuf, sizeof(modbuf))) != HAL_OK ||
-      (err = hal_modexp(core,
-                        msgbuf, sizeof(msgbuf),
-                        expbuf, sizeof(expbuf),
-                        modbuf, sizeof(modbuf),
-                        resbuf, sizeof(resbuf))) != HAL_OK)
+      (err = hal_modexp(precalc, &args))             != HAL_OK)
     goto fail;
 
   fp_read_unsigned_bin(res, resbuf, sizeof(resbuf));
@@ -236,6 +256,83 @@ static hal_error_t modexp(hal_core_t *core,
   memset(expbuf, 0, sizeof(expbuf));
   memset(modbuf, 0, sizeof(modbuf));
   memset(resbuf, 0, sizeof(resbuf));
+  memset(&args,  0, sizeof(args));
+  return err;
+}
+
+static hal_error_t modexp2(const int precalc,
+                           const fp_int * const msg,
+                           hal_core_t *core1,
+                           const fp_int * const exp1,
+                           const fp_int * const mod1,
+                           fp_int       *       res1,
+                           uint8_t *coeff1, const size_t coeff1_len,
+                           uint8_t *mont1,  const size_t mont1_len,
+                           hal_core_t *core2,
+                           const fp_int * const exp2,
+                           const fp_int * const mod2,
+                           fp_int       *       res2,
+                           uint8_t *coeff2, const size_t coeff2_len,
+                           uint8_t *mont2,  const size_t mont2_len)
+{
+  hal_error_t err = HAL_OK;
+
+  if (msg  == NULL ||
+      exp1 == NULL || mod1 == NULL || res1 == NULL || coeff1 == NULL || mont1 == NULL ||
+      exp2 == NULL || mod2 == NULL || res2 == NULL || coeff2 == NULL || mont2 == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
+
+  const size_t msg_len  = (fp_unsigned_bin_size(unconst_fp_int(msg))  + 3) & ~3;
+  const size_t exp1_len = (fp_unsigned_bin_size(unconst_fp_int(exp1)) + 3) & ~3;
+  const size_t mod1_len = (fp_unsigned_bin_size(unconst_fp_int(mod1)) + 3) & ~3;
+  const size_t exp2_len = (fp_unsigned_bin_size(unconst_fp_int(exp2)) + 3) & ~3;
+  const size_t mod2_len = (fp_unsigned_bin_size(unconst_fp_int(mod2)) + 3) & ~3;
+
+  uint8_t msgbuf[msg_len];
+  uint8_t expbuf1[exp1_len], modbuf1[mod1_len], resbuf1[mod1_len];
+  uint8_t expbuf2[exp2_len], modbuf2[mod2_len], resbuf2[mod2_len];
+
+  hal_modexp_arg_t args1 = {
+    .core   = core1,
+    .msg    = msgbuf,  .msg_len    = sizeof(msgbuf),
+    .exp    = expbuf1, .exp_len    = sizeof(expbuf1),
+    .mod    = modbuf1, .mod_len    = sizeof(modbuf1),
+    .result = resbuf1, .result_len = sizeof(resbuf1),
+    .coeff  = coeff1,  .coeff_len  = coeff1_len,
+    .mont   = mont1,   .mont_len   = mont1_len
+  };
+
+  hal_modexp_arg_t args2 = {
+    .core   = core2,
+    .msg    = msgbuf,  .msg_len    = sizeof(msgbuf),
+    .exp    = expbuf2, .exp_len    = sizeof(expbuf2),
+    .mod    = modbuf2, .mod_len    = sizeof(modbuf2),
+    .result = resbuf2, .result_len = sizeof(resbuf2),
+    .coeff  = coeff2,  .coeff_len  = coeff2_len,
+    .mont   = mont2,   .mont_len   = mont2_len
+  };
+
+  if ((err = unpack_fp(msg,  msgbuf,  sizeof(msgbuf)))  != HAL_OK ||
+      (err = unpack_fp(exp1, expbuf1, sizeof(expbuf1))) != HAL_OK ||
+      (err = unpack_fp(mod1, modbuf1, sizeof(modbuf1))) != HAL_OK ||
+      (err = unpack_fp(exp2, expbuf2, sizeof(expbuf2))) != HAL_OK ||
+      (err = unpack_fp(mod2, modbuf2, sizeof(modbuf2))) != HAL_OK ||
+      (err = hal_modexp2(precalc, &args1, &args2))      != HAL_OK)
+    goto fail;
+
+  fp_read_unsigned_bin(res1, resbuf1, sizeof(resbuf1));
+  fp_read_unsigned_bin(res2, resbuf2, sizeof(resbuf2));
+
+ fail:
+  memset(msgbuf,  0, sizeof(msgbuf));
+  memset(expbuf1, 0, sizeof(expbuf1));
+  memset(modbuf1, 0, sizeof(modbuf1));
+  memset(resbuf1, 0, sizeof(resbuf1));
+  memset(&args1,  0, sizeof(args1));
+  memset(expbuf2, 0, sizeof(expbuf2));
+  memset(modbuf2, 0, sizeof(modbuf2));
+  memset(resbuf2, 0, sizeof(resbuf2));
+  memset(&args2,  0, sizeof(args2));
   return err;
 }
 
@@ -249,13 +346,39 @@ static hal_error_t modexp(hal_core_t *core,
  */
 
 static hal_error_t modexp(const hal_core_t *core, /* ignored */
+                          const int precalc,      /* ignored */
                           const fp_int * const msg,
                           const fp_int * const exp,
                           const fp_int * const mod,
-                          fp_int *res)
+                          fp_int *res,
+                          uint8_t *coeff, const size_t coeff_len, /* ignored */
+                          uint8_t *mont,  const size_t mont_len) /* ignored */
+
 {
   hal_error_t err = HAL_OK;
   FP_CHECK(fp_exptmod(unconst_fp_int(msg), unconst_fp_int(exp), unconst_fp_int(mod), res));
+ fail:
+  return err;
+}
+
+static hal_error_t modexp2(const int precalc, /* ignored */
+                           const fp_int * const msg,
+                           hal_core_t *core1, /* ignored */
+                           const fp_int * const exp1,
+                           const fp_int * const mod1,
+                           fp_int       *       res1,
+                           uint8_t *coeff1, const size_t coeff1_len, /* ignored */
+                           uint8_t *mont1,  const size_t mont1_len, /* ignored */
+                           hal_core_t *core2, /* ignored */
+                           const fp_int * const exp2,
+                           const fp_int * const mod2,
+                           fp_int       *       res2,
+                           uint8_t *coeff2, const size_t coeff2_len, /* ignored */
+                           uint8_t *mont2,  const size_t mont2_len) /* ignored */
+{
+  hal_error_t err = HAL_OK;
+  FP_CHECK(fp_exptmod(unconst_fp_int(msg), unconst_fp_int(exp1), unconst_fp_int(mod1), res1));
+  FP_CHECK(fp_exptmod(unconst_fp_int(msg), unconst_fp_int(exp2), unconst_fp_int(mod2), res2));
  fail:
   return err;
 }
@@ -281,7 +404,12 @@ static hal_error_t modexp(const hal_core_t *core, /* ignored */
 
 int fp_exptmod(fp_int *a, fp_int *b, fp_int *c, fp_int *d)
 {
-  return modexp(NULL, a, b, c, d) == HAL_OK ? FP_OKAY : FP_VAL;
+  const size_t len = (fp_unsigned_bin_size(unconst_fp_int(b)) + 3) & ~3;
+  uint8_t C[len], F[len];
+  const hal_error_t err = modexp(NULL, 0, a, b, c, d, C, sizeof(C), F, sizeof(F));
+  memset(C, 0, sizeof(C));
+  memset(F, 0, sizeof(F));
+  return err == HAL_OK ? FP_OKAY : FP_VAL;
 }
 
 #endif /* HAL_RSA_SIGN_USE_MODEXP && HAL_RSA_KEYGEN_USE_MODEXP */
@@ -292,10 +420,12 @@ int fp_exptmod(fp_int *a, fp_int *b, fp_int *c, fp_int *d)
  * try.  Come back to this if it looks like a bottleneck.
  */
 
-static hal_error_t create_blinding_factors(hal_core_t *core, const hal_rsa_key_t * const key, fp_int *bf, fp_int *ubf)
+static hal_error_t create_blinding_factors(hal_core_t *core, hal_rsa_key_t *key, fp_int *bf, fp_int *ubf)
 {
-  assert(key != NULL && bf != NULL && ubf != NULL);
+  if (key == NULL || bf == NULL || ubf == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
 
+  const int precalc = !(key->flags & RSA_FLAG_PRECALC_N_DONE);
   uint8_t rnd[fp_unsigned_bin_size(unconst_fp_int(key->n))];
   hal_error_t err = HAL_OK;
 
@@ -306,8 +436,12 @@ static hal_error_t create_blinding_factors(hal_core_t *core, const hal_rsa_key_t
   fp_read_unsigned_bin(bf,  rnd, sizeof(rnd));
   fp_copy(bf, ubf);
 
-  if ((err = modexp(core, bf, key->e, key->n, bf)) != HAL_OK)
+  if ((err = modexp(core, precalc, bf, key->e, key->n, bf,
+                    key->nC, sizeof(key->nC), key->nF, sizeof(key->nF))) != HAL_OK)
     goto fail;
+
+  if (precalc)
+    key->flags |= RSA_FLAG_PRECALC_N_DONE | RSA_FLAG_NEEDS_SAVING;
 
   FP_CHECK(fp_invmod(ubf, unconst_fp_int(key->n), ubf));
 
@@ -320,10 +454,12 @@ static hal_error_t create_blinding_factors(hal_core_t *core, const hal_rsa_key_t
  * RSA decryption via Chinese Remainder Theorem (Garner's formula).
  */
 
-static hal_error_t rsa_crt(hal_core_t *core, const hal_rsa_key_t * const key, fp_int *msg, fp_int *sig)
+static hal_error_t rsa_crt(hal_core_t *core1, hal_core_t *core2, hal_rsa_key_t *key, fp_int *msg, fp_int *sig)
 {
-  assert(key != NULL && msg != NULL && sig != NULL);
+  if (key == NULL || msg == NULL || sig == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
 
+  const int precalc = !(key->flags & RSA_FLAG_PRECALC_PQ_DONE);
   hal_error_t err = HAL_OK;
   fp_int t[1]   = INIT_FP_INT;
   fp_int m1[1]  = INIT_FP_INT;
@@ -335,7 +471,7 @@ static hal_error_t rsa_crt(hal_core_t *core, const hal_rsa_key_t * const key, fp
    * Handle blinding if requested.
    */
   if (blinding) {
-    if ((err = create_blinding_factors(core, key, bf, ubf)) != HAL_OK)
+    if ((err = create_blinding_factors(core1, key, bf, ubf)) != HAL_OK)
       goto fail;
     FP_CHECK(fp_mulmod(msg, bf, unconst_fp_int(key->n), msg));
   }
@@ -344,9 +480,13 @@ static hal_error_t rsa_crt(hal_core_t *core, const hal_rsa_key_t * const key, fp
    * m1 = msg ** dP mod p
    * m2 = msg ** dQ mod q
    */
-  if ((err = modexp(core, msg, key->dP, key->p, m1)) != HAL_OK ||
-      (err = modexp(core, msg, key->dQ, key->q, m2)) != HAL_OK)
+  if ((err = modexp2(precalc, msg,
+                     core1, key->dP, key->p, m1, key->pC, sizeof(key->pC), key->pF, sizeof(key->pF),
+                     core2, key->dQ, key->q, m2, key->qC, sizeof(key->qC), key->qF, sizeof(key->qF))) != HAL_OK)
     goto fail;
+
+  if (precalc)
+    key->flags |= RSA_FLAG_PRECALC_PQ_DONE | RSA_FLAG_NEEDS_SAVING;
 
   /*
    * t = m1 - m2.
@@ -392,7 +532,7 @@ static hal_error_t rsa_crt(hal_core_t *core, const hal_rsa_key_t * const key, fp
  */
 
 hal_error_t hal_rsa_encrypt(hal_core_t *core,
-                            const hal_rsa_key_t * const key,
+                            hal_rsa_key_t *key,
                             const uint8_t * const input,  const size_t input_len,
                             uint8_t * output, const size_t output_len)
 {
@@ -401,23 +541,29 @@ hal_error_t hal_rsa_encrypt(hal_core_t *core,
   if (key == NULL || input == NULL || output == NULL || input_len > output_len)
     return HAL_ERROR_BAD_ARGUMENTS;
 
+  const int precalc = !(key->flags & RSA_FLAG_PRECALC_N_DONE);
   fp_int i[1] = INIT_FP_INT;
   fp_int o[1] = INIT_FP_INT;
 
   fp_read_unsigned_bin(i, unconst_uint8_t(input), input_len);
 
-  if ((err = modexp(core, i, key->e, key->n, o)) != HAL_OK ||
-      (err = unpack_fp(o, output, output_len))   != HAL_OK)
-    goto fail;
+  err = modexp(core, precalc, i, key->e, key->n, o,
+               key->nC, sizeof(key->nC), key->nF, sizeof(key->nF));
 
- fail:
+  if (err == HAL_OK && precalc)
+    key->flags |= RSA_FLAG_PRECALC_N_DONE | RSA_FLAG_NEEDS_SAVING;
+
+  if (err == HAL_OK)
+    err = unpack_fp(o, output, output_len);
+
   fp_zero(i);
   fp_zero(o);
   return err;
 }
 
-hal_error_t hal_rsa_decrypt(hal_core_t *core,
-                            const hal_rsa_key_t * const key,
+hal_error_t hal_rsa_decrypt(hal_core_t *core1,
+                            hal_core_t *core2,
+                            hal_rsa_key_t *key,
                             const uint8_t * const input,  const size_t input_len,
                             uint8_t * output, const size_t output_len)
 {
@@ -436,10 +582,17 @@ hal_error_t hal_rsa_decrypt(hal_core_t *core,
    * just do brute force ModExp.
    */
 
-  if (fp_iszero(key->p) || fp_iszero(key->q) || fp_iszero(key->u) || fp_iszero(key->dP) || fp_iszero(key->dQ))
-    err = modexp(core, i, key->d, key->n, o);
-  else
-    err = rsa_crt(core, key, i, o);
+  if (!fp_iszero(key->p) && !fp_iszero(key->q) && !fp_iszero(key->u) &&
+      !fp_iszero(key->dP) && !fp_iszero(key->dQ))
+    err = rsa_crt(core1, core2, key, i, o);
+
+  else {
+    const int precalc = !(key->flags & RSA_FLAG_PRECALC_N_DONE);
+    err = modexp(core1, precalc, i, key->d, key->n, o, key->nC, sizeof(key->nC),
+                 key->nF, sizeof(key->nF));
+    if (err == HAL_OK && precalc)
+      key->flags |= RSA_FLAG_PRECALC_N_DONE | RSA_FLAG_NEEDS_SAVING;
+  }
 
   if (err != HAL_OK || (err = unpack_fp(o, output, output_len)) != HAL_OK)
     goto fail;
@@ -762,6 +915,8 @@ hal_error_t hal_rsa_key_gen(hal_core_t *core,
   FP_CHECK(fp_mod(key->d, q_1, key->dQ));            /* dQ = d % (q-1) */
   FP_CHECK(fp_invmod(key->q, key->p, key->u));       /* u = (1/q) % p */
 
+  key->flags |= RSA_FLAG_NEEDS_SAVING;
+
   *key_ = key;
 
   /* Fall through to cleanup */
@@ -775,10 +930,26 @@ hal_error_t hal_rsa_key_gen(hal_core_t *core,
 }
 
 /*
+ * Whether a key contains new data that need saving (newly generated
+ * key, updated speedup components, whatever).
+ */
+
+int hal_rsa_key_needs_saving(const hal_rsa_key_t * const key)
+{
+  return key != NULL && (key->flags & RSA_FLAG_NEEDS_SAVING);
+}
+
+/*
  * Just enough ASN.1 to read and write PKCS #1.5 RSAPrivateKey syntax
  * (RFC 2313 section 7.2) wrapped in a PKCS #8 PrivateKeyInfo (RFC 5208).
  *
  * RSAPrivateKey fields in the required order.
+ *
+ * The "extra" fields are additional key components specific to the
+ * systolic modexpa7 core.  We represent these in ASN.1 as OPTIONAL
+ * fields using IMPLICIT PRIVATE tags, since this is neither
+ * standardized nor meaningful to anybody else.  Underlying encoding
+ * is INTEGER or OCTET STRING (currently the latter).
  */
 
 #define RSAPrivateKey_fields    \
@@ -792,8 +963,17 @@ hal_error_t hal_rsa_key_gen(hal_core_t *core,
   _(key->dQ);                   \
   _(key->u);
 
-hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
-                                       uint8_t *der, size_t *der_len, const size_t der_max)
+#define RSAPrivateKey_extra_fields                      \
+  _(ASN1_PRIVATE + 0, nC, RSA_FLAG_PRECALC_N_DONE);     \
+  _(ASN1_PRIVATE + 1, nF, RSA_FLAG_PRECALC_N_DONE);     \
+  _(ASN1_PRIVATE + 2, pC, RSA_FLAG_PRECALC_PQ_DONE);    \
+  _(ASN1_PRIVATE + 3, pF, RSA_FLAG_PRECALC_PQ_DONE);    \
+  _(ASN1_PRIVATE + 4, qC, RSA_FLAG_PRECALC_PQ_DONE);    \
+  _(ASN1_PRIVATE + 5, qF, RSA_FLAG_PRECALC_PQ_DONE);
+
+hal_error_t hal_rsa_private_key_to_der_internal(const hal_rsa_key_t * const key,
+                                                const int include_extra,
+                                                uint8_t *der, size_t *der_len, const size_t der_max)
 {
   hal_error_t err = HAL_OK;
 
@@ -808,8 +988,30 @@ hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
 
   size_t hlen = 0, vlen = 0;
 
-#define _(x) { size_t n; if ((err = hal_asn1_encode_integer(x, NULL, &n, der_max - vlen)) != HAL_OK) return err; vlen += n; }
+#define _(x)                                                            \
+  {                                                                     \
+    size_t n = 0;                                                       \
+    err = hal_asn1_encode_integer(x, NULL, &n, der_max - vlen);         \
+    if (err != HAL_OK)                                                  \
+      return err;                                                       \
+    vlen += n;                                                          \
+  }
+
   RSAPrivateKey_fields;
+#undef _
+
+#define _(x,y,z)                                                        \
+  if ((key->flags & z) != 0) {                                          \
+    size_t n = 0;                                                       \
+    if ((err = hal_asn1_encode_header(x, sizeof(key->y), NULL,          \
+                                      &n, 0)) != HAL_OK)                \
+      return err;                                                       \
+    vlen += n + sizeof(key->y);                                         \
+  }
+
+  if (include_extra) {
+    RSAPrivateKey_extra_fields;
+  }
 #undef _
 
   if ((err = hal_asn1_encode_header(ASN1_SEQUENCE, vlen, NULL, &hlen, 0)) != HAL_OK)
@@ -832,18 +1034,51 @@ hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
   uint8_t *d = der + hlen;
   memset(d, 0, vlen);
 
-#define _(x) { size_t n; if ((err = hal_asn1_encode_integer(x, d, &n, vlen)) != HAL_OK) return err; d += n; vlen -= n; }
+#define _(x)                                                            \
+  {                                                                     \
+    size_t n = 0;                                                       \
+    err = hal_asn1_encode_integer(x, d, &n, vlen);                      \
+    if (err != HAL_OK)                                                  \
+      return err;                                                       \
+    d += n;                                                             \
+    vlen -= n;                                                          \
+  }
+
   RSAPrivateKey_fields;
+#undef _
+
+#define _(x,y,z)                                                        \
+  if ((key->flags & z) != 0) {                                          \
+    size_t n = 0;                                                       \
+    if ((err = hal_asn1_encode_header(x, sizeof(key->y), d,             \
+                                      &n, vlen)) != HAL_OK)             \
+      return err;                                                       \
+    d    += n;                                                          \
+    vlen -= n;                                                          \
+    memcpy(d, key->y, sizeof(key->y));                                  \
+    d    += sizeof(key->y);                                             \
+    vlen -= sizeof(key->y);                                             \
+  }
+
+  if (include_extra) {
+    RSAPrivateKey_extra_fields;
+  }
 #undef _
 
   return hal_asn1_encode_pkcs8_privatekeyinfo(hal_asn1_oid_rsaEncryption, hal_asn1_oid_rsaEncryption_len,
                                               NULL, 0, der, d - der, der, der_len, der_max);
 }
 
-size_t hal_rsa_private_key_to_der_len(const hal_rsa_key_t * const key)
+hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
+                                       uint8_t *der, size_t *der_len, const size_t der_max)
 {
-  size_t len = 0;
-  return hal_rsa_private_key_to_der(key, NULL, &len, 0) == HAL_OK ? len : 0;
+  return hal_rsa_private_key_to_der_internal(key, 0, der, der_len, der_max);
+}
+
+hal_error_t hal_rsa_private_key_to_der_extra(const hal_rsa_key_t * const key,
+                                       uint8_t *der, size_t *der_len, const size_t der_max)
+{
+  return hal_rsa_private_key_to_der_internal(key, 1, der, der_len, der_max);
 }
 
 hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key_,
@@ -881,12 +1116,48 @@ hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key_,
 
   fp_int version[1] = INIT_FP_INT;
 
-#define _(x) { size_t n; if ((err = hal_asn1_decode_integer(x, d, &n, vlen)) != HAL_OK) return err; d += n; vlen -= n; }
+#define _(x)                                                            \
+  {                                                                     \
+    size_t n;                                                           \
+    err = hal_asn1_decode_integer(x, d, &n, vlen);                      \
+    if (err != HAL_OK)                                                  \
+      return err;                                                       \
+    d += n;                                                             \
+    vlen -= n;                                                          \
+  }
+
   RSAPrivateKey_fields;
 #undef _
 
-  if (d != privkey + privkey_len || !fp_iszero(version))
+#define _(x,y,z)                                                        \
+  if (hal_asn1_peek(x, d, vlen)) {                                      \
+    size_t hl = 0, vl = 0;                                              \
+    if ((err = hal_asn1_decode_header(x, d, vlen, &hl, &vl)) != HAL_OK) \
+      return err;                                                       \
+    if (vl > sizeof(key->y)) {                                          \
+      hal_log(HAL_LOG_DEBUG, "extra factor %s too big (%lu > %lu)",     \
+              #y, (unsigned long) vl, (unsigned long) sizeof(key->y));  \
+      return HAL_ERROR_ASN1_PARSE_FAILED;                               \
+    }                                                                   \
+    memcpy(key->y, d + hl, vl);                                         \
+    key->flags |= z;                                                    \
+    d    += hl + vl;                                                    \
+    vlen -= hl + vl;                                                    \
+  }
+
+  RSAPrivateKey_extra_fields;
+#undef _
+
+  if (d != privkey + privkey_len) {
+    hal_log(HAL_LOG_DEBUG, "not at end of buffer (0x%lx != 0x%lx)",
+            (unsigned long) d, (unsigned long) privkey + privkey_len);
     return HAL_ERROR_ASN1_PARSE_FAILED;
+    }
+
+  if (!fp_iszero(version)) {
+    hal_log(HAL_LOG_DEBUG, "nonzero version");
+    return HAL_ERROR_ASN1_PARSE_FAILED;
+  }
 
   *key_ = key;
 

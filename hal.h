@@ -201,11 +201,8 @@ typedef struct hal_core hal_core_t;
 extern void hal_io_set_debug(int onoff);
 extern hal_error_t hal_io_write(const hal_core_t *core, hal_addr_t offset, const uint8_t *buf, size_t len);
 extern hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf, size_t len);
-extern hal_error_t hal_io_init(const hal_core_t *core);
-extern hal_error_t hal_io_next(const hal_core_t *core);
-extern hal_error_t hal_io_wait(const hal_core_t *core, uint8_t status, int *count);
-extern hal_error_t hal_io_wait_ready(const hal_core_t *core);
-extern hal_error_t hal_io_wait_valid(const hal_core_t *core);
+extern hal_error_t hal_io_wait(const hal_core_t *core, const uint8_t status, int *count);
+extern hal_error_t hal_io_wait2(const hal_core_t *core1, const hal_core_t *core2, const uint8_t status, int *count);
 
 /*
  * Core management functions.
@@ -372,16 +369,25 @@ extern hal_error_t hal_pbkdf2(hal_core_t *core,
 			      unsigned iterations_desired);
 
 /*
- * Modular exponentiation.
+ * Modular exponentiation.  This takes a ridiculous number of
+ * arguments of very similar types, making it easy to confuse them,
+ * particularly when performing two modexp operations in parallel, so
+ * we encapsulate the arguments in a structure.
  */
 
-extern void hal_modexp_set_debug(const int onoff);
+typedef struct {
+  hal_core_t *core;
+  const uint8_t *msg;    size_t msg_len;        /* Message */
+  const uint8_t *exp;    size_t exp_len;        /* Exponent */
+  const uint8_t *mod;    size_t mod_len;        /* Modulus */
+  uint8_t       *result; size_t result_len;     /* Result of exponentiation */
+  uint8_t       *coeff;  size_t coeff_len;      /* Modulus coefficient (r/w) */
+  uint8_t       *mont;   size_t mont_len;       /* Montgomery factor (r/w)*/
+} hal_modexp_arg_t;
 
-extern hal_error_t hal_modexp(hal_core_t *core,
-                              const uint8_t * const msg, const size_t msg_len, /* Message */
-                              const uint8_t * const exp, const size_t exp_len, /* Exponent */
-                              const uint8_t * const mod, const size_t mod_len, /* Modulus */
-                              uint8_t * result, const size_t result_len);
+extern void hal_modexp_set_debug(const int onoff);
+extern hal_error_t hal_modexp( const int precalc, hal_modexp_arg_t *args);
+extern hal_error_t hal_modexp2(const int precalc, hal_modexp_arg_t *args1, hal_modexp_arg_t *args2);
 
 /*
  * Master Key Memory Interface
@@ -459,12 +465,13 @@ extern hal_error_t hal_rsa_key_get_public_exponent(const hal_rsa_key_t * const k
 extern void hal_rsa_key_clear(hal_rsa_key_t *key);
 
 extern hal_error_t hal_rsa_encrypt(hal_core_t *core,
-                                   const hal_rsa_key_t * const key,
+                                   hal_rsa_key_t *key,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * output, const size_t output_len);
 
-extern hal_error_t hal_rsa_decrypt(hal_core_t *core,
-                                   const hal_rsa_key_t * const key,
+extern hal_error_t hal_rsa_decrypt(hal_core_t *core1,
+                                   hal_core_t *core2,
+                                   hal_rsa_key_t *key,
                                    const uint8_t * const input,  const size_t input_len,
                                    uint8_t * output, const size_t output_len);
 
@@ -477,7 +484,8 @@ extern hal_error_t hal_rsa_key_gen(hal_core_t *core,
 extern hal_error_t hal_rsa_private_key_to_der(const hal_rsa_key_t * const key,
                                               uint8_t *der, size_t *der_len, const size_t der_max);
 
-extern size_t hal_rsa_private_key_to_der_len(const hal_rsa_key_t * const key);
+extern hal_error_t hal_rsa_private_key_to_der_extra(const hal_rsa_key_t * const key,
+                                                    uint8_t *der, size_t *der_len, const size_t der_max);
 
 extern hal_error_t hal_rsa_private_key_from_der(hal_rsa_key_t **key,
                                                 void *keybuf, const size_t keybuf_len,
@@ -491,6 +499,20 @@ extern size_t hal_rsa_public_key_to_der_len(const hal_rsa_key_t * const key);
 extern hal_error_t hal_rsa_public_key_from_der(hal_rsa_key_t **key,
                                                void *keybuf, const size_t keybuf_len,
                                                const uint8_t * const der, const size_t der_len);
+
+extern int hal_rsa_key_needs_saving(const hal_rsa_key_t * const key);
+
+static inline size_t hal_rsa_private_key_to_der_len(const hal_rsa_key_t * const key)
+{
+  size_t len = 0;
+  return hal_rsa_private_key_to_der(key, NULL, &len, 0) == HAL_OK ? len : 0;
+}
+
+static inline size_t hal_rsa_private_key_to_der_extra_len(const hal_rsa_key_t * const key)
+{
+  size_t len = 0;
+  return hal_rsa_private_key_to_der_extra(key, NULL, &len, 0) == HAL_OK ? len : 0;
+}
 
 /*
  * ECDSA.

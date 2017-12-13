@@ -46,7 +46,7 @@
  */
 
 #ifndef HAL_KS_BLOCK_SIZE
-#define HAL_KS_BLOCK_SIZE       (4096)
+#define HAL_KS_BLOCK_SIZE       (4096 * 2)
 #endif
 
 /*

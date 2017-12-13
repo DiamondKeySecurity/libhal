@@ -151,6 +151,16 @@ extern hal_error_t hal_asn1_decode_pkcs8_encryptedprivatekeyinfo(const uint8_t *
 extern hal_error_t hal_asn1_guess_key_type(hal_key_type_t *type, hal_curve_name_t *curve,
                                            const uint8_t *const der,  const size_t der_len);
 
+/*
+ * Peek ahead for an OPTIONAL attribute.
+ */
+
+static inline int hal_asn1_peek(const uint8_t tag,
+                                const uint8_t * const der, size_t der_max)
+{
+  return der != NULL && der_max > 0 && der[0] == tag;
+}
+
 #endif /* _HAL_ASN1_INTERNAL_H_ */
 
 /*

@@ -97,7 +97,7 @@ static int name_matches(const hal_core_t *const core, const char * const name)
 static const struct { const char *name; hal_addr_t extra; } gaps[] = {
   { "csprng",  11 * CORE_SIZE }, /* empty slots after csprng */
   { "modexps6", 3 * CORE_SIZE }, /* ModexpS6 uses four slots */
-  { "modexpa7", 3 * CORE_SIZE }, /* ModexpA7 uses four slots */
+  { "modexpa7", 7 * CORE_SIZE }, /* ModexpA7 uses eight slots */
 };
 
 static hal_core_t *head = NULL;
@@ -203,15 +203,17 @@ hal_core_t *hal_core_find(const char *name, hal_core_t *core)
 
 hal_error_t hal_core_alloc(const char *name, hal_core_t **pcore)
 {
-  hal_core_t *core;
-  hal_error_t err = HAL_ERROR_CORE_NOT_FOUND;
+  /*
+   * This used to allow name == NULL iff *core != NULL, but the
+   * semantics were fragile and in practice we always pass a name
+   * anyway, so simplify by requiring name != NULL, always.
+   */
 
-  if (name == NULL && (pcore == NULL || *pcore == NULL))
+  if (name == NULL || pcore == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  core = *pcore;
-  if (name == NULL)
-    name = core->info.name;
+  hal_error_t err = HAL_ERROR_CORE_NOT_FOUND;
+  hal_core_t *core = *pcore;
 
   if (core != NULL) {
     /* if we can reallocate the same core, do it now */
@@ -221,24 +223,23 @@ hal_error_t hal_core_alloc(const char *name, hal_core_t **pcore)
       hal_critical_section_end();
       return HAL_OK;
     }
-    /* else fall through to search */
+    /* else forget that core and fall through to search */
+    *pcore = NULL;
   }
 
   while (1) {
     hal_critical_section_start();
     for (core = hal_core_iterate(NULL); core != NULL; core = core->next) {
-      if (name_matches(core, name)) {
-        if (core->busy) {
-          err = HAL_ERROR_CORE_BUSY;
-          continue;
-        }
-        else {
-          err = HAL_OK;
-          *pcore = core;
-          core->busy = 1;
-          break;
-        }
+      if (!name_matches(core, name))
+        continue;
+      if (core->busy) {
+        err = HAL_ERROR_CORE_BUSY;
+        continue;
       }
+      err = HAL_OK;
+      *pcore = core;
+      core->busy = 1;
+      break;
     }
     hal_critical_section_end();
     if (err == HAL_ERROR_CORE_BUSY)

@@ -43,6 +43,7 @@
 #include <sys/time.h>
 
 #include <hal.h>
+#include <hal_internal.h>
 #include <verilog_constants.h>
 
 #ifndef WAIT_FOR_CSPRNG_VALID

@@ -301,53 +301,6 @@ hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf,
   return HAL_OK;
 }
 
-hal_error_t hal_io_init(const hal_core_t *core)
-{
-  uint8_t buf[4] = { 0, 0, 0, CTRL_INIT };
-  return hal_io_write(core, ADDR_CTRL, buf, 4);
-}
-
-hal_error_t hal_io_next(const hal_core_t *core)
-{
-  uint8_t buf[4] = { 0, 0, 0, CTRL_NEXT };
-  return hal_io_write(core, ADDR_CTRL, buf, 4);
-}
-
-hal_error_t hal_io_wait(const hal_core_t *core, uint8_t status, int *count)
-{
-  hal_error_t err;
-  uint8_t buf[4];
-  int i;
-
-  for (i = 1; ; ++i) {
-
-    if (count && (*count > 0) && (i >= *count))
-      return HAL_ERROR_IO_TIMEOUT;
-
-    if ((err = hal_io_read(core, ADDR_STATUS, buf, 4)) != HAL_OK)
-      return err;
-
-    if (buf[3] & status) {
-      if (count)
-        *count = i;
-      return HAL_OK;
-
-    }
-  }
-}
-
-hal_error_t hal_io_wait_ready(const hal_core_t *core)
-{
-  int limit = 10;
-  return hal_io_wait(core, STATUS_READY, &limit);
-}
-
-hal_error_t hal_io_wait_valid(const hal_core_t *core)
-{
-  int limit = 10;
-  return hal_io_wait(core, STATUS_VALID, &limit);
-}
-
 /*
  * Local variables:
  * indent-tabs-mode: nil
