@@ -11,7 +11,7 @@
  * enough that this module is no longer needed, it will go away.
  *
  * Authors: Rob Austein
- * Copyright (c) 2015, NORDUnet A/S
+ * Copyright (c) 2015-2017, NORDUnet A/S
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,7 +62,7 @@ void hal_modexp_set_debug(const int onoff)
  * Get value of an ordinary register.
  */
 
-static hal_error_t inline get_register(const hal_core_t *core,
+static inline hal_error_t get_register(const hal_core_t *core,
                                        const hal_addr_t addr,
                                        uint32_t *value)
 {
@@ -84,7 +84,7 @@ static hal_error_t inline get_register(const hal_core_t *core,
  * Set value of an ordinary register.
  */
 
-static hal_error_t inline set_register(const hal_core_t *core,
+static inline hal_error_t set_register(const hal_core_t *core,
                                        const hal_addr_t addr,
                                        const uint32_t value)
 {
@@ -307,8 +307,8 @@ hal_error_t hal_modexp2(const int precalc, hal_modexp_arg_t *a1, hal_modexp_arg_
       (err = check_args(a2)) != HAL_OK)
     return err;
 
-  if ((err = hal_core_alloc(MODEXPA7_NAME, &a1->core)) == HAL_OK  &&
-      (err = hal_core_alloc(MODEXPA7_NAME, &a2->core)) == HAL_OK  &&
+  if ((err = hal_core_alloc2(MODEXPA7_NAME, &a1->core,
+                             MODEXPA7_NAME, &a2->core)) == HAL_OK  &&
       (err = setup_precalc(precalc, a1))               == HAL_OK  &&
       (err = setup_precalc(precalc, a2))               == HAL_OK  &&
       (!precalc ||

@@ -226,6 +226,8 @@ extern hal_addr_t hal_core_base(const hal_core_t *core);
 extern hal_core_t * hal_core_iterate(hal_core_t *core);
 extern void hal_core_reset_table(void);
 extern hal_error_t hal_core_alloc(const char *name, hal_core_t **core);
+extern hal_error_t hal_core_alloc2(const char *name1, hal_core_t **pcore1,
+                                   const char *name2, hal_core_t **pcore2);
 extern void hal_core_free(hal_core_t *core);
 extern void hal_critical_section_start(void);
 extern void hal_critical_section_end(void);

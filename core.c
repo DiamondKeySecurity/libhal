@@ -4,7 +4,7 @@
  * This module contains code to probe the FPGA for its installed cores.
  *
  * Author: Paul Selkirk, Rob Austein
- * Copyright (c) 2015-2016, NORDUnet A/S All rights reserved.
+ * Copyright (c) 2015-2017, NORDUnet A/S All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -201,7 +201,7 @@ hal_core_t *hal_core_find(const char *name, hal_core_t *core)
   return NULL;
 }
 
-hal_error_t hal_core_alloc(const char *name, hal_core_t **pcore)
+static hal_error_t hal_core_alloc_no_wait(const char *name, hal_core_t **pcore)
 {
   /*
    * This used to allow name == NULL iff *core != NULL, but the
@@ -227,28 +227,50 @@ hal_error_t hal_core_alloc(const char *name, hal_core_t **pcore)
     *pcore = NULL;
   }
 
-  while (1) {
-    hal_critical_section_start();
-    for (core = hal_core_iterate(NULL); core != NULL; core = core->next) {
-      if (!name_matches(core, name))
-        continue;
-      if (core->busy) {
-        err = HAL_ERROR_CORE_BUSY;
-        continue;
-      }
-      err = HAL_OK;
-      *pcore = core;
-      core->busy = 1;
-      break;
+  hal_critical_section_start();
+  for (core = hal_core_find(name, NULL); core != NULL; core = hal_core_find(name, core)) {
+    if (core->busy) {
+      err = HAL_ERROR_CORE_BUSY;
+      continue;
     }
-    hal_critical_section_end();
-    if (err == HAL_ERROR_CORE_BUSY)
-      hal_task_yield();
-    else
-      break;
+    err = HAL_OK;
+    *pcore = core;
+    core->busy = 1;
+    break;
   }
+  hal_critical_section_end();
 
   return err;
+}
+
+hal_error_t hal_core_alloc(const char *name, hal_core_t **pcore)
+{
+  hal_error_t err;
+
+  while ((err = hal_core_alloc_no_wait(name, pcore)) == HAL_ERROR_CORE_BUSY)
+    hal_task_yield();
+
+  return err;
+}
+
+hal_error_t hal_core_alloc2(const char *name1, hal_core_t **pcore1,
+                            const char *name2, hal_core_t **pcore2)
+{
+  hal_error_t err;
+
+  while (1) {
+    if ((err = hal_core_alloc(name1, pcore1)) != HAL_OK)
+      return err;
+
+    if ((err = hal_core_alloc_no_wait(name2, pcore2)) == HAL_OK)
+      return HAL_OK;
+    
+    hal_core_free(*pcore1);
+    /* hal_core_free does a yield, so we don't need to do another one */
+
+    if (err != HAL_ERROR_CORE_BUSY)
+      return err;
+  }
 }
 
 void hal_core_free(hal_core_t *core)
