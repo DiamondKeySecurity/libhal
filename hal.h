@@ -161,6 +161,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_WRONG_BLOCK_TYPE, "Wrong block type in keystore")                 \
   DEFINE_HAL_ERROR(HAL_ERROR_RPC_PROTOCOL_ERROR,        "RPC protocol error")                           \
   DEFINE_HAL_ERROR(HAL_ERROR_NOT_IMPLEMENTED,           "Not implemented")                              \
+  DEFINE_HAL_ERROR(HAL_ERROR_HASHSIG_KEY_EXHAUSTED,     "Key exhausted")                                \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -226,8 +227,6 @@ extern hal_addr_t hal_core_base(const hal_core_t *core);
 extern hal_core_t * hal_core_iterate(hal_core_t *core);
 extern void hal_core_reset_table(void);
 extern hal_error_t hal_core_alloc(const char *name, hal_core_t **core);
-extern hal_error_t hal_core_alloc2(const char *name1, hal_core_t **pcore1,
-                                   const char *name2, hal_core_t **pcore2);
 extern void hal_core_free(hal_core_t *core);
 extern void hal_critical_section_start(void);
 extern void hal_critical_section_end(void);
@@ -413,7 +412,11 @@ typedef enum {
   HAL_KEY_TYPE_RSA_PRIVATE,
   HAL_KEY_TYPE_RSA_PUBLIC,
   HAL_KEY_TYPE_EC_PRIVATE,
-  HAL_KEY_TYPE_EC_PUBLIC
+  HAL_KEY_TYPE_EC_PUBLIC,
+  HAL_KEY_TYPE_HASHSIG_PRIVATE,
+  HAL_KEY_TYPE_HASHSIG_PUBLIC,
+  HAL_KEY_TYPE_HASHSIG_LMS,
+  HAL_KEY_TYPE_HASHSIG_LMOTS,
 } hal_key_type_t;
 
 typedef enum {
@@ -793,6 +796,18 @@ extern hal_error_t hal_rpc_pkey_generate_ec(const hal_client_handle_t client,
                                             hal_uuid_t *name,
                                             const hal_curve_name_t curve,
                                             const hal_key_flags_t flags);
+
+typedef enum lmots_algorithm_type lmots_algorithm_t;
+typedef enum lms_algorithm_type lms_algorithm_t;
+
+extern hal_error_t hal_rpc_pkey_generate_hashsig(const hal_client_handle_t client,
+                                                 const hal_session_handle_t session,
+                                                 hal_pkey_handle_t *pkey,
+                                                 hal_uuid_t *name,
+                                                 const size_t hss_levels,
+                                                 const lms_algorithm_t lms_type,
+                                                 const lmots_algorithm_t lmots_type,
+                                                 const hal_key_flags_t flags);
 
 extern hal_error_t hal_rpc_pkey_close(const hal_pkey_handle_t pkey);
 

@@ -38,6 +38,7 @@
 #include "hal.h"
 #include "hal_internal.h"
 #include "xdr_internal.h"
+#include "hashsig.h"
 
 #ifndef HAL_RPC_CLIENT_DEBUG
 #define HAL_RPC_CLIENT_DEBUG 0
@@ -531,6 +532,44 @@ static hal_error_t pkey_remote_generate_ec(const hal_client_handle_t client,
   check(hal_rpc_send(outbuf, optr - outbuf));
 
   check(read_matching_packet(RPC_FUNC_PKEY_GENERATE_EC, inbuf, sizeof(inbuf), &iptr, &ilimit));
+
+  check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
+
+  if (rpc_ret == HAL_OK) {
+    check(hal_xdr_decode_int(&iptr, ilimit, &pkey->handle));
+    check(hal_xdr_decode_variable_opaque(&iptr, ilimit, name->uuid, &name_len));
+    if (name_len != sizeof(name->uuid))
+      return HAL_ERROR_KEY_NAME_TOO_LONG;
+  }
+
+  return rpc_ret;
+}
+
+static hal_error_t pkey_remote_generate_hashsig(const hal_client_handle_t client,
+                                                const hal_session_handle_t session,
+                                                hal_pkey_handle_t *pkey,
+                                                hal_uuid_t *name,
+                                                const size_t hss_levels,
+                                                const lms_algorithm_t lms_type,
+                                                const lmots_algorithm_t lmots_type,
+                                                const hal_key_flags_t flags)
+{
+  uint8_t outbuf[nargs(7)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t inbuf[nargs(5) + pad(sizeof(name->uuid))];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  size_t name_len = sizeof(name->uuid);
+  hal_error_t rpc_ret;
+
+  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_PKEY_GENERATE_HASHSIG));
+  check(hal_xdr_encode_int(&optr, olimit, client.handle));
+  check(hal_xdr_encode_int(&optr, olimit, session.handle));
+  check(hal_xdr_encode_int(&optr, olimit, (uint32_t)hss_levels));
+  check(hal_xdr_encode_int(&optr, olimit, (uint32_t)lms_type));
+  check(hal_xdr_encode_int(&optr, olimit, (uint32_t)lmots_type));
+  check(hal_xdr_encode_int(&optr, olimit, flags));
+  check(hal_rpc_send(outbuf, optr - outbuf));
+
+  check(read_matching_packet(RPC_FUNC_PKEY_GENERATE_HASHSIG, inbuf, sizeof(inbuf), &iptr, &ilimit));
 
   check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
 
@@ -1095,6 +1134,7 @@ const hal_rpc_pkey_dispatch_t hal_rpc_remote_pkey_dispatch = {
   .open                         = pkey_remote_open,
   .generate_rsa                 = pkey_remote_generate_rsa,
   .generate_ec                  = pkey_remote_generate_ec,
+  .generate_hashsig             = pkey_remote_generate_hashsig,
   .close                        = pkey_remote_close,
   .delete                       = pkey_remote_delete,
   .get_key_type                 = pkey_remote_get_key_type,
@@ -1117,6 +1157,7 @@ const hal_rpc_pkey_dispatch_t hal_rpc_mixed_pkey_dispatch = {
   .open                         = pkey_remote_open,
   .generate_rsa                 = pkey_remote_generate_rsa,
   .generate_ec                  = pkey_remote_generate_ec,
+  .generate_hashsig             = pkey_remote_generate_hashsig,
   .close                        = pkey_remote_close,
   .delete                       = pkey_remote_delete,
   .get_key_type                 = pkey_remote_get_key_type,

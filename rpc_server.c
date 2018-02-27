@@ -35,6 +35,7 @@
 #include "hal.h"
 #include "hal_internal.h"
 #include "xdr_internal.h"
+#include "hashsig.h"
 
 /*
  * RPC calls.
@@ -351,6 +352,36 @@ static hal_error_t pkey_generate_ec(const uint8_t **iptr, const uint8_t * const 
     check(hal_xdr_decode_int(iptr, ilimit, &flags));
 
     check(hal_rpc_pkey_generate_ec(client, session, &pkey, &name, curve, flags));
+
+    if ((err = hal_xdr_encode_int(optr, olimit, pkey.handle)) != HAL_OK ||
+        (err = hal_xdr_encode_variable_opaque(optr, olimit, name.uuid, sizeof(name.uuid))) != HAL_OK)
+        *optr = optr_orig;
+
+    return err;
+}
+
+static hal_error_t pkey_generate_hashsig(const uint8_t **iptr, const uint8_t * const ilimit,
+                                         uint8_t **optr, const uint8_t * const olimit)
+{
+    hal_client_handle_t client;
+    hal_session_handle_t session;
+    hal_pkey_handle_t pkey;
+    hal_uuid_t name;
+    uint32_t hss_levels;
+    uint32_t lms_type;
+    uint32_t lmots_type;
+    hal_key_flags_t flags;
+    uint8_t *optr_orig = *optr;
+    hal_error_t err;
+
+    check(hal_xdr_decode_int(iptr, ilimit, &client.handle));
+    check(hal_xdr_decode_int(iptr, ilimit, &session.handle));
+    check(hal_xdr_decode_int(iptr, ilimit, &hss_levels));
+    check(hal_xdr_decode_int(iptr, ilimit, &lms_type));
+    check(hal_xdr_decode_int(iptr, ilimit, &lmots_type));
+    check(hal_xdr_decode_int(iptr, ilimit, &flags));
+
+    check(hal_rpc_pkey_generate_hashsig(client, session, &pkey, &name, hss_levels, lms_type, lmots_type, flags));
 
     if ((err = hal_xdr_encode_int(optr, olimit, pkey.handle)) != HAL_OK ||
         (err = hal_xdr_encode_variable_opaque(optr, olimit, name.uuid, sizeof(name.uuid))) != HAL_OK)
@@ -793,6 +824,9 @@ hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ile
         break;
     case RPC_FUNC_PKEY_GENERATE_EC:
         handler = pkey_generate_ec;
+        break;
+    case RPC_FUNC_PKEY_GENERATE_HASHSIG:
+        handler = pkey_generate_hashsig;
         break;
     case RPC_FUNC_PKEY_CLOSE:
         handler = pkey_close;
