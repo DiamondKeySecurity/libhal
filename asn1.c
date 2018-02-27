@@ -175,6 +175,88 @@ hal_error_t hal_asn1_encode_integer(const fp_int * const bn,
 }
 
 /*
+ * Encode an unsigned ASN.1 INTEGER from a uint32_t.  If der is
+ * NULL, just return the length of what we would have encoded.
+ */
+
+hal_error_t hal_asn1_encode_uint32(const uint32_t n,
+                                   uint8_t *der, size_t *der_len, const size_t der_max)
+{
+  /*
+   * We only handle unsigned INTEGERs, so we need to pad data with a
+   * leading zero if the most significant bit is set, to avoid
+   * flipping the ASN.1 sign bit.
+   */
+
+  size_t vlen;
+  hal_error_t err;
+  size_t hlen;
+
+  /* DER says to use the minimum number of octets */
+  if (n < 0x80)            vlen = 1;
+  else if (n < 0x8000)     vlen = 2;
+  else if (n < 0x800000)   vlen = 3;
+  else if (n < 0x80000000) vlen = 4;
+  else                     vlen = 5;
+
+  err = hal_asn1_encode_header(ASN1_INTEGER, vlen, der, &hlen, der_max);
+
+  if (der_len != NULL)
+    *der_len = hlen + vlen;
+
+  if (der == NULL || err != HAL_OK)
+    return err;
+
+  assert(hlen + vlen <= der_max);
+
+  der += hlen;
+
+  uint32_t m = n;
+  for (size_t i = vlen; i > 0; --i) {
+    der[i - 1] = m & 0xff;
+    m >>= 8;
+  }
+
+  return HAL_OK;
+}
+
+/*
+ * Encode an ASN.1 OCTET STRING.  If der is NULL, just return the length
+ * of what we would have encoded.
+ */
+
+hal_error_t hal_asn1_encode_octet_string(const uint8_t * const data,    const size_t data_len,
+                                         uint8_t *der, size_t *der_len, const size_t der_max)
+{
+  if (data_len == 0 || (der != NULL && data == NULL))
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  size_t hlen;
+  hal_error_t err;
+
+  if ((err = hal_asn1_encode_header(ASN1_OCTET_STRING, data_len, NULL, &hlen, 0)) != HAL_OK)
+    return err;
+  
+  if (der_len != NULL)
+    *der_len = hlen + data_len;
+
+  if (der == NULL)
+    return HAL_OK;
+
+  assert(hlen + data_len <= der_max);
+
+  /*
+   * Handle data early, in case it was staged into our output buffer.
+   */
+  memmove(der + hlen, data, data_len);
+
+  if ((err = hal_asn1_encode_header(ASN1_OCTET_STRING, data_len, der, &hlen, der_max)) != HAL_OK)
+    return err;
+
+  return HAL_OK;
+}
+
+/*
  * Encode a public key into a X.509 SubjectPublicKeyInfo (RFC 5280).
  */
 
@@ -480,6 +562,68 @@ hal_error_t hal_asn1_decode_integer(fp_int *bn,
 
   fp_init(bn);
   fp_read_unsigned_bin(bn, (uint8_t *) der + hlen, vlen);
+  return HAL_OK;
+}
+
+/*
+ * Decode an ASN.1 INTEGER into a uint32_t.  Since we only
+ * support (or need to support, or expect to see) unsigned integers,
+ * we return failure if the sign bit is set in the ASN.1 INTEGER.
+ */
+
+hal_error_t hal_asn1_decode_uint32(uint32_t *np,
+                                   const uint8_t * const der, size_t *der_len, const size_t der_max)
+{
+  if (np == NULL || der == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  hal_error_t err;
+  size_t hlen, vlen;
+
+  if ((err = hal_asn1_decode_header(ASN1_INTEGER, der, der_max, &hlen, &vlen)) != HAL_OK)
+    return err;
+
+  if (der_len != NULL)
+    *der_len = hlen + vlen;
+
+  if (vlen < 1 || vlen > 5 || (der[hlen] & 0x80) != 0x00 || (vlen == 5 && der[hlen] != 0))
+    return HAL_ERROR_ASN1_PARSE_FAILED;
+
+  uint32_t n = 0;
+  for (size_t i = 0; i < vlen; ++i) {
+    n <<= 8;		// slightly inefficient for the first octet
+    n += der[hlen + i];
+  }
+  *np = n;
+
+  return HAL_OK;
+}
+
+/*
+ * Decode an ASN.1 OCTET STRING.
+ */
+
+hal_error_t hal_asn1_decode_octet_string(uint8_t *data, const size_t data_len,
+                                         const uint8_t * const der, size_t *der_len, const size_t der_max)
+{
+  if (der == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  size_t hlen, vlen;
+  hal_error_t err;
+
+  if ((err = hal_asn1_decode_header(ASN1_OCTET_STRING, der, der_max, &hlen, &vlen)) != HAL_OK)
+    return err;
+
+  if (der_len != NULL)
+    *der_len = hlen + vlen;
+
+  if (data != NULL) {
+    if (data_len != vlen)
+      return HAL_ERROR_ASN1_PARSE_FAILED;
+    memmove(data, der + hlen, vlen);
+  }
+
   return HAL_OK;
 }
 

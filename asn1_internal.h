@@ -117,8 +117,20 @@ extern hal_error_t hal_asn1_decode_header(const uint8_t tag,
 extern hal_error_t hal_asn1_encode_integer(const fp_int * const bn,
                                            uint8_t *der, size_t *der_len, const size_t der_max);
 
+extern hal_error_t hal_asn1_encode_uint32(const uint32_t n,
+                                          uint8_t *der, size_t *der_len, const size_t der_max);
+
+extern hal_error_t hal_asn1_encode_octet_string(const uint8_t * const data,    const size_t data_len,
+                                                uint8_t *der, size_t *der_len, const size_t der_max);
+
 extern hal_error_t hal_asn1_decode_integer(fp_int *bn,
                                            const uint8_t * const der, size_t *der_len, const size_t der_max);
+
+extern hal_error_t hal_asn1_decode_uint32(uint32_t *np,
+                                          const uint8_t * const der, size_t *der_len, const size_t der_max);
+
+extern hal_error_t hal_asn1_decode_octet_string(uint8_t *data, const size_t data_len,
+                                                const uint8_t * const der, size_t *der_len, const size_t der_max);
 
 extern hal_error_t hal_asn1_encode_spki(const uint8_t * const alg_oid,   const size_t alg_oid_len,
                                         const uint8_t * const curve_oid, const size_t curve_oid_len,
