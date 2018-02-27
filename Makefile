@@ -34,7 +34,7 @@ STATIC_CORE_STATE_BLOCKS = 32
 STATIC_HASH_STATE_BLOCKS = 32
 STATIC_HMAC_STATE_BLOCKS = 16
 STATIC_PKEY_STATE_BLOCKS = 256
-STATIC_KS_VOLATILE_SLOTS = 128
+STATIC_KS_VOLATILE_SLOTS = 1280
 
 LIB		= libhal.a
 
@@ -93,7 +93,7 @@ endif
 # makefile, so the working definition of "always want" is sometimes
 # just "building this is harmless even if we don't use it."
 
-OBJ += errorstrings.o hash.o asn1.o ecdsa.o rsa.o xdr.o slip.o
+OBJ += errorstrings.o hash.o asn1.o ecdsa.o rsa.o hashsig.o xdr.o slip.o
 OBJ += rpc_api.o rpc_hash.o uuid.o rpc_pkcs1.o crc32.o locks.o logging.o
 
 # Object files to build when we're on a platform with direct access
@@ -220,6 +220,7 @@ CFLAGS		+= -DHAL_STATIC_CORE_STATE_BLOCKS=${STATIC_CORE_STATE_BLOCKS}
 CFLAGS		+= -DHAL_STATIC_HASH_STATE_BLOCKS=${STATIC_HASH_STATE_BLOCKS}
 CFLAGS		+= -DHAL_STATIC_HMAC_STATE_BLOCKS=${STATIC_HMAC_STATE_BLOCKS}
 CFLAGS		+= -DHAL_STATIC_PKEY_STATE_BLOCKS=${STATIC_PKEY_STATE_BLOCKS}
+CFLAGS		+= -DHAL_STATIC_KS_VOLATILE_SLOTS=${STATIC_KS_VOLATILE_SLOTS}
 CFLAGS		+= -I${CRYPTECH_ROOT}/sw/libhal
 CFLAGS		+= -I${LIBTFM_BLD}
 
@@ -272,6 +273,7 @@ novena-eim.o hal_io_eim.o:					novena-eim.h
 slip.o rpc_client_serial.o rpc_server_serial.o:			slip_internal.h
 ${OBJ}:								verilog_constants.h
 rpc_client.o rpc_server.o xdr.o:				xdr_internal.h
+hashsig.o:                                                      hashsig.h
 
 last_gasp_pin_internal.h:
 	./utils/last_gasp_default_pin >$@

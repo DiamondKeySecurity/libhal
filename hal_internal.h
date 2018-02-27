@@ -48,7 +48,7 @@
  */
 
 /*
- * htonl is not available in arm-none-eabi headers or libc.
+ * htonl and htons are not available in arm-none-eabi headers or libc.
  */
 #ifndef STM32F4XX
 #include <arpa/inet.h>
@@ -62,10 +62,18 @@ inline uint32_t htonl(uint32_t w)
         ((w & 0x00ff0000) >> 8) +
         ((w & 0xff000000) >> 24);
 }
+inline uint16_t htons(uint16_t w)
+{
+    return
+        ((w & 0x00ff) << 8) +
+        ((w & 0xff00) >> 8);
+}
 #else                           /* big endian */
 #define htonl(x) (x)
+#define htons(x) (x)
 #endif
 #define ntohl htonl
+#define ntohs htons
 #endif
 
 /*
@@ -281,6 +289,15 @@ typedef struct {
                               const hal_curve_name_t curve,
                               const hal_key_flags_t flags);
 
+  hal_error_t  (*generate_hashsig)(const hal_client_handle_t client,
+                                   const hal_session_handle_t session,
+                                   hal_pkey_handle_t *pkey,
+                                   hal_uuid_t *name,
+                                   const size_t hss_levels,
+                                   const lms_algorithm_t lms_type,
+                                   const lmots_algorithm_t lmots_type,
+                                   const hal_key_flags_t flags);
+
   hal_error_t  (*close)(const hal_pkey_handle_t pkey);
 
   hal_error_t  (*delete)(const hal_pkey_handle_t pkey);
@@ -420,14 +437,14 @@ static inline hal_crc32_t hal_crc32_finalize(hal_crc32_t crc)
 #if 0
 #define HAL_KS_WRAPPED_KEYSIZE  ((2373 + 15) & ~7)
 #else
-#warning Temporary test hack to HAL_KS_WRAPPED_KEYSIZE, clean this up
+//#warning Temporary test hack to HAL_KS_WRAPPED_KEYSIZE, clean this up
 //
 // See how much of the problem we're having with pkey support for the
 // new modexpa7 components is just this buffer size being too small.
 //
 #define HAL_KS_WRAPPED_KEYSIZE  ((2373 + 6 * 4096 / 8 + 6 * 4 + 15) & ~7)
-#if HAL_KS_WRAPPED_KEYSIZE + 8 > 4096
-#warning HAL_KS_WRAPPED_KEYSIZE is too big for a single 4096-octet block
+#if HAL_KS_WRAPPED_KEYSIZE + 8 > 8192
+#warning HAL_KS_WRAPPED_KEYSIZE is too big for a single 8192-octet block
 #endif
 #endif
 
@@ -648,9 +665,10 @@ typedef enum {
     RPC_FUNC_PKEY_GET_ATTRIBUTES,
     RPC_FUNC_PKEY_EXPORT,
     RPC_FUNC_PKEY_IMPORT,
+    RPC_FUNC_PKEY_GENERATE_HASHSIG,
 } rpc_func_num_t;
 
-#define RPC_VERSION 0x01010000          /* 1.1.0.0 */
+#define RPC_VERSION 0x01010100          /* 1.1.1.0 */
 
 /*
  * RPC client locality. These have to be defines rather than an enum,
@@ -667,7 +685,7 @@ typedef enum {
  */
 
 #ifndef HAL_RPC_MAX_PKT_SIZE
-#define HAL_RPC_MAX_PKT_SIZE    4096
+#define HAL_RPC_MAX_PKT_SIZE    16384
 #endif
 
 /*

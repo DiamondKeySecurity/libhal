@@ -77,6 +77,10 @@ const uint8_t hal_asn1_oid_aesKeyWrap[] = { 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 
 const size_t hal_asn1_oid_aesKeyWrap_len = sizeof(hal_asn1_oid_aesKeyWrap);
 #endif
 
+/* from draft-housley-cms-mts-hash-sig-07.txt */
+const uint8_t hal_asn1_oid_mts_hashsig[] = { 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x09, 0x10, 0x03, 0x11 };
+const size_t hal_asn1_oid_mts_hashsig_len = sizeof(hal_asn1_oid_mts_hashsig);
+
 /*
  * Encode tag and length fields of an ASN.1 object.
  *
@@ -930,6 +934,12 @@ hal_error_t hal_asn1_guess_key_type(hal_key_type_t *type,
     if ((err = hal_ecdsa_oid_to_curve(curve, curve_oid, curve_oid_len)) != HAL_OK)
       *curve = HAL_CURVE_NONE;
     return err;
+  }
+
+  if (alg_oid_len == hal_asn1_oid_mts_hashsig_len && memcmp(alg_oid, hal_asn1_oid_mts_hashsig, alg_oid_len) == 0) {
+    *type = public ? HAL_KEY_TYPE_HASHSIG_PUBLIC : HAL_KEY_TYPE_HASHSIG_PRIVATE;
+    *curve = HAL_CURVE_NONE;
+    return HAL_OK;
   }
 
   *type = HAL_KEY_TYPE_NONE;

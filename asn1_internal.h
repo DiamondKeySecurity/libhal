@@ -102,6 +102,9 @@ extern const size_t  hal_asn1_oid_ecPublicKey_len;
 extern const uint8_t hal_asn1_oid_aesKeyWrap[];
 extern const size_t  hal_asn1_oid_aesKeyWrap_len;
 
+extern const uint8_t hal_asn1_oid_mts_hashsig[];
+extern const size_t hal_asn1_oid_mts_hashsig_len;
+
 /*
  * Transcoding functions.
  */
