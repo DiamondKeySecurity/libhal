@@ -1010,6 +1010,18 @@ hal_error_t hal_ks_rewrite_der(hal_ks_t *ks,
   return err;
 }
 
+hal_error_t hal_ks_available(hal_ks_t *ks, size_t *count)
+{
+  if (ks == NULL || count == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  hal_ks_lock();
+  *count = ks->size - ks->used;
+  hal_ks_unlock();
+
+  return HAL_OK;
+}
+
 /*
  * Local variables:
  * indent-tabs-mode: nil
