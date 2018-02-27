@@ -422,6 +422,8 @@ extern hal_error_t hal_ks_block_update(hal_ks_t *ks,
                                        const hal_uuid_t * const uuid,
                                        int *hint);
 
+extern hal_error_t hal_ks_available(hal_ks_t *ks, size_t *count);
+
 #endif /* _KS_H_ */
 
 /*
