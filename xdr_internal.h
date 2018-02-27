@@ -2,8 +2,9 @@
  * xdr_internal.h
  * --------------
  * Serialization/deserialization routines, using XDR (RFC 4506) encoding.
+ * These functions are not part of the public libhal API.
  *
- * Copyright (c) 2016, NORDUnet A/S All rights reserved.
+ * Copyright (c) 2016-2018, NORDUnet A/S All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -35,10 +36,6 @@
 #ifndef _XDR_INTERNAL_H
 #define _XDR_INTERNAL_H
 
- /*
- * RPC serialization/deserialization routines, using XDR (RFC 4506) encoding.
- */
-
 hal_error_t hal_xdr_encode_int(uint8_t ** const outbuf,
                                const uint8_t * const limit,
                                const uint32_t value);
@@ -47,22 +44,35 @@ hal_error_t hal_xdr_decode_int(const uint8_t ** const inbuf,
                                const uint8_t * const limit,
                                uint32_t * const value);
 
-hal_error_t hal_xdr_undecode_int(const uint8_t ** const inbuf);
+hal_error_t hal_xdr_decode_int_peek(const uint8_t ** const inbuf,
+                                    const uint8_t * const limit,
+                                    uint32_t * const value);
 
-hal_error_t hal_xdr_encode_buffer(uint8_t ** const outbuf,
-                                  const uint8_t * const limit,
-                                  const uint8_t * const value,
-                                  const uint32_t len);
+hal_error_t hal_xdr_encode_fixed_opaque(uint8_t ** const outbuf,
+                                        const uint8_t * const limit,
+                                        const uint8_t * const value, const size_t len);
 
-hal_error_t hal_xdr_decode_buffer_in_place(const uint8_t ** const inbuf,
+hal_error_t hal_xdr_decode_fixed_opaque(const uint8_t ** const inbuf,
+                                        const uint8_t * const limit,
+                                        uint8_t * const value, const size_t len);
+
+hal_error_t hal_xdr_decode_fixed_opaque_ptr(const uint8_t ** const inbuf,
+                                            const uint8_t * const limit,
+                                           const  uint8_t ** const vptr, const size_t len);
+
+hal_error_t hal_xdr_encode_variable_opaque(uint8_t ** const outbuf,
                                            const uint8_t * const limit,
-                                           const uint8_t ** const vptr,
-                                           uint32_t * const len);
+                                           const uint8_t * const value,
+                                           const size_t len);
 
-hal_error_t hal_xdr_decode_buffer(const uint8_t ** const inbuf,
-                                  const uint8_t * const limit,
-                                  uint8_t * const value,
-                                  uint32_t * const len);
+hal_error_t hal_xdr_decode_variable_opaque(const uint8_t ** const inbuf,
+                                           const uint8_t * const limit,
+                                           uint8_t * const value,
+                                           size_t * const len);
 
+hal_error_t hal_xdr_decode_variable_opaque_ptr(const uint8_t ** const inbuf,
+                                               const uint8_t * const limit,
+                                               const uint8_t ** const vptr,
+                                               size_t * const len);
 
 #endif /* _XDR_INTERNAL_H*/
