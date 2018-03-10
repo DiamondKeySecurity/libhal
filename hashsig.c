@@ -137,21 +137,15 @@ static inline hal_error_t hal_xdr_decode_bytestring16(const uint8_t ** const inb
  * LM-OTS
  */
 
-static uint8_t coef1(const uint8_t * const S, const size_t i);
-static uint8_t coef2(const uint8_t * const S, const size_t i);
-static uint8_t coef4(const uint8_t * const S, const size_t i);
-static uint8_t coef8(const uint8_t * const S, const size_t i);
-
 typedef const struct lmots_parameter_set {
     lmots_algorithm_t type;
     size_t                  n, w,  w2,   p, ls;
-    uint8_t (*coef)(const uint8_t * const S, const size_t i);
 } lmots_parameter_t;
 static lmots_parameter_t lmots_parameters[] = {
-    { lmots_sha256_n32_w1, 32, 1,   2, 265, 7, coef1 },
-    { lmots_sha256_n32_w2, 32, 2,   4, 133, 6, coef2 },
-    { lmots_sha256_n32_w4, 32, 4,  16,  67, 4, coef4 },
-    { lmots_sha256_n32_w8, 32, 8, 256,  34, 0, coef8 },
+    { lmots_sha256_n32_w1, 32, 1,   2, 265, 7 },
+    { lmots_sha256_n32_w2, 32, 2,   4, 133, 6 },
+    { lmots_sha256_n32_w4, 32, 4,  16,  67, 4 },
+    { lmots_sha256_n32_w8, 32, 8, 256,  34, 0 },
 };
 
 typedef struct lmots_key {
@@ -265,32 +259,21 @@ static hal_error_t lmots_generate(lmots_key_t * const key)
 }
 #endif
 
-/* coef() functions for the supported values of w.
- * This is a bit of premature optimization, because coef() gets called a lot.
- */
-
-/* w = 1 */
-static uint8_t coef1(const uint8_t * const S, const size_t i)
+/* strings of w-bit elements */
+static uint8_t coef(const uint8_t * const S, const size_t i, size_t w)
 {
-    return (S[i/8] >> (7 - (i % 8))) & 0x01;
-}
-
-/* w = 2 */
-static uint8_t coef2(const uint8_t * const S, const size_t i)
-{
-    return (S[i/4] >> (6 - (2 * (i % 4)))) & 0x03;
-}
-
-/* w = 4 */
-static uint8_t coef4(const uint8_t * const S, const size_t i)
-{
-    return (S[i/2] >> (4 - (4 * (i % 2)))) & 0x0f;
-}
-
-/* w = 8 */
-static uint8_t coef8(const uint8_t * const S, const size_t i)
-{
-    return S[i];
+    switch (w) {
+    case 1:
+        return (S[i/8] >> (7 - (i % 8))) & 0x01;
+    case 2:
+        return (S[i/4] >> (6 - (2 * (i % 4)))) & 0x03;
+    case 4:
+        return (S[i/2] >> (4 - (4 * (i % 2)))) & 0x0f;
+    case 8:
+        return S[i];
+    default:
+        return 0;
+    }
 }
 
 /* checksum */
@@ -299,7 +282,7 @@ static uint16_t Cksm(const uint8_t * const S, lmots_parameter_t *lmots)
     uint16_t sum = 0;
 
     for (size_t i = 0; i < (lmots->n * 8 / lmots->w); ++i)
-        sum += (lmots->w2 - 1) - lmots->coef(S, i);
+        sum += (lmots->w2 - 1) - coef(S, i, lmots->w);
 
     return (sum << lmots->ls);
 }
@@ -321,7 +304,7 @@ static hal_error_t lmots_sign(lmots_key_t *key,
 
     size_t n = key->lmots->n;
     size_t p = key->lmots->p;
-    uint8_t (*coef)() = key->lmots->coef;
+    size_t w = key->lmots->w;
 
     if (sig_max < lmots_signature_len(key->lmots))
         return HAL_ERROR_BAD_ARGUMENTS;
@@ -360,7 +343,7 @@ static hal_error_t lmots_sign(lmots_key_t *key,
     for (size_t i = 0; i < p; ++i) {
 
 //          a = coef(Q || Cksm(Q), i, w)
-        uint8_t a = coef(Q, i);
+        uint8_t a = coef(Q, i, w);
 
 //          tmp = x[i]
         bytestring32 tmp;
@@ -431,8 +414,8 @@ static hal_error_t lmots_public_key_candidate(const lmots_key_t * const key,
 
     size_t n = key->lmots->n;
     size_t p = key->lmots->p;
+    size_t w = key->lmots->w;
     size_t w2 = key->lmots->w2;
-    uint8_t (*coef)() = key->lmots->coef;
 
 //     d. C = next n bytes of signature
 
@@ -475,7 +458,7 @@ static hal_error_t lmots_public_key_candidate(const lmots_key_t * const key,
     for (size_t i = 0; i < p; ++i) {
 
 //       a = coef(Q || Cksm(Q), i, w)
-        uint8_t a = coef(Q, i);
+        uint8_t a = coef(Q, i, w);
 
 //       tmp = y[i]
         bytestring32 tmp;
