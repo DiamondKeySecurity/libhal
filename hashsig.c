@@ -284,10 +284,7 @@ static uint8_t coef2(const uint8_t * const S, const size_t i)
 /* w = 4 */
 static uint8_t coef4(const uint8_t * const S, const size_t i)
 {
-    uint8_t byte = S[i/2];
-    if (i % 2)
-        byte >>= 4;
-    return byte & 0x0f;
+    return (S[i/2] >> (4 - (4 * (i % 2)))) & 0x0f;
 }
 
 /* w = 8 */
