@@ -139,13 +139,13 @@ static inline hal_error_t hal_xdr_decode_bytestring16(const uint8_t ** const inb
 
 typedef const struct lmots_parameter_set {
     lmots_algorithm_t type;
-    size_t                  n, w,  w2,   p, ls;
+    size_t                  n, w,   p, ls;
 } lmots_parameter_t;
 static lmots_parameter_t lmots_parameters[] = {
-    { lmots_sha256_n32_w1, 32, 1,   2, 265, 7 },
-    { lmots_sha256_n32_w2, 32, 2,   4, 133, 6 },
-    { lmots_sha256_n32_w4, 32, 4,  16,  67, 4 },
-    { lmots_sha256_n32_w8, 32, 8, 256,  34, 0 },
+    { lmots_sha256_n32_w1, 32, 1, 265, 7 },
+    { lmots_sha256_n32_w2, 32, 2, 133, 6 },
+    { lmots_sha256_n32_w4, 32, 4,  67, 4 },
+    { lmots_sha256_n32_w8, 32, 8,  34, 0 },
 };
 
 typedef struct lmots_key {
@@ -199,7 +199,7 @@ static hal_error_t lmots_generate(lmots_key_t * const key)
 
     size_t n = key->lmots->n;
     size_t p = key->lmots->p;
-    size_t w2 = key->lmots->w2;
+    size_t w = key->lmots->w;
 
 //  4. compute the array x as follows:
 //     for ( i = 0; i < p; i = i + 1 ) {
@@ -229,7 +229,7 @@ static hal_error_t lmots_generate(lmots_key_t * const key)
         memcpy(&tmp, &key->x[i], sizeof(tmp));
 
 //        for ( j = 0; j < 2^w - 1; j = j + 1 ) {
-        for (size_t j = 0; j < w2 - 1; ++j) {
+        for (size_t j = 0; j < (1U << w) - 1; ++j) {
 
 //           tmp = H(I || u32str(q) || u16str(i) || u8str(j) || tmp)
             check(hal_hash_initialize(NULL, hal_hash_sha256, &state, statebuf, sizeof(statebuf)));
@@ -282,7 +282,7 @@ static uint16_t Cksm(const uint8_t * const S, lmots_parameter_t *lmots)
     uint16_t sum = 0;
 
     for (size_t i = 0; i < (lmots->n * 8 / lmots->w); ++i)
-        sum += (lmots->w2 - 1) - coef(S, i, lmots->w);
+        sum += ((1 << lmots->w) - 1) - coef(S, i, lmots->w);
 
     return (sum << lmots->ls);
 }
@@ -415,7 +415,6 @@ static hal_error_t lmots_public_key_candidate(const lmots_key_t * const key,
     size_t n = key->lmots->n;
     size_t p = key->lmots->p;
     size_t w = key->lmots->w;
-    size_t w2 = key->lmots->w2;
 
 //     d. C = next n bytes of signature
 
@@ -465,7 +464,7 @@ static hal_error_t lmots_public_key_candidate(const lmots_key_t * const key,
         memcpy(&tmp, &y[i], sizeof(tmp));
 
 //       for ( j = a; j < 2^w - 1; j = j + 1 ) {
-        for (size_t j = (size_t)a; j < w2 - 1; ++j) {
+        for (size_t j = (size_t)a; j < (1U << w) - 1; ++j) {
 
 //          tmp = H(I || u32str(q) || u16str(i) || u8str(j) || tmp)
             check(hal_hash_initialize(NULL, hal_hash_sha256, &state, statebuf, sizeof(statebuf)));
@@ -608,14 +607,14 @@ static hal_error_t lmots_private_key_from_der(lmots_key_t *key,
 
 typedef const struct lms_parameter_set {
     lms_algorithm_t type;
-    size_t                 m,  h,       h2;
+    size_t                 m,  h;
 } lms_parameter_t;
 static lms_parameter_t lms_parameters[] = {
-    { lms_sha256_n32_h5,  32,  5,       32 },
-    { lms_sha256_n32_h10, 32, 10,     1024 },
-    { lms_sha256_n32_h15, 32, 15,    32768 },
-    { lms_sha256_n32_h20, 32, 20,  1048576 },
-    { lms_sha256_n32_h25, 32, 25, 33554432 },
+    { lms_sha256_n32_h5,  32,  5 },
+    { lms_sha256_n32_h10, 32, 10 },
+    { lms_sha256_n32_h15, 32, 15 },
+    { lms_sha256_n32_h20, 32, 20 },
+    { lms_sha256_n32_h25, 32, 25 },
 };
 
 typedef struct lms_key {
@@ -686,8 +685,7 @@ static hal_error_t lms_generate(lms_key_t *key)
     hal_hash_state_t *state = NULL;
     uint32_t l;
     uint16_t s;
-
-    size_t h2 = key->lms->h2;
+    size_t h2 = (1 << key->lms->h);
 
     /* private key - array of lmots key names */
     for (size_t q = 0; q < h2; ++q) {
@@ -755,7 +753,7 @@ static hal_error_t lms_delete(const lms_key_t * const key)
     hal_ks_t *ks = (key->level == 0) ? hal_ks_token : hal_ks_volatile;
 
     /* delete the lmots keys */
-    for (size_t i = 0; i < key->lms->h2; ++i) {
+    for (size_t i = 0; i < (1U << key->lms->h); ++i) {
         memcpy(&slot.name, &key->lmots_keys[i], sizeof(slot.name));
         check(hal_ks_delete(ks, &slot));
     }
@@ -775,7 +773,7 @@ static hal_error_t lms_sign(lms_key_t * const key,
     if (key == NULL || key->type != HAL_KEY_TYPE_HASHSIG_LMS || msg == NULL || sig == NULL)
         return HAL_ERROR_BAD_ARGUMENTS;
 
-    if (key->q >= key->lms->h2)
+    if (key->q >= (1U << key->lms->h))
         return HAL_ERROR_HASHSIG_KEY_EXHAUSTED;
 
     if (sig_max < lms_signature_len(key->lms, key->lmots))
@@ -817,7 +815,7 @@ static hal_error_t lms_sign(lms_key_t * const key,
     check(hal_xdr_encode_int(&sigptr, siglim, key->lms->type));
 
     /* generate the path array */
-    for (size_t r = key->lms->h2 + key->q; r > 1; r /= 2)
+    for (size_t r = (1 << key->lms->h) + key->q; r > 1; r /= 2)
         check(hal_xdr_encode_bytestring32(&sigptr, siglim, ((r & 1) ? &key->T[r-1] : &key->T[r+1])));
 
     if (sig_len != NULL)
@@ -946,7 +944,7 @@ static hal_error_t lms_public_key_candidate(const lms_key_t * const key,
 
     size_t m = key->lms->m;
     size_t h = key->lms->h;
-    size_t h2 = key->lms->h2;
+    size_t h2 = (1 << key->lms->h);
 
 //    h. if q >= 2^h or the signature is not exactly 12 + n * (p + 1) + m * h bytes long, return INVALID
 
@@ -1214,6 +1212,7 @@ hal_error_t hal_hashsig_key_gen(hal_core_t *core,
     lms_parameter_t *lms = lms_select_parameter_set(lms_type);
     if (lms == NULL)
         return HAL_ERROR_BAD_ARGUMENTS;
+    size_t h2 = (1 << lms->h);
 
     lmots_parameter_t *lmots = lmots_select_parameter_set(lmots_type);
     if (lmots == NULL)
@@ -1236,12 +1235,12 @@ hal_error_t hal_hashsig_key_gen(hal_core_t *core,
     /* check flash keystore for space to store the root tree */
     size_t available;
     check(hal_ks_available(hal_ks_token, &available));
-    if (available < lms->h2 + 2)
+    if (available < h2 + 2)
         return HAL_ERROR_NO_KEY_INDEX_SLOTS;
 
     /* check volatile keystore for space to store the lower-level trees */
     check(hal_ks_available(hal_ks_volatile, &available));
-    if (available < (L - 1) * (lms->h2 + 1))
+    if (available < (L - 1) * (h2 + 1))
         return HAL_ERROR_NO_KEY_INDEX_SLOTS;
 
     size_t lms_sig_len = lms_signature_len(lms, lmots);
@@ -1252,8 +1251,8 @@ hal_error_t hal_hashsig_key_gen(hal_core_t *core,
                   L * sizeof(lms_key_t) +
                   L * lms_sig_len +
                   L * lms_pub_len +
-                  L * lms->h2 * sizeof(hal_uuid_t) +
-                  L * (2 * lms->h2 - 1) * sizeof(bytestring32));
+                  L * h2 * sizeof(hal_uuid_t) +
+                  L * (2 * h2 - 1) * sizeof(bytestring32));
     uint8_t *mem = hal_allocate_static_memory(len);
     if (mem == NULL)
         return HAL_ERROR_ALLOCATION_FAILURE;
@@ -1280,8 +1279,8 @@ hal_error_t hal_hashsig_key_gen(hal_core_t *core,
         lms_key->lms = lms;
         lms_key->lmots = lmots;
         lms_key->level = i;
-        lms_key->lmots_keys = (hal_uuid_t *)gnaw(&mem, &len, lms->h2 * sizeof(hal_uuid_t));
-        lms_key->T = gnaw(&mem, &len, (2 * lms->h2 - 1) * sizeof(bytestring32));
+        lms_key->lmots_keys = (hal_uuid_t *)gnaw(&mem, &len, h2 * sizeof(hal_uuid_t));
+        lms_key->T = gnaw(&mem, &len, (2 * h2 - 1) * sizeof(bytestring32));
         lms_key->signature = gnaw(&mem, &len, lms_sig_len);
         lms_key->signature_len = lms_sig_len;
         lms_key->pubkey = gnaw(&mem, &len, lms_pub_len);
@@ -1373,9 +1372,10 @@ hal_error_t hal_hashsig_sign(hal_core_t *core,
 //      values, then the public key pub[i] is signed with prv[i-1], and
 //      sig[i-1] is set to the resulting value.
 
-    if (key->lms_keys[key->L-1].q >= key->lms->h2) {
+    size_t h2 = (1 << key->lms->h);
+    if (key->lms_keys[key->L-1].q >= h2) {
         size_t d;
-        for (d = key->L-1; d > 0 && key->lms_keys[d-1].q >= key->lms->h2; --d) {
+        for (d = key->L-1; d > 0 && key->lms_keys[d-1].q >= h2; --d) {
         }
         if (d == 0)
             return HAL_ERROR_HASHSIG_KEY_EXHAUSTED;
