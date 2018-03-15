@@ -110,6 +110,9 @@ extern size_t hal_hashsig_signature_len(const size_t L,
 
 extern size_t hal_hashsig_lmots_private_key_len(const lmots_algorithm_t lmots_type);
 
+extern hal_error_t hal_hashsig_public_key_der_to_xdr(const uint8_t * const der, const size_t der_len,
+                                                     uint8_t * const xdr, size_t * const xdr_len , const size_t xdr_max);
+
 //extern hal_error_t hal_hashsig_restart(...);
 
 #endif /* _HAL_HASHSIG_H_ */
