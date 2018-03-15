@@ -43,6 +43,7 @@ static uint8_t tc1_msg[] = {
 };
 
 /* Test Case 1 Signature */
+/* 2 levels, both h=5, w=8 */
 
 static uint8_t tc1_sig[] = {
     0x00, 0x00, 0x00, 0x01,
@@ -419,6 +420,7 @@ static uint8_t tc2_msg[] = {
 };
 
 /* Test Case 2 Signature */
+/* 2 levels: h=10, w=4; h=5, w=8 */
 
 static uint8_t tc2_sig[] = {
     0x00, 0x00, 0x00, 0x01, 

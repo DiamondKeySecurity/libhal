@@ -3,8 +3,7 @@
  * ------------------
  * Test code for RPC interface to Cryptech public key operations.
  *
- * Authors: Rob Austein, Paul Selkirk
- * Copyright (c) 2015-2018, NORDUnet A/S
+ * Copyright (c) 2018, NORDUnet A/S
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,6 +41,11 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <assert.h>
+#include <string.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <hal.h>
 #include <hashsig.h>
@@ -151,14 +155,14 @@ fail:
 
 static void hexdump(const char * const label, const uint8_t * const buf, const size_t len)
 {
-    printf("%-15s ", label);
+    printf("%-11s ", label);
 
     for (size_t i = 0; i < len; ++i) {
         printf("%02x", buf[i]);
         if ((i & 0x0f) == 0x0f) {
             printf("\n");
             if (i < len - 1)
-                printf("                ");
+                printf("            ");
         }
     }
     if ((len & 0x0f) != 0)
@@ -174,30 +178,6 @@ static inline size_t lms_type_to_h(const lms_algorithm_t lms_type)
     case lms_sha256_n32_h20: return 20;
     case lms_sha256_n32_h25: return 25;
     default: return 0;
-    }
-}
-
-static inline size_t two_to_the(const size_t n)
-{
-    if (n % 5 != 0)
-        return 0;
-
-    size_t result, i;
-    for (result = 1, i = 0; i < n; i += 5)
-        result *= 32;
-
-    return result;
-}
-
-static inline size_t lms_type_to_h2(const lms_algorithm_t lms_type)
-{
-    switch (lms_type) {
-    case lms_sha256_n32_h5:  return two_to_the(5);
-    case lms_sha256_n32_h10: return two_to_the(10);
-    case lms_sha256_n32_h15: return two_to_the(15);
-    case lms_sha256_n32_h20: return two_to_the(20);
-    case lms_sha256_n32_h25: return two_to_the(25);
-    default:                 return 0;
     }
 }
 
@@ -283,7 +263,8 @@ static hal_error_t dump_hss_signature(const uint8_t * const sig, const size_t le
 static int test_hashsig_sign(const size_t L,
                              const lms_algorithm_t lms_type,
                              const lmots_algorithm_t lmots_type,
-                             size_t iterations)
+                             size_t iterations,
+                             int save)
 {
     const hal_client_handle_t client = {HAL_HANDLE_NONE};
     const hal_session_handle_t session = {HAL_HANDLE_NONE};
@@ -293,6 +274,19 @@ static int test_hashsig_sign(const size_t L,
     size_t len;
 
     {
+        char save_name[16];
+        if (save) {
+            sprintf(save_name, "L%d.lms%d.ots%d", (int)L, (int)lms_type, (int)lmots_type);
+            FILE *fp;
+            if ((fp = fopen(save_name, "wb")) == NULL)
+                lose("Error opening %s: %s\n", save_name, strerror(errno));
+            size_t len1;
+            if ((len1 = fwrite(tc1_msg, 1, sizeof(tc1_msg), fp)) != sizeof(tc1_msg))
+                lose("Wrote %lu bytes to %s, expected %lu\n", len1, save_name, sizeof(tc1_msg));
+            if (fclose(fp) != 0)
+                lose("Error closing %s: %s\n", save_name, strerror(errno));
+        }
+
         hal_key_flags_t flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE;
 
         printf("Starting hashsig key test: L %lu, lms type %u (h=%lu), lmots type %u (w=%lu)\n",
@@ -306,8 +300,7 @@ static int test_hashsig_sign(const size_t L,
         hal_uuid_t private_name, public_name;
         struct timeval tv_start, tv_end, tv_diff;
 
-        size_t Lh2 = two_to_the(L * lms_type_to_h(lms_type));
-        size_t h2 = lms_type_to_h2(lms_type);
+        size_t h = lms_type_to_h(lms_type);
 
         if (info)
             gettimeofday(&tv_start, NULL);
@@ -317,7 +310,7 @@ static int test_hashsig_sign(const size_t L,
         if (info) {
             gettimeofday(&tv_end, NULL);
             timersub(&tv_end, &tv_start, &tv_diff);
-            long per_key = (tv_diff.tv_sec * 1000000 + tv_diff.tv_usec) / (L * h2);
+            long per_key = (tv_diff.tv_sec * 1000000 + tv_diff.tv_usec) / (L * (1 << h));
             printf("Info: %ldm%ld.%03lds to generate key (%ld.%03lds per lmots key)\n",
                    tv_diff.tv_sec / 60, tv_diff.tv_sec % 60, tv_diff.tv_usec / 1000,
                    per_key / 1000000, (per_key % 1000000) / 1000);
@@ -326,13 +319,29 @@ static int test_hashsig_sign(const size_t L,
         uint8_t public_der[hal_rpc_pkey_get_public_key_len(private_key)];
 
         if ((err = hal_rpc_pkey_get_public_key(private_key, public_der, &len, sizeof(public_der))) != HAL_OK)
-            lose("Could not DER encode RPC hashsig public key from RPC hashsig private key: %s\n", hal_error_string(err));
+            lose("Could not DER encode public key from private key: %s\n", hal_error_string(err));
 
         assert(len == sizeof(public_der));
 
         if ((err = hal_rpc_pkey_load(client, session, &public_key, &public_name,
                                      public_der, sizeof(public_der), flags)) != HAL_OK)
             lose("Could not load public key into RPC: %s\n", hal_error_string(err));
+
+        if (save) {
+            char fn[strlen(save_name) + 5];
+            sprintf(fn, "%s.pub", save_name);
+            FILE *fp;
+            if ((fp = fopen(fn, "wb")) == NULL)
+                lose("Error opening %s: %s\n", fn, strerror(errno));
+            uint8_t pub[60];
+            if ((err = hal_hashsig_public_key_der_to_xdr(public_der, sizeof(public_der), pub, &len, sizeof(pub))) != HAL_OK)
+                lose("Could not XDR encode public key: %s\n", hal_error_string(err));
+            size_t len1;
+            if ((len1 = fwrite(pub, 1, len, fp)) != len)
+                lose("Wrote %lu bytes to %s, expected %lu\n", len1, fn, len);
+            if (fclose(fp) != 0)
+                lose("Error closing %s: %s\n", fn, strerror(errno));
+        }
 
         if (iterations > 0) {
             uint8_t sig[hal_hashsig_signature_len(L, lms_type, lmots_type)];
@@ -350,10 +359,22 @@ static int test_hashsig_sign(const size_t L,
                     }
                 }
                 else {
-                    if (i == Lh2 && err == HAL_ERROR_HASHSIG_KEY_EXHAUSTED)
+                    if (i == (1 << (L * h)) && err == HAL_ERROR_HASHSIG_KEY_EXHAUSTED)
                         break;
                     else
                         lose("Could not sign (%d): %s\n", i, hal_error_string(err));
+                }
+                if (save) {
+                    char fn[strlen(save_name) + 16];
+                    sprintf(fn, "%s.%d.sig", save_name, i);
+                    FILE *fp;
+                    if ((fp = fopen(fn, "wb")) == NULL)
+                        lose("Error opening %s: %s\n", fn, strerror(errno));
+                    size_t len1;
+                    if ((len1 = fwrite(sig, 1, len, fp)) != len)
+                        lose("Wrote %lu bytes to %s, expected %lu\n", len1, fn, len);
+                    if (fclose(fp) != 0)
+                        lose("Error closing %s: %s\n", fn, strerror(errno));
                 }
             }
             if (info) {
@@ -400,6 +421,35 @@ fail:
     return 0;
 }
 
+static int read_sig(char *fn)
+{
+    {
+        FILE *fp;
+        if ((fp = fopen(fn, "rb")) == NULL)
+            lose("Error opening %s: %s\n", fn, strerror(errno));
+
+        struct stat statbuf;
+        if (stat(fn, &statbuf) != 0)
+            lose("Error statting %s: %s\n", fn, strerror(errno));
+
+        uint8_t sig[statbuf.st_size];
+        size_t len;
+        if ((len = fread(sig, 1, sizeof(sig), fp)) != sizeof(sig))
+            lose("Read %lu bytes from %s, expected %lu\n", len, fn, sizeof(sig));
+
+        if (fclose(fp) != 0)
+            lose("Error closing %s: %s\n", fn, strerror(errno));
+
+        hal_error_t err;
+        if ((err = dump_hss_signature(sig, len)) != HAL_OK)
+            lose("Error parsing signature: %s\n", hal_error_string(err));
+    }
+
+    return 1;
+fail:
+    return 0;        
+}
+
 int main(int argc, char *argv[])
 {
     const hal_client_handle_t client = {HAL_HANDLE_NONE};
@@ -410,12 +460,13 @@ int main(int argc, char *argv[])
     size_t L_lo = 0, L_hi = 0;
     size_t lms_lo = 5, lms_hi = 0;
     size_t lmots_lo = 3, lmots_hi = 0;
+    int save = 0;
     char *p;
     hal_error_t err;
     int ok = 1;
 
 char usage[] = "\
-Usage: %s [-d] [-i] [-p pin] [-t] [-L n] [-l n] [-o n] [-n n]\n\
+Usage: %s [-d] [-i] [-p pin] [-t] [-L n] [-l n] [-o n] [-n n] [-s] [-r file]\n\
        -d: enable debugging - hexdump signatures\n\
        -i: enable informational messages - runtimes and signature lengths\n\
        -p: user PIN\n\
@@ -424,10 +475,12 @@ Usage: %s [-d] [-i] [-p pin] [-t] [-L n] [-l n] [-o n] [-n n]\n\
        -l: LMS type (5..9)\n\
        -o: LM-OTS type (1..4)\n\
        -n: number of signatures to generate (0..'max')\n\
+       -s: save generated public key and signatures\n\
+       -r: read and pretty-print a saved signature file\n\
 Numeric arguments can be a single number or a range, e.g. '1..4'\n";
 
     int opt;
-    while ((opt = getopt(argc, argv, "ditp:L:l:o:n:h?")) != -1) {
+    while ((opt = getopt(argc, argv, "ditp:L:l:o:n:sr:h?")) != -1) {
         switch (opt) {
         case 'd':
             debug = 1;
@@ -468,6 +521,13 @@ Numeric arguments can be a single number or a range, e.g. '1..4'\n";
                 lmots_lo = (size_t)atoi(p);
             if ((p = strtok(NULL, ".")) != NULL)
                 lmots_hi = (size_t)atoi(p);
+            do_default = 0;
+            break;
+        case's':
+            save = 1;
+            break;
+        case 'r':
+            ok &= read_sig(optarg);
             do_default = 0;
             break;
         case 'h':
@@ -512,7 +572,7 @@ Numeric arguments can be a single number or a range, e.g. '1..4'\n";
         for (size_t L = L_lo; L <= L_hi; ++L) {
             for (lms_algorithm_t lms_type = lms_lo; lms_type <= lms_hi; ++lms_type) {
                 for (lmots_algorithm_t lmots_type = lmots_lo; lmots_type <= lmots_hi; ++lmots_type) {
-                    ok &= test_hashsig_sign(L, lms_type, lmots_type, iterations);
+                    ok &= test_hashsig_sign(L, lms_type, lmots_type, iterations, save);
                 }
             }
         }

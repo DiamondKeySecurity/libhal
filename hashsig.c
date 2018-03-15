@@ -1,7 +1,7 @@
 /*
  * hashsig.c
  * ---------
- * Implementation of draft-mcgrew-hash-sigs-08.txt
+ * Implementation of draft-mcgrew-hash-sigs-10.txt
  *
  * Copyright (c) 2018, NORDUnet A/S All rights reserved.
  *
@@ -706,13 +706,12 @@ static hal_error_t lms_generate(lms_key_t *key)
         /* record the lmots keystore name */
         memcpy(&key->lmots_keys[q], &slot.name, sizeof(slot.name));
 
-        /* compute T[r] = H(I || u32str(r) || u16str(D_LEAF) || OTS_PUB[r-2^h]) */
+        /* compute T[r] = H(I || u32str(r) || u16str(D_LEAF) || OTS_PUB_HASH[r-2^h]) */
         size_t r = h2 + q;
         check(hal_hash_initialize(NULL, hal_hash_sha256, &state, statebuf, sizeof(statebuf)));
         check(hal_hash_update(state, (const uint8_t *)&key->I, sizeof(key->I)));
         l = u32str(r); check(hal_hash_update(state, (const uint8_t *)&l, sizeof(l)));
         s = u16str(D_LEAF); check(hal_hash_update(state, (const uint8_t *)&s, sizeof(s)));
-        /* they say "OTS_PUB", but they really just mean K */
         check(hal_hash_update(state, (const uint8_t *)&lmots_key.K, sizeof(lmots_key.K)));
         check(hal_hash_finalize(state, (uint8_t *)&key->T[r], sizeof(key->T[r])));
     }
@@ -851,36 +850,32 @@ static hal_error_t lms_verify(const lms_key_t * const key,
         return HAL_ERROR_INVALID_SIGNATURE;
 
 //   Algorithm 6: LMS Signature Verification
-
-//     1. if the public key is not at least four bytes long, return
-//        INVALID
 //
-//     2. parse pubtype, I, and T[1] from the public key as follows:
+//    1. if the public key is not at least eight bytes long, return
+//       INVALID
 //
-//        a. pubtype = strTou32(first 4 bytes of public key)
+//    2. parse pubtype, I, and T[1] from the public key as follows:
 //
-//        b. set m according to pubtype, based on Table 2
+//       a. pubtype = strTou32(first 4 bytes of public key)
 //
-//        c. if the public key is not exactly 20 + m bytes
-//           long, return INVALID
-
-    /* XXX THIS IS WRONG, should be 24 + m */
-
-    /* XXX missing from draft: pubotstype = strTou32(next 4 bytes of public key) */
-
+//       b. ots_typecode = strTou32(next 4 bytes of public key)
 //
-//        d. I = next 16 bytes of the public key
+//       c. set m according to pubtype, based on Table 2
 //
-//        e. T[1] = next m bytes of the public key
+//       d. if the public key is not exactly 24 + m bytes
+//          long, return INVALID
 //
-//     3. compute the candidate LMS root value Tc from the signature,
-//        message, identifier and pubtype using Algorithm 6b.
-    /* XXX and pubotstype */
+//       e. I = next 16 bytes of the public key
+//
+//       f. T[1] = next m bytes of the public key
+//
+//    3. compute the candidate LMS root value Tc from the signature,
+//       message, identifier and pubtype using Algorithm 6b.
 
     bytestring32 Tc;
     check(lms_public_key_candidate(key, msg, msg_len, sig, sig_len, &Tc));
 
-//     4. if Tc is equal to T[1], return VALID; otherwise, return INVALID
+//    4. if Tc is equal to T[1], return VALID; otherwise, return INVALID
 
     return (memcmp(&Tc, &key->T1, sizeof(Tc)) ? HAL_ERROR_INVALID_SIGNATURE : HAL_OK);
 }
@@ -1788,4 +1783,58 @@ hal_error_t hal_hashsig_key_load_public_xdr(hal_hashsig_key_t **key_,
     return hal_hashsig_key_load_public(key_, keybuf, keybuf_len, L, lms_type, lmots_type,
                                        (const uint8_t * const)I, sizeof(bytestring16),
                                        (const uint8_t * const)T1, sizeof(bytestring32));
+}
+
+hal_error_t hal_hashsig_public_key_der_to_xdr(const uint8_t * const der, const size_t der_len,
+                                              uint8_t * const xdr, size_t * const xdr_len , const size_t xdr_max)
+{
+    if (der == NULL || xdr == NULL)
+        return HAL_ERROR_BAD_ARGUMENTS;
+
+    const uint8_t *alg_oid = NULL, *null = NULL, *pubkey = NULL;
+    size_t         alg_oid_len,     null_len,     pubkey_len;
+
+    check(hal_asn1_decode_spki(&alg_oid, &alg_oid_len, &null, &null_len, &pubkey, &pubkey_len, der, der_len));
+
+    if (null != NULL || null_len != 0 || alg_oid == NULL ||
+        alg_oid_len != hal_asn1_oid_mts_hashsig_len || memcmp(alg_oid, hal_asn1_oid_mts_hashsig, alg_oid_len) != 0)
+        return HAL_ERROR_ASN1_PARSE_FAILED;
+
+    size_t len, hlen, vlen;
+
+    check(hal_asn1_decode_header(ASN1_SEQUENCE, pubkey, pubkey_len, &hlen, &vlen));
+
+    const uint8_t * const pubkey_end = pubkey + hlen + vlen;
+    const uint8_t *d = pubkey + hlen;
+
+    // L || u32str(lms_type) || u32str(lmots_type) || I || T[1]
+
+    size_t L;
+    lms_algorithm_t lms_type;
+    lmots_algorithm_t lmots_type;
+    bytestring16 I;
+    bytestring32 T1;
+
+    check(hal_asn1_decode_size_t(&L, d, &len, pubkey_end - d));                   d += len;
+    check(hal_asn1_decode_lms_algorithm(&lms_type, d, &len, pubkey_end - d));     d += len;
+    check(hal_asn1_decode_lmots_algorithm(&lmots_type, d, &len, pubkey_end - d)); d += len;
+    check(hal_asn1_decode_bytestring16(&I, d, &len, pubkey_end - d));             d += len;
+    check(hal_asn1_decode_bytestring32(&T1, d, &len, pubkey_end - d));            d += len;
+
+    if (d != pubkey_end)
+        return HAL_ERROR_ASN1_PARSE_FAILED;
+
+    uint8_t * xdrptr = xdr;
+    const uint8_t * const xdrlim = xdr + xdr_max;
+
+    check(hal_xdr_encode_int(&xdrptr, xdrlim, L));
+    check(hal_xdr_encode_int(&xdrptr, xdrlim, lms_type));
+    check(hal_xdr_encode_int(&xdrptr, xdrlim, lmots_type));
+    check(hal_xdr_encode_bytestring16(&xdrptr, xdrlim, &I));
+    check(hal_xdr_encode_bytestring32(&xdrptr, xdrlim, &T1));
+
+    if (xdr_len != NULL)
+        *xdr_len = xdrptr - xdr;
+
+    return HAL_OK;
 }
