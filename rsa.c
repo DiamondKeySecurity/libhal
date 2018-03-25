@@ -829,6 +829,7 @@ static hal_error_t find_prime(const unsigned prime_length,
   buffer[sizeof(buffer) - 1] |=  0x01; /* Candidates are odd  */
 
   fp_read_unsigned_bin(result, buffer, sizeof(buffer));
+  memset(buffer, 0, sizeof(buffer));
 
   for (size_t i = 0; i < sizeof(small_prime)/sizeof(*small_prime); i++) {
     fp_digit d;
@@ -853,10 +854,8 @@ static hal_error_t find_prime(const unsigned prime_length,
       possible = fp_cmp_d(t, 1) == FP_EQ;
     }
 
-    if (possible) {
-      fp_zero(t);
-      return HAL_OK;
-    }
+    if (possible)
+      break;
 
     fp_add_d(result, 2, result);
 
@@ -864,6 +863,10 @@ static hal_error_t find_prime(const unsigned prime_length,
       if ((remainder[i] += 2) >= small_prime[i])
         remainder[i] -= small_prime[i];
   }
+
+  memset(remainder, 0, sizeof(remainder));
+  fp_zero(t);
+  return HAL_OK;
 }
 
 /*
