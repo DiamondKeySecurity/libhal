@@ -102,6 +102,12 @@ class PKey(cryptech.libhal.Handle):
         yield self.hsm.pkey_verify(self, data = data, signature = signature)
 
 
+class ContextManagedUnpacker(xdrlib.Unpacker):
+    def __enter__(self):
+        return self
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.done()
+
 
 class HSM(cryptech.libhal.HSM):
 
@@ -136,7 +142,7 @@ class HSM(cryptech.libhal.HSM):
             unpacker = cryptech.libhal.slip_decode(unpacker)
             if not unpacker:
                 continue
-            unpacker = cryptech.libhal.ContextManagedUnpacker("".join(unpacker))
+            unpacker = ContextManagedUnpacker("".join(unpacker))
             if unpacker.unpack_uint() == code:
                 break
         client = unpacker.unpack_uint()
@@ -222,7 +228,7 @@ def main():
 
     k = key_table[args.key]
     q = Queue()
-    r = Result(args)
+    r = Result(args, args.key)
     
     tbs = pkcs1_hash_and_pad(args.text)
     der = k.exportKey(format = "DER", pkcs = 8)
@@ -247,8 +253,9 @@ def main():
 
 class Result(object):
 
-    def __init__(self, args):
+    def __init__(self, args, name):
         self.args = args
+        self.name = name
         self.sum = datetime.timedelta(seconds = 0)
         self.t0 = datetime.datetime.now()
         self.t1 = None
@@ -274,13 +281,18 @@ class Result(object):
     def sigs_per_sec(self):
         return self.n / (self.t1 - self.t0).total_seconds()
 
+    @property
+    def speedup(self):
+        return (self.t1 - self.t0).total_seconds() / self.sum.total_seconds()
+
     def report(self):
         if self.t1 is None:
             self.t1 = datetime.datetime.now()
-        sys.stdout.write(("\r"
+        sys.stdout.write(("\r{0.name} "
                           "sigs/sec {0.sigs_per_sec} "
                           "secs/sig {0.secs_per_sig} "
                           "mean {0.mean} "
+                          "speedup {0.speedup} "
                           "(n {0.n}, "
                           "t0 {0.t0} "
                           "t1 {0.t1})\n").format(self))
