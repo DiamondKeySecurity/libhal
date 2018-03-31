@@ -228,7 +228,6 @@ def main():
 
     k = key_table[args.key]
     q = Queue()
-    r = Result(args, args.key)
     
     tbs = pkcs1_hash_and_pad(args.text)
     der = k.exportKey(format = "DER", pkcs = 8)
@@ -239,6 +238,8 @@ def main():
         yield hsm.login(HAL_USER_NORMAL, args.pin)
 
     pkeys = yield [hsm.pkey_load(der, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE) for hsm in hsms]
+
+    r = Result(args, args.key)
 
     for pkey in pkeys:
         IOLoop.current().spawn_callback(worker, args, k, pkey, q, r, tbs)
@@ -257,11 +258,14 @@ class Result(object):
         self.args = args
         self.name = name
         self.sum = datetime.timedelta(seconds = 0)
-        self.t0 = datetime.datetime.now()
+        self.t0 = None
         self.t1 = None
         self.n = 0
 
     def add(self, t0, t1):
+        if self.t0 is None:
+            self.t0 = t0
+        self.t1 = t1
         delta = t1 - t0
         self.sum += delta
         self.n += 1
@@ -283,11 +287,9 @@ class Result(object):
 
     @property
     def speedup(self):
-        return (self.t1 - self.t0).total_seconds() / self.sum.total_seconds()
+        return  self.sum.total_seconds() / (self.t1 - self.t0).total_seconds()
 
     def report(self):
-        if self.t1 is None:
-            self.t1 = datetime.datetime.now()
         sys.stdout.write(("\r{0.name} "
                           "sigs/sec {0.sigs_per_sec} "
                           "secs/sig {0.secs_per_sig} "
