@@ -49,6 +49,10 @@
 #define HAL_KS_BLOCK_SIZE       (4096 * 2)
 #endif
 
+#if HAL_KS_WRAPPED_KEYSIZE + 8 > HAL_KS_BLOCK_SIZE
+#warning HAL_KS_WRAPPED_KEYSIZE is too big for to fit in a keystore block
+#endif
+
 /*
  * PIN block gets the all-zeros UUID, which will never be returned by
  * the UUID generation code (by definition -- it's not a version 4 UUID).

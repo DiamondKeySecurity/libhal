@@ -406,30 +406,17 @@ static inline hal_crc32_t hal_crc32_finalize(hal_crc32_t crc)
  * EC P-384:             185 bytes
  * EC P-521:             240 bytes
  *
+ * Plus extra space for pre-computed speed-up factors specific to our
+ * Verilog implementation, which we store as fixed-length byte strings.
+ *
  * Plus we need a bit of AES-keywrap overhead, since we're storing the
  * wrapped form (see hal_aes_keywrap_cyphertext_length()).
  *
- * A buffer big enough for a 8192-bit RSA key would overflow one
- * sub-sector on the flash chip we're using on the Alpha.  We could
- * invent some more complex scheme where key blocks are allowed to
- * span multiple sub-sectors, but since an 8192-bit RSA key would also
- * be unusably slow with the current RSA implementation, for the
- * moment we take the easy way out and cap this at 4096-bit RSA.
+ * Length check warning moved to ks.h since size of keystore blocks is
+ * internal to the keystore implementation.
  */
 
-#if 0
-#define HAL_KS_WRAPPED_KEYSIZE  ((2373 + 15) & ~7)
-#else
-#warning Temporary test hack to HAL_KS_WRAPPED_KEYSIZE, clean this up
-//
-// See how much of the problem we're having with pkey support for the
-// new modexpa7 components is just this buffer size being too small.
-//
 #define HAL_KS_WRAPPED_KEYSIZE  ((2373 + 6 * 4096 / 8 + 6 * 4 + 15) & ~7)
-#if HAL_KS_WRAPPED_KEYSIZE + 8 > 4096
-#warning HAL_KS_WRAPPED_KEYSIZE is too big for a single 4096-octet block
-#endif
-#endif
 
 /*
  * PINs.
