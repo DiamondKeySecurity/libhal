@@ -1,5 +1,5 @@
 /*
- * hashsig.c
+ * hashsig.h
  * ---------
  * Implementation of draft-mcgrew-hash-sigs-08.txt
  *
@@ -113,6 +113,6 @@ extern size_t hal_hashsig_lmots_private_key_len(const lmots_algorithm_t lmots_ty
 extern hal_error_t hal_hashsig_public_key_der_to_xdr(const uint8_t * const der, const size_t der_len,
                                                      uint8_t * const xdr, size_t * const xdr_len , const size_t xdr_max);
 
-//extern hal_error_t hal_hashsig_restart(...);
+extern hal_error_t hal_hashsig_ks_init(void);
 
 #endif /* _HAL_HASHSIG_H_ */
