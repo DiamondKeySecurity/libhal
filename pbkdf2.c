@@ -140,6 +140,8 @@ hal_error_t hal_pbkdf2(hal_core_t *core,
 
     for (iteration = 2; iteration <= iterations_desired; iteration++) {
 
+      hal_task_yield_maybe();
+
       if ((err = do_hmac(core, descriptor, password, password_length,
                          mac, descriptor->digest_length,
                          0, mac, sizeof(mac))) != HAL_OK)

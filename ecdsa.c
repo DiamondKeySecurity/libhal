@@ -707,6 +707,7 @@ static hal_error_t point_scalar_multiply(const fp_int * const k,
     point_double (M[1],        M[1],    curve);
     point_add    (M[bit],  P,  M[bit],  curve);
 
+    hal_task_yield_maybe();
   }
 
   /*
