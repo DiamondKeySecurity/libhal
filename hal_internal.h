@@ -125,17 +125,17 @@ static inline hal_error_t hal_io_wait_valid2(const hal_core_t *core1, const hal_
 
 /*
  * Static memory allocation on start-up.  Don't use this except where
- * really necessary.  By design, there's no way to free this, we don't
- * want to have to manage a heap.  Intent is just to allow allocation
- * things like the large-ish ks_index arrays used by ks_flash.c from a
- * memory source external to the executable image file (eg, from the
- * secondary SDRAM chip on the Cryptech Alpha board).
+ * really necessary.  Intent is just to allow allocation of things like
+ * the large-ish ks_index arrays used by ks_flash.c from a memory source
+ * external to the executable image file (eg, from the secondary SDRAM
+ * chip on the Cryptech Alpha board).
  *
  * We shouldn't need this except on the HSM, so for now we don't bother
  * with implementing a version of this based on malloc() or sbrk().
  */
 
 extern void *hal_allocate_static_memory(const size_t size);
+extern hal_error_t hal_free_static_memory(const void * const ptr);
 
 /*
  * Longest hash block and digest we support at the moment.

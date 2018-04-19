@@ -264,7 +264,7 @@ static int test_hashsig_sign(const size_t L,
                              const lms_algorithm_t lms_type,
                              const lmots_algorithm_t lmots_type,
                              size_t iterations,
-                             int save)
+                             int save, int keep)
 {
     const hal_client_handle_t client = {HAL_HANDLE_NONE};
     const hal_session_handle_t session = {HAL_HANDLE_NONE};
@@ -287,7 +287,7 @@ static int test_hashsig_sign(const size_t L,
                 lose("Error closing %s: %s\n", save_name, strerror(errno));
         }
 
-        hal_key_flags_t flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE;
+        hal_key_flags_t flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | HAL_KEY_FLAG_TOKEN;
 
         printf("Starting hashsig key test: L %lu, lms type %u (h=%lu), lmots type %u (w=%lu)\n",
                L, lms_type, lms_type_to_h(lms_type), lmots_type, lmots_type_to_w(lmots_type));
@@ -399,8 +399,10 @@ static int test_hashsig_sign(const size_t L,
             }
         }
 
-        if ((err = hal_rpc_pkey_delete(private_key)) != HAL_OK)
-            lose("Could not delete private key: %s\n", hal_error_string(err));
+        if (!keep) {
+            if ((err = hal_rpc_pkey_delete(private_key)) != HAL_OK)
+                lose("Could not delete private key: %s\n", hal_error_string(err));
+        }
 
         if ((err = hal_rpc_pkey_delete(public_key)) != HAL_OK)
             lose("Could not delete public key: %s\n", hal_error_string(err));
@@ -460,7 +462,7 @@ int main(int argc, char *argv[])
     size_t L_lo = 0, L_hi = 0;
     size_t lms_lo = 5, lms_hi = 0;
     size_t lmots_lo = 3, lmots_hi = 0;
-    int save = 0;
+    int save = 0, keep = 0;
     char *p;
     hal_error_t err;
     int ok = 1;
@@ -476,11 +478,12 @@ Usage: %s [-d] [-i] [-p pin] [-t] [-L n] [-l n] [-o n] [-n n] [-s] [-r file]\n\
        -o: LM-OTS type (1..4)\n\
        -n: number of signatures to generate (0..'max')\n\
        -s: save generated public key and signatures\n\
+       -k: keep (don't delete) the generated keys on the hsm\n\
        -r: read and pretty-print a saved signature file\n\
 Numeric arguments can be a single number or a range, e.g. '1..4'\n";
 
     int opt;
-    while ((opt = getopt(argc, argv, "ditp:L:l:o:n:sr:h?")) != -1) {
+    while ((opt = getopt(argc, argv, "ditp:L:l:o:n:skr:h?")) != -1) {
         switch (opt) {
         case 'd':
             debug = 1;
@@ -525,6 +528,9 @@ Numeric arguments can be a single number or a range, e.g. '1..4'\n";
             break;
         case's':
             save = 1;
+            break;
+        case 'k':
+            keep = 1;
             break;
         case 'r':
             ok &= read_sig(optarg);
@@ -572,7 +578,7 @@ Numeric arguments can be a single number or a range, e.g. '1..4'\n";
         for (size_t L = L_lo; L <= L_hi; ++L) {
             for (lms_algorithm_t lms_type = lms_lo; lms_type <= lms_hi; ++lms_type) {
                 for (lmots_algorithm_t lmots_type = lmots_lo; lmots_type <= lmots_hi; ++lmots_type) {
-                    ok &= test_hashsig_sign(L, lms_type, lmots_type, iterations, save);
+                    ok &= test_hashsig_sign(L, lms_type, lmots_type, iterations, save, keep);
                 }
             }
         }
