@@ -716,6 +716,7 @@ static hal_error_t lms_generate(lms_key_t *key)
         s = u16str(D_LEAF); check(hal_hash_update(state, (const uint8_t *)&s, sizeof(s)));
         check(hal_hash_update(state, (const uint8_t *)&lmots_key.K, sizeof(lmots_key.K)));
         check(hal_hash_finalize(state, (uint8_t *)&key->T[r], sizeof(key->T[r])));
+        hal_task_yield_maybe();
     }
 
     /* generate the rest of T[r] = H(I || u32str(r) || u16str(D_INTR) || T[2*r] || T[2*r+1]) */
@@ -727,6 +728,7 @@ static hal_error_t lms_generate(lms_key_t *key)
         check(hal_hash_update(state, (const uint8_t *)&key->T[2*r], sizeof(key->T[r])));
         check(hal_hash_update(state, (const uint8_t *)&key->T[2*r+1], sizeof(key->T[r])));
         check(hal_hash_finalize(state, (uint8_t *)&key->T[r], sizeof(key->T[r])));
+        hal_task_yield_maybe();
     }
 
     memcpy(&key->T1, &key->T[1], sizeof(key->T1));
@@ -754,6 +756,7 @@ static hal_error_t lms_delete(const lms_key_t * const key)
     for (size_t i = 0; i < (1U << key->lms->h); ++i) {
         memcpy(&slot.name, &key->lmots_keys[i], sizeof(slot.name));
         check(hal_ks_delete(ks, &slot));
+        hal_task_yield_maybe();
     }
 
     /* delete the lms key */
