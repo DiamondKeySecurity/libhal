@@ -623,16 +623,17 @@ hal_error_t hal_ks_fetch(hal_ks_t *ks,
   if ((err = hal_ks_index_find(ks, &slot->name, &b, &slot->hint))         != HAL_OK ||
       (err = hal_ks_block_test_owner(ks, b, slot->client, slot->session)) != HAL_OK ||
       (err = hal_ks_block_read_cached(ks, b, &block))                     != HAL_OK)
-    goto done;
+    goto unlock;
 
   if (hal_ks_block_get_type(block) != HAL_KS_BLOCK_TYPE_KEY) {
     err = HAL_ERROR_KEYSTORE_WRONG_BLOCK_TYPE; /* HAL_ERROR_KEY_NOT_FOUND */
-    goto done;
+    goto unlock;
   }
 
   hal_ks_cache_mark_used(ks, block, b);
 
   hal_ks_key_block_t *k = &block->key;
+  const size_t k_der_len = k->der_len;
 
   slot->type  = k->type;
   slot->curve = k->curve;
@@ -640,6 +641,15 @@ hal_error_t hal_ks_fetch(hal_ks_t *ks,
 
   if (der == NULL && der_len != NULL)
     *der_len = k->der_len;
+
+  if (der != NULL && k_der_len <= der_max)
+    memcpy(der, k->der, k_der_len);
+
+ unlock:
+  hal_ks_unlock();
+
+  if (err != HAL_OK)
+    return err;
 
   if (der != NULL) {
 
@@ -653,13 +663,11 @@ hal_error_t hal_ks_fetch(hal_ks_t *ks,
     *der_len = der_max;
 
     if ((err = hal_mkm_get_kek(kek, &kek_len, sizeof(kek))) == HAL_OK)
-      err = hal_aes_keyunwrap(NULL, kek, kek_len, k->der, k->der_len, der, der_len);
+      err = hal_aes_keyunwrap(NULL, kek, kek_len, der, k_der_len, der, der_len);
 
     memset(kek, 0, sizeof(kek));
   }
 
- done:
-  hal_ks_unlock();
   return err;
 }
 
