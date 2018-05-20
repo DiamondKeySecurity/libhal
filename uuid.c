@@ -33,7 +33,6 @@
  */
 
 #include <stdio.h>
-#include <assert.h>
 
 #include "hal.h"
 #include "hal_internal.h"

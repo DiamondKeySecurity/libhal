@@ -33,8 +33,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <assert.h>
-
 #include "hal.h"
 #include "hal_internal.h"
 #include "xdr_internal.h"
