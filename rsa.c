@@ -12,7 +12,7 @@
  * St Denis's libtomcrypt code.
  *
  * Authors: Rob Austein
- * Copyright (c) 2015, NORDUnet A/S
+ * Copyright (c) 2015-2018, NORDUnet A/S
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -102,6 +102,15 @@
 #endif
 
 /*
+ * How big to make the blinding factors cache.
+ * Zero disables the cache entirely.
+ */
+
+#ifndef HAL_RSA_BLINDING_CACHE_SIZE
+#define HAL_RSA_BLINDING_CACHE_SIZE 2
+#endif
+
+/*
  * Whether we want debug output.
  */
 
@@ -122,6 +131,20 @@ void hal_rsa_set_blinding(const int onoff)
 {
   blinding = onoff;
 }
+
+#if HAL_RSA_BLINDING_CACHE_SIZE > 0
+
+typedef struct {
+  unsigned lru;
+  fp_int n[1], bf[1], ubf[1];
+} bfc_slot_t;
+
+static struct {
+  unsigned lru;
+  bfc_slot_t slot[HAL_RSA_BLINDING_CACHE_SIZE];
+} bfc;
+
+#endif
 
 /*
  * RSA key implementation.  This structure type is private to this
@@ -429,6 +452,31 @@ static hal_error_t create_blinding_factors(hal_core_t *core, hal_rsa_key_t *key,
   uint8_t rnd[fp_unsigned_bin_size(unconst_fp_int(key->n))];
   hal_error_t err = HAL_OK;
 
+  hal_rsa_bf_lock();
+
+#if HAL_RSA_BLINDING_CACHE_SIZE > 0
+  unsigned best_delta = 0;
+  int      best_index = 0;
+
+  for (int i = 0; i < HAL_RSA_BLINDING_CACHE_SIZE; i++) {
+    bfc_slot_t *b = &bfc.slot[i];
+    const unsigned delta = bfc.lru - b->lru;
+    if (delta > best_delta) {
+      best_delta = delta;
+      best_index = i;
+    }
+    if (fp_cmp_mag(b->n, key->n) == FP_EQ) {
+      if (fp_sqrmod(b->bf,  key->n, b->bf)  != FP_OKAY ||
+          fp_sqrmod(b->ubf, key->n, b->ubf) != FP_OKAY)
+        continue;               /* should never happen, but be safe */
+      fp_copy(b->bf, bf);
+      fp_copy(b->ubf, ubf);
+      err = HAL_OK;
+      goto fail;
+    }
+  }
+#endif
+
   if ((err = hal_get_random(NULL, rnd, sizeof(rnd))) != HAL_OK)
     goto fail;
 
@@ -445,7 +493,18 @@ static hal_error_t create_blinding_factors(hal_core_t *core, hal_rsa_key_t *key,
 
   FP_CHECK(fp_invmod(ubf, unconst_fp_int(key->n), ubf));
 
+#if HAL_RSA_BLINDING_CACHE_SIZE > 0
+  {
+    bfc_slot_t *b = &bfc.slot[best_index];
+    fp_copy(key->n, b->n);
+    fp_copy(bf,  b->bf);
+    fp_copy(ubf, b->ubf);
+    b->lru = ++bfc.lru;
+  }
+#endif
+
  fail:
+  hal_rsa_bf_unlock();
   memset(rnd, 0, sizeof(rnd));
   return err;
 }

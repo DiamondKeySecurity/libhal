@@ -77,29 +77,26 @@
  * Critical sections -- disable preemption BRIEFLY.
  */
 
-WEAK_FUNCTION void hal_critical_section_start(void)
-{
-  return;
-}
-
-WEAK_FUNCTION void hal_critical_section_end(void)
-{
-  return;
-}
+WEAK_FUNCTION void hal_critical_section_start(void) { return; }
+WEAK_FUNCTION void hal_critical_section_end(void)   { return; }
 
 /*
  * Keystore lock -- lock call blocks indefinitely.
  */
 
-WEAK_FUNCTION void hal_ks_lock(void)
-{
-  return;
-}
+WEAK_FUNCTION void hal_ks_lock(void)   { return; }
+WEAK_FUNCTION void hal_ks_unlock(void) { return; }
 
-WEAK_FUNCTION void hal_ks_unlock(void)
-{
-  return;
-}
+/*
+ * RSA blinding cache lock -- lock call blocks indefinitely.
+ */
+
+WEAK_FUNCTION void hal_rsa_bf_lock(void)   { return; }
+WEAK_FUNCTION void hal_rsa_bf_unlock(void) { return; }
+
+/*
+ * Non-preemptive task yield.
+ */
 
 WEAK_FUNCTION void hal_task_yield(void)
 {
