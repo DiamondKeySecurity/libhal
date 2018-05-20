@@ -616,6 +616,7 @@ hal_error_t hal_ks_fetch(hal_ks_t *ks,
 
   hal_error_t err = HAL_OK;
   hal_ks_block_t *block;
+  size_t k_der_len = 0;
   unsigned b;
 
   hal_ks_lock();
@@ -633,8 +634,8 @@ hal_error_t hal_ks_fetch(hal_ks_t *ks,
   hal_ks_cache_mark_used(ks, block, b);
 
   hal_ks_key_block_t *k = &block->key;
-  const size_t k_der_len = k->der_len;
 
+  k_der_len   = k->der_len;
   slot->type  = k->type;
   slot->curve = k->curve;
   slot->flags = k->flags;
