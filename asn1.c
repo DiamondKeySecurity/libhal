@@ -164,7 +164,7 @@ hal_error_t hal_asn1_encode_integer(const fp_int * const bn,
   if (der == NULL || err != HAL_OK)
     return err;
 
-  assert(hlen + vlen <= der_max);
+  hal_assert(hlen + vlen <= der_max);
 
   der += hlen;
   if (leading_zero)
@@ -250,8 +250,8 @@ hal_error_t hal_asn1_encode_spki(const uint8_t * const alg_oid,   const size_t a
   *d++ = 0x00;
   d += pubkey_len;              /* pubkey handled early, above. */
 
-  assert(d == der + hlen_spki + vlen);
-  assert(d <= der + der_max);
+  hal_assert(d == der + hlen_spki + vlen);
+  hal_assert(d <= der + der_max);
 
   return HAL_OK;
 }
@@ -342,8 +342,8 @@ hal_error_t hal_asn1_encode_pkcs8_privatekeyinfo(const uint8_t * const alg_oid, 
   d += hlen;
   d += privkey_len;             /* privkey handled early, above. */
 
-  assert(d == der_end);
-  assert(d <= der + der_max);
+  hal_assert(d == der_end);
+  hal_assert(d <= der + der_max);
 
   return HAL_OK;
 }
@@ -410,8 +410,8 @@ hal_error_t hal_asn1_encode_pkcs8_encryptedprivatekeyinfo(const uint8_t * const 
 
   d += data_len;                /* data handled early, above. */
 
-  assert(d == der + hlen_pkcs8 + vlen);
-  assert(d <= der + der_max);
+  hal_assert(d == der + hlen_pkcs8 + vlen);
+  hal_assert(d <= der + der_max);
 
   return HAL_OK;
 }
@@ -427,7 +427,7 @@ hal_error_t hal_asn1_decode_header(const uint8_t tag,
 				   const uint8_t * const der, size_t der_max,
 				   size_t *hlen, size_t *vlen)
 {
-  assert(der != NULL && hlen != NULL && vlen != NULL);
+  hal_assert(der != NULL && hlen != NULL && vlen != NULL);
 
   if (der_max < 2 || der[0] != tag)
     return HAL_ERROR_ASN1_PARSE_FAILED;

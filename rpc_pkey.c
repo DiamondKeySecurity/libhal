@@ -73,8 +73,6 @@ static inline hal_pkey_slot_t *alloc_slot(const hal_key_flags_t flags)
   uint32_t glop = ++next_glop << 16;
   next_glop %= 0x7FFF;
 
-  assert((glop & HAL_PKEY_HANDLE_TOKEN_FLAG) == 0);
-
   if ((flags & HAL_KEY_FLAG_TOKEN) != 0)
     glop |= HAL_PKEY_HANDLE_TOKEN_FLAG;
 
@@ -224,7 +222,7 @@ static inline hal_error_t check_writable(const hal_client_handle_t client,
 
 static inline hal_error_t get_nonzero_random(uint8_t *buffer, size_t n)
 {
-  assert(buffer != NULL);
+  hal_assert(buffer != NULL);
 
   uint32_t word = 0;
   hal_error_t err;
@@ -260,7 +258,7 @@ static hal_error_t pkcs1_5_pad(const uint8_t * const data, const size_t data_len
                                uint8_t *block, const size_t block_len,
                                const uint8_t type)
 {
-  assert(data != NULL && block != NULL && (type == 0x01 || type == 0x02));
+  hal_assert(data != NULL && block != NULL && (type == 0x01 || type == 0x02));
 
   hal_error_t err;
 
@@ -330,7 +328,7 @@ static hal_error_t pkey_local_load(const hal_client_handle_t client,
                                    const uint8_t * const der, const size_t der_len,
                                    const hal_key_flags_t flags)
 {
-  assert(pkey != NULL && name != NULL && der != NULL);
+  hal_assert(pkey != NULL && name != NULL && der != NULL);
 
   hal_curve_name_t curve;
   hal_pkey_slot_t *slot;
@@ -374,7 +372,7 @@ static hal_error_t pkey_local_open(const hal_client_handle_t client,
                                    hal_pkey_handle_t *pkey,
                                    const hal_uuid_t * const name)
 {
-  assert(pkey != NULL && name != NULL);
+  hal_assert(pkey != NULL && name != NULL);
 
   hal_pkey_slot_t *slot;
   hal_error_t err;
@@ -418,7 +416,7 @@ static hal_error_t pkey_local_generate_rsa(const hal_client_handle_t client,
                                            const uint8_t * const public_exponent, const size_t public_exponent_len,
                                            const hal_key_flags_t flags)
 {
-  assert(pkey != NULL && name != NULL && (key_length & 7) == 0);
+  hal_assert(pkey != NULL && name != NULL && (key_length & 7) == 0);
 
   uint8_t keybuf[hal_rsa_key_t_size];
   hal_rsa_key_t *key = NULL;
@@ -477,7 +475,7 @@ static hal_error_t pkey_local_generate_ec(const hal_client_handle_t client,
                                           const hal_curve_name_t curve,
                                           const hal_key_flags_t flags)
 {
-  assert(pkey != NULL && name != NULL);
+  hal_assert(pkey != NULL && name != NULL);
 
   uint8_t keybuf[hal_ecdsa_key_t_size];
   hal_ecdsa_key_t *key = NULL;
@@ -738,18 +736,18 @@ static hal_error_t pkey_local_sign_rsa(hal_pkey_slot_t *slot,
                                        uint8_t *keybuf, const size_t keybuf_len,
                                        const uint8_t * const der, const size_t der_len,
                                        const hal_hash_handle_t hash,
-                                       const uint8_t * input, size_t input_len,
-                                       uint8_t * signature, size_t *signature_len, const size_t signature_max)
+                                       const uint8_t *input, size_t input_len,
+                                       uint8_t *signature, size_t *signature_len, const size_t signature_max)
 {
   hal_rsa_key_t *key = NULL;
   hal_error_t err;
 
-  assert(signature != NULL && signature_len != NULL);
-  assert((hash.handle == HAL_HANDLE_NONE) != (input == NULL || input_len == 0));
+  hal_assert(signature != NULL && signature_len != NULL);
+  hal_assert((hash.handle == HAL_HANDLE_NONE) != (input == NULL || input_len == 0));
 
   if ((err = hal_rsa_private_key_from_der(&key, keybuf, keybuf_len, der, der_len)) != HAL_OK ||
       (err = hal_rsa_key_get_modulus(key, NULL, signature_len, 0))         != HAL_OK)
-    return err;
+      return err;
 
   if (*signature_len > signature_max)
     return HAL_ERROR_RESULT_TOO_LONG;
@@ -760,7 +758,7 @@ static hal_error_t pkey_local_sign_rsa(hal_pkey_slot_t *slot,
     input = signature;
   }
 
-  if ((err = pkcs1_5_pad(input, input_len, signature, *signature_len, 0x01))                         != HAL_OK ||
+  if ((err = pkcs1_5_pad(input, input_len, signature, *signature_len, 0x01)) != HAL_OK ||
       (err = hal_rsa_decrypt(NULL, NULL, key, signature, *signature_len, signature, *signature_len)) != HAL_OK)
     return err;
 
@@ -787,8 +785,8 @@ static hal_error_t pkey_local_sign_ecdsa(hal_pkey_slot_t *slot,
   hal_ecdsa_key_t *key = NULL;
   hal_error_t err;
 
-  assert(signature != NULL && signature_len != NULL);
-  assert((hash.handle == HAL_HANDLE_NONE) != (input == NULL || input_len == 0));
+  hal_assert(signature != NULL && signature_len != NULL);
+  hal_assert((hash.handle == HAL_HANDLE_NONE) != (input == NULL || input_len == 0));
 
   if ((err = hal_ecdsa_private_key_from_der(&key, keybuf, keybuf_len, der, der_len)) != HAL_OK)
     return err;
@@ -879,8 +877,8 @@ static hal_error_t pkey_local_verify_rsa(uint8_t *keybuf, const size_t keybuf_le
   hal_rsa_key_t *key = NULL;
   hal_error_t err;
 
-  assert(signature != NULL && signature_len > 0);
-  assert((hash.handle == HAL_HANDLE_NONE) != (input == NULL || input_len == 0));
+  hal_assert(signature != NULL && signature_len > 0);
+  hal_assert((hash.handle == HAL_HANDLE_NONE) != (input == NULL || input_len == 0));
 
   switch (type) {
   case HAL_KEY_TYPE_RSA_PRIVATE:
@@ -926,8 +924,8 @@ static hal_error_t pkey_local_verify_ecdsa(uint8_t *keybuf, const size_t keybuf_
   hal_ecdsa_key_t *key = NULL;
   hal_error_t err;
 
-  assert(signature != NULL && signature_len > 0);
-  assert((hash.handle == HAL_HANDLE_NONE) != (input == NULL || input_len == 0));
+  hal_assert(signature != NULL && signature_len > 0);
+  hal_assert((hash.handle == HAL_HANDLE_NONE) != (input == NULL || input_len == 0));
 
   switch (type) {
   case HAL_KEY_TYPE_EC_PRIVATE:
@@ -1057,7 +1055,7 @@ static hal_error_t pkey_local_match(const hal_client_handle_t client,
                                     const unsigned result_max,
                                     const hal_uuid_t * const previous_uuid)
 {
-  assert(state != NULL && result_len != NULL);
+  hal_assert(state != NULL && result_len != NULL);
 
   static const hal_uuid_t uuid_zero[1] = {{{0}}};
   const hal_uuid_t *prev = previous_uuid;
@@ -1142,7 +1140,7 @@ static hal_error_t pkey_local_export(const hal_pkey_handle_t pkey_handle,
                                      uint8_t *pkcs8, size_t *pkcs8_len, const size_t pkcs8_max,
                                      uint8_t *kek,   size_t *kek_len,   const size_t kek_max)
 {
-  assert(pkcs8 != NULL && pkcs8_len != NULL && kek != NULL && kek_len != NULL && kek_max > KEK_LENGTH);
+  hal_assert(pkcs8 != NULL && pkcs8_len != NULL && kek != NULL && kek_len != NULL && kek_max > KEK_LENGTH);
 
   uint8_t rsabuf[hal_rsa_key_t_size];
   hal_rsa_key_t *rsa = NULL;
@@ -1239,7 +1237,7 @@ static hal_error_t pkey_local_import(const hal_client_handle_t client,
                                      const uint8_t * const kek_,  const size_t kek_len,
                                      const hal_key_flags_t flags)
 {
-  assert(pkey != NULL && name != NULL && pkcs8 != NULL && kek_ != NULL && kek_len > 2);
+  hal_assert(pkey != NULL && name != NULL && pkcs8 != NULL && kek_ != NULL && kek_len > 2);
 
   uint8_t kek[KEK_LENGTH], rsabuf[hal_rsa_key_t_size], der[HAL_KS_WRAPPED_KEYSIZE], *d;
   size_t der_len, oid_len, data_len;

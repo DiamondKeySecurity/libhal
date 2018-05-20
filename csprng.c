@@ -46,9 +46,10 @@
 hal_error_t hal_get_random(hal_core_t *core, void *buffer, const size_t length)
 {
   uint8_t temp[4], ior = 0, * const buf = buffer;
-  hal_error_t err;
+  const int free_core = core == NULL;
+  hal_error_t err = HAL_OK;
 
-  if ((err = hal_core_alloc(CSPRNG_NAME, &core)) != HAL_OK)
+  if (free_core && (err = hal_core_alloc(CSPRNG_NAME, &core, NULL)) != HAL_OK)
     return err;
 
   for (size_t i = 0; i < length; i += 4) {
@@ -73,7 +74,8 @@ hal_error_t hal_get_random(hal_core_t *core, void *buffer, const size_t length)
       err = HAL_ERROR_CSPRNG_BROKEN;
   }
 
-  hal_core_free(core);
+  if (free_core)
+    hal_core_free(core);
   return err;
 }
 

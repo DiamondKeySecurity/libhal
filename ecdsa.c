@@ -354,8 +354,7 @@ static inline void ff_sqr(const ecdsa_curve_t * const curve,
 
 static inline int point_is_infinite(const ec_point_t * const P)
 {
-  assert(P != NULL);
-  return fp_iszero(P->z);
+  return P == NULL || fp_iszero(P->z);
 }
 
 /*
@@ -367,9 +366,9 @@ static inline int point_is_infinite(const ec_point_t * const P)
  * infinity for that curve.
  */
 
-static inline void point_set_infinite(ec_point_t *P, const ecdsa_curve_t * const curve)
+static inline hal_error_t point_set_infinite(ec_point_t *P, const ecdsa_curve_t * const curve)
 {
-  assert(P != NULL);
+  hal_assert(P != NULL);
 
   if (curve != NULL) {
     fp_copy(unconst_fp_int(curve->mu), P->x);
@@ -382,6 +381,8 @@ static inline void point_set_infinite(ec_point_t *P, const ecdsa_curve_t * const
     fp_set(P->y, 1);
     fp_zero(P->z);
   }
+
+  return HAL_OK;
 }
 
 /*
@@ -403,7 +404,7 @@ static inline void point_copy(const ec_point_t * const P, ec_point_t *R)
 static inline hal_error_t point_to_montgomery(ec_point_t *P,
                                               const ecdsa_curve_t * const curve)
 {
-  assert(P != NULL && curve != NULL);
+  hal_assert(P != NULL && curve != NULL);
 
   if (fp_cmp_d(unconst_fp_int(P->z), 1) != FP_EQ)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -431,7 +432,7 @@ static inline hal_error_t point_to_montgomery(ec_point_t *P,
 static inline hal_error_t point_to_affine(ec_point_t *P,
                                           const ecdsa_curve_t * const curve)
 {
-  assert(P != NULL && curve != NULL);
+  hal_assert(P != NULL && curve != NULL);
 
   if (point_is_infinite(P))
     return HAL_ERROR_IMPOSSIBLE;
@@ -475,11 +476,11 @@ static inline hal_error_t point_to_affine(ec_point_t *P,
  * http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html
  */
 
-static inline void point_double(const ec_point_t * const P,
-                                ec_point_t *R,
-                                const ecdsa_curve_t * const curve)
+static inline hal_error_t point_double(const ec_point_t * const P,
+                                       ec_point_t *R,
+                                       const ecdsa_curve_t * const curve)
 {
-  assert(P != NULL && R != NULL && curve != NULL);
+  hal_assert(P != NULL && R != NULL && curve != NULL);
 
   const int was_infinite = point_is_infinite(P);
 
@@ -520,9 +521,11 @@ static inline void point_double(const ec_point_t * const P,
   ff_add  (curve,  t2,    t2,     t2);
   ff_sub  (curve,  t1,    t2,     R->y);
 
-  assert(was_infinite == point_is_infinite(P));
+  hal_assert(was_infinite == point_is_infinite(P));
 
   fp_zero(alpha); fp_zero(beta); fp_zero(gamma); fp_zero(delta); fp_zero(t1); fp_zero(t2);
+
+  return HAL_OK;
 }
 
 /**
@@ -542,18 +545,18 @@ static inline void point_double(const ec_point_t * const P,
  * point doubling algorithm.
  */
 
-static inline void point_add(const ec_point_t * const P,
-                             const ec_point_t * const Q,
-                             ec_point_t *R,
-                             const ecdsa_curve_t * const curve)
+static inline hal_error_t point_add(const ec_point_t * const P,
+                                    const ec_point_t * const Q,
+                                    ec_point_t *R,
+                                    const ecdsa_curve_t * const curve)
 {
-  assert(P != NULL && Q != NULL && R != NULL && curve != NULL);
+  hal_assert(P != NULL && Q != NULL && R != NULL && curve != NULL);
 
   /*
    * Q must be affine in Montgomery form.
    */
 
-  assert(fp_cmp(unconst_fp_int(Q->z), unconst_fp_int(curve->mu)) == FP_EQ);
+  hal_assert(fp_cmp(unconst_fp_int(Q->z), unconst_fp_int(curve->mu)) == FP_EQ);
 
 #warning What happens here if P and Q are not equal but map to the same point in affine space?
 
@@ -640,6 +643,8 @@ static inline void point_add(const ec_point_t * const P,
 
   else if (result_is_infinite)
     point_set_infinite(R, curve);
+
+  return HAL_OK;
 }
 
 /**
@@ -658,7 +663,7 @@ static hal_error_t point_scalar_multiply(const fp_int * const k,
                                          ec_point_t *R,
                                          const ecdsa_curve_t * const curve)
 {
-  assert(k != NULL && P_ != NULL && R != NULL &&  curve != NULL);
+  hal_assert(k != NULL && P_ != NULL && R != NULL &&  curve != NULL);
 
   if (fp_iszero(k) || fp_cmp_d(unconst_fp_int(P_->z), 1) != FP_EQ)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -786,7 +791,7 @@ static hal_error_t verilog_point_pick_random(const verilog_ecdsa_driver_t * cons
                                              fp_int *k,
                                              ec_point_t *P)
 {
-  assert(k != NULL && P != NULL);
+  hal_assert(k != NULL && P != NULL);
 
   const size_t len = fp_unsigned_bin_size(k);
   uint8_t b[driver->bytes];
@@ -797,7 +802,7 @@ static hal_error_t verilog_point_pick_random(const verilog_ecdsa_driver_t * cons
   if (len > sizeof(b))
     return HAL_ERROR_RESULT_TOO_LONG;
 
-  if ((err = hal_core_alloc(driver->name, &core)) != HAL_OK)
+  if ((err = hal_core_alloc(driver->name, &core, NULL)) != HAL_OK)
     goto fail;
 
 #define check(_x_) do { if ((err = (_x_)) != HAL_OK) goto fail; } while (0)
@@ -845,7 +850,7 @@ static hal_error_t point_pick_random(const ecdsa_curve_t * const curve,
 {
   hal_error_t err;
 
-  assert(curve != NULL && k != NULL && P != NULL);
+  hal_assert(curve != NULL && k != NULL && P != NULL);
 
   /*
    * Pick a random scalar corresponding to a point on the curve.  Per
@@ -932,7 +937,8 @@ static hal_error_t point_pick_random(const ecdsa_curve_t * const curve,
 static int point_is_on_curve(const ec_point_t * const P,
                              const ecdsa_curve_t * const curve)
 {
-  assert(P != NULL && curve != NULL);
+  if (P == NULL || curve == NULL)
+    return 0;
 
   fp_int t1[1] = INIT_FP_INT;
   fp_int t2[1] = INIT_FP_INT;
@@ -964,6 +970,8 @@ static int point_is_on_curve(const ec_point_t * const P,
 
   return fp_cmp(t1, unconst_fp_int(curve->b)) == FP_EQ;
 }
+
+#warning hal_ecdsa_xxx() functions currently ignore core arguments, works but suboptimal, fix this
 
 /*
  * Generate a new ECDSA key.
@@ -1171,7 +1179,7 @@ hal_error_t hal_ecdsa_key_to_ecpoint(const hal_ecdsa_key_t * const key,
   const size_t q_len  = fp_unsigned_bin_size(unconst_fp_int(curve->q));
   const size_t Qx_len = fp_unsigned_bin_size(unconst_fp_int(key->Q->x));
   const size_t Qy_len = fp_unsigned_bin_size(unconst_fp_int(key->Q->y));
-  assert(q_len >= Qx_len && q_len >= Qy_len);
+  hal_assert(q_len >= Qx_len && q_len >= Qy_len);
 
   const size_t vlen = q_len * 2 + 1;
   size_t hlen;
@@ -1184,7 +1192,7 @@ hal_error_t hal_ecdsa_key_to_ecpoint(const hal_ecdsa_key_t * const key,
   if (der == NULL || err != HAL_OK)
     return err;
 
-  assert(hlen + vlen <= der_max);
+  hal_assert(hlen + vlen <= der_max);
 
   uint8_t *d = der + hlen;
   memset(d, 0, vlen);
@@ -1197,7 +1205,7 @@ hal_error_t hal_ecdsa_key_to_ecpoint(const hal_ecdsa_key_t * const key,
   fp_to_unsigned_bin(unconst_fp_int(key->Q->y), d + q_len - Qy_len);
   d += q_len;
 
-  assert(d <= der + der_max);
+  hal_assert(d <= der + der_max);
 
   return HAL_OK;
 }
@@ -1290,7 +1298,7 @@ hal_error_t hal_ecdsa_private_key_to_der(const hal_ecdsa_key_t * const key,
   const size_t d_len  = fp_unsigned_bin_size(unconst_fp_int(key->d));
   const size_t Qx_len = fp_unsigned_bin_size(unconst_fp_int(key->Q->x));
   const size_t Qy_len = fp_unsigned_bin_size(unconst_fp_int(key->Q->y));
-  assert(q_len >= d_len && q_len >= Qx_len && q_len >= Qy_len);
+  hal_assert(q_len >= d_len && q_len >= Qx_len && q_len >= Qy_len);
 
   fp_int version[1] = INIT_FP_INT;
   fp_set(version, 1);
@@ -1465,7 +1473,7 @@ hal_error_t hal_ecdsa_public_key_to_der(const hal_ecdsa_key_t * const key,
   const size_t Qx_len = fp_unsigned_bin_size(unconst_fp_int(key->Q->x));
   const size_t Qy_len = fp_unsigned_bin_size(unconst_fp_int(key->Q->y));
   const size_t ecpoint_len = q_len * 2 + 1;
-  assert(q_len >= Qx_len && q_len >= Qy_len);
+  hal_assert(q_len >= Qx_len && q_len >= Qy_len);
 
   if (der != NULL && ecpoint_len < der_max) {
     memset(der, 0, ecpoint_len);
@@ -1479,7 +1487,7 @@ hal_error_t hal_ecdsa_public_key_to_der(const hal_ecdsa_key_t * const key,
     fp_to_unsigned_bin(unconst_fp_int(key->Q->y), d + q_len - Qy_len);
     d += q_len;
 
-    assert(d < der + der_max);
+    hal_assert(d < der + der_max);
   }
 
   return hal_asn1_encode_spki(hal_asn1_oid_ecPublicKey, hal_asn1_oid_ecPublicKey_len,
@@ -1553,7 +1561,7 @@ static hal_error_t encode_signature_pkcs11(const ecdsa_curve_t * const curve,
                                            const fp_int * const r, const fp_int * const s,
                                            uint8_t *signature, size_t *signature_len, const size_t signature_max)
 {
-  assert(curve != NULL && r != NULL && s != NULL);
+  hal_assert(curve != NULL && r != NULL && s != NULL);
 
   const size_t n_len = fp_unsigned_bin_size(unconst_fp_int(curve->n));
   const size_t r_len = fp_unsigned_bin_size(unconst_fp_int(r));
@@ -1588,7 +1596,7 @@ static hal_error_t decode_signature_pkcs11(const ecdsa_curve_t * const curve,
                                            fp_int *r, fp_int *s,
                                            const uint8_t * const signature, const size_t signature_len)
 {
-  assert(curve != NULL && r != NULL && s != NULL);
+  hal_assert(curve != NULL && r != NULL && s != NULL);
 
   if (signature == NULL || (signature_len & 1) != 0)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -1694,7 +1702,7 @@ hal_error_t hal_ecdsa_verify(hal_core_t *core,
                              const uint8_t * const hash, const size_t hash_len,
                              const uint8_t * const signature, const size_t signature_len)
 {
-  assert(key != NULL && hash != NULL && signature != NULL);
+  hal_assert(key != NULL && hash != NULL && signature != NULL);
 
   const ecdsa_curve_t * const curve = get_curve(key->curve);
 

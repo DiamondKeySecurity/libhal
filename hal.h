@@ -161,6 +161,8 @@
   DEFINE_HAL_ERROR(HAL_ERROR_KEYSTORE_WRONG_BLOCK_TYPE, "Wrong block type in keystore")                 \
   DEFINE_HAL_ERROR(HAL_ERROR_RPC_PROTOCOL_ERROR,        "RPC protocol error")                           \
   DEFINE_HAL_ERROR(HAL_ERROR_NOT_IMPLEMENTED,           "Not implemented")                              \
+  DEFINE_HAL_ERROR(HAL_ERROR_CORE_REASSIGNED,           "Core has been reassigned since last use")      \
+  DEFINE_HAL_ERROR(HAL_ERROR_ASSERTION_FAILED,          "Assertion failed")                             \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -220,18 +222,17 @@ typedef struct {
   hal_addr_t base;
 } hal_core_info_t;
 
+typedef uint32_t hal_core_lru_t;
+
 extern hal_core_t *hal_core_find(const char *name, hal_core_t *core);
 extern const hal_core_info_t *hal_core_info(const hal_core_t *core);
 extern hal_addr_t hal_core_base(const hal_core_t *core);
-extern hal_core_t * hal_core_iterate(hal_core_t *core);
+extern hal_core_t *hal_core_iterate(hal_core_t *core);
 extern void hal_core_reset_table(void);
-extern hal_error_t hal_core_alloc(const char *name, hal_core_t **core);
-extern hal_error_t hal_core_alloc2(const char *name1, hal_core_t **pcore1,
-                                   const char *name2, hal_core_t **pcore2);
+extern hal_error_t hal_core_alloc(const char *name, hal_core_t **core, hal_core_lru_t *pomace);
+extern hal_error_t hal_core_alloc2(const char *name1, hal_core_t **core1, hal_core_lru_t *pomace1,
+                                   const char *name2, hal_core_t **core2, hal_core_lru_t *pomace2);
 extern void hal_core_free(hal_core_t *core);
-extern void hal_critical_section_start(void);
-extern void hal_critical_section_end(void);
-extern int hal_core_busy(const hal_core_t *core);
 
 /*
  * Slightly higher level public API, still working directly with cores.

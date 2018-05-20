@@ -46,7 +46,7 @@ hal_error_t hal_rpc_pkcs1_construct_digestinfo(const hal_hash_handle_t handle,
 					       uint8_t *digest_info, size_t *digest_info_len,
 					       const size_t digest_info_max)
 {
-  assert(digest_info != NULL && digest_info_len != NULL);
+  hal_assert(digest_info != NULL && digest_info_len != NULL);
 
   hal_digest_algorithm_t alg;
   size_t len, alg_len;
@@ -62,7 +62,7 @@ hal_error_t hal_rpc_pkcs1_construct_digestinfo(const hal_hash_handle_t handle,
   if (*digest_info_len >= digest_info_max)
     return HAL_ERROR_RESULT_TOO_LONG;
 
-  assert(*digest_info_len < 130);
+  hal_assert(*digest_info_len < 130);
 
   uint8_t *d = digest_info;
 
@@ -76,7 +76,7 @@ hal_error_t hal_rpc_pkcs1_construct_digestinfo(const hal_hash_handle_t handle,
   *d++ = 0x04;                /* OCTET STRING */
   *d++ = (uint8_t) len;
 
-  assert(digest_info + *digest_info_len == d + len);
+  hal_assert(digest_info + *digest_info_len == d + len);
 
   return hal_rpc_hash_finalize(handle, d, len);
 }

@@ -132,7 +132,7 @@ static hal_error_t do_block(const hal_core_t *core, uint8_t *b1, uint8_t *b2)
 {
   hal_error_t err;
 
-  assert(b1 != NULL && b2 != NULL);
+  hal_assert(b1 != NULL && b2 != NULL);
 
   if ((err = hal_io_write(core, AES_ADDR_BLOCK0, b1, 8)) != HAL_OK ||
       (err = hal_io_write(core, AES_ADDR_BLOCK2, b2, 8)) != HAL_OK ||
@@ -164,15 +164,16 @@ hal_error_t hal_aes_keywrap(hal_core_t *core,
                             size_t *C_len)
 {
   const size_t calculated_C_len = hal_aes_keywrap_ciphertext_length(m);
+  const int free_core = core == NULL;
   hal_error_t err;
   size_t n;
 
-  assert(calculated_C_len % 8 == 0);
+  hal_assert(calculated_C_len % 8 == 0);
 
   if (Q == NULL || C == NULL || C_len == NULL || *C_len < calculated_C_len)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if ((err = hal_core_alloc(AES_CORE_NAME, &core)) != HAL_OK)
+  if (free_core && (err = hal_core_alloc(AES_CORE_NAME, &core, NULL)) != HAL_OK)
     return err;
 
   if ((err = load_kek(core, K, K_len, KEK_encrypting)) != HAL_OK)
@@ -215,7 +216,8 @@ hal_error_t hal_aes_keywrap(hal_core_t *core,
   }
 
 out:
-  hal_core_free(core);
+  if (free_core)
+    hal_core_free(core);
   return err;
 }
 
@@ -226,13 +228,14 @@ out:
  * Q should be the same size as C.  Q and C can overlap.
  */
 
-hal_error_t hal_aes_keyunwrap(hal_core_t * core,
+hal_error_t hal_aes_keyunwrap(hal_core_t *core,
                               const uint8_t *K, const size_t K_len,
                               const uint8_t * const C,
                               const size_t C_len,
                               uint8_t *Q,
                               size_t *Q_len)
 {
+  const int free_core = core == NULL;
   hal_error_t err;
   size_t n;
   size_t m;
@@ -240,7 +243,7 @@ hal_error_t hal_aes_keyunwrap(hal_core_t * core,
   if (C == NULL || Q == NULL || C_len % 8 != 0 || C_len < 16 || Q_len == NULL || *Q_len < C_len)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if ((err = hal_core_alloc(AES_CORE_NAME, &core)) != HAL_OK)
+  if (free_core && (err = hal_core_alloc(AES_CORE_NAME, &core, NULL)) != HAL_OK)
     return err;
 
   if ((err = load_kek(core, K, K_len, KEK_decrypting)) != HAL_OK)
@@ -294,7 +297,8 @@ hal_error_t hal_aes_keyunwrap(hal_core_t * core,
   memmove(Q, Q + 8, m);
 
 out:
-  hal_core_free(core);
+  if (free_core)
+    hal_core_free(core);
   return err;
 }
 

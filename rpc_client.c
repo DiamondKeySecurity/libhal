@@ -45,7 +45,7 @@
 
 #if HAL_RPC_CLIENT_DEBUG
 #include <stdio.h>
-#define check(op) do { const hal_error_t _err_ = (op); if (_err_ != HAL_OK) { printf("%s returned %d (%s)\n", #op, _err_, hal_error_string(_err_)); return _err_; } } while (0)
+#define check(op) do { const hal_error_t _err_ = (op); if (_err_ != HAL_OK) { hal_log(HAL_LOG_DEBUG, "%s returned %d (%s)", #op, _err_, hal_error_string(_err_)); return _err_; } } while (0)
 #else
 #define check(op) do { const hal_error_t _err_ = (op); if (_err_ != HAL_OK) { return _err_; } } while (0)
 #endif
@@ -73,14 +73,14 @@ static hal_error_t read_matching_packet(const rpc_func_num_t expected_func,
   size_t ilen = inbuf_max;
   hal_error_t err;
 
-  assert(inbuf != NULL && iptr != NULL && ilimit != NULL);
+  hal_assert(inbuf != NULL && iptr != NULL && ilimit != NULL);
 
   do {
 
     if ((err = hal_rpc_recv(inbuf, &ilen)) != HAL_OK)
       return err;
 
-    assert(ilen <= inbuf_max);
+    hal_assert(ilen <= inbuf_max);
     *iptr = inbuf;
     *ilimit = inbuf + ilen;
 

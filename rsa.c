@@ -238,7 +238,7 @@ static hal_error_t modexp(hal_core_t *core,
                           const fp_int * const msg,
                           const fp_int * const exp,
                           const fp_int * const mod,
-                          fp_int *res,
+                          fp_int       *       res,
                           uint8_t *coeff, const size_t coeff_len,
                           uint8_t *mont,  const size_t mont_len)
 {
@@ -248,29 +248,29 @@ static hal_error_t modexp(hal_core_t *core,
     return HAL_ERROR_IMPOSSIBLE;
 
   const size_t msg_len = (fp_unsigned_bin_size(unconst_fp_int(msg)) + 3) & ~3;
-  const size_t exp_len = (fp_unsigned_bin_size(unconst_fp_int(exp)) + 3) & ~3;
-  const size_t mod_len = (fp_unsigned_bin_size(unconst_fp_int(mod)) + 3) & ~3;
+    const size_t exp_len = (fp_unsigned_bin_size(unconst_fp_int(exp)) + 3) & ~3;
+    const size_t mod_len = (fp_unsigned_bin_size(unconst_fp_int(mod)) + 3) & ~3;
 
   uint8_t msgbuf[msg_len];
   uint8_t expbuf[exp_len];
   uint8_t modbuf[mod_len];
   uint8_t resbuf[mod_len];
 
-  hal_modexp_arg_t args = {
-    .core   = core,
-    .msg    = msgbuf, .msg_len    = sizeof(msgbuf),
-    .exp    = expbuf, .exp_len    = sizeof(expbuf),
-    .mod    = modbuf, .mod_len    = sizeof(modbuf),
-    .result = resbuf, .result_len = sizeof(resbuf),
-    .coeff  = coeff,  .coeff_len  = coeff_len,
-    .mont   = mont,   .mont_len   = mont_len
-  };
+    hal_modexp_arg_t args = {
+      .core   = core,
+      .msg    = msgbuf, .msg_len    = sizeof(msgbuf),
+      .exp    = expbuf, .exp_len    = sizeof(expbuf),
+      .mod    = modbuf, .mod_len    = sizeof(modbuf),
+      .result = resbuf, .result_len = sizeof(resbuf),
+      .coeff  = coeff,  .coeff_len  = coeff_len,
+      .mont   = mont,   .mont_len   = mont_len
+    };
 
   if ((err = unpack_fp(msg, msgbuf, sizeof(msgbuf))) != HAL_OK ||
       (err = unpack_fp(exp, expbuf, sizeof(expbuf))) != HAL_OK ||
       (err = unpack_fp(mod, modbuf, sizeof(modbuf))) != HAL_OK ||
       (err = hal_modexp(precalc, &args))             != HAL_OK)
-    goto fail;
+      goto fail;
 
   fp_read_unsigned_bin(res, resbuf, sizeof(resbuf));
 
@@ -306,34 +306,34 @@ static hal_error_t modexp2(const int precalc,
     return HAL_ERROR_IMPOSSIBLE;
 
   const size_t msg_len  = (fp_unsigned_bin_size(unconst_fp_int(msg))  + 3) & ~3;
-  const size_t exp1_len = (fp_unsigned_bin_size(unconst_fp_int(exp1)) + 3) & ~3;
-  const size_t mod1_len = (fp_unsigned_bin_size(unconst_fp_int(mod1)) + 3) & ~3;
-  const size_t exp2_len = (fp_unsigned_bin_size(unconst_fp_int(exp2)) + 3) & ~3;
-  const size_t mod2_len = (fp_unsigned_bin_size(unconst_fp_int(mod2)) + 3) & ~3;
+    const size_t exp1_len = (fp_unsigned_bin_size(unconst_fp_int(exp1)) + 3) & ~3;
+    const size_t mod1_len = (fp_unsigned_bin_size(unconst_fp_int(mod1)) + 3) & ~3;
+    const size_t exp2_len = (fp_unsigned_bin_size(unconst_fp_int(exp2)) + 3) & ~3;
+    const size_t mod2_len = (fp_unsigned_bin_size(unconst_fp_int(mod2)) + 3) & ~3;
 
   uint8_t msgbuf[msg_len];
   uint8_t expbuf1[exp1_len], modbuf1[mod1_len], resbuf1[mod1_len];
   uint8_t expbuf2[exp2_len], modbuf2[mod2_len], resbuf2[mod2_len];
 
-  hal_modexp_arg_t args1 = {
-    .core   = core1,
-    .msg    = msgbuf,  .msg_len    = sizeof(msgbuf),
-    .exp    = expbuf1, .exp_len    = sizeof(expbuf1),
-    .mod    = modbuf1, .mod_len    = sizeof(modbuf1),
-    .result = resbuf1, .result_len = sizeof(resbuf1),
-    .coeff  = coeff1,  .coeff_len  = coeff1_len,
-    .mont   = mont1,   .mont_len   = mont1_len
-  };
+    hal_modexp_arg_t args1 = {
+      .core   = core1,
+      .msg    = msgbuf,  .msg_len    = sizeof(msgbuf),
+      .exp    = expbuf1, .exp_len    = sizeof(expbuf1),
+      .mod    = modbuf1, .mod_len    = sizeof(modbuf1),
+      .result = resbuf1, .result_len = sizeof(resbuf1),
+      .coeff  = coeff1,  .coeff_len  = coeff1_len,
+      .mont   = mont1,   .mont_len   = mont1_len
+    };
 
-  hal_modexp_arg_t args2 = {
-    .core   = core2,
-    .msg    = msgbuf,  .msg_len    = sizeof(msgbuf),
-    .exp    = expbuf2, .exp_len    = sizeof(expbuf2),
-    .mod    = modbuf2, .mod_len    = sizeof(modbuf2),
-    .result = resbuf2, .result_len = sizeof(resbuf2),
-    .coeff  = coeff2,  .coeff_len  = coeff2_len,
-    .mont   = mont2,   .mont_len   = mont2_len
-  };
+    hal_modexp_arg_t args2 = {
+      .core   = core2,
+      .msg    = msgbuf,  .msg_len    = sizeof(msgbuf),
+      .exp    = expbuf2, .exp_len    = sizeof(expbuf2),
+      .mod    = modbuf2, .mod_len    = sizeof(modbuf2),
+      .result = resbuf2, .result_len = sizeof(resbuf2),
+      .coeff  = coeff2,  .coeff_len  = coeff2_len,
+      .mont   = mont2,   .mont_len   = mont2_len
+    };
 
   if ((err = unpack_fp(msg,  msgbuf,  sizeof(msgbuf)))  != HAL_OK ||
       (err = unpack_fp(exp1, expbuf1, sizeof(expbuf1))) != HAL_OK ||
@@ -341,7 +341,7 @@ static hal_error_t modexp2(const int precalc,
       (err = unpack_fp(exp2, expbuf2, sizeof(expbuf2))) != HAL_OK ||
       (err = unpack_fp(mod2, modbuf2, sizeof(modbuf2))) != HAL_OK ||
       (err = hal_modexp2(precalc, &args1, &args2))      != HAL_OK)
-    goto fail;
+      goto fail;
 
   fp_read_unsigned_bin(res1, resbuf1, sizeof(resbuf1));
   fp_read_unsigned_bin(res2, resbuf2, sizeof(resbuf2));
@@ -438,12 +438,10 @@ int fp_exptmod(fp_int *a, fp_int *b, fp_int *c, fp_int *d)
 #endif /* HAL_RSA_SIGN_USE_MODEXP && HAL_RSA_KEYGEN_USE_MODEXP */
 
 /*
- * Create blinding factors.  There are various schemes for amortizing
- * the cost of this over multiple RSA operations, at present we don't
- * try.  Come back to this if it looks like a bottleneck.
+ * Create blinding factors.
  */
 
-static hal_error_t create_blinding_factors(hal_core_t *core, hal_rsa_key_t *key, fp_int *bf, fp_int *ubf)
+static hal_error_t create_blinding_factors(hal_rsa_key_t *key, fp_int *bf, fp_int *ubf)
 {
   if (key == NULL || bf == NULL || ubf == NULL)
     return HAL_ERROR_IMPOSSIBLE;
@@ -481,10 +479,10 @@ static hal_error_t create_blinding_factors(hal_core_t *core, hal_rsa_key_t *key,
     goto fail;
 
   fp_init(bf);
-  fp_read_unsigned_bin(bf,  rnd, sizeof(rnd));
+  fp_read_unsigned_bin(bf, rnd, sizeof(rnd));
   fp_copy(bf, ubf);
 
-  if ((err = modexp(core, precalc, bf, key->e, key->n, bf,
+  if ((err = modexp(NULL, precalc, bf, key->e, key->n, bf,
                     key->nC, sizeof(key->nC), key->nF, sizeof(key->nF))) != HAL_OK)
     goto fail;
 
@@ -530,7 +528,7 @@ static hal_error_t rsa_crt(hal_core_t *core1, hal_core_t *core2, hal_rsa_key_t *
    * Handle blinding if requested.
    */
   if (blinding) {
-    if ((err = create_blinding_factors(core1, key, bf, ubf)) != HAL_OK)
+    if ((err = create_blinding_factors(key, bf, ubf)) != HAL_OK)
       goto fail;
     FP_CHECK(fp_mulmod(msg, bf, unconst_fp_int(key->n), msg));
   }

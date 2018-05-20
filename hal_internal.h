@@ -48,6 +48,19 @@
  */
 
 /*
+ * Assertions, using our logger rather than printf() and assuming a
+ * hal_error_t return value.
+ */
+
+#define hal_assert(_whatever_)                                          \
+  do {                                                                  \
+    if (!(_whatever_)) {                                                \
+      hal_log(HAL_LOG_ERROR, "Assertion failed: %s", #_whatever_);      \
+      return HAL_ERROR_ASSERTION_FAILED;                                \
+    }                                                                   \
+  } while (0)
+
+/*
  * htonl is not available in arm-none-eabi headers or libc.
  */
 #ifndef STM32F4XX
@@ -513,15 +526,8 @@ typedef struct {
   int hint;
 
   /*
-   * This might be where we'd stash a (hal_core_t *) pointing to a
-   * core which has already been loaded with the key, if we were
-   * trying to be clever about using multiple signing cores.  Moot
-   * point (ie, no way we could possibly test such a thing) as long as
-   * the FPGA is too small to hold more than one modexp core and ECDSA
-   * is entirely software, so skip it for now, but the implied
-   * semantics are interesting: a pkey handle starts to resemble an
-   * initialized signing core, and once all the cores are in use, one
-   * can't load another key without closing an existing pkey handle.
+   * This might be where we'd stash one or more (hal_core_t *)
+   * pointing to cores which have already been loaded with the key.
    */
 } hal_pkey_slot_t;
 

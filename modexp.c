@@ -265,7 +265,6 @@ static inline hal_error_t extract_result(hal_modexp_arg_t *a)
 {
   /*
    * Extract results from the main calculation and we're done.
-   * Hardly seems worth making this a separate function.
    */
 
   return get_buffer(a->core, MODEXPA7_ADDR_RESULT, a->result, a->mod_len);
@@ -282,16 +281,23 @@ hal_error_t hal_modexp(const int precalc, hal_modexp_arg_t *a)
   if ((err = check_args(a)) != HAL_OK)
     return err;
 
-  if ((err = hal_core_alloc(MODEXPA7_NAME, &a->core)) == HAL_OK  &&
-      (err = setup_precalc(precalc, a))               == HAL_OK  &&
+  const int free_core = a->core == NULL;
+
+  if ((!free_core ||
+       (err = hal_core_alloc(MODEXPA7_NAME, &a->core, NULL)) == HAL_OK) &&
+      (err = setup_precalc(precalc, a))                      == HAL_OK  &&
       (!precalc ||
-       (err = hal_io_wait_ready(a->core))             == HAL_OK) &&
-      (err = setup_calc(precalc, a))                  == HAL_OK  &&
-      (err = hal_io_wait_valid(a->core))              == HAL_OK  &&
-      (err = extract_result(a))                       == HAL_OK)
+       (err = hal_io_wait_ready(a->core))                    == HAL_OK) &&
+      (err = setup_calc(precalc, a))                         == HAL_OK  &&
+      (err = hal_io_wait_valid(a->core))                     == HAL_OK  &&
+      (err = extract_result(a))                              == HAL_OK)
     err = HAL_OK;
 
-  hal_core_free(a->core);
+  if (free_core) {
+    hal_core_free(a->core);
+    a->core = NULL;
+  }
+
   return err;
 }
 
@@ -301,27 +307,38 @@ hal_error_t hal_modexp(const int precalc, hal_modexp_arg_t *a)
 
 hal_error_t hal_modexp2(const int precalc, hal_modexp_arg_t *a1, hal_modexp_arg_t *a2)
 {
+  int free_core = 0;
   hal_error_t err;
 
   if ((err = check_args(a1)) != HAL_OK ||
       (err = check_args(a2)) != HAL_OK)
     return err;
 
-  if ((err = hal_core_alloc2(MODEXPA7_NAME, &a1->core,
-                             MODEXPA7_NAME, &a2->core)) == HAL_OK  &&
-      (err = setup_precalc(precalc, a1))               == HAL_OK  &&
-      (err = setup_precalc(precalc, a2))               == HAL_OK  &&
+  if (a1->core == NULL && a2->core == NULL)
+    free_core = 1;
+  else if (a1->core == NULL || a2->core == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  if ((!free_core ||
+       (err = hal_core_alloc2(MODEXPA7_NAME, &a1->core, NULL,
+                              MODEXPA7_NAME, &a2->core, NULL)) == HAL_OK) &&
+      (err = setup_precalc(precalc, a1))                       == HAL_OK  &&
+      (err = setup_precalc(precalc, a2))                       == HAL_OK  &&
       (!precalc ||
-       (err = hal_io_wait_ready2(a1->core, a2->core))  == HAL_OK) &&
-      (err = setup_calc(precalc, a1))                  == HAL_OK  &&
-      (err = setup_calc(precalc, a2))                  == HAL_OK  &&
-      (err = hal_io_wait_valid2(a1->core, a2->core))   == HAL_OK  &&
-      (err = extract_result(a1))                       == HAL_OK  &&
-      (err = extract_result(a2))                       == HAL_OK)
+       (err = hal_io_wait_ready2(a1->core, a2->core))          == HAL_OK) &&
+      (err = setup_calc(precalc, a1))                          == HAL_OK  &&
+      (err = setup_calc(precalc, a2))                          == HAL_OK  &&
+      (err = hal_io_wait_valid2(a1->core, a2->core))           == HAL_OK  &&
+      (err = extract_result(a1))                               == HAL_OK  &&
+      (err = extract_result(a2))                               == HAL_OK)
     err = HAL_OK;
 
-  hal_core_free(a1->core);
-  hal_core_free(a2->core);
+  if (free_core) {
+    hal_core_free(a1->core);
+    hal_core_free(a2->core);
+    a1->core = a2->core = NULL;
+  }
+
   return err;
 }
 

@@ -53,7 +53,7 @@ static hal_error_t do_hmac(hal_core_t *core,
                            const uint32_t  block,
                                  uint8_t * mac,        const size_t mac_len)
 {
-  assert(d != NULL && pw != NULL && data != NULL && mac != NULL);
+  hal_assert(d != NULL && pw != NULL && data != NULL && mac != NULL);
 
   uint8_t sb[d->hmac_state_length];
   hal_hmac_state_t *s;
@@ -96,9 +96,9 @@ hal_error_t hal_pbkdf2(hal_core_t *core,
       iterations_desired == 0)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  assert(sizeof(statebuf) >= descriptor->hmac_state_length);
-  assert(sizeof(result)   >= descriptor->digest_length);
-  assert(sizeof(mac)      >= descriptor->digest_length);
+  hal_assert(sizeof(statebuf) >= descriptor->hmac_state_length);
+  hal_assert(sizeof(result)   >= descriptor->digest_length);
+  hal_assert(sizeof(mac)      >= descriptor->digest_length);
 
   /* Output length check per RFC 2989 5.2. */
   if ((uint64_t) derived_key_length > ((uint64_t) 0xFFFFFFFF) * descriptor->block_length)

@@ -4,7 +4,7 @@
  * HAL interface to Cryptech hash cores.
  *
  * Authors: Joachim Strömbergson, Paul Selkirk, Rob Austein
- * Copyright (c) 2014-2016, NORDUnet A/S
+ * Copyright (c) 2014-2018, NORDUnet A/S
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -119,10 +119,12 @@ struct hal_hash_state {
   size_t block_used;                            /* How much of the block we've used */
   unsigned block_count;                         /* Blocks sent */
   unsigned flags;
+  hal_core_lru_t pomace;                        /* Private data for hal_core_alloc() */
 };
 
-#define STATE_FLAG_STATE_ALLOCATED      0x1     /* State buffer dynamically allocated */
+#define STATE_FLAG_STATE_ALLOCATED      0x1     /* State buffer in use */
 #define STATE_FLAG_SOFTWARE_CORE        0x2     /* Use software rather than hardware core */
+#define STATE_FLAG_FREE_CORE            0x4     /* Free core after use */
 
 /*
  * HMAC state.  Right now this just holds the key block and a hash
@@ -330,7 +332,7 @@ static inline hal_hmac_state_t *alloc_static_hmac_state(void)
  * This is only used by the software hash cores, but it's simpler to define it unconditionally.
  */
 
-static inline void swytebop(void *out_, const void * const in_, const size_t n, const size_t w)
+static inline hal_error_t swytebop(void *out_, const void * const in_, const size_t n, const size_t w)
 {
   const uint8_t  order[] = { 0x01, 0x02, 0x03, 0x04 };
 
@@ -338,23 +340,24 @@ static inline void swytebop(void *out_, const void * const in_, const size_t n, 
   uint8_t *out = out_;
 
   /* w must be a power of two */
-  assert(in != out && in != NULL && out != NULL && w && !(w & (w - 1)));
+  hal_assert(in != out && in != NULL && out != NULL && w && !(w & (w - 1)));
 
   switch (* (uint32_t *) order) {
 
   case 0x01020304:
     memcpy(out, in, n);
-    return;
+    break;
 
   case 0x04030201:
     for (size_t i = 0; i < n; i += w)
       for (size_t j = 0; j < w && i + j < n; j++)
         out[i + j] = in[i + w - j - 1];
-    return;
+    break;
 
   default:
-    assert((* (uint32_t *) order) == 0x01020304 || (* (uint32_t *) order) == 0x04030201);
+    hal_assert((* (uint32_t *) order) == 0x01020304 || (* (uint32_t *) order) == 0x04030201);
   }
+  return HAL_OK;
 }
 
 /*
@@ -364,28 +367,37 @@ static inline void swytebop(void *out_, const void * const in_, const size_t n, 
 
 static inline hal_error_t check_core(hal_core_t **core,
                                      const hal_hash_descriptor_t * const descriptor,
-                                     unsigned *flags)
+                                     unsigned *flags,
+                                     hal_core_lru_t *pomace)
 {
-  assert(descriptor != NULL && descriptor->driver != NULL);
+  if (core == NULL || descriptor == NULL || descriptor->driver == NULL || flags == NULL)
+    return HAL_ERROR_IMPOSSIBLE;
 
-#if HAL_ONLY_USE_SOFTWARE_HASH_CORES
   hal_error_t err = HAL_ERROR_CORE_NOT_FOUND;
-#else
-  hal_error_t err = hal_core_alloc(descriptor->core_name, core);
+
+#if !HAL_ONLY_USE_SOFTWARE_HASH_CORES
+
+  if (*core != NULL)
+    return HAL_OK;
+
+  if ((err = hal_core_alloc(descriptor->core_name, core, pomace)) == HAL_OK) {
+    *flags |= STATE_FLAG_FREE_CORE;
+    return HAL_OK;
+  }
+
 #endif
 
+  if (*core != NULL)
+    return HAL_ERROR_IMPOSSIBLE;
+
 #if HAL_ENABLE_SOFTWARE_HASH_CORES
-  if ((err == HAL_ERROR_CORE_NOT_FOUND || err == HAL_ERROR_CORE_BUSY) &&
-      descriptor->driver->sw_core) {
 
-    *core = NULL;
-
-    if (flags != NULL)
-      *flags |= STATE_FLAG_SOFTWARE_CORE;
-
-    err = HAL_OK;
+  if (descriptor->driver->sw_core && err == HAL_ERROR_CORE_NOT_FOUND) {
+    *flags |= STATE_FLAG_SOFTWARE_CORE;
+    return HAL_OK;
   }
-#endif /* HAL_ENABLE_SOFTWARE_HASH_CORES */
+
+#endif
 
   return err;
 }
@@ -414,6 +426,7 @@ hal_error_t hal_hash_initialize(hal_core_t *core,
 {
   const hal_hash_driver_t * const driver = check_driver(descriptor);
   hal_hash_state_t *state = state_buffer;
+  hal_core_lru_t pomace = 0;
   unsigned flags = 0;
   hal_error_t err;
 
@@ -423,18 +436,15 @@ hal_error_t hal_hash_initialize(hal_core_t *core,
   if (state_buffer != NULL && state_length < descriptor->hash_state_length)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  if ((err = check_core(&core, descriptor, &flags)) != HAL_OK)
+  if ((err = check_core(&core, descriptor, &flags, &pomace)) != HAL_OK)
     return err;
 
-#if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
-  /*
-   * If we're using a Verilog core that can save/restore state, then we
-   * free it after every operation, so that it can possibly be used by
-   * another client.
-   */
-  if (descriptor->can_restore_state)
-      hal_core_free(core);
-#endif
+  if ((flags & STATE_FLAG_FREE_CORE) != 0)
+    hal_core_free(core);
+
+  /* A dynamically allocated core that can't restore state isn't going to work. */
+  if (!state->descriptor->can_restore_state && (flags & STATE_FLAG_FREE_CORE) != 0)
+    return HAL_ERROR_BAD_ARGUMENTS;
 
   if (state_buffer == NULL && (state = alloc_static_hash_state()) == NULL)
       return HAL_ERROR_ALLOCATION_FAILURE;
@@ -444,6 +454,7 @@ hal_error_t hal_hash_initialize(hal_core_t *core,
   state->driver = driver;
   state->core = core;
   state->flags = flags | STATE_FLAG_STATE_ALLOCATED;
+  state->pomace = pomace;
 
   *state_ = state;
 
@@ -451,21 +462,17 @@ hal_error_t hal_hash_initialize(hal_core_t *core,
 }
 
 /*
- * Clean up hash state.  No-op unless memory was dynamically allocated.
+ * Clean up hash state.
  */
 
-void hal_hash_cleanup(hal_hash_state_t **state_)
+void hal_hash_cleanup(hal_hash_state_t **state)
 {
-  if (state_ == NULL)
+  if (state == NULL || *state == NULL)
     return;
 
-  hal_hash_state_t *state = *state_;
+  memset(*state, 0, (*state)->descriptor->hash_state_length);
 
-  if (state == NULL || (state->flags & STATE_FLAG_STATE_ALLOCATED) == 0)
-    return;
-
-  memset(state, 0, state->descriptor->hash_state_length);
-  *state_ = NULL;
+  *state = NULL;
 }
 
 #if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
@@ -482,7 +489,7 @@ static hal_error_t hash_read_digest(const hal_core_t *core,
 {
   hal_error_t err;
 
-  assert(digest != NULL && digest_length % 4 == 0);
+  hal_assert(digest != NULL && digest_length % 4 == 0);
 
   if ((err = hal_io_wait_valid(core)) != HAL_OK)
     return err;
@@ -501,7 +508,7 @@ static hal_error_t hash_write_digest(const hal_core_t *core,
 {
   hal_error_t err;
 
-  assert(digest != NULL && digest_length % 4 == 0);
+  hal_assert(digest != NULL && digest_length % 4 == 0);
 
   if ((err = hal_io_wait_ready(core)) != HAL_OK)
     return err;
@@ -517,14 +524,14 @@ static hal_error_t hash_write_digest(const hal_core_t *core,
 
 static hal_error_t hash_write_block(hal_hash_state_t * const state)
 {
-  assert(state != NULL && state->descriptor != NULL && state->driver != NULL);
-  assert(state->descriptor->block_length % 4 == 0);
+  hal_assert(state != NULL && state->descriptor != NULL && state->driver != NULL);
+  hal_assert(state->descriptor->block_length % 4 == 0);
 
-  assert(state->descriptor->digest_length <= sizeof(state->core_state) ||
-         !state->descriptor->can_restore_state);
+  hal_assert(state->descriptor->digest_length <= sizeof(state->core_state) ||
+             !state->descriptor->can_restore_state);
 
   if (debug)
-    fprintf(stderr, "[ %s ]\n", state->block_count == 0 ? "init" : "next");
+    hal_log(HAL_LOG_DEBUG, "[ %s ]\n", state->block_count == 0 ? "init" : "next");
 
 #if HAL_ENABLE_SOFTWARE_HASH_CORES
   if ((state->flags & STATE_FLAG_SOFTWARE_CORE) != 0)
@@ -585,22 +592,25 @@ hal_error_t hal_hash_update(hal_hash_state_t *state,            /* Opaque state 
   if (data_buffer_length == 0)
     return HAL_OK;
 
-  assert(state->descriptor != NULL && state->driver != NULL);
-  assert(state->descriptor->block_length <= sizeof(state->block));
+  hal_assert(state->descriptor != NULL && state->driver != NULL);
+  hal_assert(state->descriptor->block_length <= sizeof(state->block));
 
-#if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
-  if (((state->flags & STATE_FLAG_SOFTWARE_CORE) == 0) &&
-      state->descriptor->can_restore_state &&
-      (err = hal_core_alloc(state->descriptor->core_name, &state->core)) != HAL_OK)
+  if ((state->flags & STATE_FLAG_FREE_CORE) != 0) {
+    err = hal_core_alloc(state->descriptor->core_name, &state->core, &state->pomace);
+    if (err == HAL_ERROR_CORE_REASSIGNED) {
+      state->core = NULL;
+      err = hal_core_alloc(state->descriptor->core_name, &state->core, &state->pomace);
+    }
+    if (err != HAL_OK)
       return err;
-#endif
+  }
 
   while ((n = state->descriptor->block_length - state->block_used) <= data_buffer_length) {
     /*
      * We have enough data for another complete block.
      */
     if (debug)
-      fprintf(stderr, "[ Full block, data_buffer_length %lu, used %lu, n %lu, msg_length %llu ]\n",
+      hal_log(HAL_LOG_DEBUG, "[ Full block, data_buffer_length %lu, used %lu, n %lu, msg_length %llu ]\n",
               (unsigned long) data_buffer_length, (unsigned long) state->block_used, (unsigned long) n, (unsigned long long)state->msg_length_low);
     memcpy(state->block + state->block_used, p, n);
     if ((state->msg_length_low += n) < n)
@@ -618,9 +628,9 @@ hal_error_t hal_hash_update(hal_hash_state_t *state,            /* Opaque state 
      * Data left over, but not enough for a full block, stash it.
      */
     if (debug)
-      fprintf(stderr, "[ Partial block, data_buffer_length %lu, used %lu, n %lu, msg_length %llu ]\n",
+      hal_log(HAL_LOG_DEBUG, "[ Partial block, data_buffer_length %lu, used %lu, n %lu, msg_length %llu ]\n",
               (unsigned long) data_buffer_length, (unsigned long) state->block_used, (unsigned long) n, (unsigned long long)state->msg_length_low);
-    assert(data_buffer_length < n);
+    hal_assert(data_buffer_length < n);
     memcpy(state->block + state->block_used, p, data_buffer_length);
     if ((state->msg_length_low += data_buffer_length) < data_buffer_length)
       state->msg_length_high++;
@@ -628,10 +638,8 @@ hal_error_t hal_hash_update(hal_hash_state_t *state,            /* Opaque state 
   }
 
 out:
-#if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
-  if (state->descriptor->can_restore_state)
+  if ((state->flags & STATE_FLAG_FREE_CORE) != 0)
     hal_core_free(state->core);
-#endif
   return err;
 }
 
@@ -652,19 +660,22 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
   if (state == NULL || digest_buffer == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  assert(state->descriptor != NULL && state->driver != NULL);
+  hal_assert(state->descriptor != NULL && state->driver != NULL);
 
   if (digest_buffer_length < state->descriptor->digest_length)
     return HAL_ERROR_BAD_ARGUMENTS;
 
-  assert(state->descriptor->block_length <= sizeof(state->block));
+  hal_assert(state->descriptor->block_length <= sizeof(state->block));
 
-#if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
-  if (((state->flags & STATE_FLAG_SOFTWARE_CORE) == 0) &&
-      state->descriptor->can_restore_state &&
-      (err = hal_core_alloc(state->descriptor->core_name, &state->core)) != HAL_OK)
+  if ((state->flags & STATE_FLAG_FREE_CORE) != 0) {
+    err = hal_core_alloc(state->descriptor->core_name, &state->core, &state->pomace);
+    if (err == HAL_ERROR_CORE_REASSIGNED) {
+      state->core = NULL;
+      err = hal_core_alloc(state->descriptor->core_name, &state->core, &state->pomace);
+    }
+    if (err != HAL_OK)
       return err;
-#endif
+  }
 
   /*
    * Add padding, then pull result from the core
@@ -674,13 +685,13 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
   bit_length_high = (state->msg_length_high << 3) | (state->msg_length_low >> 61);
 
   /* Initial pad byte */
-  assert(state->block_used < state->descriptor->block_length);
+  hal_assert(state->block_used < state->descriptor->block_length);
   state->block[state->block_used++] = 0x80;
 
   /* If not enough room for bit count, zero and push current block */
   if ((n = state->descriptor->block_length - state->block_used) < state->driver->length_length) {
     if (debug)
-      fprintf(stderr, "[ Overflow block, used %lu, n %lu, msg_length %llu ]\n",
+      hal_log(HAL_LOG_DEBUG, "[ Overflow block, used %lu, n %lu, msg_length %llu ]\n",
               (unsigned long) state->block_used, (unsigned long) n, (unsigned long long)state->msg_length_low);
     if (n > 0)
       memset(state->block + state->block_used, 0, n);
@@ -692,11 +703,11 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
 
   /* Pad final block */
   n = state->descriptor->block_length - state->block_used;
-  assert(n >= state->driver->length_length);
+  hal_assert(n >= state->driver->length_length);
   if (n > 0)
     memset(state->block + state->block_used, 0, n);
   if (debug)
-    fprintf(stderr, "[ Final block, used %lu, n %lu, msg_length %llu ]\n",
+    hal_log(HAL_LOG_DEBUG, "[ Final block, used %lu, n %lu, msg_length %llu ]\n",
             (unsigned long) state->block_used, (unsigned long) n, (unsigned long long)state->msg_length_low);
   p = state->block + state->descriptor->block_length;
   for (i = 0; (bit_length_low || bit_length_high) && i < state->driver->length_length; i++) {
@@ -715,10 +726,9 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
 
   /* All data pushed to core, now we just need to read back the result */
 #if HAL_ENABLE_SOFTWARE_HASH_CORES
-  if ((state->flags & STATE_FLAG_SOFTWARE_CORE) != 0) {
-    swytebop(digest_buffer, state->core_state, state->descriptor->digest_length, state->driver->sw_word_size);
-    return HAL_OK;
-  }
+  if ((state->flags & STATE_FLAG_SOFTWARE_CORE) != 0)
+    return swytebop(digest_buffer, state->core_state, state->descriptor->digest_length,
+                    state->driver->sw_word_size);
 #endif
 #if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
   if ((state->flags & STATE_FLAG_SOFTWARE_CORE) == 0)
@@ -726,9 +736,8 @@ hal_error_t hal_hash_finalize(hal_hash_state_t *state,                  /* Opaqu
 #endif
 
 out:
-#if ! HAL_ONLY_USE_SOFTWARE_HASH_CORES
-  hal_core_free(state->core);
-#endif
+  if ((state->flags & STATE_FLAG_FREE_CORE) != 0)
+    hal_core_free(state->core);
   return err;
 }
 
@@ -758,7 +767,7 @@ hal_error_t hal_hmac_initialize(hal_core_t *core,
 
   hal_hash_state_t *h = &state->hash_state;
 
-  assert(descriptor->block_length <= sizeof(state->keybuf));
+  hal_assert(descriptor->block_length <= sizeof(state->keybuf));
 
 #if 0
   /*
@@ -828,26 +837,17 @@ hal_error_t hal_hmac_initialize(hal_core_t *core,
 }
 
 /*
- * Clean up HMAC state.  No-op unless memory was dynamically allocated.
+ * Clean up HMAC state.
  */
 
-void hal_hmac_cleanup(hal_hmac_state_t **state_)
+void hal_hmac_cleanup(hal_hmac_state_t **state)
 {
-  if (state_ == NULL)
+  if (state == NULL || *state == NULL)
     return;
 
-  hal_hmac_state_t *state = *state_;
+  memset(*state, 0, (*state)->hash_state.descriptor->hmac_state_length);
 
-  if (state == NULL)
-    return;
-
-  hal_hash_state_t *h = &state->hash_state;
-
-  if ((h->flags & STATE_FLAG_STATE_ALLOCATED) == 0)
-    return;
-
-  memset(state, 0, h->descriptor->hmac_state_length);
-  *state_ = NULL;
+  *state = NULL;
 }
 
 /*
@@ -878,15 +878,19 @@ hal_error_t hal_hmac_finalize(hal_hmac_state_t *state,
   uint8_t d[HAL_MAX_HASH_DIGEST_LENGTH];
   hal_error_t err;
 
-  assert(descriptor != NULL && descriptor->digest_length <= sizeof(d));
+  hal_assert(descriptor != NULL && descriptor->digest_length <= sizeof(d));
 
   /*
    * Finish up inner hash and extract digest, then perform outer hash
    * to get HMAC.  Key was prepared for this in hal_hmac_initialize().
+   *
+   * For silly reasons, reusing the core value from the hash state
+   * block here would require nontrivial refactoring, so for the
+   * moment pass NULL and let the core allocator deal.  Fix someday.
    */
 
   if ((err = hal_hash_finalize(h, d, sizeof(d)))                           != HAL_OK ||
-      (err = hal_hash_initialize(h->core, descriptor, &h, &state->hash_state,
+      (err = hal_hash_initialize(NULL, descriptor, &h, &state->hash_state,
                                  sizeof(state->hash_state)))               != HAL_OK ||
       (err = hal_hash_update(h, state->keybuf, descriptor->block_length))  != HAL_OK ||
       (err = hal_hash_update(h, d, descriptor->digest_length))             != HAL_OK ||
@@ -971,12 +975,12 @@ static const uint64_t sha512_K[80] = {
  * confusing enough without adding a lot of unnecessary C macro baggage).
  */
 
-static inline uint32_t rot_l_32(uint32_t x, unsigned n) { assert(n < 32); return ((x << n) | (x >> (32 - n))); }
-static inline uint32_t rot_r_32(uint32_t x, unsigned n) { assert(n < 32); return ((x >> n) | (x << (32 - n))); }
-static inline uint32_t lsh_r_32(uint32_t x, unsigned n) { assert(n < 32); return (x >> n); }
+static inline uint32_t rot_l_32(uint32_t x, unsigned n) { return ((x << n) | (x >> (32 - n))); }
+static inline uint32_t rot_r_32(uint32_t x, unsigned n) { return ((x >> n) | (x << (32 - n))); }
+static inline uint32_t lsh_r_32(uint32_t x, unsigned n) { return (x >> n); }
 
-static inline uint64_t rot_r_64(uint64_t x, unsigned n) { assert(n < 64); return ((x >> n) | (x << (64 - n))); }
-static inline uint64_t lsh_r_64(uint64_t x, unsigned n) { assert(n < 64); return (x >> n); }
+static inline uint64_t rot_r_64(uint64_t x, unsigned n) { return ((x >> n) | (x << (64 - n))); }
+static inline uint64_t lsh_r_64(uint64_t x, unsigned n) { return (x >> n); }
 
 static inline uint32_t Choose_32(  uint32_t x, uint32_t y, uint32_t z) { return (z ^ (x & (y ^ z)));       }
 static inline uint32_t Majority_32(uint32_t x, uint32_t y, uint32_t z) { return ((x & y) | (z & (x | y))); }
@@ -999,8 +1003,8 @@ static inline uint64_t Gamma1_64(uint64_t x) { return rot_r_64(x, 19) ^ rot_r_64
  * Offset into hash state.  In theory, this should works out to compile-time constants after optimization.
  */
 
-static inline int sha1_pos(int i, int j) { assert(i >= 0 && j >= 0 && j < 5); return (5 + j - (i % 5)) % 5; }
-static inline int sha2_pos(int i, int j) { assert(i >= 0 && j >= 0 && j < 8); return (8 + j - (i % 8)) % 8; }
+static inline int sha1_pos(int i, int j) { return (5 + j - (i % 5)) % 5; }
+static inline int sha2_pos(int i, int j) { return (8 + j - (i % 8)) % 8; }
 
 /*
  * Software implementation of SHA-1 block algorithm.
@@ -1009,6 +1013,7 @@ static inline int sha2_pos(int i, int j) { assert(i >= 0 && j >= 0 && j < 8); re
 static hal_error_t sw_hash_core_sha1(hal_hash_state_t *state)
 {
   static const uint32_t iv[5] = {0x67452301UL, 0xefcdab89UL, 0x98badcfeUL, 0x10325476UL, 0xc3d2e1f0UL};
+  hal_error_t err;
 
   if (state == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
@@ -1020,7 +1025,8 @@ static hal_error_t sw_hash_core_sha1(hal_hash_state_t *state)
 
   memcpy(S, H, sizeof(S));
 
-  swytebop(W, state->block, 16 * sizeof(*W), sizeof(*W));
+  if ((err = swytebop(W, state->block, 16 * sizeof(*W), sizeof(*W))) != HAL_OK)
+    return err;
 
   for (int i = 16; i < 80; i++)
     W[i] = rot_l_32(W[i - 3] ^ W[i - 8] ^ W[i - 14] ^ W[i - 16], 1);
@@ -1035,7 +1041,7 @@ static hal_error_t sw_hash_core_sha1(hal_hash_state_t *state)
     else                f = Parity_32(   S[b], S[c], S[d]), k = 0xCA62C1D6UL;
 
     if (debug)
-      fprintf(stderr,
+      hal_log(HAL_LOG_DEBUG,
               "[Round %02d < a = 0x%08x, b = 0x%08x, c = 0x%08x, d = 0x%08x, e = 0x%08x, f = 0x%08x, k = 0x%08x, w = 0x%08x]\n",
               i, (unsigned)S[a], (unsigned)S[b], (unsigned)S[c], (unsigned)S[d], (unsigned)S[e], (unsigned)f, (unsigned)k, (unsigned)W[i]);
 
@@ -1043,7 +1049,7 @@ static hal_error_t sw_hash_core_sha1(hal_hash_state_t *state)
     S[b] = rot_l_32(S[b], 30);
 
     if (debug)
-      fprintf(stderr, "[Round %02d > a = 0x%08x, b = 0x%08x, c = 0x%08x, d = 0x%08x, e = 0x%08x]\n",
+      hal_log(HAL_LOG_DEBUG, "[Round %02d > a = 0x%08x, b = 0x%08x, c = 0x%08x, d = 0x%08x, e = 0x%08x]\n",
               i, (unsigned)S[a], (unsigned)S[b], (unsigned)S[c], (unsigned)S[d], (unsigned)S[e]);
   }
 
@@ -1066,6 +1072,8 @@ static hal_error_t sw_hash_core_sha256(hal_hash_state_t *state)
   static const uint32_t sha256_iv[8] = {0x6A09E667UL, 0xBB67AE85UL, 0x3C6EF372UL, 0xA54FF53AUL,
                                         0x510E527FUL, 0x9B05688CUL, 0x1F83D9ABUL, 0x5BE0CD19UL};
 
+  hal_error_t err;
+
   if (state == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
@@ -1081,7 +1089,8 @@ static hal_error_t sw_hash_core_sha256(hal_hash_state_t *state)
 
   memcpy(S, H, sizeof(S));
 
-  swytebop(W, state->block, 16 * sizeof(*W), sizeof(*W));
+  if ((err = swytebop(W, state->block, 16 * sizeof(*W), sizeof(*W))) != HAL_OK)
+    return err;
 
   for (int i = 16; i < 64; i++)
     W[i] = Gamma1_32(W[i - 2]) + W[i - 7] + Gamma0_32(W[i - 15]) + W[i - 16];
@@ -1123,6 +1132,8 @@ static hal_error_t sw_hash_core_sha512(hal_hash_state_t *state)
     sha512_256_iv[8] = {0x22312194FC2BF72CULL, 0x9F555FA3C84C64C2ULL, 0x2393B86B6F53B151ULL, 0x963877195940EABDULL,
                         0x96283EE2A88EFFE3ULL, 0xBE5E1E2553863992ULL, 0x2B0199FC2C85B8AAULL, 0x0EB72DDC81C52CA2ULL};
 
+  hal_error_t err;
+
   if (state == NULL)
     return HAL_ERROR_BAD_ARGUMENTS;
 
@@ -1140,7 +1151,8 @@ static hal_error_t sw_hash_core_sha512(hal_hash_state_t *state)
 
   memcpy(S, H, sizeof(S));
 
-  swytebop(W, state->block, 16 * sizeof(*W), sizeof(*W));
+  if ((err = swytebop(W, state->block, 16 * sizeof(*W), sizeof(*W))) != HAL_OK)
+    return err;
 
   for (int i = 16; i < 80; i++)
     W[i] = Gamma1_64(W[i - 2]) + W[i - 7] + Gamma0_64(W[i - 15]) + W[i - 16];

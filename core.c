@@ -56,16 +56,15 @@ extern size_t strnlen(const char *, size_t);
 
 struct hal_core {
   hal_core_info_t info;
-  uint32_t busy;
+  int busy;
+  hal_core_lru_t lru;
   struct hal_core *next;
 };
 
-#ifndef	HAL_STATIC_CORE_STATE_BLOCKS
-#define	HAL_STATIC_CORE_STATE_BLOCKS 0
-#endif
-
-#if HAL_STATIC_CORE_STATE_BLOCKS > 0
+#if defined(HAL_STATIC_CORE_STATE_BLOCKS) && HAL_STATIC_CORE_STATE_BLOCKS > 0
 static hal_core_t core_table[HAL_STATIC_CORE_STATE_BLOCKS];
+#else
+#error HAL_STATIC_CORE_STATE_BLOCKS must be defined as a positive integer
 #endif
 
 /*
@@ -73,7 +72,7 @@ static hal_core_t core_table[HAL_STATIC_CORE_STATE_BLOCKS];
  * bit nasty due to non-null-terminated fixed-length names.
  */
 
-static int name_matches(const hal_core_t *const core, const char * const name)
+static inline int name_matches(const hal_core_t *const core, const char * const name)
 {
   return (core != NULL && name != NULL && *name != '\0' &&
           strncmp(name, core->info.name, strnlen(name, sizeof(core->info.name))) == 0);
@@ -92,39 +91,31 @@ static int name_matches(const hal_core_t *const core, const char * const name)
 #define	CORE_MAX                0x10000
 #define	CORE_SIZE               0x100
 
-/* Extra space to leave after particular cores.  Yummy. */
-
-static const struct { const char *name; hal_addr_t extra; } gaps[] = {
-  { "csprng",  11 * CORE_SIZE }, /* empty slots after csprng */
-  { "modexps6", 3 * CORE_SIZE }, /* ModexpS6 uses four slots */
-  { "modexpa7", 7 * CORE_SIZE }, /* ModexpA7 uses eight slots */
-};
-
 static hal_core_t *head = NULL;
+static hal_core_lru_t lru = 0;
 
-static hal_core_t *probe_cores(void)
+static inline hal_core_t *probe_cores(void)
 {
+  /* Extra space to leave after particular cores.  Yummy. */
+  static const struct { const char *name; hal_addr_t extra; } gaps[] = {
+    { "csprng",  11 * CORE_SIZE }, /* empty slots after csprng */
+    { "modexps6", 3 * CORE_SIZE }, /* ModexpS6 uses four slots */
+    { "modexpa7", 7 * CORE_SIZE }, /* ModexpA7 uses eight slots */
+  };
+
   if (head != NULL)
     return head;
 
-  hal_core_t *core = NULL;
   hal_core_t **tail = &head;
   hal_error_t err = HAL_OK;
-#if HAL_STATIC_CORE_STATE_BLOCKS > 0
-  int n = 0;
-#endif
+  hal_addr_t addr;
+  int n;
 
-  for (hal_addr_t addr = CORE_MIN; addr < CORE_MAX; addr += CORE_SIZE) {
+  for (addr = CORE_MIN,    n = 0;
+       addr < CORE_MAX  && n < HAL_STATIC_CORE_STATE_BLOCKS;
+       addr += CORE_SIZE,  n++) {
 
-#if HAL_STATIC_CORE_STATE_BLOCKS > 0
-    core = &core_table[n];
-#else
-    if (core == NULL && (core = malloc(sizeof(hal_core_t))) == NULL) {
-      err = HAL_ERROR_ALLOCATION_FAILURE;
-      goto fail;
-    }
-#endif
-
+    hal_core_t *core = &core_table[n];
     memset(core, 0, sizeof(*core));
     core->info.base = addr;
 
@@ -144,48 +135,19 @@ static hal_core_t *probe_cores(void)
 
     *tail = core;
     tail = &core->next;
-    core = NULL;
-
-#if HAL_STATIC_CORE_STATE_BLOCKS > 0
-    if (++n >= HAL_STATIC_CORE_STATE_BLOCKS)
-      break;
-#endif
   }
-
-#if HAL_STATIC_CORE_STATE_BLOCKS > 0
-#else
-  if (core != NULL)
-    free(core);
-#endif
 
   return head;
 
  fail:
-#if HAL_STATIC_CORE_STATE_BLOCKS > 0
   memset(core_table, 0, sizeof(core_table));
-#else
-  if (core != NULL)
-    free(core);
-  while ((core = head) != NULL) {
-    head = core->next;
-    free(core);
-  }
-#endif
   return NULL;
 }
 
 void hal_core_reset_table(void)
 {
-#if HAL_STATIC_CORE_STATE_BLOCKS > 0
-    head = NULL;
-    memset(core_table, 0, sizeof(core_table));
-#else
-    while (head != NULL) {
-        hal_core_t *next = head->next;
-        free(head);
-        head = next;
-    }
-#endif
+  head = NULL;
+  memset(core_table, 0, sizeof(core_table));
 }
 
 hal_core_t * hal_core_iterate(hal_core_t *core)
@@ -201,76 +163,133 @@ hal_core_t *hal_core_find(const char *name, hal_core_t *core)
   return NULL;
 }
 
-static hal_error_t hal_core_alloc_no_wait(const char *name, hal_core_t **pcore)
-{
-  /*
-   * This used to allow name == NULL iff *core != NULL, but the
-   * semantics were fragile and in practice we always pass a name
-   * anyway, so simplify by requiring name != NULL, always.
-   */
+/*
+ * If caller specifies a non-NULL core value, we fail unless that core
+ * is available and has the right name and lru values.
+ *
+ * If caller specifies a NULL core value, we take any free core with
+ * the right name.
+ *
+ * Modification of lru field is handled by the jacket routines, to
+ * avoid premature updates.
+ */
 
-  if (name == NULL || pcore == NULL)
+static hal_error_t hal_core_alloc_no_wait(const char *name, hal_core_t **pcore, hal_core_lru_t *pomace)
+{
+  if (name == NULL || pcore == NULL || (*pcore != NULL && pomace == NULL))
     return HAL_ERROR_BAD_ARGUMENTS;
 
   hal_error_t err = HAL_ERROR_CORE_NOT_FOUND;
   hal_core_t *core = *pcore;
-
-  if (core != NULL) {
-    /* if we can reallocate the same core, do it now */
-    if (!core->busy) {
-      hal_critical_section_start();
-      core->busy = 1;
-      hal_critical_section_end();
-      return HAL_OK;
-    }
-    /* else forget that core and fall through to search */
-    *pcore = NULL;
-  }
+  hal_core_t *best = NULL;
+  uint32_t age = 0;
 
   hal_critical_section_start();
-  for (core = hal_core_find(name, NULL); core != NULL; core = hal_core_find(name, core)) {
-    if (core->busy) {
-      err = HAL_ERROR_CORE_BUSY;
-      continue;
+
+  /*
+   * User wants to reuse previous core, grab that core or or bust.
+   * Never return CORE_BUSY in this case, because busy implies
+   * somebody else has touched it.  Checking the name in this case
+   * isn't strictly necessary, but it's cheap insurance.
+   */
+  if (core != NULL) {
+    if (core->busy || core->lru != *pomace)
+      err = HAL_ERROR_CORE_REASSIGNED;
+    else if (!name_matches(core, name))
+      err = HAL_ERROR_CORE_NOT_FOUND;
+    else {
+      core->busy = 1;
+      err = HAL_OK;
     }
-    err = HAL_OK;
-    *pcore = core;
-    core->busy = 1;
-    break;
   }
+
+  /*
+   * User just wants a core with the right name, search for least recently used matching core.
+   */
+  else {
+    for (core = hal_core_find(name, NULL); core != NULL; core = hal_core_find(name, core)) {
+      if (core->busy && err == HAL_ERROR_CORE_NOT_FOUND) {
+        err = HAL_ERROR_CORE_BUSY;
+      }
+      else if (!core->busy && (lru - core->lru) >= age) {
+        best = core;
+        age = (lru - core->lru);
+      }
+    }
+    if (best != NULL) {
+      *pcore = best;
+      best->busy = 1;
+      err = HAL_OK;
+    }
+  }
+
   hal_critical_section_end();
 
   return err;
 }
 
-hal_error_t hal_core_alloc(const char *name, hal_core_t **pcore)
+hal_error_t hal_core_alloc(const char *name, hal_core_t **pcore, hal_core_lru_t *pomace)
 {
   hal_error_t err;
 
-  while ((err = hal_core_alloc_no_wait(name, pcore)) == HAL_ERROR_CORE_BUSY)
+  while ((err = hal_core_alloc_no_wait(name, pcore, pomace)) == HAL_ERROR_CORE_BUSY)
     hal_task_yield();
 
-  return err;
+  if (err != HAL_OK)
+    return err;
+
+  (*pcore)->lru = ++lru;
+
+  if (pomace != NULL)
+    *pomace = (*pcore)->lru;
+
+  return HAL_OK;
 }
 
-hal_error_t hal_core_alloc2(const char *name1, hal_core_t **pcore1,
-                            const char *name2, hal_core_t **pcore2)
+hal_error_t hal_core_alloc2(const char *name1, hal_core_t **pcore1, hal_core_lru_t *pomace1,
+                            const char *name2, hal_core_t **pcore2, hal_core_lru_t *pomace2)
 {
-  hal_error_t err;
+  const int clear = pcore1 != NULL && *pcore1 == NULL;
 
-  while (1) {
-    if ((err = hal_core_alloc(name1, pcore1)) != HAL_OK)
+  for (;;) {
+
+    hal_error_t err = hal_core_alloc_no_wait(name1, pcore1, pomace1);
+
+    switch (err) {
+
+    case HAL_OK:
+      break;
+
+    case HAL_ERROR_CORE_BUSY:
+      hal_task_yield();
+      continue;
+
+    default:
       return err;
+    }
 
-    if ((err = hal_core_alloc_no_wait(name2, pcore2)) == HAL_OK)
-      return HAL_OK;
-    
-    hal_core_free(*pcore1);
-    /* hal_core_free does a yield, so we don't need to do another one */
+    if ((err = hal_core_alloc_no_wait(name2, pcore2, pomace2)) == HAL_OK)
+      break;
+
+    hal_core_free(*pcore1);     /* hal_core_free does a yield, so we don't need to do another one */
+
+    if (clear)                  /* put *pcore1 back as we found it */
+      *pcore1 = NULL;
 
     if (err != HAL_ERROR_CORE_BUSY)
       return err;
   }
+
+  (*pcore1)->lru = ++lru;
+  (*pcore2)->lru = ++lru;
+
+  if (pomace1 != NULL)
+    *pomace1 = (*pcore1)->lru;
+
+  if (pomace2 != NULL)
+    *pomace2 = (*pcore2)->lru;
+
+  return HAL_OK;
 }
 
 void hal_core_free(hal_core_t *core)
@@ -291,11 +310,6 @@ hal_addr_t hal_core_base(const hal_core_t *core)
 const hal_core_info_t *hal_core_info(const hal_core_t *core)
 {
   return core == NULL ? NULL : &core->info;
-}
-
-int hal_core_busy(const hal_core_t *core)
-{
-  return (int)core->busy;
 }
 
 /*

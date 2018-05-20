@@ -92,7 +92,7 @@ hal_error_t hal_serial_init(const char * const device, const uint32_t speed)
         termios_speed = B921600;
 	break;
     default:
-        fprintf(stderr, "invalid line speed %lu\n", (unsigned long) speed);
+        hal_log(HAL_LOG_ERROR, "invalid line speed %lu\n", (unsigned long) speed);
 	return HAL_ERROR_RPC_TRANSPORT;
     }
 
