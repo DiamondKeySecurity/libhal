@@ -54,7 +54,6 @@ from argparse           import ArgumentParser, ArgumentDefaultsHelpFormatter
 from tornado.gen        import Return, coroutine
 from tornado.ioloop     import IOLoop
 from tornado.iostream   import IOStream, StreamClosedError
-from tornado.queues     import Queue
 
 from Crypto.Util.asn1               import DerSequence, DerNull, DerOctetString
 from Crypto.Util.number             import inverse
@@ -197,55 +196,52 @@ def pkcs1_hash_and_pad(text):
 
 
 @coroutine
-def worker(args, k, p, q, r, m):
-    while True:
-        n = yield q.get()
+def client(args, k, p, q, r, m, v, h):
+    while q:
+        n = q.pop(0)
         logger.debug("Signing %s", n)
-        try:
-            t0 = datetime.datetime.now()
-            s  = yield p.sign(data = m)
-            t1 = datetime.datetime.now()
-            if args.verify:
-                k.verify(s)
-            r.add(t0, t1)
-        except:
-            logger.exception("Signature failed")
-        finally:
-            q.task_done()
+        t0 = datetime.datetime.now()
+        s  = yield p.sign(data = m)
+        t1 = datetime.datetime.now()
+        logger.debug("Signature %s: %s", n, ":".join("{:02x}".format(ord(b)) for b in s))
+        if args.verify and not v.verify(h, s):
+            raise RuntimeError("RSA verification failed")
+        r.add(t0, t1)
+
 
 @coroutine
 def main():
     parser = ArgumentParser(description = __doc__, formatter_class = ArgumentDefaultsHelpFormatter)
     parser.add_argument("-i", "--iterations",   default = 1000, type = int,     help = "iterations")
+    parser.add_argument("-c", "--clients",      default = 4, type = int,        help = "client count")
     parser.add_argument("-k", "--key",          choices = tuple(key_table),
                                                 default = "rsa_2048",           help = "key to test")
     parser.add_argument("-p", "--pin",          default = "fnord",              help = "user PIN")
-    parser.add_argument("-q", "--quiet",        action = "store_true",          help = "be less chatty")
+    parser.add_argument("-q", "--quiet",        action = "store_true",          help = "bark less")
+    parser.add_argument("-d", "--debug",        action = "store_true",          help = "bark more")
     parser.add_argument("-t", "--text",         default = "Hamsters'R'Us",      help = "plaintext to sign")
     parser.add_argument("-v", "--verify",       action = "store_true",          help = "verify signatures")
-    parser.add_argument("-w", "--workers",      default = 4, type = int,        help = "worker count")
     args = parser.parse_args()
 
-    k = key_table[args.key]
-    q = Queue()
-    
-    tbs = pkcs1_hash_and_pad(args.text)
-    der = k.exportKey(format = "DER", pkcs = 8)
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
 
-    hsms = [HSM() for i in xrange(args.workers)]
+    k = key_table[args.key]
+    d = k.exportKey(format = "DER", pkcs = 8)
+    h = SHA256(args.text)
+    v = PKCS115_SigScheme(k)
+    q = range(args.iterations)
+    m = pkcs1_hash_and_pad(args.text)
+    r = Result(args, args.key)
+
+    hsms = [HSM() for i in xrange(args.clients)]
 
     for hsm in hsms:
         yield hsm.login(HAL_USER_NORMAL, args.pin)
 
-    pkeys = yield [hsm.pkey_load(der, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE) for hsm in hsms]
+    pkeys = yield [hsm.pkey_load(d, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE) for hsm in hsms]
 
-    r = Result(args, args.key)
-
-    for pkey in pkeys:
-        IOLoop.current().spawn_callback(worker, args, k, pkey, q, r, tbs)
-
-    yield [q.put(i) for i in xrange(args.iterations)]
-    yield q.join()
+    yield [client(args, k, pkey, q, r, m, v, h) for pkey in pkeys]
 
     yield [pkey.delete() for pkey in pkeys]
 
@@ -296,6 +292,7 @@ class Result(object):
                           "mean {0.mean} "
                           "speedup {0.speedup} "
                           "(n {0.n}, "
+                          "c {0.args.clients} "
                           "t0 {0.t0} "
                           "t1 {0.t1})\n").format(self))
         sys.stdout.flush()
