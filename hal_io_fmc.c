@@ -44,6 +44,15 @@
 #include "hal.h"
 #include "hal_internal.h"
 
+/*
+ * Even no-op debugging code shows up in profiling if it's in an inner
+ * loop which runs often enough, so we leave now this off by default
+ * at compile time.
+ */
+#ifndef HAL_IO_FMC_DEBUG
+#define HAL_IO_FMC_DEBUG        0
+#endif
+
 static int debug = 0;
 static int inited = 0;
 
@@ -68,16 +77,23 @@ void hal_io_set_debug(int onoff)
   debug = onoff;
 }
 
-static void dump(char *label, hal_addr_t offset, const uint8_t *buf, size_t len)
+#if HAL_IO_FMC_DEBUG
+
+static inline void dump(const char *label, const hal_addr_t offset, const uint8_t * const buf, const size_t len)
 {
   if (debug) {
-    size_t i;
-    printf("%s %04x [", label, (unsigned int)offset);
-    for (i = 0; i < len; ++i)
-      printf(" %02x", buf[i]);
-    printf(" ]\n");
+    char hex[len * 3 + 1];
+    for (size_t i = 0; i < len; ++i)
+      sprintf(hex + 3 * i, " %02x", buf[i]);
+    hal_log(HAL_LOG_DEBUG, "%s %04x [%s ]", label, (unsigned int) offset, hex);
   }
 }
+
+#else
+
+#define dump(...)
+
+#endif
 
 hal_error_t hal_io_write(const hal_core_t *core, hal_addr_t offset, const uint8_t *buf, size_t len)
 {
@@ -108,7 +124,6 @@ hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf,
 {
   uint8_t *rbuf = buf;
   int rlen = len;
-  hal_addr_t orig_offset = offset;
   hal_error_t err;
 
   if (core == NULL)
@@ -120,14 +135,14 @@ hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf,
   if ((err = init()) != HAL_OK)
     return err;
 
+  dump("read  ", offset + hal_core_base(core), buf, len);
+
   offset = fmc_offset(offset + hal_core_base(core));
   for (; rlen > 0; offset += 4, rbuf += 4, rlen -= 4) {
     uint32_t val;
     fmc_read_32(offset, &val);
     *(uint32_t *)rbuf = ntohl(val);
   }
-
-  dump("read  ", orig_offset + hal_core_base(core), buf, len);
 
   return HAL_OK;
 }
