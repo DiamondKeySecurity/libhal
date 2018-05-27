@@ -114,7 +114,7 @@ hal_error_t hal_io_write(const hal_core_t *core, hal_addr_t offset, const uint8_
   for (; len > 0; offset += 4, buf += 4, len -= 4) {
     uint32_t val;
     val = htonl(*(uint32_t *)buf);
-    fmc_write_32(offset, &val);
+    fmc_write_32(offset, val);
   }
 
   return HAL_OK;
