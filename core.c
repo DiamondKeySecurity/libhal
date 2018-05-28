@@ -103,6 +103,9 @@ static inline hal_core_t *probe_cores(void)
     { "modexpa7", 7 * CORE_SIZE }, /* ModexpA7 uses eight slots */
   };
 
+  if (offsetof(hal_core_t, info) != 0)
+    return NULL;                /* Paranoia, see hal.h */
+
   if (head != NULL)
     return head;
 
@@ -300,16 +303,6 @@ void hal_core_free(hal_core_t *core)
     hal_critical_section_end();
     hal_task_yield();
   }
-}
-
-hal_addr_t hal_core_base(const hal_core_t *core)
-{
-  return core == NULL ? 0 : core->info.base;
-}
-
-const hal_core_info_t *hal_core_info(const hal_core_t *core)
-{
-  return core == NULL ? NULL : &core->info;
 }
 
 /*

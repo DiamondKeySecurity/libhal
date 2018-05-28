@@ -214,6 +214,12 @@ extern hal_error_t hal_io_wait2(const hal_core_t *core1, const hal_core_t *core2
  * insistence on discarding array bounds information makes
  * non-delimited character arrays problematic unless we wrap them in a
  * structure.
+ *
+ * For performance reasons, we promise that the hal_core_info_t will
+ * be the first element of hal_core_t, so that we can convert between
+ * them using inline functions without completely exposing hal_core_t.
+ * This is icky, but hal_core_base() gets called a lot during I/O, so
+ * it's worth a bit of ick to eliminate some function call overhead.
  */
 
 typedef struct {
@@ -224,9 +230,17 @@ typedef struct {
 
 typedef uint32_t hal_core_lru_t;
 
+static inline const hal_core_info_t *hal_core_info(const hal_core_t *core)
+{
+  return (const hal_core_info_t *) core;
+}
+
+static inline hal_addr_t hal_core_base(const hal_core_t *core)
+{
+  return core == NULL ? 0 : hal_core_info(core)->base;
+}
+
 extern hal_core_t *hal_core_find(const char *name, hal_core_t *core);
-extern const hal_core_info_t *hal_core_info(const hal_core_t *core);
-extern hal_addr_t hal_core_base(const hal_core_t *core);
 extern hal_core_t *hal_core_iterate(hal_core_t *core);
 extern void hal_core_reset_table(void);
 extern hal_error_t hal_core_alloc(const char *name, hal_core_t **core, hal_core_lru_t *pomace);
