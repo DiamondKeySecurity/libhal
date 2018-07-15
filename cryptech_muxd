@@ -419,6 +419,10 @@ def main():
                         default = os.getenv("CRYPTECH_RPC_CLIENT_SOCKET_NAME",
                                             "/tmp/.cryptech_muxd.rpc"))
 
+    parser.add_argument("--rpc-socket-mode",
+                        help    = "permission bits for RPC socket inode",
+                        default = 0600, type = lambda s: int(s, 8))
+
     parser.add_argument("--cty-device",
                         help    = "CTY serial device name",
                         default = os.getenv("CRYPTECH_CTY_CLIENT_SERIAL_DEVICE"))
@@ -427,6 +431,10 @@ def main():
                         help    = "CTY PF_UNIX socket name",
                         default = os.getenv("CRYPTECH_CTY_CLIENT_SOCKET_NAME",
                                             "/tmp/.cryptech_muxd.cty"))
+
+    parser.add_argument("--cty-socket-mode",
+                        help    = "permission bits for CTY socket inode",
+                        default = 0600, type = lambda s: int(s, 8))
 
     args = parser.parse_args()
 
@@ -454,7 +462,7 @@ def main():
         logger.warn("No RPC device found")
     else:
         rpc_stream = RPCIOStream(device = args.rpc_device)
-        rpc_server = RPCServer(rpc_stream, args.rpc_socket)
+        rpc_server = RPCServer(rpc_stream, args.rpc_socket, args.rpc_socket_mode)
         futures.append(rpc_stream.rpc_output_loop())
         futures.append(rpc_stream.logout_all())
 
@@ -462,7 +470,7 @@ def main():
         logger.warn("No CTY device found")
     else:
         cty_stream = CTYIOStream(device = args.cty_device, console_log = console_log)
-        cty_server = CTYServer(cty_stream, args.cty_socket)
+        cty_server = CTYServer(cty_stream, args.cty_socket, args.cty_socket_mode)
         futures.append(cty_stream.cty_output_loop())
 
     # Might want to use WaitIterator(dict(...)) here so we can
