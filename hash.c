@@ -80,6 +80,11 @@ static hal_error_t sw_hash_core_sha512(hal_hash_state_t *);
 
 #endif /* HAL_ENABLE_SOFTWARE_HASH_CORES */
 
+#if HAL_ONLY_USE_SOFTWARE_HASH_CORES
+#define hal_core_alloc(x, y, z) HAL_ERROR_CORE_NOT_FOUND
+#define hal_core_free(x)
+#endif
+
 /*
  * HMAC magic numbers.
  */
