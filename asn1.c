@@ -61,12 +61,36 @@
  * Algorithm OIDs used in SPKI and PKCS #8.
  */
 
+/*
+ * From RFC 5480 New ASN.1 Modules for the Public Key Infrastructure Using X.509 (PKIX)
+ *
+ *     rsaEncryption OBJECT IDENTIFIER ::= {
+ *         iso(1) member-body(2) US(840) rsadsi(113549) pkcs(1)
+ *         pkcs-1(1) 1 }
+ */
 const uint8_t hal_asn1_oid_rsaEncryption[] = { 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01 };
 const size_t  hal_asn1_oid_rsaEncryption_len = sizeof(hal_asn1_oid_rsaEncryption);
 
+/*
+ * From RFC 5480 Elliptic Curve Cryptography Subject Public Key Information
+ *
+ *     id-ecPublicKey OBJECT IDENTIFIER ::= {
+ *       iso(1) member-body(2) us(840) ansi-X9-62(10045) keyType(2) 1 }
+ */
 const uint8_t hal_asn1_oid_ecPublicKey[] = { 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01 };
 const size_t  hal_asn1_oid_ecPublicKey_len = sizeof(hal_asn1_oid_ecPublicKey);
 
+/*
+ * From RFC 5649 Advanced Encryption Standard (AES) Key Wrap with Padding Algorithm
+ *
+ *      aes OBJECT IDENTIFIER ::= { joint-iso-itu-t(2) country(16)
+ *                us(840) organization(1) gov(101) csor(3)
+ *                nistAlgorithm(4) 1 }
+ *
+ *      id-aes128-wrap-pad OBJECT IDENTIFIER ::= { aes 8 }
+ *
+ *      id-aes256-wrap-pad OBJECT IDENTIFIER ::= { aes 48 }
+ */
 #if KEK_LENGTH == (bitsToBytes(128))
 const uint8_t hal_asn1_oid_aesKeyWrap[] = { 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x08 };
 const size_t hal_asn1_oid_aesKeyWrap_len = sizeof(hal_asn1_oid_aesKeyWrap);
@@ -77,7 +101,12 @@ const uint8_t hal_asn1_oid_aesKeyWrap[] = { 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 
 const size_t hal_asn1_oid_aesKeyWrap_len = sizeof(hal_asn1_oid_aesKeyWrap);
 #endif
 
-/* from draft-housley-cms-mts-hash-sig-07.txt */
+/*
+ * From draft-housley-cms-mts-hash-sig Use of the Hash-based Merkle Tree Signature (MTS) Algorithm in the Cryptographic Message Syntax (CMS)
+ *
+ *      id-alg-mts-hashsig  OBJECT IDENTIFIER ::= { iso(1) member-body(2)
+ *            us(840) rsadsi(113549) pkcs(1) pkcs9(9) smime(16) alg(3) 17 }
+ */
 const uint8_t hal_asn1_oid_mts_hashsig[] = { 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x09, 0x10, 0x03, 0x11 };
 const size_t hal_asn1_oid_mts_hashsig_len = sizeof(hal_asn1_oid_mts_hashsig);
 
