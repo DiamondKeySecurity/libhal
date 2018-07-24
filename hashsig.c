@@ -1182,6 +1182,8 @@ size_t hal_hashsig_lmots_private_key_len(const lmots_algorithm_t lmots_type)
 }
 
 #if RPC_CLIENT == RPC_CLIENT_LOCAL
+static int restart_in_progress = 0;
+
 static inline void *gnaw(uint8_t **mem, size_t *len, const size_t size)
 {
     if (mem == NULL || *mem == NULL || len == NULL || size > *len)
@@ -1285,6 +1287,9 @@ hal_error_t hal_hashsig_key_gen(hal_core_t *core,
 {
     /* hss_alloc does most of the checks */
 
+    if (restart_in_progress)
+        return HAL_ERROR_NOT_READY;
+
     /* check flash keystore for space to store the root tree */
     lms_parameter_t *lms = lms_select_parameter_set(lms_type);
     if (lms == NULL)
@@ -1335,6 +1340,9 @@ hal_error_t hal_hashsig_key_gen(hal_core_t *core,
 /* caller will delete the hss key from the keystore */
 hal_error_t hal_hashsig_key_delete(const hal_hashsig_key_t * const key)
 {
+    if (restart_in_progress)
+        return HAL_ERROR_NOT_READY;
+
     if (key == NULL || key->type != HAL_KEY_TYPE_HASHSIG_PRIVATE)
         return HAL_ERROR_BAD_ARGUMENTS;
 
@@ -1367,6 +1375,9 @@ hal_error_t hal_hashsig_sign(hal_core_t *core,
                              const uint8_t * const msg, const size_t msg_len,
                              uint8_t *sig, size_t *sig_len, const size_t sig_max)
 {
+    if (restart_in_progress)
+        return HAL_ERROR_NOT_READY;
+
     if (key == NULL || key->type != HAL_KEY_TYPE_HASHSIG_PRIVATE || msg == NULL || sig == NULL || sig_len == NULL)
         return HAL_ERROR_BAD_ARGUMENTS;
 
@@ -1873,6 +1884,8 @@ hal_error_t hal_hashsig_ks_init(void)
     uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
     size_t der_len;
 
+    restart_in_progress = 1;
+
     /* Find all hss private keys */
     while ((hal_ks_match(hal_ks_token, client, session,
                          HAL_KEY_TYPE_HASHSIG_PRIVATE, HAL_CURVE_NONE, 0, 0, NULL, 0,
@@ -2056,6 +2069,7 @@ hal_error_t hal_hashsig_ks_init(void)
         }
     }
 
+    restart_in_progress = 0;
     return HAL_OK;
 }
 #endif

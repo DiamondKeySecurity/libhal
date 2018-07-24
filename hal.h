@@ -162,6 +162,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_RPC_PROTOCOL_ERROR,        "RPC protocol error")                           \
   DEFINE_HAL_ERROR(HAL_ERROR_NOT_IMPLEMENTED,           "Not implemented")                              \
   DEFINE_HAL_ERROR(HAL_ERROR_HASHSIG_KEY_EXHAUSTED,     "Key exhausted")                                \
+  DEFINE_HAL_ERROR(HAL_ERROR_NOT_READY,                 "Not ready for this operation")                 \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
