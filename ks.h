@@ -58,7 +58,7 @@
  * the UUID generation code (by definition -- it's not a version 4 UUID).
  */
 
-const hal_uuid_t hal_ks_pin_uuid;
+extern const hal_uuid_t hal_ks_pin_uuid;
 
 /*
  * Known block states.
