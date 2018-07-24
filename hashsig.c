@@ -97,20 +97,50 @@ static inline hal_error_t hal_xdr_decode_bytestring16(const uint8_t ** const inb
 #define hal_asn1_encode_size_t(n, der, der_len, der_max)                \
     hal_asn1_encode_uint32((const uint32_t)n, der, der_len, der_max)
 
-#define hal_asn1_decode_size_t(np, der, der_len, der_max)               \
-    hal_asn1_decode_uint32((uint32_t *)np, der, der_len, der_max)
+static inline hal_error_t hal_asn1_decode_size_t(size_t *np, const uint8_t * const der, size_t *der_len, const size_t der_max)
+{
+    /* trust the compiler to optimize out the unused code path */
+    if (sizeof(size_t) == sizeof(uint32_t)) {
+        return hal_asn1_decode_uint32((uint32_t *)np, der, der_len, der_max);
+    }
+    else {
+        uint32_t n;
+        hal_error_t err;
+
+        if ((err = hal_asn1_decode_uint32(&n, der, der_len, der_max)) == HAL_OK)
+            *np = (size_t)n;
+
+        return err;
+    }
+}
 
 #define hal_asn1_encode_lms_algorithm(type, der, der_len, der_max)      \
     hal_asn1_encode_uint32((const uint32_t)type, der, der_len, der_max)
 
-#define hal_asn1_decode_lms_algorithm(type, der, der_len, der_max)      \
-    hal_asn1_decode_uint32((uint32_t *)type, der, der_len, der_max)
+static inline hal_error_t hal_asn1_decode_lms_algorithm(lms_algorithm_t *type, const uint8_t * const der, size_t *der_len, const size_t der_max)
+{
+    uint32_t n;
+    hal_error_t err;
+
+    if ((err = hal_asn1_decode_uint32(&n, der, der_len, der_max)) == HAL_OK)
+        *type = (lms_algorithm_t)n;
+
+    return err;
+}
 
 #define hal_asn1_encode_lmots_algorithm(type, der, der_len, der_max)    \
     hal_asn1_encode_uint32((const uint32_t)type, der, der_len, der_max)
 
-#define hal_asn1_decode_lmots_algorithm(type, der, der_len, der_max)    \
-    hal_asn1_decode_uint32((uint32_t *)type, der, der_len, der_max)
+static inline hal_error_t hal_asn1_decode_lmots_algorithm(lmots_algorithm_t *type, const uint8_t * const der, size_t *der_len, const size_t der_max)
+{
+    uint32_t n;
+    hal_error_t err;
+
+    if ((err = hal_asn1_decode_uint32(&n, der, der_len, der_max)) == HAL_OK)
+        *type = (lmots_algorithm_t)n;
+
+    return err;
+}
 
 #define hal_asn1_encode_uuid(data, der, der_len, der_max)               \
     hal_asn1_encode_octet_string((const uint8_t * const)data, sizeof(hal_uuid_t), der, der_len, der_max)
