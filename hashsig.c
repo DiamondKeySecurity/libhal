@@ -94,8 +94,10 @@ static inline hal_error_t hal_xdr_decode_bytestring16(const uint8_t ** const inb
  * ASN.1 extensions
  */
 
-#define hal_asn1_encode_size_t(n, der, der_len, der_max)                \
-    hal_asn1_encode_uint32((const uint32_t)n, der, der_len, der_max)
+static inline hal_error_t hal_asn1_encode_size_t(const size_t n, uint8_t *der, size_t *der_len, const size_t der_max)
+{
+    return hal_asn1_encode_uint32((const uint32_t)n, der, der_len, der_max);
+}
 
 static inline hal_error_t hal_asn1_decode_size_t(size_t *np, const uint8_t * const der, size_t *der_len, const size_t der_max)
 {
@@ -114,8 +116,10 @@ static inline hal_error_t hal_asn1_decode_size_t(size_t *np, const uint8_t * con
     }
 }
 
-#define hal_asn1_encode_lms_algorithm(type, der, der_len, der_max)      \
-    hal_asn1_encode_uint32((const uint32_t)type, der, der_len, der_max)
+static inline hal_error_t hal_asn1_encode_lms_algorithm(const lms_algorithm_t type, uint8_t *der, size_t *der_len, const size_t der_max)
+{
+    return hal_asn1_encode_uint32((const uint32_t)type, der, der_len, der_max);
+}
 
 static inline hal_error_t hal_asn1_decode_lms_algorithm(lms_algorithm_t *type, const uint8_t * const der, size_t *der_len, const size_t der_max)
 {
@@ -128,8 +132,10 @@ static inline hal_error_t hal_asn1_decode_lms_algorithm(lms_algorithm_t *type, c
     return err;
 }
 
-#define hal_asn1_encode_lmots_algorithm(type, der, der_len, der_max)    \
-    hal_asn1_encode_uint32((const uint32_t)type, der, der_len, der_max)
+static inline hal_error_t hal_asn1_encode_lmots_algorithm(const lmots_algorithm_t type, uint8_t *der, size_t *der_len, const size_t der_max)
+{
+    return hal_asn1_encode_uint32((const uint32_t)type, der, der_len, der_max);
+}
 
 static inline hal_error_t hal_asn1_decode_lmots_algorithm(lmots_algorithm_t *type, const uint8_t * const der, size_t *der_len, const size_t der_max)
 {
@@ -142,24 +148,35 @@ static inline hal_error_t hal_asn1_decode_lmots_algorithm(lmots_algorithm_t *typ
     return err;
 }
 
-#define hal_asn1_encode_uuid(data, der, der_len, der_max)               \
-    hal_asn1_encode_octet_string((const uint8_t * const)data, sizeof(hal_uuid_t), der, der_len, der_max)
+static inline hal_error_t hal_asn1_encode_uuid(const hal_uuid_t * const data, uint8_t *der, size_t *der_len, const size_t der_max)
+{
+    return hal_asn1_encode_octet_string((const uint8_t * const)data, sizeof(hal_uuid_t), der, der_len, der_max);
+}
 
-#define hal_asn1_decode_uuid(data, der, der_len, der_max)               \
-    hal_asn1_decode_octet_string((uint8_t *)data, sizeof(hal_uuid_t), der, der_len, der_max)
+static inline hal_error_t hal_asn1_decode_uuid(hal_uuid_t *data, const uint8_t * const der, size_t *der_len, const size_t der_max)
+{
+    return hal_asn1_decode_octet_string((uint8_t *)data, sizeof(hal_uuid_t), der, der_len, der_max);
+}
 
-#define hal_asn1_encode_bytestring16(data, der, der_len, der_max)       \
-    hal_asn1_encode_octet_string((const uint8_t * const)data, sizeof(bytestring16), der, der_len, der_max)
+static inline hal_error_t hal_asn1_encode_bytestring16(const bytestring16 * const data, uint8_t *der, size_t *der_len, const size_t der_max)
+{
+    return hal_asn1_encode_octet_string((const uint8_t * const)data, sizeof(bytestring16), der, der_len, der_max);
+}
 
-#define hal_asn1_decode_bytestring16(data, der, der_len, der_max)       \
-    hal_asn1_decode_octet_string((uint8_t *)data, sizeof(bytestring16), der, der_len, der_max)
+static inline hal_error_t hal_asn1_decode_bytestring16(bytestring16 *data, const uint8_t * const der, size_t *der_len, const size_t der_max)
+{
+    return hal_asn1_decode_octet_string((uint8_t *)data, sizeof(bytestring16), der, der_len, der_max);
+}
 
-#define hal_asn1_encode_bytestring32(data, der, der_len, der_max)       \
-    hal_asn1_encode_octet_string((const uint8_t * const)data, sizeof(bytestring32), der, der_len, der_max)
+static inline hal_error_t hal_asn1_encode_bytestring32(const bytestring32 * const data, uint8_t *der, size_t *der_len, const size_t der_max)
+{
+    return hal_asn1_encode_octet_string((const uint8_t * const)data, sizeof(bytestring32), der, der_len, der_max);
+}
 
-#define hal_asn1_decode_bytestring32(data, der, der_len, der_max)       \
-    hal_asn1_decode_octet_string((uint8_t *)data, sizeof(bytestring32), der, der_len, der_max)
-
+static inline hal_error_t hal_asn1_decode_bytestring32(bytestring32 *data, const uint8_t * const der, size_t *der_len, const size_t der_max)
+{
+    return hal_asn1_decode_octet_string((uint8_t *)data, sizeof(bytestring32), der, der_len, der_max);
+}
 
 /* ---------------------------------------------------------------- */
 
