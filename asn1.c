@@ -60,12 +60,36 @@
  * Algorithm OIDs used in SPKI and PKCS #8.
  */
 
+/*
+ * From RFC 5480 New ASN.1 Modules for the Public Key Infrastructure Using X.509 (PKIX)
+ *
+ *     rsaEncryption OBJECT IDENTIFIER ::= {
+ *         iso(1) member-body(2) US(840) rsadsi(113549) pkcs(1)
+ *         pkcs-1(1) 1 }
+ */
 const uint8_t hal_asn1_oid_rsaEncryption[] = { 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01 };
 const size_t  hal_asn1_oid_rsaEncryption_len = sizeof(hal_asn1_oid_rsaEncryption);
 
+/*
+ * From RFC 5480 Elliptic Curve Cryptography Subject Public Key Information
+ *
+ *     id-ecPublicKey OBJECT IDENTIFIER ::= {
+ *       iso(1) member-body(2) us(840) ansi-X9-62(10045) keyType(2) 1 }
+ */
 const uint8_t hal_asn1_oid_ecPublicKey[] = { 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01 };
 const size_t  hal_asn1_oid_ecPublicKey_len = sizeof(hal_asn1_oid_ecPublicKey);
 
+/*
+ * From RFC 5649 Advanced Encryption Standard (AES) Key Wrap with Padding Algorithm
+ *
+ *      aes OBJECT IDENTIFIER ::= { joint-iso-itu-t(2) country(16)
+ *                us(840) organization(1) gov(101) csor(3)
+ *                nistAlgorithm(4) 1 }
+ *
+ *      id-aes128-wrap-pad OBJECT IDENTIFIER ::= { aes 8 }
+ *
+ *      id-aes256-wrap-pad OBJECT IDENTIFIER ::= { aes 48 }
+ */
 #if KEK_LENGTH == (bitsToBytes(128))
 const uint8_t hal_asn1_oid_aesKeyWrap[] = { 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x08 };
 const size_t hal_asn1_oid_aesKeyWrap_len = sizeof(hal_asn1_oid_aesKeyWrap);
@@ -75,6 +99,15 @@ const size_t hal_asn1_oid_aesKeyWrap_len = sizeof(hal_asn1_oid_aesKeyWrap);
 const uint8_t hal_asn1_oid_aesKeyWrap[] = { 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x30 };
 const size_t hal_asn1_oid_aesKeyWrap_len = sizeof(hal_asn1_oid_aesKeyWrap);
 #endif
+
+/*
+ * From draft-housley-cms-mts-hash-sig Use of the Hash-based Merkle Tree Signature (MTS) Algorithm in the Cryptographic Message Syntax (CMS)
+ *
+ *      id-alg-mts-hashsig  OBJECT IDENTIFIER ::= { iso(1) member-body(2)
+ *            us(840) rsadsi(113549) pkcs(1) pkcs9(9) smime(16) alg(3) 17 }
+ */
+const uint8_t hal_asn1_oid_mts_hashsig[] = { 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x09, 0x10, 0x03, 0x11 };
+const size_t hal_asn1_oid_mts_hashsig_len = sizeof(hal_asn1_oid_mts_hashsig);
 
 /*
  * Encode tag and length fields of an ASN.1 object.
@@ -169,6 +202,88 @@ hal_error_t hal_asn1_encode_integer(const fp_int * const bn,
   if (leading_zero)
     *der++ = 0x00;
   fp_to_unsigned_bin(unconst_fp_int(bn), der);
+
+  return HAL_OK;
+}
+
+/*
+ * Encode an unsigned ASN.1 INTEGER from a uint32_t.  If der is
+ * NULL, just return the length of what we would have encoded.
+ */
+
+hal_error_t hal_asn1_encode_uint32(const uint32_t n,
+                                   uint8_t *der, size_t *der_len, const size_t der_max)
+{
+  /*
+   * We only handle unsigned INTEGERs, so we need to pad data with a
+   * leading zero if the most significant bit is set, to avoid
+   * flipping the ASN.1 sign bit.
+   */
+
+  size_t vlen;
+  hal_error_t err;
+  size_t hlen;
+
+  /* DER says to use the minimum number of octets */
+  if (n < 0x80)            vlen = 1;
+  else if (n < 0x8000)     vlen = 2;
+  else if (n < 0x800000)   vlen = 3;
+  else if (n < 0x80000000) vlen = 4;
+  else                     vlen = 5;
+
+  err = hal_asn1_encode_header(ASN1_INTEGER, vlen, der, &hlen, der_max);
+
+  if (der_len != NULL)
+    *der_len = hlen + vlen;
+
+  if (der == NULL || err != HAL_OK)
+    return err;
+
+  hal_assert(hlen + vlen <= der_max);
+
+  der += hlen;
+
+  uint32_t m = n;
+  for (size_t i = vlen; i > 0; --i) {
+    der[i - 1] = m & 0xff;
+    m >>= 8;
+  }
+
+  return HAL_OK;
+}
+
+/*
+ * Encode an ASN.1 OCTET STRING.  If der is NULL, just return the length
+ * of what we would have encoded.
+ */
+
+hal_error_t hal_asn1_encode_octet_string(const uint8_t * const data,    const size_t data_len,
+                                         uint8_t *der, size_t *der_len, const size_t der_max)
+{
+  if (data_len == 0 || (der != NULL && data == NULL))
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  size_t hlen;
+  hal_error_t err;
+
+  if ((err = hal_asn1_encode_header(ASN1_OCTET_STRING, data_len, NULL, &hlen, 0)) != HAL_OK)
+    return err;
+  
+  if (der_len != NULL)
+    *der_len = hlen + data_len;
+
+  if (der == NULL)
+    return HAL_OK;
+
+  hal_assert(hlen + data_len <= der_max);
+
+  /*
+   * Handle data early, in case it was staged into our output buffer.
+   */
+  memmove(der + hlen, data, data_len);
+
+  if ((err = hal_asn1_encode_header(ASN1_OCTET_STRING, data_len, der, &hlen, der_max)) != HAL_OK)
+    return err;
 
   return HAL_OK;
 }
@@ -483,6 +598,68 @@ hal_error_t hal_asn1_decode_integer(fp_int *bn,
 }
 
 /*
+ * Decode an ASN.1 INTEGER into a uint32_t.  Since we only
+ * support (or need to support, or expect to see) unsigned integers,
+ * we return failure if the sign bit is set in the ASN.1 INTEGER.
+ */
+
+hal_error_t hal_asn1_decode_uint32(uint32_t *np,
+                                   const uint8_t * const der, size_t *der_len, const size_t der_max)
+{
+  if (np == NULL || der == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  hal_error_t err;
+  size_t hlen, vlen;
+
+  if ((err = hal_asn1_decode_header(ASN1_INTEGER, der, der_max, &hlen, &vlen)) != HAL_OK)
+    return err;
+
+  if (der_len != NULL)
+    *der_len = hlen + vlen;
+
+  if (vlen < 1 || vlen > 5 || (der[hlen] & 0x80) != 0x00 || (vlen == 5 && der[hlen] != 0))
+    return HAL_ERROR_ASN1_PARSE_FAILED;
+
+  uint32_t n = 0;
+  for (size_t i = 0; i < vlen; ++i) {
+    n <<= 8;		// slightly inefficient for the first octet
+    n += der[hlen + i];
+  }
+  *np = n;
+
+  return HAL_OK;
+}
+
+/*
+ * Decode an ASN.1 OCTET STRING.
+ */
+
+hal_error_t hal_asn1_decode_octet_string(uint8_t *data, const size_t data_len,
+                                         const uint8_t * const der, size_t *der_len, const size_t der_max)
+{
+  if (der == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  size_t hlen, vlen;
+  hal_error_t err;
+
+  if ((err = hal_asn1_decode_header(ASN1_OCTET_STRING, der, der_max, &hlen, &vlen)) != HAL_OK)
+    return err;
+
+  if (der_len != NULL)
+    *der_len = hlen + vlen;
+
+  if (data != NULL) {
+    if (data_len != vlen)
+      return HAL_ERROR_ASN1_PARSE_FAILED;
+    memmove(data, der + hlen, vlen);
+  }
+
+  return HAL_OK;
+}
+
+/*
  * Decode a public key from a X.509 SubjectPublicKeyInfo (RFC 5280).
  */
 
@@ -785,6 +962,12 @@ hal_error_t hal_asn1_guess_key_type(hal_key_type_t *type,
     if ((err = hal_ecdsa_oid_to_curve(curve, curve_oid, curve_oid_len)) != HAL_OK)
       *curve = HAL_CURVE_NONE;
     return err;
+  }
+
+  if (alg_oid_len == hal_asn1_oid_mts_hashsig_len && memcmp(alg_oid, hal_asn1_oid_mts_hashsig, alg_oid_len) == 0) {
+    *type = public ? HAL_KEY_TYPE_HASHSIG_PUBLIC : HAL_KEY_TYPE_HASHSIG_PRIVATE;
+    *curve = HAL_CURVE_NONE;
+    return HAL_OK;
   }
 
   *type = HAL_KEY_TYPE_NONE;

@@ -38,6 +38,7 @@
 #include "hal.h"
 #include "hal_internal.h"
 #include "asn1_internal.h"
+#include "hashsig.h"
 
 #ifndef HAL_STATIC_PKEY_STATE_BLOCKS
 #define HAL_STATIC_PKEY_STATE_BLOCKS 0
@@ -521,6 +522,68 @@ static hal_error_t pkey_local_generate_ec(const hal_client_handle_t client,
 }
 
 /*
+ * Generate a new hash-tree key with supplied name, return a key handle.
+ */
+
+static hal_error_t pkey_local_generate_hashsig(const hal_client_handle_t client,
+                                               const hal_session_handle_t session,
+                                               hal_pkey_handle_t *pkey,
+                                               hal_uuid_t *name,
+                                               const size_t hss_levels,
+                                               const lms_algorithm_t lms_type,
+                                               const lmots_algorithm_t lmots_type,
+                                               const hal_key_flags_t flags)
+{
+  hal_assert(pkey != NULL && name != NULL);
+
+  hal_hashsig_key_t *key = NULL;
+  hal_pkey_slot_t *slot;
+  hal_error_t err;
+
+  if ((err = check_writable(client, flags)) != HAL_OK)
+    return err;
+
+  if ((slot = alloc_slot(flags)) == NULL)
+    return HAL_ERROR_NO_KEY_SLOTS_AVAILABLE;
+
+  if ((err = hal_uuid_gen(&slot->name)) != HAL_OK)
+    return err;
+
+  slot->client  = client;
+  slot->session = session;
+  slot->type    = HAL_KEY_TYPE_HASHSIG_PRIVATE,
+  slot->curve   = HAL_CURVE_NONE;
+  slot->flags   = flags;
+
+  if ((err = hal_hashsig_key_gen(NULL, &key, hss_levels, lms_type, lmots_type)) != HAL_OK) {
+    slot->type = HAL_KEY_TYPE_NONE;
+    return err;
+  }
+
+  uint8_t der[hal_hashsig_private_key_to_der_len(key)];
+  size_t der_len;
+
+  if ((err = hal_hashsig_private_key_to_der(key, der, &der_len, sizeof(der))) == HAL_OK)
+    err = hal_ks_store(ks_from_flags(flags), slot, der, der_len);
+
+  /* There's nothing sensitive in the top-level private key, but we wipe
+   * the der anyway, for symmetry with other key types. The actual key buf
+   * is allocated internally and stays in memory, because everything else
+   * is linked off of it.
+   */
+  memset(der, 0, sizeof(der));
+
+  if (err != HAL_OK) {
+    slot->type = HAL_KEY_TYPE_NONE;
+    return err;
+  }
+
+  *pkey = slot->pkey;
+  *name = slot->name;
+  return HAL_OK;
+}
+
+/*
  * Discard key handle, leaving key intact.
  */
 
@@ -539,6 +602,7 @@ static hal_error_t pkey_local_close(const hal_pkey_handle_t pkey)
 /*
  * Delete a key from the store, given its key handle.
  */
+static hal_error_t pkey_local_get_key_type(const hal_pkey_handle_t pkey, hal_key_type_t *type);
 
 static hal_error_t pkey_local_delete(const hal_pkey_handle_t pkey)
 {
@@ -551,6 +615,21 @@ static hal_error_t pkey_local_delete(const hal_pkey_handle_t pkey)
 
   if ((err = check_writable(slot->client, slot->flags)) != HAL_OK)
     return err;
+
+  hal_key_type_t key_type;
+  if ((err = pkey_local_get_key_type(pkey, &key_type)) != HAL_OK)
+      return err;
+
+  if (key_type == HAL_KEY_TYPE_HASHSIG_PRIVATE) {
+    hal_hashsig_key_t *key;
+    uint8_t keybuf[hal_hashsig_key_t_size];
+    uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
+    size_t der_len;
+    if ((err = ks_fetch_from_flags(slot, der, &der_len, sizeof(der))) != HAL_OK ||
+        (err = hal_hashsig_private_key_from_der(&key, keybuf, sizeof(keybuf), der, der_len)) != HAL_OK ||
+        (err = hal_hashsig_key_delete(key)) != HAL_OK)
+      return err;
+  }
 
   err = hal_ks_delete(ks_from_flags(slot->flags), slot);
 
@@ -633,9 +712,15 @@ static size_t pkey_local_get_public_key_len(const hal_pkey_handle_t pkey)
 
   size_t result = 0;
 
-  uint8_t keybuf[hal_rsa_key_t_size > hal_ecdsa_key_t_size ? hal_rsa_key_t_size : hal_ecdsa_key_t_size];
-  hal_rsa_key_t   *rsa_key   = NULL;
-  hal_ecdsa_key_t *ecdsa_key = NULL;
+#ifndef max
+#define max(a, b) ((a) >= (b) ? (a) : (b))
+#endif
+  size_t keybuf_size = max(hal_rsa_key_t_size, hal_ecdsa_key_t_size);
+  keybuf_size = max(keybuf_size, hal_hashsig_key_t_size);
+  uint8_t keybuf[keybuf_size];
+  hal_rsa_key_t     *rsa_key   = NULL;
+  hal_ecdsa_key_t   *ecdsa_key = NULL;
+  hal_hashsig_key_t *hashsig_key = NULL;
   uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
   size_t der_len;
   hal_error_t err;
@@ -645,6 +730,7 @@ static size_t pkey_local_get_public_key_len(const hal_pkey_handle_t pkey)
 
     case HAL_KEY_TYPE_RSA_PUBLIC:
     case HAL_KEY_TYPE_EC_PUBLIC:
+    case HAL_KEY_TYPE_HASHSIG_PUBLIC:
       result = der_len;
       break;
 
@@ -656,6 +742,11 @@ static size_t pkey_local_get_public_key_len(const hal_pkey_handle_t pkey)
     case HAL_KEY_TYPE_EC_PRIVATE:
       if (hal_ecdsa_private_key_from_der(&ecdsa_key, keybuf, sizeof(keybuf), der, der_len) == HAL_OK)
         result = hal_ecdsa_public_key_to_der_len(ecdsa_key);
+      break;
+
+    case HAL_KEY_TYPE_HASHSIG_PRIVATE:
+      if (hal_hashsig_private_key_from_der(&hashsig_key, keybuf, sizeof(keybuf), der, der_len) == HAL_OK)
+        result = hal_hashsig_public_key_to_der_len(hashsig_key);
       break;
 
     default:
@@ -681,10 +772,12 @@ static hal_error_t pkey_local_get_public_key(const hal_pkey_handle_t pkey,
   if (slot == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
 
-  uint8_t keybuf[hal_rsa_key_t_size > hal_ecdsa_key_t_size
-                 ? hal_rsa_key_t_size : hal_ecdsa_key_t_size];
-  hal_rsa_key_t   *rsa_key   = NULL;
-  hal_ecdsa_key_t *ecdsa_key = NULL;
+  size_t keybuf_size = max(hal_rsa_key_t_size, hal_ecdsa_key_t_size);
+  keybuf_size = max(keybuf_size, hal_hashsig_key_t_size);
+  uint8_t keybuf[keybuf_size];
+  hal_rsa_key_t     *rsa_key   = NULL;
+  hal_ecdsa_key_t   *ecdsa_key = NULL;
+  hal_hashsig_key_t *hashsig_key = NULL;
   uint8_t buf[HAL_KS_WRAPPED_KEYSIZE];
   size_t buf_len;
   hal_error_t err;
@@ -694,6 +787,7 @@ static hal_error_t pkey_local_get_public_key(const hal_pkey_handle_t pkey,
 
     case HAL_KEY_TYPE_RSA_PUBLIC:
     case HAL_KEY_TYPE_EC_PUBLIC:
+    case HAL_KEY_TYPE_HASHSIG_PUBLIC:
       if (der_len != NULL)
         *der_len = buf_len;
       if (der != NULL && der_max < buf_len)
@@ -710,6 +804,11 @@ static hal_error_t pkey_local_get_public_key(const hal_pkey_handle_t pkey,
     case HAL_KEY_TYPE_EC_PRIVATE:
       if ((err = hal_ecdsa_private_key_from_der(&ecdsa_key, keybuf, sizeof(keybuf), buf, buf_len)) == HAL_OK)
         err = hal_ecdsa_public_key_to_der(ecdsa_key, der, der_len, der_max);
+      break;
+
+    case HAL_KEY_TYPE_HASHSIG_PRIVATE:
+      if ((err = hal_hashsig_private_key_from_der(&hashsig_key, keybuf, sizeof(keybuf), buf, buf_len)) == HAL_OK)
+        err = hal_hashsig_public_key_to_der(hashsig_key, der, der_len, der_max);
       break;
 
     default:
@@ -812,6 +911,44 @@ static hal_error_t pkey_local_sign_ecdsa(hal_pkey_slot_t *slot,
   return HAL_OK;
 }
 
+static hal_error_t pkey_local_sign_hashsig(hal_pkey_slot_t *slot,
+                                           uint8_t *keybuf, const size_t keybuf_len,
+                                           const uint8_t * const der, const size_t der_len,
+                                           const hal_hash_handle_t hash,
+                                           const uint8_t * input, size_t input_len,
+                                           uint8_t * signature, size_t *signature_len, const size_t signature_max)
+{
+  hal_hashsig_key_t *key = NULL;
+  hal_error_t err;
+
+  hal_assert(signature != NULL && signature_len != NULL);
+  hal_assert((hash.handle == HAL_HANDLE_NONE) != (input == NULL || input_len == 0));
+
+  if ((err = hal_hashsig_private_key_from_der(&key, keybuf, keybuf_len, der, der_len)) != HAL_OK)
+    return err;
+
+  if (input == NULL || input_len == 0) {
+    hal_digest_algorithm_t alg;
+
+    if ((err = hal_rpc_hash_get_algorithm(hash, &alg))          != HAL_OK ||
+        (err = hal_rpc_hash_get_digest_length(alg, &input_len)) != HAL_OK)
+      return err;
+
+    if (input_len > signature_max)
+      return HAL_ERROR_RESULT_TOO_LONG;
+
+    if ((err = hal_rpc_hash_finalize(hash, signature, input_len)) != HAL_OK)
+      return err;
+
+    input = signature;
+  }
+
+  if ((err = hal_hashsig_sign(NULL, key, input, input_len, signature, signature_len, signature_max)) != HAL_OK)
+    return err;
+
+  return HAL_OK;
+}
+
 static hal_error_t pkey_local_sign(const hal_pkey_handle_t pkey,
                                    const hal_hash_handle_t hash,
                                    const uint8_t * const input,  const size_t input_len,
@@ -828,13 +965,20 @@ static hal_error_t pkey_local_sign(const hal_pkey_handle_t pkey,
                         const hal_hash_handle_t hash,
                         const uint8_t * const input,  const size_t input_len,
                         uint8_t * signature, size_t *signature_len, const size_t signature_max);
+  size_t keybuf_size;
 
   switch (slot->type) {
   case HAL_KEY_TYPE_RSA_PRIVATE:
     signer = pkey_local_sign_rsa;
+    keybuf_size = hal_rsa_key_t_size;
     break;
   case HAL_KEY_TYPE_EC_PRIVATE:
     signer = pkey_local_sign_ecdsa;
+    keybuf_size = hal_ecdsa_key_t_size;
+    break;
+  case HAL_KEY_TYPE_HASHSIG_PRIVATE:
+    signer = pkey_local_sign_hashsig;
+    keybuf_size = hal_hashsig_key_t_size;
     break;
   default:
     return HAL_ERROR_UNSUPPORTED_KEY;
@@ -843,8 +987,7 @@ static hal_error_t pkey_local_sign(const hal_pkey_handle_t pkey,
   if ((slot->flags & HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE) == 0)
     return HAL_ERROR_FORBIDDEN;
 
-  uint8_t keybuf[hal_rsa_key_t_size > hal_ecdsa_key_t_size
-                 ? hal_rsa_key_t_size : hal_ecdsa_key_t_size];
+  uint8_t keybuf[keybuf_size];
   uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
   size_t der_len;
   hal_error_t err;
@@ -957,6 +1100,40 @@ static hal_error_t pkey_local_verify_ecdsa(uint8_t *keybuf, const size_t keybuf_
   return HAL_OK;
 }
 
+static hal_error_t pkey_local_verify_hashsig(uint8_t *keybuf, const size_t keybuf_len, const hal_key_type_t type,
+                                           const uint8_t * const der, const size_t der_len,
+                                           const hal_hash_handle_t hash,
+                                           const uint8_t * input, size_t input_len,
+                                           const uint8_t * const signature, const size_t signature_len)
+{
+  uint8_t digest[signature_len];
+  hal_hashsig_key_t *key = NULL;
+  hal_error_t err;
+
+  hal_assert(signature != NULL && signature_len > 0);
+  hal_assert((hash.handle == HAL_HANDLE_NONE) != (input == NULL || input_len == 0));
+
+  if ((err = hal_hashsig_public_key_from_der(&key, keybuf, keybuf_len, der, der_len)) != HAL_OK)
+    return err;
+
+  if (input == NULL || input_len == 0) {
+    hal_digest_algorithm_t alg;
+
+    // ???
+    if ((err = hal_rpc_hash_get_algorithm(hash, &alg))              != HAL_OK ||
+        (err = hal_rpc_hash_get_digest_length(alg, &input_len))     != HAL_OK ||
+        (err = hal_rpc_hash_finalize(hash, digest, sizeof(digest))) != HAL_OK)
+      return err;
+
+    input = digest;
+  }
+
+  if ((err = hal_hashsig_verify(NULL, key, input, input_len, signature, signature_len)) != HAL_OK)
+    return err;
+
+  return HAL_OK;
+}
+
 static hal_error_t pkey_local_verify(const hal_pkey_handle_t pkey,
                                      const hal_hash_handle_t hash,
                                      const uint8_t * const input, const size_t input_len,
@@ -972,15 +1149,22 @@ static hal_error_t pkey_local_verify(const hal_pkey_handle_t pkey,
                           const hal_hash_handle_t hash,
                           const uint8_t * const input,  const size_t input_len,
                           const uint8_t * const signature, const size_t signature_len);
+  size_t keybuf_size;
 
   switch (slot->type) {
   case HAL_KEY_TYPE_RSA_PRIVATE:
   case HAL_KEY_TYPE_RSA_PUBLIC:
     verifier = pkey_local_verify_rsa;
+    keybuf_size = hal_rsa_key_t_size;
     break;
   case HAL_KEY_TYPE_EC_PRIVATE:
   case HAL_KEY_TYPE_EC_PUBLIC:
     verifier = pkey_local_verify_ecdsa;
+    keybuf_size = hal_ecdsa_key_t_size;
+    break;
+  case HAL_KEY_TYPE_HASHSIG_PUBLIC:
+    verifier = pkey_local_verify_hashsig;
+    keybuf_size = hal_hashsig_key_t_size;
     break;
   default:
     return HAL_ERROR_UNSUPPORTED_KEY;
@@ -989,8 +1173,7 @@ static hal_error_t pkey_local_verify(const hal_pkey_handle_t pkey,
   if ((slot->flags & HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE) == 0)
     return HAL_ERROR_FORBIDDEN;
 
-  uint8_t keybuf[hal_rsa_key_t_size > hal_ecdsa_key_t_size
-                 ? hal_rsa_key_t_size : hal_ecdsa_key_t_size];
+  uint8_t keybuf[keybuf_size];
   uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
   size_t der_len;
   hal_error_t err;
@@ -1314,6 +1497,7 @@ const hal_rpc_pkey_dispatch_t hal_rpc_local_pkey_dispatch = {
   .open                 = pkey_local_open,
   .generate_rsa         = pkey_local_generate_rsa,
   .generate_ec          = pkey_local_generate_ec,
+  .generate_hashsig     = pkey_local_generate_hashsig,
   .close                = pkey_local_close,
   .delete               = pkey_local_delete,
   .get_key_type         = pkey_local_get_key_type,

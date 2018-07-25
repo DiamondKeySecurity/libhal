@@ -447,7 +447,7 @@ hal_error_t hal_hash_initialize(hal_core_t *core,
     hal_core_free(core);
 
   /* A dynamically allocated core that can't restore state isn't going to work. */
-  if (!state->descriptor->can_restore_state && (flags & STATE_FLAG_FREE_CORE) != 0)
+  if (!descriptor->can_restore_state && (flags & STATE_FLAG_FREE_CORE) != 0)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   if (state_buffer == NULL && (state = alloc_static_hash_state()) == NULL)

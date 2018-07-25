@@ -103,6 +103,11 @@ WEAK_FUNCTION void hal_task_yield(void)
   return;
 }
 
+WEAK_FUNCTION void hal_task_yield_maybe(void)
+{
+  return;
+}
+
 /*
  * Local variables:
  * indent-tabs-mode: nil

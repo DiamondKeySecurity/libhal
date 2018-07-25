@@ -514,6 +514,10 @@ static inline int acceptable_key_type(const hal_key_type_t type)
   case HAL_KEY_TYPE_EC_PRIVATE:
   case HAL_KEY_TYPE_RSA_PUBLIC:
   case HAL_KEY_TYPE_EC_PUBLIC:
+  case HAL_KEY_TYPE_HASHSIG_PRIVATE:
+  case HAL_KEY_TYPE_HASHSIG_PUBLIC:
+  case HAL_KEY_TYPE_HASHSIG_LMS:
+  case HAL_KEY_TYPE_HASHSIG_LMOTS:
     return 1;
   default:
     return 0;
@@ -1017,6 +1021,18 @@ hal_error_t hal_ks_rewrite_der(hal_ks_t *ks,
  done:
   hal_ks_unlock();
   return err;
+}
+
+hal_error_t hal_ks_available(hal_ks_t *ks, size_t *count)
+{
+  if (ks == NULL || count == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
+
+  hal_ks_lock();
+  *count = ks->size - ks->used;
+  hal_ks_unlock();
+
+  return HAL_OK;
 }
 
 /*

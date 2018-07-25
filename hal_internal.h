@@ -61,7 +61,7 @@
   } while (0)
 
 /*
- * htonl is not available in arm-none-eabi headers or libc.
+ * htonl and htons are not available in arm-none-eabi headers or libc.
  */
 #ifndef STM32F4XX
 #include <arpa/inet.h>
@@ -75,10 +75,18 @@ inline uint32_t htonl(uint32_t w)
         ((w & 0x00ff0000) >> 8) +
         ((w & 0xff000000) >> 24);
 }
+inline uint16_t htons(uint16_t w)
+{
+    return
+        ((w & 0x00ff) << 8) +
+        ((w & 0xff00) >> 8);
+}
 #else                           /* big endian */
 #define htonl(x) (x)
+#define htons(x) (x)
 #endif
 #define ntohl htonl
+#define ntohs htons
 #endif
 
 /*
@@ -130,17 +138,17 @@ static inline hal_error_t hal_io_wait_valid2(const hal_core_t *core1, const hal_
 
 /*
  * Static memory allocation on start-up.  Don't use this except where
- * really necessary.  By design, there's no way to free this, we don't
- * want to have to manage a heap.  Intent is just to allow allocation
- * things like the large-ish ks_index arrays used by ks_flash.c from a
- * memory source external to the executable image file (eg, from the
- * secondary SDRAM chip on the Cryptech Alpha board).
+ * really necessary.  Intent is just to allow allocation of things like
+ * the large-ish ks_index arrays used by ks_flash.c from a memory source
+ * external to the executable image file (eg, from the secondary SDRAM
+ * chip on the Cryptech Alpha board).
  *
  * We shouldn't need this except on the HSM, so for now we don't bother
  * with implementing a version of this based on malloc() or sbrk().
  */
 
 extern void *hal_allocate_static_memory(const size_t size);
+extern hal_error_t hal_free_static_memory(const void * const ptr);
 
 /*
  * Longest hash block and digest we support at the moment.
@@ -160,6 +168,7 @@ extern void hal_ks_unlock(void);
 extern void hal_rsa_bf_lock(void);
 extern void hal_rsa_bf_unlock(void);
 extern void hal_task_yield(void);
+extern void hal_task_yield_maybe(void);
 
 /*
  * Thread sleep.  Currently used only for bad-PIN delays.
@@ -295,6 +304,15 @@ typedef struct {
                               hal_uuid_t *name,
                               const hal_curve_name_t curve,
                               const hal_key_flags_t flags);
+
+  hal_error_t  (*generate_hashsig)(const hal_client_handle_t client,
+                                   const hal_session_handle_t session,
+                                   hal_pkey_handle_t *pkey,
+                                   hal_uuid_t *name,
+                                   const size_t hss_levels,
+                                   const lms_algorithm_t lms_type,
+                                   const lmots_algorithm_t lmots_type,
+                                   const hal_key_flags_t flags);
 
   hal_error_t  (*close)(const hal_pkey_handle_t pkey);
 
@@ -643,9 +661,10 @@ typedef enum {
     RPC_FUNC_PKEY_GET_ATTRIBUTES,
     RPC_FUNC_PKEY_EXPORT,
     RPC_FUNC_PKEY_IMPORT,
+    RPC_FUNC_PKEY_GENERATE_HASHSIG,
 } rpc_func_num_t;
 
-#define RPC_VERSION 0x01010000          /* 1.1.0.0 */
+#define RPC_VERSION 0x01010100          /* 1.1.1.0 */
 
 /*
  * RPC client locality. These have to be defines rather than an enum,
@@ -662,7 +681,7 @@ typedef enum {
  */
 
 #ifndef HAL_RPC_MAX_PKT_SIZE
-#define HAL_RPC_MAX_PKT_SIZE    4096
+#define HAL_RPC_MAX_PKT_SIZE    16384
 #endif
 
 /*

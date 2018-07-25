@@ -42,10 +42,6 @@
 #include "hal_internal.h"
 #include "ks.h"
 
-#ifndef STATIC_KS_VOLATILE_SLOTS
-#define STATIC_KS_VOLATILE_SLOTS HAL_STATIC_PKEY_STATE_BLOCKS
-#endif
-
 #ifndef KS_VOLATILE_CACHE_SIZE
 #define KS_VOLATILE_CACHE_SIZE 4
 #endif
@@ -257,8 +253,8 @@ static hal_error_t ks_volatile_init(hal_ks_t *ks, const int alloc)
   hal_error_t err;
 
   if (alloc &&
-      (err = hal_ks_alloc_common(ks, STATIC_KS_VOLATILE_SLOTS, KS_VOLATILE_CACHE_SIZE,
-                                 &mem, sizeof(*db->keys) * STATIC_KS_VOLATILE_SLOTS)) != HAL_OK)
+      (err = hal_ks_alloc_common(ks, HAL_STATIC_KS_VOLATILE_SLOTS, KS_VOLATILE_CACHE_SIZE,
+                                 &mem, sizeof(*db->keys) * HAL_STATIC_KS_VOLATILE_SLOTS)) != HAL_OK)
     return err;
 
   if (alloc)

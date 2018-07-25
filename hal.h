@@ -163,6 +163,8 @@
   DEFINE_HAL_ERROR(HAL_ERROR_NOT_IMPLEMENTED,           "Not implemented")                              \
   DEFINE_HAL_ERROR(HAL_ERROR_CORE_REASSIGNED,           "Core has been reassigned since last use")      \
   DEFINE_HAL_ERROR(HAL_ERROR_ASSERTION_FAILED,          "Assertion failed")                             \
+  DEFINE_HAL_ERROR(HAL_ERROR_HASHSIG_KEY_EXHAUSTED,     "Key exhausted")                                \
+  DEFINE_HAL_ERROR(HAL_ERROR_NOT_READY,                 "Not ready for this operation")                 \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -428,7 +430,11 @@ typedef enum {
   HAL_KEY_TYPE_RSA_PRIVATE,
   HAL_KEY_TYPE_RSA_PUBLIC,
   HAL_KEY_TYPE_EC_PRIVATE,
-  HAL_KEY_TYPE_EC_PUBLIC
+  HAL_KEY_TYPE_EC_PUBLIC,
+  HAL_KEY_TYPE_HASHSIG_PRIVATE,
+  HAL_KEY_TYPE_HASHSIG_PUBLIC,
+  HAL_KEY_TYPE_HASHSIG_LMS,
+  HAL_KEY_TYPE_HASHSIG_LMOTS,
 } hal_key_type_t;
 
 typedef enum {
@@ -808,6 +814,18 @@ extern hal_error_t hal_rpc_pkey_generate_ec(const hal_client_handle_t client,
                                             hal_uuid_t *name,
                                             const hal_curve_name_t curve,
                                             const hal_key_flags_t flags);
+
+typedef enum lmots_algorithm_type lmots_algorithm_t;
+typedef enum lms_algorithm_type lms_algorithm_t;
+
+extern hal_error_t hal_rpc_pkey_generate_hashsig(const hal_client_handle_t client,
+                                                 const hal_session_handle_t session,
+                                                 hal_pkey_handle_t *pkey,
+                                                 hal_uuid_t *name,
+                                                 const size_t hss_levels,
+                                                 const lms_algorithm_t lms_type,
+                                                 const lmots_algorithm_t lmots_type,
+                                                 const hal_key_flags_t flags);
 
 extern hal_error_t hal_rpc_pkey_close(const hal_pkey_handle_t pkey);
 

@@ -45,7 +45,7 @@ CFLAGS		?= -g3 -Wall -fPIC -std=c99 -I${LIBHAL_SRC} -I${LIBTFM_BLD}
 
 CORE_TESTS	= test-aes-key-wrap test-hash test-pbkdf2 test-ecdsa test-bus test-trng test-rsa test-mkmif
 SERVER_TESTS	= test-rpc_server
-CLIENT_TESTS	= test-rpc_hash test-rpc_pkey test-rpc_get_version test-rpc_get_random test-rpc_login test-rpc_bighash
+CLIENT_TESTS	= test-rpc_hash test-rpc_pkey test-rpc_get_version test-rpc_get_random test-rpc_login test-rpc_bighash test-xdr test-rpc_hashsig
 
 ALL_TESTS	= ${CORE_TESTS} ${SERVER_TESTS} ${CLIENT_TESTS}
 
@@ -78,3 +78,5 @@ ${BIN}: %: %.o ${LIBS}
 
 %.o: %.c ${LBHAL_SRC}/*.h ${LIBTFM_BLD}/tfm.h
 	${CC} ${CFLAGS} -c -o $@ $<
+
+test-rpc_hashsig.o: test-hashsig.h
