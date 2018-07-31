@@ -30,6 +30,8 @@ Current contents of the library:
 * An implementation of ECDSA, optionally using the Cryptech ECDSA base
   point multiplier cores.
 
+* An implementation of HSS/LMS hash-based signatures.
+
 * An interface to the Master Key Memory interface core on the Cryptech
   Alpha platform.
 
@@ -113,6 +115,55 @@ Points stored in keys and curve parameters are in affine format, but
 point arithmetic is performed in Jacobian projective coordinates, with
 the coordinates themselves in Montgomery form; final mapping back to
 affine coordinates also handles the final Montgomery reduction.
+
+
+## Hash-Based Signatures ##
+
+A hashsig private key is a Merkle tree of one-time signing keys, which can
+be used to sign a finite number of messages. Since they don't rely on
+"hard math" for security, hashsig schemes are quantum-resistant.
+
+This hashsig code is a clean-room implementation of draft-mcgrew-hash-sigs.
+It has been shown to interoperate with the Cisco reference code (each can
+verify the other's signatures).
+
+Following the recommendations of the draft, we only store the topmost hash
+tree (the "root tree") in the token keystore; lower-level trees are stored
+in the volatile keystore, and are regenerated upon a system restart.
+
+This implementation has limitations on the number of keys, size of OTS
+keys, and size of signatures, because of the design of the keystore and of
+the RPC mechanism:
+
+1. The token keystore is a fairly small flash, partitioned into 2048
+8096-byte blocks. Therefore, we can't support LMS algorithm types >
+lms_sha256_n32_h10 (a.k.a. h=10, or 1024 keys per tree). In this case,
+keygen will return HAL_ERROR_NO_KEY_INDEX_SLOTS.
+
+Additionally, the 8KB key storage size means that we can't support LM-OTS
+algorithm type lmots_sha256_n32_w1, which has an OTS key size of 8504
+bytes. In this case, keygen will return HAL_ERROR_UNSUPPORTED_KEY.
+
+2. The volatile keystore is currently limited to 1280 keys, so only 2
+levels at h=10, but more levels at h=5. One could easily increase the size
+of the volatile keystore, but L=2/h=10 gives us a key that can sign 1M
+messages, which is sufficient for development and testing purposes.
+
+3. The RPC mechanism currently limits request and response messages to
+16KB, so we can't generate or verify signatures greater than that size.
+In this case, keygen will return HAL_ERROR_UNSUPPORTED_KEY.
+
+Because the hashsig private key consists of a large number of one-time
+signing keys, and because only the root tree is stored in flash, it can
+take several minutes to reconstruct the full tree on system restart.
+During this time, attempts to generate a hashsig key, delete a hashsig
+key, or sign with a hashsig key will return HAL_ERROR_NOT_READY.
+
+A hashsig private key can sign at most 2^(L*h) messages. (System restarts
+will cause the lower-level trees to be regenerated, which will need to be
+signed with by the root tree, so frequent restarts will rapidly exhaust
+the root tree.) When a hashsig key is exhausted, any attempt to use it for
+signing will return HAL_ERROR_HASHSIG_KEY_EXHAUSTED.
 
 
 ## Keystore ##
