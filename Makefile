@@ -120,6 +120,17 @@ else
   ECDSA_USE_ECDSA384_CORE := 0
 endif
 
+# add paths for LibreSSL
+# LIBERSSL_INCLUDE should be altered if libressl was installed on a different path
+# LibreSSL is used by the the Diamond Key Security, NFP to connect to the DKS HSM
+# using a secure TCP socket
+LIBRESSL_DIR	:= /opt/libressl
+LIBERSSL_INCLUDE	:= ${LIBRESSL_DIR}/include
+LIBRESSL_LIB_DIR	:= ${LIBRESSL_DIR}/lib
+LIBRESSL_LIBS	:= ${LIBRESSL_LIB_DIR}/libtls.a ${LIBRESSL_LIB_DIR}/libssl.a ${LIBRESSL_LIB_DIR}/libcrypto.a
+
+EXTRA_LIBS :=
+
 # Object files to build, initialized with ones we always want.
 # There's a balance here between skipping files we don't strictly
 # need and reducing the number of unnecessary conditionals in this
@@ -179,10 +190,14 @@ KS_OBJ = ks.o ks_index.o ks_attribute.o ks_volatile.o ks_token.o mkm.o
 #   client-mixed:	Like client-simple but do hashing locally in software and
 #			support a local keystore (for PKCS #11 public keys, etc)
 #
-# RPC_TRANSPORT = none | loopback | serial | daemon
-#   loopback:		Communicate over loopback socket on Novena
-#   serial:		Communicate over USB in serial pass-through mode
-#   daemon:		Communicate over USB via a daemon, to arbitrate multiple clients
+# RPC_TRANSPORT = none | loopback | ser256_CORE}
+  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER=${ECDSA_USE_ECDSAial | daemon
+#   loopback:		Communicate over loopba256_CORE}
+  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER=${ECDSA_USE_ECDSAck socket on Novena
+#   serial:		Communicate over USB in s256_CORE}
+  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER=${ECDSA_USE_ECDSAerial pass-through mode
+#   daemon:		Communicate over USB via 256_CORE}
+  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER=${ECDSA_USE_ECDSAa daemon, to arbitrate multiple clients
 #
 # Note that RPC_MODE setting also controls the RPC_CLIENT setting passed to the C
 # preprocessor via CFLAGS.  Whatever we pass here must evaluate to an integer in
@@ -200,6 +215,8 @@ else ifeq "${RPC_TRANSPORT}" "daemon"
 # add new support for TCP connection to RPC server
 else ifeq "${RPC_TRANSPORT}" "tcpdaemon"
   RPC_CLIENT_OBJ += rpc_client_tcp.o
+  EXTRA_LIBS += ${LIBRESSL_LIBS}
+  CFLAGS += -I${LIBERSSL_INCLUDE}
 endif
 
 RPC_SERVER_OBJ = ${KS_OBJ} rpc_misc.o rpc_pkey.o rpc_server.o
@@ -299,8 +316,8 @@ tcpdaemon:
 
 .PHONY: client mixed server serial daemon tcp
 
-${LIB}: ${OBJ}
-	${AR} rcs $@ $^
+${LIB}: ${EXTRA_LIBS} ${OBJ}
+	${AR} rcs $@ $^ 
 
 asn1.o rsa.o ecdsa.o:						asn1_internal.h
 ecdsa.o:							ecdsa_curves.h
