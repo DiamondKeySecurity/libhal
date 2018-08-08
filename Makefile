@@ -129,7 +129,7 @@ LIBERSSL_INCLUDE	:= ${LIBRESSL_DIR}/include
 LIBRESSL_LIB_DIR	:= ${LIBRESSL_DIR}/lib
 LIBRESSL_LIBS	:= ${LIBRESSL_LIB_DIR}/libtls.a ${LIBRESSL_LIB_DIR}/libssl.a ${LIBRESSL_LIB_DIR}/libcrypto.a
 
-EXTRA_LIBS :=
+ADDITIONAL_LIBS :=
 
 # Object files to build, initialized with ones we always want.
 # There's a balance here between skipping files we don't strictly
@@ -211,7 +211,7 @@ else ifeq "${RPC_TRANSPORT}" "daemon"
 # add new support for TCP connection to RPC server
 else ifeq "${RPC_TRANSPORT}" "tcpdaemon"
   RPC_CLIENT_OBJ += rpc_client_tcp.o
-  EXTRA_LIBS += ${LIBRESSL_LIBS}
+  ADDITIONAL_LIBS := ${LIBRESSL_LIBS} -lpthread
   CFLAGS += -I${LIBERSSL_INCLUDE}
 endif
 
@@ -290,7 +290,7 @@ CFLAGS		+= -DHAL_ENABLE_SOFTWARE_HASH_CORES=1
 export RPC_MODE
 
 all: ${LIB}
-	${MAKE} -C tests $@ CFLAGS='${CFLAGS}'
+	${MAKE} -C tests $@ CFLAGS='${CFLAGS}' ADDITIONAL_LIBS='${ADDITIONAL_LIBS}'
 	${MAKE} -C utils $@ CFLAGS='${CFLAGS}'
 
 client:
@@ -331,12 +331,12 @@ last_gasp_pin_internal.h:
 	./utils/last_gasp_default_pin >$@
 
 test: all
-	${MAKE} -C tests -k $@ CFLAGS='${CFLAGS}'
+	${MAKE} -C tests -k $@ CFLAGS='${CFLAGS}' ADDITIONAL_LIBS='${ADDITIONAL_LIBS}'
 
 clean:
 	rm -f *.o ${LIB}
-	${MAKE} -C tests $@ CFLAGS='${CFLAGS}'
-	${MAKE} -C utils $@ CFLAGS='${CFLAGS}'
+	${MAKE} -C tests clean 
+	${MAKE} -C utils clean
 
 distclean: clean
 	rm -f TAGS

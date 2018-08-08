@@ -31,13 +31,15 @@ ifndef CRYPTECH_ROOT
   CRYPTECH_ROOT := $(abspath ../../..)
 endif
 
+ADDITIONAL_LIBS ?=
+
 LIBTFM_SRC	?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
 LIBTFM_BLD	?= ${LIBTFM_SRC}
 
 LIBHAL_SRC	?= ${CRYPTECH_ROOT}/sw/libhal
 LIBHAL_BLD	?= ${LIBHAL_SRC}
 
-LIBS		= ${LIBHAL_BLD}/libhal.a ${LIBTFM_BLD}/libtfm.a
+LIBS		= ${LIBHAL_BLD}/libhal.a ${LIBTFM_BLD}/libtfm.a ${ADDITIONAL_LIBS}
 
 CFLAGS		?= -g3 -Wall -fPIC -std=c99 -I${LIBHAL_SRC} -I${LIBTFM_BLD}
 
