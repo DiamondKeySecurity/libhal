@@ -190,14 +190,10 @@ KS_OBJ = ks.o ks_index.o ks_attribute.o ks_volatile.o ks_token.o mkm.o
 #   client-mixed:	Like client-simple but do hashing locally in software and
 #			support a local keystore (for PKCS #11 public keys, etc)
 #
-# RPC_TRANSPORT = none | loopback | ser256_CORE}
-  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER=${ECDSA_USE_ECDSAial | daemon
-#   loopback:		Communicate over loopba256_CORE}
-  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER=${ECDSA_USE_ECDSAck socket on Novena
-#   serial:		Communicate over USB in s256_CORE}
-  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER=${ECDSA_USE_ECDSAerial pass-through mode
-#   daemon:		Communicate over USB via 256_CORE}
-  CFLAGS += -DHAL_ECDSA_VERILOG_ECDSA384_MULTIPLIER=${ECDSA_USE_ECDSAa daemon, to arbitrate multiple clients
+# RPC_TRANSPORT = none | loopback | serial | daemon
+#   loopback:		Communicate over loopback socket on Novena
+#   serial:		Communicate over USB in serial pass-through mode
+#   daemon:		Communicate over USB via a daemon, to arbitrate multiple clients
 #
 # Note that RPC_MODE setting also controls the RPC_CLIENT setting passed to the C
 # preprocessor via CFLAGS.  Whatever we pass here must evaluate to an integer in
@@ -314,7 +310,7 @@ daemon: mixed
 tcpdaemon:
 	${MAKE} RPC_MODE=client-mixed RPC_TRANSPORT=tcpdaemon
 
-.PHONY: client mixed server serial daemon tcp
+.PHONY: client mixed server serial daemon tcpdaemon
 
 ${LIB}: ${EXTRA_LIBS} ${OBJ}
 	${AR} rcs $@ $^ 
