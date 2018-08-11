@@ -53,6 +53,8 @@
 
 #include <sys/time.h>
 /* not included in my glibc, sigh... */
+/* But it's a macro on *BSD including MacOS so don't conflict with that. */
+#ifndef timersub
 void timersub(struct timeval *a, struct timeval *b, struct timeval *res)
 {
     res->tv_sec = a->tv_sec - b->tv_sec;
@@ -66,6 +68,7 @@ void timersub(struct timeval *a, struct timeval *b, struct timeval *res)
         ++res->tv_sec;
     }
 }
+#endif
 
 static int debug = 0;
 static int info = 0;
