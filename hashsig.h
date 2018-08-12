@@ -35,23 +35,6 @@
 #ifndef _HAL_HASHSIG_H_
 #define _HAL_HASHSIG_H_
 
-typedef enum lmots_algorithm_type {
-    lmots_reserved      = 0,
-    lmots_sha256_n32_w1 = 1,
-    lmots_sha256_n32_w2 = 2,
-    lmots_sha256_n32_w4 = 3,
-    lmots_sha256_n32_w8 = 4
-} lmots_algorithm_t;
-
-typedef enum lms_algorithm_type {
-    lms_reserved        = 0,
-    lms_sha256_n32_h5   = 5,
-    lms_sha256_n32_h10  = 6,
-    lms_sha256_n32_h15  = 7,
-    lms_sha256_n32_h20  = 8,
-    lms_sha256_n32_h25  = 9
-} lms_algorithm_t;
-
 typedef struct hal_hashsig_key hal_hashsig_key_t;
 
 extern const size_t hal_hashsig_key_t_size;
@@ -59,8 +42,8 @@ extern const size_t hal_hashsig_key_t_size;
 extern hal_error_t hal_hashsig_key_gen(hal_core_t *core,
                                        hal_hashsig_key_t **key_,
                                        const size_t hss_levels,
-                                       const lms_algorithm_t lms_type,
-                                       const lmots_algorithm_t lmots_type);
+                                       const hal_lms_algorithm_t lms_type,
+                                       const hal_lmots_algorithm_t lmots_type);
 
 extern hal_error_t hal_hashsig_key_delete(const hal_hashsig_key_t * const key);
 
@@ -95,8 +78,8 @@ extern hal_error_t hal_hashsig_verify(hal_core_t *core,
 extern hal_error_t hal_hashsig_key_load_public(hal_hashsig_key_t **key_,
                                                void *keybuf, const size_t keybuf_len,
                                                const size_t L,
-                                               const lms_algorithm_t lms_type,
-                                               const lmots_algorithm_t lmots_type,
+                                               const hal_lms_algorithm_t lms_type,
+                                               const hal_lmots_algorithm_t lmots_type,
                                                const uint8_t * const I, const size_t I_len,
                                                const uint8_t * const T1, const size_t T1_len);
 
@@ -105,10 +88,10 @@ extern hal_error_t hal_hashsig_key_load_public_xdr(hal_hashsig_key_t **key_,
                                                    const uint8_t * const xdr, const size_t xdr_len);
 
 extern size_t hal_hashsig_signature_len(const size_t L,
-                                        const lms_algorithm_t lms_type,
-                                        const lmots_algorithm_t lmots_type);
+                                        const hal_lms_algorithm_t lms_type,
+                                        const hal_lmots_algorithm_t lmots_type);
 
-extern size_t hal_hashsig_lmots_private_key_len(const lmots_algorithm_t lmots_type);
+extern size_t hal_hashsig_lmots_private_key_len(const hal_lmots_algorithm_t lmots_type);
 
 extern hal_error_t hal_hashsig_public_key_der_to_xdr(const uint8_t * const der, const size_t der_len,
                                                      uint8_t * const xdr, size_t * const xdr_len , const size_t xdr_max);

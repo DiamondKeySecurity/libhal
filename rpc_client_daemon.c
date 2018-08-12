@@ -37,6 +37,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <sys/un.h>
+#include <sys/socket.h>
 
 #include "hal.h"
 #include "hal_internal.h"

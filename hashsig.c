@@ -116,38 +116,39 @@ static inline hal_error_t hal_asn1_decode_size_t(size_t *np, const uint8_t * con
     }
 }
 
-static inline hal_error_t hal_asn1_encode_lms_algorithm(const lms_algorithm_t type, uint8_t *der, size_t *der_len, const size_t der_max)
+static inline hal_error_t hal_asn1_encode_lms_algorithm(const hal_lms_algorithm_t type, uint8_t *der, size_t *der_len, const size_t der_max)
 {
     return hal_asn1_encode_uint32((const uint32_t)type, der, der_len, der_max);
 }
 
-static inline hal_error_t hal_asn1_decode_lms_algorithm(lms_algorithm_t *type, const uint8_t * const der, size_t *der_len, const size_t der_max)
+static inline hal_error_t hal_asn1_decode_lms_algorithm(hal_lms_algorithm_t *type, const uint8_t * const der, size_t *der_len, const size_t der_max)
 {
     uint32_t n;
     hal_error_t err;
 
     if ((err = hal_asn1_decode_uint32(&n, der, der_len, der_max)) == HAL_OK)
-        *type = (lms_algorithm_t)n;
+        *type = (hal_lms_algorithm_t)n;
 
     return err;
 }
 
-static inline hal_error_t hal_asn1_encode_lmots_algorithm(const lmots_algorithm_t type, uint8_t *der, size_t *der_len, const size_t der_max)
+static inline hal_error_t hal_asn1_encode_lmots_algorithm(const hal_lmots_algorithm_t type, uint8_t *der, size_t *der_len, const size_t der_max)
 {
     return hal_asn1_encode_uint32((const uint32_t)type, der, der_len, der_max);
 }
 
-static inline hal_error_t hal_asn1_decode_lmots_algorithm(lmots_algorithm_t *type, const uint8_t * const der, size_t *der_len, const size_t der_max)
+static inline hal_error_t hal_asn1_decode_lmots_algorithm(hal_lmots_algorithm_t *type, const uint8_t * const der, size_t *der_len, const size_t der_max)
 {
     uint32_t n;
     hal_error_t err;
 
     if ((err = hal_asn1_decode_uint32(&n, der, der_len, der_max)) == HAL_OK)
-        *type = (lmots_algorithm_t)n;
+        *type = (hal_lmots_algorithm_t)n;
 
     return err;
 }
 
+#if 0 /* currently unused */
 static inline hal_error_t hal_asn1_encode_uuid(const hal_uuid_t * const data, uint8_t *der, size_t *der_len, const size_t der_max)
 {
     return hal_asn1_encode_octet_string((const uint8_t * const)data, sizeof(hal_uuid_t), der, der_len, der_max);
@@ -157,6 +158,7 @@ static inline hal_error_t hal_asn1_decode_uuid(hal_uuid_t *data, const uint8_t *
 {
     return hal_asn1_decode_octet_string((uint8_t *)data, sizeof(hal_uuid_t), der, der_len, der_max);
 }
+#endif
 
 static inline hal_error_t hal_asn1_encode_bytestring16(const bytestring16 * const data, uint8_t *der, size_t *der_len, const size_t der_max)
 {
@@ -185,14 +187,14 @@ static inline hal_error_t hal_asn1_decode_bytestring32(bytestring32 *data, const
  */
 
 typedef const struct lmots_parameter_set {
-    lmots_algorithm_t type;
+    hal_lmots_algorithm_t type;
     size_t                  n, w,   p, ls;
 } lmots_parameter_t;
 static lmots_parameter_t lmots_parameters[] = {
-    { lmots_sha256_n32_w1, 32, 1, 265, 7 },
-    { lmots_sha256_n32_w2, 32, 2, 133, 6 },
-    { lmots_sha256_n32_w4, 32, 4,  67, 4 },
-    { lmots_sha256_n32_w8, 32, 8,  34, 0 },
+    { hal_lmots_sha256_n32_w1, 32, 1, 265, 7 },
+    { hal_lmots_sha256_n32_w2, 32, 2, 133, 6 },
+    { hal_lmots_sha256_n32_w4, 32, 4,  67, 4 },
+    { hal_lmots_sha256_n32_w8, 32, 8,  34, 0 },
 };
 
 typedef struct lmots_key {
@@ -204,12 +206,12 @@ typedef struct lmots_key {
     bytestring32 K;
 } lmots_key_t;
 
-static inline lmots_parameter_t *lmots_select_parameter_set(const lmots_algorithm_t lmots_type)
+static inline lmots_parameter_t *lmots_select_parameter_set(const hal_lmots_algorithm_t lmots_type)
 {
-    if (lmots_type < lmots_sha256_n32_w1 || lmots_type > lmots_sha256_n32_w8)
+    if (lmots_type < hal_lmots_sha256_n32_w1 || lmots_type > hal_lmots_sha256_n32_w8)
         return NULL;
     else
-        return &lmots_parameters[lmots_type - lmots_sha256_n32_w1];
+        return &lmots_parameters[lmots_type - hal_lmots_sha256_n32_w1];
 }
 
 static inline size_t lmots_private_key_len(lmots_parameter_t * const lmots)
@@ -218,11 +220,13 @@ static inline size_t lmots_private_key_len(lmots_parameter_t * const lmots)
     return 2 * sizeof(uint32_t) + sizeof(bytestring16) + (lmots->p * lmots->n);
 }
 
+#if 0 /* currently unused */
 static inline size_t lmots_public_key_len(lmots_parameter_t * const lmots)
 {
     /* u32str(type) || I || u32str(q) || K */
     return 2 * sizeof(uint32_t) + sizeof(bytestring16) + lmots->n;
 }
+#endif
 
 static inline size_t lmots_signature_len(lmots_parameter_t * const lmots)
 {
@@ -453,7 +457,7 @@ static hal_error_t lmots_public_key_candidate(const lmots_key_t * const key,
 
 //     b. if sigtype is not equal to pubtype, return INVALID
 
-    if ((lmots_algorithm_t)sigtype != key->lmots->type)
+    if ((hal_lmots_algorithm_t)sigtype != key->lmots->type)
         return HAL_ERROR_INVALID_SIGNATURE;
 
 //     c. set n and p according to the pubtype and Table 1;  if the
@@ -629,7 +633,7 @@ static hal_error_t lmots_private_key_from_der(lmots_key_t *key,
 
     // u32str(lmots_type) || I || u32str(q) || K || x[0] || x[1] || ... || x[p-1]
 
-    lmots_algorithm_t lmots_type;
+    hal_lmots_algorithm_t lmots_type;
     check(hal_asn1_decode_lmots_algorithm(&lmots_type, d, &len, vlen));  d += len; vlen -= len;
     key->lmots = lmots_select_parameter_set(lmots_type);
     check(hal_asn1_decode_bytestring16(&key->I, d, &len, vlen));         d += len; vlen -= len;
@@ -655,15 +659,15 @@ static hal_error_t lmots_private_key_from_der(lmots_key_t *key,
  */
 
 typedef const struct lms_parameter_set {
-    lms_algorithm_t type;
+    hal_lms_algorithm_t type;
     size_t                 m,  h;
 } lms_parameter_t;
 static lms_parameter_t lms_parameters[] = {
-    { lms_sha256_n32_h5,  32,  5 },
-    { lms_sha256_n32_h10, 32, 10 },
-    { lms_sha256_n32_h15, 32, 15 },
-    { lms_sha256_n32_h20, 32, 20 },
-    { lms_sha256_n32_h25, 32, 25 },
+    { hal_lms_sha256_n32_h5,  32,  5 },
+    { hal_lms_sha256_n32_h10, 32, 10 },
+    { hal_lms_sha256_n32_h15, 32, 15 },
+    { hal_lms_sha256_n32_h20, 32, 20 },
+    { hal_lms_sha256_n32_h25, 32, 25 },
 };
 
 typedef struct lms_key {
@@ -682,12 +686,12 @@ typedef struct lms_key {
     size_t signature_len;
 } lms_key_t;
 
-static inline lms_parameter_t *lms_select_parameter_set(const lms_algorithm_t lms_type)
+static inline lms_parameter_t *lms_select_parameter_set(const hal_lms_algorithm_t lms_type)
 {
-    if (lms_type < lms_sha256_n32_h5 || lms_type > lms_sha256_n32_h25)
+    if (lms_type < hal_lms_sha256_n32_h5 || lms_type > hal_lms_sha256_n32_h25)
         return NULL;
     else
-        return &lms_parameters[lms_type - lms_sha256_n32_h5];
+        return &lms_parameters[lms_type - hal_lms_sha256_n32_h5];
 }
 
 static inline size_t lms_public_key_len(lms_parameter_t * const lms)
@@ -796,7 +800,7 @@ static hal_error_t lms_generate(lms_key_t *key)
 
 static hal_error_t lms_delete(const lms_key_t * const key)
 {
-    hal_pkey_slot_t slot = {0};
+    hal_pkey_slot_t slot = {{0}};
     hal_ks_t *ks = (key->level == 0) ? hal_ks_token : hal_ks_volatile;
 
     /* delete the lmots keys */
@@ -959,7 +963,7 @@ static hal_error_t lms_public_key_candidate(const lms_key_t * const key,
 
 //    c. if otssigtype is not the OTS typecode from the public key, return INVALID
 
-    if ((lmots_algorithm_t)otssigtype != key->lmots->type)
+    if ((hal_lmots_algorithm_t)otssigtype != key->lmots->type)
         return HAL_ERROR_INVALID_SIGNATURE;
 
 //    d. set n, p according to otssigtype and Table 1; if the
@@ -982,7 +986,7 @@ static hal_error_t lms_public_key_candidate(const lms_key_t * const key,
 
 //    f. if sigtype is not the LM typecode from the public key, return INVALID
 
-    if ((lms_algorithm_t)sigtype != key->lms->type)
+    if ((hal_lms_algorithm_t)sigtype != key->lms->type)
         return HAL_ERROR_INVALID_SIGNATURE;
 
 //    g. set m, h according to sigtype and Table 2
@@ -1148,10 +1152,10 @@ static hal_error_t lms_private_key_from_der(lms_key_t *key,
 
     // u32str(lms_type) || u32str(lmots_type) || I || q
 
-    lms_algorithm_t lms_type;
+    hal_lms_algorithm_t lms_type;
     check(hal_asn1_decode_lms_algorithm(&lms_type, d, &n, vlen));     d += n; vlen -= n;
     key->lms = lms_select_parameter_set(lms_type);
-    lmots_algorithm_t lmots_type;
+    hal_lmots_algorithm_t lmots_type;
     check(hal_asn1_decode_lmots_algorithm(&lmots_type, d, &n, vlen)); d += n; vlen -= n;
     key->lmots = lmots_select_parameter_set(lmots_type);
     check(hal_asn1_decode_bytestring16(&key->I, d, &n, vlen));        d += n; vlen -= n;
@@ -1192,11 +1196,13 @@ const size_t hal_hashsig_key_t_size = sizeof(hss_key_t);
 
 static hss_key_t *hss_keys = NULL;
 
+#if 0 /* currently unused */
 static inline size_t hss_public_key_len(lms_parameter_t * const lms)
 {
     /* L || pub[0] */
     return sizeof(uint32_t) + lms_public_key_len(lms);
 }
+#endif
 
 static inline size_t hss_signature_len(const size_t L, lms_parameter_t * const lms, lmots_parameter_t * const lmots)
 {
@@ -1205,8 +1211,8 @@ static inline size_t hss_signature_len(const size_t L, lms_parameter_t * const l
 }
 
 size_t hal_hashsig_signature_len(const size_t L,
-                                 const lms_algorithm_t lms_type,
-                                 const lmots_algorithm_t lmots_type)
+                                 const hal_lms_algorithm_t lms_type,
+                                 const hal_lmots_algorithm_t lmots_type)
 {
     lms_parameter_t * const lms = lms_select_parameter_set(lms_type);
     if (lms == NULL)
@@ -1219,7 +1225,7 @@ size_t hal_hashsig_signature_len(const size_t L,
     return hss_signature_len(L, lms, lmots);
 }
 
-size_t hal_hashsig_lmots_private_key_len(const lmots_algorithm_t lmots_type)
+size_t hal_hashsig_lmots_private_key_len(const hal_lmots_algorithm_t lmots_type)
 {
     lmots_parameter_t * const lmots = lmots_select_parameter_set(lmots_type);
     if (lmots == NULL)
@@ -1243,8 +1249,8 @@ static inline void *gnaw(uint8_t **mem, size_t *len, const size_t size)
 
 static hal_error_t hss_alloc(hal_hashsig_key_t **key_,
                              const size_t L,
-                             const lms_algorithm_t lms_type,
-                             const lmots_algorithm_t lmots_type)
+                             const hal_lms_algorithm_t lms_type,
+                             const hal_lmots_algorithm_t lmots_type)
 {
     if (key_ == NULL)
         return HAL_ERROR_BAD_ARGUMENTS;
@@ -1329,8 +1335,8 @@ static hal_error_t hss_alloc(hal_hashsig_key_t **key_,
 hal_error_t hal_hashsig_key_gen(hal_core_t *core,
                                 hal_hashsig_key_t **key_,
                                 const size_t L,
-                                const lms_algorithm_t lms_type,
-                                const lmots_algorithm_t lmots_type)
+                                const hal_lms_algorithm_t lms_type,
+                                const hal_lmots_algorithm_t lmots_type)
 {
     /* hss_alloc does most of the checks */
 
@@ -1520,8 +1526,6 @@ hal_error_t hal_hashsig_verify(hal_core_t *core,
     if (key == NULL || key->type != HAL_KEY_TYPE_HASHSIG_PUBLIC || msg == NULL || sig == NULL)
         return HAL_ERROR_BAD_ARGUMENTS;
 
-    core = core;
-
 //   To verify a signature sig and message using the public key pub, the
 //   following steps are performed:
 //
@@ -1567,7 +1571,7 @@ hal_error_t hal_hashsig_verify(hal_core_t *core,
         /* read lmots_type out of the ots_signature */
         uint32_t lmots_type;
         check(hal_xdr_decode_int_peek(&sigptr, siglim, &lmots_type));
-        lmots_parameter_t *lmots = lmots_select_parameter_set((lmots_algorithm_t)lmots_type);
+        lmots_parameter_t *lmots = lmots_select_parameter_set((hal_lmots_algorithm_t)lmots_type);
         if (lmots == NULL)
             return HAL_ERROR_INVALID_SIGNATURE;
         /* skip over ots_signature */
@@ -1575,7 +1579,7 @@ hal_error_t hal_hashsig_verify(hal_core_t *core,
         /* read lms_type after ots_signature */
         uint32_t lms_type;
         check(hal_xdr_decode_int(&sigptr, siglim, &lms_type));
-        lms_parameter_t *lms = lms_select_parameter_set((lms_algorithm_t)lms_type);
+        lms_parameter_t *lms = lms_select_parameter_set((hal_lms_algorithm_t)lms_type);
         if (lms == NULL)
             return HAL_ERROR_INVALID_SIGNATURE;
         /* skip over the path elements of the lms signature */
@@ -1587,11 +1591,11 @@ hal_error_t hal_hashsig_verify(hal_core_t *core,
 
         /* parse the signed public key */
         check(hal_xdr_decode_int(&sigptr, siglim, &lms_type));
-        pub.lms = lms_select_parameter_set((lmots_algorithm_t)lms_type);
+        pub.lms = lms_select_parameter_set((hal_lms_algorithm_t)lms_type);
         if (pub.lms == NULL)
             return HAL_ERROR_INVALID_SIGNATURE;
         check(hal_xdr_decode_int(&sigptr, siglim, &lmots_type));
-        pub.lmots = lmots_select_parameter_set((lmots_algorithm_t)lmots_type);
+        pub.lmots = lmots_select_parameter_set((hal_lmots_algorithm_t)lmots_type);
         if (pub.lmots == NULL)
             return HAL_ERROR_INVALID_SIGNATURE;
         check(hal_xdr_decode_bytestring16(&sigptr, siglim, &pub.I));
@@ -1688,10 +1692,10 @@ hal_error_t hal_hashsig_private_key_from_der(hal_hashsig_key_t **key_,
     size_t n;
 
     check(hal_asn1_decode_size_t(&key->L, d, &n, vlen));              d += n; vlen -= n;
-    lms_algorithm_t lms_type;
+    hal_lms_algorithm_t lms_type;
     check(hal_asn1_decode_lms_algorithm(&lms_type, d, &n, vlen));     d += n; vlen -= n;
     key->lms = lms_select_parameter_set(lms_type);
-    lmots_algorithm_t lmots_type;
+    hal_lmots_algorithm_t lmots_type;
     check(hal_asn1_decode_lmots_algorithm(&lmots_type, d, &n, vlen)); d += n; vlen -= n;
     key->lmots = lmots_select_parameter_set(lmots_type);
     check(hal_asn1_decode_bytestring16(&key->I, d, &n, vlen));        d += n; vlen -= n;
@@ -1789,8 +1793,8 @@ hal_error_t hal_hashsig_public_key_from_der(hal_hashsig_key_t **key_,
 
     // L || u32str(lms_type) || u32str(lmots_type) || I || T[1]
 
-    lms_algorithm_t lms_type;
-    lmots_algorithm_t lmots_type;
+    hal_lms_algorithm_t lms_type;
+    hal_lmots_algorithm_t lmots_type;
 
     check(hal_asn1_decode_size_t(&key->L, d, &len, pubkey_end - d));              d += len;
     check(hal_asn1_decode_lms_algorithm(&lms_type, d, &len, pubkey_end - d));     d += len;
@@ -1810,8 +1814,8 @@ hal_error_t hal_hashsig_public_key_from_der(hal_hashsig_key_t **key_,
 hal_error_t hal_hashsig_key_load_public(hal_hashsig_key_t **key_,
                                         void *keybuf, const size_t keybuf_len,
                                         const size_t L,
-                                        const lms_algorithm_t lms_type,
-                                        const lmots_algorithm_t lmots_type,
+                                        const hal_lms_algorithm_t lms_type,
+                                        const hal_lmots_algorithm_t lmots_type,
                                         const uint8_t * const I, const size_t I_len,
                                         const uint8_t * const T1, const size_t T1_len)
 {
@@ -1890,8 +1894,8 @@ hal_error_t hal_hashsig_public_key_der_to_xdr(const uint8_t * const der, const s
     // L || u32str(lms_type) || u32str(lmots_type) || I || T[1]
 
     size_t L;
-    lms_algorithm_t lms_type;
-    lmots_algorithm_t lmots_type;
+    hal_lms_algorithm_t lms_type;
+    hal_lmots_algorithm_t lmots_type;
     bytestring16 I;
     bytestring32 T1;
 
@@ -1927,7 +1931,7 @@ hal_error_t hal_hashsig_ks_init(void)
     const hal_session_handle_t session = { HAL_HANDLE_NONE };
     hal_uuid_t prev_name = {{0}};
     unsigned len;
-    hal_pkey_slot_t slot = {0};
+    hal_pkey_slot_t slot = {{0}};
     uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
     size_t der_len;
 
@@ -1945,7 +1949,7 @@ hal_error_t hal_hashsig_ks_init(void)
         }
 
         /* Make sure we have the lms key */
-        hal_pkey_slot_t lms_slot = {0};
+        hal_pkey_slot_t lms_slot = {{0}};
         lms_key_t lms_key;
         memcpy(&lms_slot.name, &key->I, sizeof(lms_slot.name));
         if (hal_ks_fetch(hal_ks_token, &lms_slot, der, &der_len, sizeof(der)) != HAL_OK ||
