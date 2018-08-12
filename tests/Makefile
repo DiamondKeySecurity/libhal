@@ -1,4 +1,4 @@
-# Copyright (c) 2015, NORDUnet A/S
+# Copyright (c) 2015-2018, NORDUnet A/S
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -27,15 +27,9 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-ifndef CRYPTECH_ROOT
-  CRYPTECH_ROOT := $(abspath ../../..)
-endif
-
-LIBTFM_SRC	?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
-LIBTFM_BLD	?= ${LIBTFM_SRC}
-
-LIBHAL_SRC	?= ${CRYPTECH_ROOT}/sw/libhal
+LIBHAL_SRC	?= ..
 LIBHAL_BLD	?= ${LIBHAL_SRC}
+LIBTFM_BLD	?= ../../thirdparty/libtfm
 
 LIBS		= ${LIBHAL_BLD}/libhal.a ${LIBTFM_BLD}/libtfm.a
 
@@ -63,8 +57,6 @@ else
 
 endif
 
-$(info Building libhal with configuration IO_BUS=${IO_BUS} RPC_MODE=${RPC_MODE} KS=${KS} RPC_TRANSPORT=${RPC_TRANSPORT} MODEXP_CORE=${MODEXP_CORE})
-
 all: ${BIN}
 
 test: all
@@ -76,7 +68,7 @@ clean distclean:
 ${BIN}: %: %.o ${LIBS}
 	${CC} ${CFLAGS} -o $@ $^ ${LDFLAGS}
 
-%.o: %.c ${LBHAL_SRC}/*.h ${LIBTFM_BLD}/tfm.h
+%.o: %.c ${LIBHAL_SRC}/*.h ${LIBTFM_BLD}/tfm.h
 	${CC} ${CFLAGS} -c -o $@ $<
 
 test-rpc_hashsig.o: test-hashsig.h

@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016, NORDUnet A/S
+# Copyright (c) 2015-2018, NORDUnet A/S
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -27,19 +27,12 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-ifndef CRYPTECH_ROOT
-  CRYPTECH_ROOT := $(abspath ../../..)
-endif
-
-LIBTFM_SRC	?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
-LIBTFM_BLD	?= ${LIBTFM_SRC}
-
-LIBHAL_SRC	?= ${CRYPTECH_ROOT}/sw/libhal
+LIBHAL_SRC	?= ..
 LIBHAL_BLD	?= ${LIBHAL_SRC}
 
-LIBS		= ${LIBHAL_BLD}/libhal.a ${LIBTFM_BLD}/libtfm.a
+LIBS		= ${LIBHAL_BLD}/libhal.a
 
-CFLAGS		?= -g3 -Wall -fPIC -std=c99 -I${LIBHAL_SRC} -I${LIBTFM_BLD}
+CFLAGS		?= -g3 -Wall -fPIC -std=c99 -I${LIBHAL_SRC}
 
 BIN		= eim_peek_poke cores
 
