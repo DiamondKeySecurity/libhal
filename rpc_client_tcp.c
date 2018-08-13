@@ -110,13 +110,14 @@ hal_error_t hal_rpc_client_transport_init(void)
     config = tls_config_new();
 
     tls_config_insecure_noverifycert(config);
+
     tls_config_insecure_noverifyname(config);
 
     tls_configure(tls, config);
 
     sock = socket(AF_INET, SOCK_STREAM, 0);
 
-    server.sin_port = htons(8081);
+    server.sin_port = htons(8080);
     server.sin_addr.s_addr = inet_addr(hostip);
     server.sin_family = AF_INET;
 
@@ -127,6 +128,8 @@ hal_error_t hal_rpc_client_transport_init(void)
     if(tls_connect_socket(tls, sock, hostname) < 0) {
         return HAL_ERROR_RPC_TRANSPORT;
     }
+
+    return HAL_OK;
 }
 
 hal_error_t hal_rpc_client_transport_close(void)
