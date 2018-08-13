@@ -548,8 +548,8 @@ static hal_error_t pkey_remote_generate_hashsig(const hal_client_handle_t client
                                                 hal_pkey_handle_t *pkey,
                                                 hal_uuid_t *name,
                                                 const size_t hss_levels,
-                                                const lms_algorithm_t lms_type,
-                                                const lmots_algorithm_t lmots_type,
+                                                const hal_lms_algorithm_t lms_type,
+                                                const hal_lmots_algorithm_t lmots_type,
                                                 const hal_key_flags_t flags)
 {
   uint8_t outbuf[nargs(7)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);

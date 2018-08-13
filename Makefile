@@ -31,7 +31,7 @@
 # Diamond Key Security
 # Added updates to support TCP connection to RPC server
 #
-# Copyright (c) 2015-2017, NORDUnet A/S
+# Copyright (c) 2015-2018, NORDUnet A/S
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -256,6 +256,8 @@ ifndef CRYPTECH_ROOT
   CRYPTECH_ROOT := $(abspath ../..)
 endif
 
+LIBHAL_SRC	?= ${CRYPTECH_ROOT}/sw/libhal
+LIBHAL_BLD	?= ${LIBHAL_SRC}
 LIBTFM_SRC	?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
 LIBTFM_BLD	?= ${LIBTFM_SRC}
 
@@ -270,7 +272,7 @@ CFLAGS		+= -DHAL_STATIC_HASH_STATE_BLOCKS=${STATIC_HASH_STATE_BLOCKS}
 CFLAGS		+= -DHAL_STATIC_HMAC_STATE_BLOCKS=${STATIC_HMAC_STATE_BLOCKS}
 CFLAGS		+= -DHAL_STATIC_PKEY_STATE_BLOCKS=${STATIC_PKEY_STATE_BLOCKS}
 CFLAGS		+= -DHAL_STATIC_KS_VOLATILE_SLOTS=${STATIC_KS_VOLATILE_SLOTS}
-CFLAGS		+= -I${CRYPTECH_ROOT}/sw/libhal
+CFLAGS		+= -I${LIBHAL_SRC}
 CFLAGS		+= -I${LIBTFM_BLD}
 
 # Enable software hash cores everywhere for now.  In theory, there might be situations
@@ -288,6 +290,7 @@ CFLAGS		+= -DHAL_ENABLE_SOFTWARE_HASH_CORES=1
 #export CFLAGS
 
 export RPC_MODE
+export LIBHAL_SRC LIBHAL_BLD LIBTFM_BLD
 
 all: ${LIB}
 	${MAKE} -C tests $@ CFLAGS='${CFLAGS}' ADDITIONAL_LIBS='${ADDITIONAL_LIBS}'
@@ -335,8 +338,8 @@ test: all
 
 clean:
 	rm -f *.o ${LIB}
-	${MAKE} -C tests clean 
-	${MAKE} -C utils clean
+	${MAKE} -C tests $@
+	${MAKE} -C utils $@
 
 distclean: clean
 	rm -f TAGS

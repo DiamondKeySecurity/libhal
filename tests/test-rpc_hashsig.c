@@ -52,20 +52,18 @@
 #include "test-hashsig.h"
 
 #include <sys/time.h>
-/* not included in my glibc, sigh... */
-void timersub(struct timeval *a, struct timeval *b, struct timeval *res)
-{
-    res->tv_sec = a->tv_sec - b->tv_sec;
-    res->tv_usec = a->tv_usec - b->tv_usec;
-    if (res->tv_usec < 0) {
-        res->tv_usec += 1000000;
-        --res->tv_sec;
-    }
-    if (res->tv_usec > 1000000) {
-        res->tv_usec -= 1000000;
-        ++res->tv_sec;
-    }
-}
+
+#ifndef timersub
+#define timersub(a, b, res)                             \
+    do {                                                \
+        (res)->tv_sec = (a)->tv_sec - (b)->tv_sec;      \
+        (res)->tv_usec = (a)->tv_usec - (b)->tv_usec;   \
+        if ((res)->tv_usec < 0) {                       \
+            (res)->tv_usec += 1000000;                  \
+            --(res)->tv_sec;                            \
+        }                                               \
+    } while (0)
+#endif
 
 static int debug = 0;
 static int info = 0;
@@ -169,36 +167,36 @@ static void hexdump(const char * const label, const uint8_t * const buf, const s
         printf("\n");
 }
 
-static inline size_t lms_type_to_h(const lms_algorithm_t lms_type)
+static inline size_t lms_type_to_h(const hal_lms_algorithm_t lms_type)
 {
     switch (lms_type) {
-    case lms_sha256_n32_h5:  return  5;
-    case lms_sha256_n32_h10: return 10;
-    case lms_sha256_n32_h15: return 15;
-    case lms_sha256_n32_h20: return 20;
-    case lms_sha256_n32_h25: return 25;
+    case hal_lms_sha256_n32_h5:  return  5;
+    case hal_lms_sha256_n32_h10: return 10;
+    case hal_lms_sha256_n32_h15: return 15;
+    case hal_lms_sha256_n32_h20: return 20;
+    case hal_lms_sha256_n32_h25: return 25;
     default: return 0;
     }
 }
 
-static inline size_t lmots_type_to_w(const lmots_algorithm_t lmots_type)
+static inline size_t lmots_type_to_w(const hal_lmots_algorithm_t lmots_type)
 {
     switch (lmots_type) {
-    case lmots_sha256_n32_w1: return 1;
-    case lmots_sha256_n32_w2: return 2;
-    case lmots_sha256_n32_w4: return 4;
-    case lmots_sha256_n32_w8: return 8;
+    case hal_lmots_sha256_n32_w1: return 1;
+    case hal_lmots_sha256_n32_w2: return 2;
+    case hal_lmots_sha256_n32_w4: return 4;
+    case hal_lmots_sha256_n32_w8: return 8;
     default: return 0;
     }
 }
 
-static inline size_t lmots_type_to_p(const lmots_algorithm_t lmots_type)
+static inline size_t lmots_type_to_p(const hal_lmots_algorithm_t lmots_type)
 {
     switch (lmots_type) {
-    case lmots_sha256_n32_w1: return 265;
-    case lmots_sha256_n32_w2: return 133;
-    case lmots_sha256_n32_w4: return  67;
-    case lmots_sha256_n32_w8: return  34;
+    case hal_lmots_sha256_n32_w1: return 265;
+    case hal_lmots_sha256_n32_w2: return 133;
+    case hal_lmots_sha256_n32_w4: return  67;
+    case hal_lmots_sha256_n32_w8: return  34;
     default: return 0;
     }
 }
@@ -224,7 +222,7 @@ static hal_error_t dump_hss_signature(const uint8_t * const sig, const size_t le
             uint32_t lmots_type;
             if ((err = hal_xdr_decode_int(&sigptr, siglim, &lmots_type)) != HAL_OK) return err;
             hexdump("C", sigptr, 32); sigptr += 32;
-            size_t p = lmots_type_to_p((const lmots_algorithm_t)lmots_type);
+            size_t p = lmots_type_to_p((const hal_lmots_algorithm_t)lmots_type);
             for (size_t j = 0; j < p; ++j) {
                 char label[16];
                 sprintf(label, "y[%lu]", j);
@@ -235,7 +233,7 @@ static hal_error_t dump_hss_signature(const uint8_t * const sig, const size_t le
         hexdump("lms type", sigptr, 4);
         uint32_t lms_type;
         if ((err = hal_xdr_decode_int(&sigptr, siglim, &lms_type)) != HAL_OK) return err;
-        size_t h = lms_type_to_h((const lms_algorithm_t)lms_type);
+        size_t h = lms_type_to_h((const hal_lms_algorithm_t)lms_type);
         for (size_t j = 0; j < h; ++j) {
             char label[16];
             sprintf(label, "path[%lu]", j);
@@ -261,8 +259,8 @@ static hal_error_t dump_hss_signature(const uint8_t * const sig, const size_t le
 }
 
 static int test_hashsig_sign(const size_t L,
-                             const lms_algorithm_t lms_type,
-                             const lmots_algorithm_t lmots_type,
+                             const hal_lms_algorithm_t lms_type,
+                             const hal_lmots_algorithm_t lmots_type,
                              size_t iterations,
                              int save, int keep)
 {
@@ -312,8 +310,8 @@ static int test_hashsig_sign(const size_t L,
             timersub(&tv_end, &tv_start, &tv_diff);
             long per_key = (tv_diff.tv_sec * 1000000 + tv_diff.tv_usec) / (L * (1 << h));
             printf("Info: %ldm%ld.%03lds to generate key (%ld.%03lds per lmots key)\n",
-                   tv_diff.tv_sec / 60, tv_diff.tv_sec % 60, tv_diff.tv_usec / 1000,
-                   per_key / 1000000, (per_key % 1000000) / 1000);
+                   (long)tv_diff.tv_sec / 60, (long)tv_diff.tv_sec % 60, (long)tv_diff.tv_usec / 1000,
+                   (long)per_key / 1000000, ((long)per_key % 1000000) / 1000);
         }
 
         uint8_t public_der[hal_rpc_pkey_get_public_key_len(private_key)];
@@ -382,8 +380,8 @@ static int test_hashsig_sign(const size_t L,
                 timersub(&tv_end, &tv_start, &tv_diff);
                 long per_sig = (tv_diff.tv_sec * 1000000 + tv_diff.tv_usec) / i;
                 printf("Info: %ldm%ld.%03lds to generate %d signatures (%ld.%03lds per signature)\n",
-                       tv_diff.tv_sec / 60, tv_diff.tv_sec % 60, tv_diff.tv_usec / 1000, i,
-                       per_sig / 1000000, (per_sig % 1000000) / 1000);
+                       (long)tv_diff.tv_sec / 60, (long)tv_diff.tv_sec % 60, (long)tv_diff.tv_usec / 1000, i,
+                       (long)per_sig / 1000000, ((long)per_sig % 1000000) / 1000);
             }
 
             if (info)
@@ -395,7 +393,7 @@ static int test_hashsig_sign(const size_t L,
                 gettimeofday(&tv_end, NULL);
                 timersub(&tv_end, &tv_start, &tv_diff);
                 printf("Info: %ldm%ld.%03lds to verify 1 signature\n",
-                       tv_diff.tv_sec / 60, tv_diff.tv_sec % 60, tv_diff.tv_usec / 1000);
+                       (long)tv_diff.tv_sec / 60, (long)tv_diff.tv_sec % 60, (long)tv_diff.tv_usec / 1000);
             }
         }
 
@@ -576,8 +574,8 @@ Numeric arguments can be a single number or a range, e.g. '1..4'\n";
     /* A test to key exhaustion would be of the form '-n max' */
     if (L_lo > 0) {
         for (size_t L = L_lo; L <= L_hi; ++L) {
-            for (lms_algorithm_t lms_type = lms_lo; lms_type <= lms_hi; ++lms_type) {
-                for (lmots_algorithm_t lmots_type = lmots_lo; lmots_type <= lmots_hi; ++lmots_type) {
+            for (hal_lms_algorithm_t lms_type = lms_lo; lms_type <= lms_hi; ++lms_type) {
+                for (hal_lmots_algorithm_t lmots_type = lmots_lo; lmots_type <= lmots_hi; ++lmots_type) {
                     ok &= test_hashsig_sign(L, lms_type, lmots_type, iterations, save, keep);
                 }
             }
