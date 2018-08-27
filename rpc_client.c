@@ -902,7 +902,7 @@ static hal_error_t pkey_remote_get_attributes(const hal_pkey_handle_t pkey,
 {
   /* inbuf[] here includes one extra word per attribute for padding */
   uint8_t outbuf[nargs(5 + attributes_len)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
-  uint8_t inbuf[nargs(3 + 3 * attributes_len) + attributes_buffer_len];
+  uint8_t inbuf[nargs(4 + 3 * attributes_len) + attributes_buffer_len];
   const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
   hal_client_handle_t dummy_client = {0};
   hal_error_t rpc_ret;
@@ -939,7 +939,7 @@ static hal_error_t pkey_remote_get_attributes(const hal_pkey_handle_t pkey,
         check(hal_xdr_decode_variable_opaque(&iptr, ilimit, abuf, &len));
         attributes[i].value  = abuf;
         attributes[i].length = len;
-        abuf += u32;
+        abuf += len;
       }
     }
   }
