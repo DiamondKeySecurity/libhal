@@ -84,12 +84,25 @@ static struct tls_config *config = NULL;
 
 hal_error_t hal_rpc_client_transport_init(void)
 {
-    struct sockaddr_in server;
-    int sock;
-
     // get the IP address from the DKS_HSM_HOST_IP environment variable
     const char *hostip = getenv("DKS_HSM_HOST_IP");
     const char *hostname = getenv("DKS_HSM_HOST_NAME");
+
+    if(hostip == NULL) {
+        return HAL_ERROR_BAD_ARGUMENTS;
+    }
+
+    if(hostname == NULL) {
+        return HAL_ERROR_BAD_ARGUMENTS;
+    }
+
+    return hal_rpc_client_transport_init_ip(hostip, hostname);
+}
+
+hal_error_t hal_rpc_client_transport_init_ip(const char *hostip, const char *hostname)
+{
+    struct sockaddr_in server;
+    int sock;
 
     if(hostip == NULL) {
         return HAL_ERROR_BAD_ARGUMENTS;
