@@ -918,6 +918,8 @@ extern hal_error_t hal_rpc_server_close(void);
 extern hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
                                            uint8_t * const obuf, size_t * const olen);
 
+extern hal_error_t hal_rpc_client_transport_init_ip(const char *hostip, const char *hostname);
+
 #endif /* _HAL_H_ */
 
 /*
