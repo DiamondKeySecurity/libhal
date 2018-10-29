@@ -92,10 +92,7 @@ hal_error_t hal_xdr_decode_int(const uint8_t ** const inbuf, const uint8_t * con
 hal_error_t hal_xdr_encode_fixed_opaque(uint8_t ** const outbuf, const uint8_t * const limit, const uint8_t * const value, const size_t len)
 {
     /* arg checks */
-    hal_assert(outbuf != NULL && *outbuf != NULL && limit != NULL && limit >= *outbuf && value != NULL);
-
-    if (len == 0)
-        return HAL_OK;
+    hal_assert(outbuf != NULL && *outbuf != NULL && limit != NULL && limit >= *outbuf && (value != NULL || len == 0));
 
     /* buffer overflow check */
     /* We need to explicitly check (len > 0xfffffffc) because padding will
