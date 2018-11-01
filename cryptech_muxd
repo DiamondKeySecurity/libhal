@@ -128,8 +128,16 @@ class SerialIOStream(tornado.iostream.BaseIOStream):
     def write_to_fd(self, data):
         return self.serial.write(data)
 
-    def read_from_fd(self):
-        return self.serial.read(self.read_chunk_size) or None
+    if tornado.version > "5":
+        # .. versionchanged:: 5.0
+        # Interface redesigned to take a buffer and return a number
+        # of bytes instead of a freshly-allocated object.
+        def read_from_fd(self, buf):
+            buf[:] = self.serial.read(len(buf))
+            return len(buf) or None
+    else:
+        def read_from_fd(self):
+            return self.serial.read(self.read_chunk_size) or None
 
 
 class PFUnixServer(tornado.tcpserver.TCPServer):
