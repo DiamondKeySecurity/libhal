@@ -470,15 +470,28 @@ static int test_ecdsa_generate(const ecdsa_tc_t * const tc, hal_key_flags_t flag
   return 0;
 }
 
+#ifdef DIAMOND_HSM
+hal_error_t hal_rpc_client_transport_init_ip(const char *hostip, const char *hostname);
+#endif
+
 int main (int argc, char *argv[])
 {
   const hal_client_handle_t client = {HAL_HANDLE_NONE};
   const char *pin = argc > 1 ? argv[1] : "fnord";
+  #ifdef DIAMOND_HSM 
+    const char *ipaddr = argc > 2 ? argv[2] : "127.0.0.1";
+  #endif
   hal_error_t err;
   int ok = 1;
 
-  if ((err = hal_rpc_client_init()) != HAL_OK)
-    printf("Warning: Trouble initializing RPC client: %s\n", hal_error_string(err));
+  #ifdef DIAMOND_HSM 
+    printf("Connecting to DIAMOND HSM\r\n\r\n");
+    if ((err = hal_rpc_client_transport_init_ip(ipaddr, "dks-hsm")) != HAL_OK)
+      printf("Warning: Trouble initializing RPC client: %s\n", hal_error_string(err));
+  #else
+    if ((err = hal_rpc_client_init()) != HAL_OK)
+      printf("Warning: Trouble initializing RPC client: %s\n", hal_error_string(err));
+  #endif
 
   if ((err = hal_rpc_login(client, HAL_USER_NORMAL, pin, strlen(pin))) != HAL_OK)
     printf("Warning: Trouble logging into HSM: %s\n", hal_error_string(err));
