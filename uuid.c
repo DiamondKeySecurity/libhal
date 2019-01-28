@@ -71,14 +71,18 @@ hal_error_t hal_uuid_gen(hal_uuid_t *uuid)
 hal_error_t hal_uuid_parse(hal_uuid_t *uuid, const char * const string)
 {
   static const char fmt[]
-    = "%2hhx%2hhx%2hhx%2hhx-%2hhx%2hhx-%2hhx%2hhx-%2hhx%2hhx-%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx";
+    = "%2x%2x%2x%2x-%2x%2x-%2x%2x-%2x%2x-%2x%2x%2x%2x%2x%2x";
 
   if (uuid == NULL || string == NULL ||
       sscanf(string, fmt,
-	     uuid->uuid +  0, uuid->uuid +  1, uuid->uuid +  2, uuid->uuid +  3,
-	     uuid->uuid +  4, uuid->uuid +  5, uuid->uuid +  6, uuid->uuid +  7,
-	     uuid->uuid +  8, uuid->uuid +  9, uuid->uuid + 10, uuid->uuid + 11,
-	     uuid->uuid + 12, uuid->uuid + 13, uuid->uuid + 14, uuid->uuid + 15) != 16)
+             (unsigned *)(uuid->uuid +  0), (unsigned *)(uuid->uuid +  1),
+             (unsigned *)(uuid->uuid +  2), (unsigned *)(uuid->uuid +  3),
+             (unsigned *)(uuid->uuid +  4), (unsigned *)(uuid->uuid +  5),
+             (unsigned *)(uuid->uuid +  6), (unsigned *)(uuid->uuid +  7),
+             (unsigned *)(uuid->uuid +  8), (unsigned *)(uuid->uuid +  9),
+             (unsigned *)(uuid->uuid + 10), (unsigned *)(uuid->uuid + 11),
+             (unsigned *)(uuid->uuid + 12), (unsigned *)(uuid->uuid + 13),
+             (unsigned *)(uuid->uuid + 14), (unsigned *)(uuid->uuid + 15)) != 16)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   return HAL_OK;
@@ -87,16 +91,20 @@ hal_error_t hal_uuid_parse(hal_uuid_t *uuid, const char * const string)
 hal_error_t hal_uuid_format(const hal_uuid_t * const uuid, char *buffer, const size_t buffer_len)
 {
   static const char fmt[]
-    = "%02hhx%02hhx%02hhx%02hhx-%02hhx%02hhx-%02hhx%02hhx-%02hhx%02hhx-%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx";
+    = "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x";
 
   if (uuid == NULL || buffer == NULL || buffer_len < HAL_UUID_TEXT_SIZE)
     return HAL_ERROR_BAD_ARGUMENTS;
 
   if (snprintf(buffer, buffer_len, fmt,
-               uuid->uuid[ 0], uuid->uuid[ 1], uuid->uuid[ 2], uuid->uuid[ 3],
-               uuid->uuid[ 4], uuid->uuid[ 5], uuid->uuid[ 6], uuid->uuid[ 7],
-               uuid->uuid[ 8], uuid->uuid[ 9], uuid->uuid[10], uuid->uuid[11],
-               uuid->uuid[12], uuid->uuid[13], uuid->uuid[14], uuid->uuid[15]) != HAL_UUID_TEXT_SIZE - 1)
+               (unsigned)uuid->uuid[ 0], (unsigned)uuid->uuid[ 1],
+               (unsigned)uuid->uuid[ 2], (unsigned)uuid->uuid[ 3],
+               (unsigned)uuid->uuid[ 4], (unsigned)uuid->uuid[ 5],
+               (unsigned)uuid->uuid[ 6], (unsigned)uuid->uuid[ 7],
+               (unsigned)uuid->uuid[ 8], (unsigned)uuid->uuid[ 9],
+               (unsigned)uuid->uuid[10], (unsigned)uuid->uuid[11],
+               (unsigned)uuid->uuid[12], (unsigned)uuid->uuid[13],
+               (unsigned)uuid->uuid[14], (unsigned)uuid->uuid[15]) != HAL_UUID_TEXT_SIZE - 1)
     return HAL_ERROR_RESULT_TOO_LONG;
 
   return HAL_OK;

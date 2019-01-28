@@ -1975,6 +1975,7 @@ hal_error_t hal_hashsig_ks_init(void)
         key->lms_keys[0].q = lms_key.q;
 
         prev_name = slot.name;
+        hal_task_yield_maybe();
     }
 
     /* Delete orphaned lms keys */
@@ -1993,6 +1994,7 @@ hal_error_t hal_hashsig_ks_init(void)
         }
 
         prev_name = slot.name;
+        hal_task_yield_maybe();
     }
 
     /* Find all lmots keys */
@@ -2039,6 +2041,7 @@ hal_error_t hal_hashsig_ks_init(void)
         hal_hash_finalize(state, (uint8_t *)&hss_key->lms_keys[0].T[r], sizeof(hss_key->lms_keys[0].T[r]));
 
         prev_name = slot.name;
+        hal_task_yield_maybe();
     }
 
     /* After all keys have been read, scan for completeness. */
@@ -2082,6 +2085,7 @@ hal_error_t hal_hashsig_ks_init(void)
                 }
             }
             (void)hal_free_static_memory(hss_key);
+            hal_task_yield_maybe();
             continue;
         }
 
@@ -2096,6 +2100,7 @@ hal_error_t hal_hashsig_ks_init(void)
             hal_hash_update(state, (const uint8_t *)&hss_key->lms_keys[0].T[2*r], sizeof(hss_key->lms_keys[0].T[r]));
             hal_hash_update(state, (const uint8_t *)&hss_key->lms_keys[0].T[2*r+1], sizeof(hss_key->lms_keys[0].T[r]));
             hal_hash_finalize(state, (uint8_t *)&hss_key->lms_keys[0].T[r], sizeof(hss_key->lms_keys[0].T[r]));
+            hal_task_yield_maybe();
         }
         if (memcmp(&hss_key->lms_keys[0].T[1], &hss_key->T1, sizeof(hss_key->lms_keys[0].T[1])) != 0)
             goto fail;
@@ -2117,6 +2122,7 @@ hal_error_t hal_hashsig_ks_init(void)
                          (const uint8_t * const)lms_key->pubkey, lms_key->pubkey_len,
                          lms_key->signature, NULL, lms_key->signature_len) != HAL_OK)
                 goto fail;
+            hal_task_yield_maybe();
         }
     }
 

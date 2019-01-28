@@ -35,7 +35,6 @@
 
 #include <stdio.h>
 #include <stdint.h>
-#include <stddef.h>		/* ptrdiff_t */
 #include <string.h>             /* memcpy, memset */
 
 #include "hal.h"
@@ -50,11 +49,10 @@
 hal_error_t hal_xdr_encode_int(uint8_t ** const outbuf, const uint8_t * const limit, const uint32_t value)
 {
     /* arg checks */
-    if (outbuf == NULL || *outbuf == NULL || limit == NULL)
-        return HAL_ERROR_BAD_ARGUMENTS;
+    hal_assert(outbuf != NULL && *outbuf != NULL && limit != NULL && limit >= *outbuf);
 
     /* buffer overflow check */
-    if (limit - *outbuf < (ptrdiff_t)sizeof(value))
+    if ((size_t)(limit - *outbuf) < sizeof(value))
         return HAL_ERROR_XDR_BUFFER_OVERFLOW;
 
     **(uint32_t **)outbuf = htonl(value);
@@ -66,11 +64,10 @@ hal_error_t hal_xdr_encode_int(uint8_t ** const outbuf, const uint8_t * const li
 hal_error_t hal_xdr_decode_int_peek(const uint8_t ** const inbuf, const uint8_t * const limit, uint32_t *value)
 {
     /* arg checks */
-    if (inbuf == NULL || *inbuf == NULL || limit == NULL || value == NULL)
-        return HAL_ERROR_BAD_ARGUMENTS;
+    hal_assert(inbuf != NULL && *inbuf != NULL && limit != NULL && limit >= *inbuf && value != NULL);
 
     /* buffer overflow check */
-    if (limit - *inbuf < (ptrdiff_t)sizeof(*value))
+    if ((size_t)(limit - *inbuf) < sizeof(*value))
         return HAL_ERROR_XDR_BUFFER_OVERFLOW;
 
     *value = ntohl(**(uint32_t **)inbuf);
@@ -94,15 +91,14 @@ hal_error_t hal_xdr_decode_int(const uint8_t ** const inbuf, const uint8_t * con
 
 hal_error_t hal_xdr_encode_fixed_opaque(uint8_t ** const outbuf, const uint8_t * const limit, const uint8_t * const value, const size_t len)
 {
-    if (len == 0)
-        return HAL_OK;
-
     /* arg checks */
-    if (outbuf == NULL || *outbuf == NULL || limit == NULL || value == NULL)
-        return HAL_ERROR_BAD_ARGUMENTS;
+    hal_assert(outbuf != NULL && *outbuf != NULL && limit != NULL && limit >= *outbuf && (value != NULL || len == 0));
 
     /* buffer overflow check */
-    if (limit - *outbuf < (ptrdiff_t)((len + 3) & ~3))
+    /* We need to explicitly check (len > 0xfffffffc) because padding will
+     * round it up to 0.
+     */
+    if ((len > 0xfffffffc) || ((size_t)(limit - *outbuf) < ((len + 3) & ~3)))
         return HAL_ERROR_XDR_BUFFER_OVERFLOW;
 
     /* write the data */
@@ -110,11 +106,8 @@ hal_error_t hal_xdr_encode_fixed_opaque(uint8_t ** const outbuf, const uint8_t *
     *outbuf += len;
 
     /* pad if necessary */
-    if (len & 3) {
-        size_t n = 4 - (len & 3);
-        memset(*outbuf, 0, n);
-        *outbuf += n;
-    }
+    for (size_t i = len; (i & 3) != 0; ++i)
+        *((*outbuf)++) = 0;
 
     return HAL_OK;
 }
@@ -122,11 +115,10 @@ hal_error_t hal_xdr_encode_fixed_opaque(uint8_t ** const outbuf, const uint8_t *
 hal_error_t hal_xdr_decode_fixed_opaque_ptr(const uint8_t ** const inbuf, const uint8_t * const limit, const uint8_t ** const value, const size_t len)
 {
     /* arg checks */
-    if (inbuf == NULL || *inbuf == NULL || limit == NULL || value == NULL)
-        return HAL_ERROR_BAD_ARGUMENTS;
+    hal_assert(inbuf != NULL && *inbuf != NULL && limit != NULL && limit >= *inbuf && value != NULL);
 
     /* buffer overflow check */
-    if (limit - *inbuf < (ptrdiff_t)len)
+    if ((size_t)(limit - *inbuf) < len)
         return HAL_ERROR_XDR_BUFFER_OVERFLOW;
 
     /* return a pointer to the data */
@@ -180,8 +172,7 @@ hal_error_t hal_xdr_decode_variable_opaque_ptr(const uint8_t ** const inbuf, con
     uint32_t xdr_len;
 
     /* arg checks */
-    if (len == NULL)
-        return HAL_ERROR_BAD_ARGUMENTS;
+    hal_assert(len != NULL);
 
     /* read length */
     if ((err = hal_xdr_decode_int(inbuf, limit, &xdr_len)) == HAL_OK) {

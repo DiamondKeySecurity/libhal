@@ -44,7 +44,7 @@ static hal_error_t get_version(uint32_t *version)
 
 static hal_error_t get_random(void *buffer, const size_t length)
 {
-  if (buffer == NULL || length == 0)
+  if (buffer == NULL)
     return HAL_ERROR_IMPOSSIBLE;
 
   return hal_get_random(NULL, buffer, length);

@@ -64,6 +64,12 @@ from Crypto.Hash.SHA256             import SHA256Hash as SHA256
 from Crypto.Hash.SHA384             import SHA384Hash as SHA384
 from Crypto.Hash.SHA512             import SHA512Hash as SHA512
 
+try:
+    import statistics
+    statistics_loaded = True
+except ImportError:
+    statistics_loaded = False
+
 
 logger = logging.getLogger(__name__)
 
@@ -254,6 +260,8 @@ class Result(object):
         self.args = args
         self.name = name
         self.sum = datetime.timedelta(seconds = 0)
+        if statistics_loaded:
+            self.readings = [None] * args.iterations
         self.t0 = None
         self.t1 = None
         self.n = 0
@@ -264,14 +272,32 @@ class Result(object):
         self.t1 = t1
         delta = t1 - t0
         self.sum += delta
+        if statistics_loaded:
+            self.readings[self.n] = delta.total_seconds()
         self.n += 1
         if not self.args.quiet:
             sys.stdout.write("\r{:4d} {}".format(self.n, delta))
             sys.stdout.flush()
 
-    @property
-    def mean(self):
-        return self.sum / self.n
+    if statistics_loaded:
+
+        @property
+        def mean(self):
+            return statistics.mean(self.readings)
+
+        @property
+        def median(self):
+            return statistics.median(self.readings)
+
+        @property
+        def stdev(self):
+            return statistics.pstdev(self.readings)
+
+    else:
+
+        @property
+        def mean(self):
+                return self.sum / self.n
 
     @property
     def secs_per_sig(self):
@@ -286,15 +312,28 @@ class Result(object):
         return  self.sum.total_seconds() / (self.t1 - self.t0).total_seconds()
 
     def report(self):
-        sys.stdout.write(("\r{0.name} "
-                          "sigs/sec {0.sigs_per_sec} "
-                          "secs/sig {0.secs_per_sig} "
-                          "mean {0.mean} "
-                          "speedup {0.speedup} "
-                          "(n {0.n}, "
-                          "c {0.args.clients} "
-                          "t0 {0.t0} "
-                          "t1 {0.t1})\n").format(self))
+        if statistics_loaded:
+            sys.stdout.write(("\r{0.name} "
+                              "sigs/sec {0.sigs_per_sec} "
+                              "secs/sig {0.secs_per_sig} "
+                              "mean {0.mean} "
+                              "median {0.median} "
+                              "stdev {0.stdev} "
+                              "speedup {0.speedup} "
+                              "(n {0.n}, "
+                              "c {0.args.clients} "
+                              "t0 {0.t0} "
+                              "t1 {0.t1})\n").format(self))
+        else:
+            sys.stdout.write(("\r{0.name} "
+                              "sigs/sec {0.sigs_per_sec} "
+                              "secs/sig {0.secs_per_sig} "
+                              "mean {0.mean} "
+                              "speedup {0.speedup} "
+                              "(n {0.n}, "
+                              "c {0.args.clients} "
+                              "t0 {0.t0} "
+                              "t1 {0.t1})\n").format(self))
         sys.stdout.flush()
 
 
