@@ -63,7 +63,6 @@
 
 
 static int volatile_init = 0;
-static hal_core_t *core = NULL;
 
 #define MKM_VOLATILE_STATUS_ADDRESS     0
 #define MKM_VOLATILE_SCLK_DIV           0x20
@@ -86,14 +85,15 @@ static hal_error_t hal_mkm_volatile_init(void)
 
   hal_error_t err;
   uint32_t status;
+  hal_core_t *core = NULL;
 
-  if ((core = hal_core_find(MKMIF_NAME, NULL)) == NULL)
-    return HAL_ERROR_CORE_NOT_FOUND;
+  if ((err = hal_core_alloc(MKMIF_NAME, &core, NULL)) != LIBHAL_OK)
+    return err;
 
   if ((err = hal_mkmif_set_clockspeed(core, MKM_VOLATILE_SCLK_DIV)) != LIBHAL_OK ||
       (err = hal_mkmif_init(core)) != LIBHAL_OK ||
       (err = hal_mkmif_read_word(core, MKM_VOLATILE_STATUS_ADDRESS, &status)) != LIBHAL_OK)
-    return err;
+    goto out;
 
   if (status != MKM_STATUS_SET && status != MKM_STATUS_NOT_SET) {
     /*
@@ -103,11 +103,14 @@ static hal_error_t hal_mkm_volatile_init(void)
     uint8_t buf[KEK_LENGTH] = {0};
     if ((err = hal_mkmif_write(core, MKM_VOLATILE_STATUS_ADDRESS + 4, buf, sizeof(buf))) != LIBHAL_OK ||
 	(err = hal_mkmif_write_word(core, MKM_VOLATILE_STATUS_ADDRESS, MKM_STATUS_NOT_SET)) != LIBHAL_OK)
-      return err;
+      goto out;
   }
 
   volatile_init = 1;
-  return LIBHAL_OK;
+
+out:
+  hal_core_free(core);
+  return err;
 }
 
 hal_error_t hal_mkm_volatile_read(uint8_t *buf, const size_t len)
@@ -119,7 +122,7 @@ hal_error_t hal_mkm_volatile_read(uint8_t *buf, const size_t len)
     return HAL_ERROR_MASTERKEY_BAD_LENGTH;
 
   if ((err = hal_mkm_volatile_init()) != LIBHAL_OK ||
-      (err = hal_mkmif_read_word(core, MKM_VOLATILE_STATUS_ADDRESS, &status)) != LIBHAL_OK)
+      (err = hal_mkmif_read_word(NULL, MKM_VOLATILE_STATUS_ADDRESS, &status)) != LIBHAL_OK)
     return err;
 
   if (buf != NULL && len) {
@@ -129,7 +132,7 @@ hal_error_t hal_mkm_volatile_read(uint8_t *buf, const size_t len)
      */
     if (status != MKM_STATUS_SET)
       memset(buf, 0x0, len);
-    else if ((err = hal_mkmif_read(core, MKM_VOLATILE_STATUS_ADDRESS + 4, buf, len)) != LIBHAL_OK)
+    else if ((err = hal_mkmif_read(NULL, MKM_VOLATILE_STATUS_ADDRESS + 4, buf, len)) != LIBHAL_OK)
       return err;
   }
 
@@ -153,8 +156,8 @@ hal_error_t hal_mkm_volatile_write(const uint8_t * const buf, const size_t len)
     return HAL_ERROR_MASTERKEY_FAIL;
 
   if ((err = hal_mkm_volatile_init()) != LIBHAL_OK ||
-      (err = hal_mkmif_write(core, MKM_VOLATILE_STATUS_ADDRESS + 4, buf, len)) != LIBHAL_OK ||
-      (err = hal_mkmif_write_word(core, MKM_VOLATILE_STATUS_ADDRESS, MKM_STATUS_SET)) != LIBHAL_OK)
+      (err = hal_mkmif_write(NULL, MKM_VOLATILE_STATUS_ADDRESS + 4, buf, len)) != LIBHAL_OK ||
+      (err = hal_mkmif_write_word(NULL, MKM_VOLATILE_STATUS_ADDRESS, MKM_STATUS_SET)) != LIBHAL_OK)
     return err;
 
   return LIBHAL_OK;
@@ -169,8 +172,8 @@ hal_error_t hal_mkm_volatile_erase(const size_t len)
     return HAL_ERROR_MASTERKEY_BAD_LENGTH;
 
   if ((err = hal_mkm_volatile_init()) != LIBHAL_OK ||
-      (err = hal_mkmif_write(core, MKM_VOLATILE_STATUS_ADDRESS + 4, buf, sizeof(buf))) != LIBHAL_OK ||
-      (err = hal_mkmif_write_word(core, MKM_VOLATILE_STATUS_ADDRESS, MKM_STATUS_NOT_SET)) != LIBHAL_OK)
+      (err = hal_mkmif_write(NULL, MKM_VOLATILE_STATUS_ADDRESS + 4, buf, sizeof(buf))) != LIBHAL_OK ||
+      (err = hal_mkmif_write_word(NULL, MKM_VOLATILE_STATUS_ADDRESS, MKM_STATUS_NOT_SET)) != LIBHAL_OK)
     return err;
 
   return LIBHAL_OK;
