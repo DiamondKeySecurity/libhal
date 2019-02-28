@@ -43,7 +43,8 @@ extern hal_error_t hal_hashsig_key_gen(hal_core_t *core,
                                        hal_hashsig_key_t **key_,
                                        const size_t hss_levels,
                                        const hal_lms_algorithm_t lms_type,
-                                       const hal_lmots_algorithm_t lmots_type);
+                                       const hal_lmots_algorithm_t lmots_type,
+                                       const hal_key_flags_t flags);
 
 extern hal_error_t hal_hashsig_key_delete(const hal_hashsig_key_t * const key);
 

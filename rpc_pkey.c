@@ -555,7 +555,7 @@ static hal_error_t pkey_local_generate_hashsig(const hal_client_handle_t client,
   slot->curve   = HAL_CURVE_NONE;
   slot->flags   = flags;
 
-  if ((err = hal_hashsig_key_gen(NULL, &key, hss_levels, lms_type, lmots_type)) != HAL_OK) {
+  if ((err = hal_hashsig_key_gen(NULL, &key, hss_levels, lms_type, lmots_type, flags)) != HAL_OK) {
     slot->type = HAL_KEY_TYPE_NONE;
     return err;
   }

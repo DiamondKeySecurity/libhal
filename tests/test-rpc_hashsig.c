@@ -261,6 +261,7 @@ static hal_error_t dump_hss_signature(const uint8_t * const sig, const size_t le
 static int test_hashsig_sign(const size_t L,
                              const hal_lms_algorithm_t lms_type,
                              const hal_lmots_algorithm_t lmots_type,
+                             hal_key_flags_t flags,
                              size_t iterations,
                              int save, int keep)
 {
@@ -285,7 +286,7 @@ static int test_hashsig_sign(const size_t L,
                 lose("Error closing %s: %s\n", save_name, strerror(errno));
         }
 
-        hal_key_flags_t flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | HAL_KEY_FLAG_TOKEN;
+        flags |= HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | HAL_KEY_FLAG_TOKEN;
 
         printf("Starting hashsig key test: L %lu, lms type %u (h=%lu), lmots type %u (w=%lu)\n",
                L, lms_type, lms_type_to_h(lms_type), lmots_type, lmots_type_to_w(lmots_type));
@@ -461,6 +462,7 @@ int main(int argc, char *argv[])
     size_t lms_lo = 5, lms_hi = 0;
     size_t lmots_lo = 3, lmots_hi = 0;
     int save = 0, keep = 0;
+    hal_key_flags_t flags = 0;
     char *p;
     hal_error_t err;
     int ok = 1;
@@ -478,10 +480,11 @@ Usage: %s [-d] [-i] [-p pin] [-t] [-L n] [-l n] [-o n] [-n n] [-s] [-r file]\n\
        -s: save generated public key and signatures\n\
        -k: keep (don't delete) the generated keys on the hsm\n\
        -r: read and pretty-print a saved signature file\n\
+       -x: mark key as exportable\n\
 Numeric arguments can be a single number or a range, e.g. '1..4'\n";
 
     int opt;
-    while ((opt = getopt(argc, argv, "ditp:L:l:o:n:skr:h?")) != -1) {
+    while ((opt = getopt(argc, argv, "ditp:L:l:o:n:skr:xh?")) != -1) {
         switch (opt) {
         case 'd':
             debug = 1;
@@ -534,6 +537,9 @@ Numeric arguments can be a single number or a range, e.g. '1..4'\n";
             ok &= read_sig(optarg);
             do_default = 0;
             break;
+        case 'x':
+            flags = HAL_KEY_FLAG_EXPORTABLE;
+            break;
         case 'h':
         case '?':
             fprintf(stdout, usage, argv[0]);
@@ -576,7 +582,7 @@ Numeric arguments can be a single number or a range, e.g. '1..4'\n";
         for (size_t L = L_lo; L <= L_hi; ++L) {
             for (hal_lms_algorithm_t lms_type = lms_lo; lms_type <= lms_hi; ++lms_type) {
                 for (hal_lmots_algorithm_t lmots_type = lmots_lo; lmots_type <= lmots_hi; ++lmots_type) {
-                    ok &= test_hashsig_sign(L, lms_type, lmots_type, iterations, save, keep);
+                    ok &= test_hashsig_sign(L, lms_type, lmots_type, flags, iterations, save, keep);
                 }
             }
         }
