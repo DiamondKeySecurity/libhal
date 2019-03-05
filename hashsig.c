@@ -730,6 +730,41 @@ static inline size_t lms_signature_len(lms_parameter_t * const lms, lmots_parame
 }
 
 #if RPC_CLIENT == RPC_CLIENT_LOCAL
+static hal_error_t lms_compute_T_leaf(lms_key_t *key, lmots_key_t *lmots_key)
+{
+    /* compute T[r] = H(I || u32str(r) || u16str(D_LEAF) || K) */
+    size_t r = (1U << key->lms->h) + lmots_key->q;
+    uint8_t statebuf[512];
+    hal_hash_state_t *state = NULL;
+    check(hal_hash_initialize(NULL, hal_hash_sha256, &state, statebuf, sizeof(statebuf)));
+    check(hal_hash_update(state, (const uint8_t *)&lmots_key->I, sizeof(lmots_key->I)));
+    uint32_t l = u32str(r); check(hal_hash_update(state, (const uint8_t *)&l, sizeof(l)));
+    uint16_t s = u16str(D_LEAF); check(hal_hash_update(state, (const uint8_t *)&s, sizeof(s)));
+    check(hal_hash_update(state, (const uint8_t *)&lmots_key->K, sizeof(lmots_key->K)));
+    check(hal_hash_finalize(state, (uint8_t *)&key->T[r], sizeof(key->T[r])));
+
+    return HAL_OK;
+}
+
+static hal_error_t lms_compute_T_intr(lms_key_t *key)
+{
+    /* generate the rest of T[r] = H(I || u32str(r) || u16str(D_INTR) || T[2*r] || T[2*r+1]) */
+    for (size_t r = (1U << key->lms->h) - 1; r > 0; --r) {
+        uint8_t statebuf[512];
+        hal_hash_state_t *state = NULL;
+        check(hal_hash_initialize(NULL, hal_hash_sha256, &state, statebuf, sizeof(statebuf)));
+        check(hal_hash_update(state, (const uint8_t *)&key->I, sizeof(key->I)));
+        uint32_t l = u32str(r); check(hal_hash_update(state, (const uint8_t *)&l, sizeof(l)));
+        uint16_t s = u16str(D_INTR); check(hal_hash_update(state, (const uint8_t *)&s, sizeof(s)));
+        check(hal_hash_update(state, (const uint8_t *)&key->T[2*r], sizeof(key->T[r])));
+        check(hal_hash_update(state, (const uint8_t *)&key->T[2*r+1], sizeof(key->T[r])));
+        check(hal_hash_finalize(state, (uint8_t *)&key->T[r], sizeof(key->T[r])));
+        hal_task_yield_maybe();
+    }
+
+    return HAL_OK;
+}
+
 /* Given a key with most fields filled in, generate the lms private and
  * public key components.
  * Let the caller worry about storage.
@@ -757,14 +792,8 @@ static hal_error_t lms_generate(lms_key_t *key, bytestring32 *seed)
     };
     hal_ks_t *ks = (key->level == 0) ? hal_ks_token : hal_ks_volatile;
 
-    uint8_t statebuf[512];
-    hal_hash_state_t *state = NULL;
-    uint32_t l;
-    uint16_t s;
-    size_t h2 = (1 << key->lms->h);
-
     /* private key - array of lmots key names */
-    for (size_t q = 0; q < h2; ++q) {
+    for (size_t q = 0; q < (1U << key->lms->h); ++q) {
         /* generate the lmots private and public key components */
         lmots_key.q = q;
         check(lmots_generate(&lmots_key, seed));
@@ -783,27 +812,13 @@ static hal_error_t lms_generate(lms_key_t *key, bytestring32 *seed)
         memcpy(&key->lmots_keys[q], &slot.name, sizeof(slot.name));
 
         /* compute T[r] = H(I || u32str(r) || u16str(D_LEAF) || OTS_PUB_HASH[r-2^h]) */
-        size_t r = h2 + q;
-        check(hal_hash_initialize(NULL, hal_hash_sha256, &state, statebuf, sizeof(statebuf)));
-        check(hal_hash_update(state, (const uint8_t *)&key->I, sizeof(key->I)));
-        l = u32str(r); check(hal_hash_update(state, (const uint8_t *)&l, sizeof(l)));
-        s = u16str(D_LEAF); check(hal_hash_update(state, (const uint8_t *)&s, sizeof(s)));
-        check(hal_hash_update(state, (const uint8_t *)&lmots_key.K, sizeof(lmots_key.K)));
-        check(hal_hash_finalize(state, (uint8_t *)&key->T[r], sizeof(key->T[r])));
+        check(lms_compute_T_leaf(key, &lmots_key));
+
         hal_task_yield_maybe();
     }
 
     /* generate the rest of T[r] = H(I || u32str(r) || u16str(D_INTR) || T[2*r] || T[2*r+1]) */
-    for (size_t r = h2 - 1; r > 0; --r) {
-        check(hal_hash_initialize(NULL, hal_hash_sha256, &state, statebuf, sizeof(statebuf)));
-        check(hal_hash_update(state, (const uint8_t *)&key->I, sizeof(key->I)));
-        l = u32str(r); check(hal_hash_update(state, (const uint8_t *)&l, sizeof(l)));
-        s = u16str(D_INTR); check(hal_hash_update(state, (const uint8_t *)&s, sizeof(s)));
-        check(hal_hash_update(state, (const uint8_t *)&key->T[2*r], sizeof(key->T[r])));
-        check(hal_hash_update(state, (const uint8_t *)&key->T[2*r+1], sizeof(key->T[r])));
-        check(hal_hash_finalize(state, (uint8_t *)&key->T[r], sizeof(key->T[r])));
-        hal_task_yield_maybe();
-    }
+    check(lms_compute_T_intr(key));
 
     memcpy(&key->T1, &key->T[1], sizeof(key->T1));
 
@@ -2006,6 +2021,7 @@ hal_error_t hal_hashsig_ks_init(void)
         /* hss_alloc redefines key, so copy fields from the old version of the key */
         memcpy(&key->I, &keybuf.I, sizeof(key->I));
         memcpy(&key->T1, &keybuf.T1, sizeof(key->T1));
+        memcpy(&key->seed, &keybuf.seed, sizeof(key->seed));
         key->name = slot.name;
 
         /* initialize top-level lms key (beyond what hss_alloc did) */
@@ -2068,15 +2084,7 @@ hal_error_t hal_hashsig_ks_init(void)
         memcpy(&hss_key->lms_keys[0].lmots_keys[lmots_key.q], &slot.name, sizeof(slot.name));
 
         /* compute T[r] = H(I || u32str(r) || u16str(D_LEAF) || K) */
-        size_t r = (1U << hss_key->lms->h) + lmots_key.q;
-        uint8_t statebuf[512];
-        hal_hash_state_t *state = NULL;
-        hal_hash_initialize(NULL, hal_hash_sha256, &state, statebuf, sizeof(statebuf));
-        hal_hash_update(state, (const uint8_t *)&hss_key->I, sizeof(hss_key->I));
-        uint32_t l = u32str(r); hal_hash_update(state, (const uint8_t *)&l, sizeof(l));
-        uint16_t s = u16str(D_LEAF); hal_hash_update(state, (const uint8_t *)&s, sizeof(s));
-        hal_hash_update(state, (const uint8_t *)&lmots_key.K, sizeof(lmots_key.K));
-        hal_hash_finalize(state, (uint8_t *)&hss_key->lms_keys[0].T[r], sizeof(hss_key->lms_keys[0].T[r]));
+        check(lms_compute_T_leaf(&hss_key->lms_keys[0], &lmots_key));
 
         prev_name = slot.name;
         hal_task_yield_maybe();
@@ -2088,10 +2096,50 @@ hal_error_t hal_hashsig_ks_init(void)
     for (hss_key = hss_keys; hss_key != NULL; hss_key = hss_next) {
         hss_next = hss_key->next;
         int fail = 0;
-        for (size_t i = 0; i < (1U << hss_key->lms->h); ++i) {
-            if (hal_uuid_cmp(&hss_key->lms_keys[0].lmots_keys[i], &uuid_0) == 0) {
-                fail = 1;
-                break;
+        for (size_t q = 0; q < (1U << hss_key->lms->h); ++q) {
+            if (hal_uuid_cmp(&hss_key->lms_keys[0].lmots_keys[q], &uuid_0) == 0) {
+                bytestring32 seed_0 = {{0}};
+                if (memcmp(&hss_key->seed, &seed_0, sizeof(seed_0)) == 0) {
+                    fail = 1;
+                    break;
+                }
+                else {
+                    /* This key was generated with the pseudo-random
+                     * method, and can be regenerated.
+                     */
+                    bytestring32 x[hss_key->lmots->p];
+                    lmots_key_t lmots_key = {
+                        .type = HAL_KEY_TYPE_HASHSIG_LMOTS,
+                        .lmots = hss_key->lmots,
+                        .q = q,
+                        .x = x
+                    };
+                    memcpy(&lmots_key.I, &hss_key->I, sizeof(hss_key->I));
+
+                    /* regenerate the lmots private and public key components */
+                    check(lmots_generate(&lmots_key, &hss_key->seed));
+
+                    /* store the lmots key */
+                    hal_pkey_slot_t slot = {
+                        .type  = HAL_KEY_TYPE_HASHSIG_LMOTS,
+                        .curve = HAL_CURVE_NONE,
+                        .flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | HAL_KEY_FLAG_TOKEN
+                    };                    
+                    uint8_t der[lmots_private_key_to_der_len(&lmots_key)];
+                    size_t der_len;
+                    check(lmots_private_key_to_der(&lmots_key, der, &der_len, sizeof(der)));
+                    check(hal_uuid_gen(&slot.name));
+                    hal_error_t err = hal_ks_store(hal_ks_token, &slot, der, der_len);
+                    memset(&x, 0, sizeof(x));
+                    memset(der, 0, sizeof(der));
+                    if (err != HAL_OK) return err;
+
+                    /* record the lmots keystore name */
+                    memcpy(&hss_key->lms_keys[0].lmots_keys[q], &slot.name, sizeof(slot.name));
+
+                    /* compute T[r] = H(I || u32str(r) || u16str(D_LEAF) || K) */
+                    check(lms_compute_T_leaf(&hss_key->lms_keys[0], &lmots_key));
+                }
             }
         }
         if (fail) {
@@ -2128,18 +2176,7 @@ hal_error_t hal_hashsig_ks_init(void)
         }
 
         /* generate the rest of T[] */
-        for (size_t r = (1U << hss_key->lms->h) - 1; r > 0; --r) {
-            uint8_t statebuf[512];
-            hal_hash_state_t *state = NULL;
-            hal_hash_initialize(NULL, hal_hash_sha256, &state, statebuf, sizeof(statebuf));
-            hal_hash_update(state, (const uint8_t *)&hss_key->I, sizeof(hss_key->I));
-            uint32_t l = u32str(r); hal_hash_update(state, (const uint8_t *)&l, sizeof(l));
-            uint16_t s = u16str(D_INTR); check(hal_hash_update(state, (const uint8_t *)&s, sizeof(s)));
-            hal_hash_update(state, (const uint8_t *)&hss_key->lms_keys[0].T[2*r], sizeof(hss_key->lms_keys[0].T[r]));
-            hal_hash_update(state, (const uint8_t *)&hss_key->lms_keys[0].T[2*r+1], sizeof(hss_key->lms_keys[0].T[r]));
-            hal_hash_finalize(state, (uint8_t *)&hss_key->lms_keys[0].T[r], sizeof(hss_key->lms_keys[0].T[r]));
-            hal_task_yield_maybe();
-        }
+        lms_compute_T_intr(&hss_key->lms_keys[0]);
         if (memcmp(&hss_key->lms_keys[0].T[1], &hss_key->T1, sizeof(hss_key->lms_keys[0].T[1])) != 0)
             goto fail;
 
