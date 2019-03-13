@@ -1,7 +1,7 @@
 /*
  * hashsig.c
  * ---------
- * Implementation of draft-mcgrew-hash-sigs-10.txt
+ * Implementation of draft-mcgrew-hash-sigs-15.txt
  *
  * Copyright (c) 2018, NORDUnet A/S All rights reserved.
  *
@@ -188,13 +188,13 @@ static inline hal_error_t hal_asn1_decode_bytestring32(bytestring32 *data, const
 
 typedef const struct lmots_parameter_set {
     hal_lmots_algorithm_t type;
-    size_t                  n, w,   p, ls;
+    size_t                     n,  w, p,   ls;
 } lmots_parameter_t;
 static lmots_parameter_t lmots_parameters[] = {
     { hal_lmots_sha256_n32_w1, 32, 1, 265, 7 },
     { hal_lmots_sha256_n32_w2, 32, 2, 133, 6 },
-    { hal_lmots_sha256_n32_w4, 32, 4,  67, 4 },
-    { hal_lmots_sha256_n32_w8, 32, 8,  34, 0 },
+    { hal_lmots_sha256_n32_w4, 32, 4, 67,  4 },
+    { hal_lmots_sha256_n32_w8, 32, 8, 34,  0 },
 };
 
 typedef struct lmots_key {
@@ -683,10 +683,10 @@ static hal_error_t lmots_private_key_from_der(lmots_key_t *key,
 
 typedef const struct lms_parameter_set {
     hal_lms_algorithm_t type;
-    size_t                 m,  h;
+    size_t                    m,  h;
 } lms_parameter_t;
 static lms_parameter_t lms_parameters[] = {
-    { hal_lms_sha256_n32_h5,  32,  5 },
+    { hal_lms_sha256_n32_h5,  32, 5  },
     { hal_lms_sha256_n32_h10, 32, 10 },
     { hal_lms_sha256_n32_h15, 32, 15 },
     { hal_lms_sha256_n32_h20, 32, 20 },
@@ -700,6 +700,7 @@ typedef struct lms_key {
     lmots_parameter_t *lmots;
     bytestring16 I;
     size_t q;			/* index of next lmots signing key */
+    size_t q_end;
     hal_uuid_t *lmots_keys;	/* private key components */
     bytestring32 *T;		/* public key components */
     bytestring32 T1;		/* copy of T[1] */
@@ -765,40 +766,33 @@ static hal_error_t lms_compute_T_intr(lms_key_t *key)
     return HAL_OK;
 }
 
-/* Given a key with most fields filled in, generate the lms private and
- * public key components.
- * Let the caller worry about storage.
- */
-static hal_error_t lms_generate(lms_key_t *key, bytestring32 *seed)
+static hal_error_t lms_generate_lmots(lms_key_t *key, size_t q, bytestring32 *seed)
 {
-    if (key == NULL || key->type != HAL_KEY_TYPE_HASHSIG_LMS || key->lms == NULL || key->lmots == NULL || key->lmots_keys == NULL || key->T == NULL)
-        return HAL_ERROR_BAD_ARGUMENTS;
-
-    check(hal_uuid_gen((hal_uuid_t *)&key->I));
-    key->q = 0;
-
     bytestring32 x[key->lmots->p];
     lmots_key_t lmots_key = {
         .type = HAL_KEY_TYPE_HASHSIG_LMOTS,
         .lmots = key->lmots,
+        .q = q,
         .x = x
     };
     memcpy(&lmots_key.I, &key->I, sizeof(key->I));
 
-    hal_pkey_slot_t slot = {
-        .type  = HAL_KEY_TYPE_HASHSIG_LMOTS,
-        .curve = HAL_CURVE_NONE,
-        .flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | ((key->level == 0) ? HAL_KEY_FLAG_TOKEN: 0)
-    };
-    hal_ks_t *ks = (key->level == 0) ? hal_ks_token : hal_ks_volatile;
+    /* generate the lmots private and public key components */
+    check(lmots_generate(&lmots_key, seed));
 
-    /* private key - array of lmots key names */
-    for (size_t q = 0; q < (1U << key->lms->h); ++q) {
-        /* generate the lmots private and public key components */
-        lmots_key.q = q;
-        check(lmots_generate(&lmots_key, seed));
+    /* Note: we have to generate all the lmots keys, even if q > 0 or
+     * q_end < 2^h, because we need them to calculate T[].
+     * We just don't need to store the ones that are out of range.
+     */
 
+    if (q >= key->q && q < key->q_end) {
         /* store the lmots key */
+        hal_ks_t *ks = (key->level == 0) ? hal_ks_token : hal_ks_volatile;
+        hal_pkey_slot_t slot = {
+            .type  = HAL_KEY_TYPE_HASHSIG_LMOTS,
+            .curve = HAL_CURVE_NONE,
+            .flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | ((key->level == 0) ? HAL_KEY_FLAG_TOKEN: 0)
+        };                    
         uint8_t der[lmots_private_key_to_der_len(&lmots_key)];
         size_t der_len;
         check(lmots_private_key_to_der(&lmots_key, der, &der_len, sizeof(der)));
@@ -810,10 +804,34 @@ static hal_error_t lms_generate(lms_key_t *key, bytestring32 *seed)
 
         /* record the lmots keystore name */
         memcpy(&key->lmots_keys[q], &slot.name, sizeof(slot.name));
+    }
+    else
+        memset(&x, 0, sizeof(x));
 
-        /* compute T[r] = H(I || u32str(r) || u16str(D_LEAF) || OTS_PUB_HASH[r-2^h]) */
-        check(lms_compute_T_leaf(key, &lmots_key));
+    /* compute T[r] = H(I || u32str(r) || u16str(D_LEAF) || K) */
+    check(lms_compute_T_leaf(key, &lmots_key));
 
+    return HAL_OK;
+}
+
+/* Given a key with most fields filled in, generate the lms private and
+ * public key components.
+ * Let the caller worry about storage.
+ */
+static hal_error_t lms_generate(lms_key_t *key, bytestring32 *seed)
+{
+    if (key == NULL || key->type != HAL_KEY_TYPE_HASHSIG_LMS ||
+        key->lms == NULL || key->lmots == NULL ||
+        key->lmots_keys == NULL || key->T == NULL)
+        return HAL_ERROR_BAD_ARGUMENTS;
+
+    hal_uuid_t I_0 = {{0}};
+    if (hal_uuid_cmp((hal_uuid_t *)&key->I, &I_0) == 0)
+        check(hal_uuid_gen((hal_uuid_t *)&key->I));
+
+    /* private key - array of lmots key names */
+    for (size_t q = 0; q < (1U << key->lms->h); ++q) {
+        check(lms_generate_lmots(key, q, seed));
         hal_task_yield_maybe();
     }
 
@@ -838,14 +856,17 @@ static hal_error_t lms_generate(lms_key_t *key, bytestring32 *seed)
 
 static hal_error_t lms_delete(const lms_key_t * const key)
 {
-    hal_pkey_slot_t slot = {{0}};
     hal_ks_t *ks = (key->level == 0) ? hal_ks_token : hal_ks_volatile;
+    hal_pkey_slot_t slot = {{0}};
+    hal_uuid_t uuid_0 = {{0}};
 
     /* delete the lmots keys */
     for (size_t i = 0; i < (1U << key->lms->h); ++i) {
-        memcpy(&slot.name, &key->lmots_keys[i], sizeof(slot.name));
-        check(hal_ks_delete(ks, &slot));
-        hal_task_yield_maybe();
+        if (hal_uuid_cmp(&key->lmots_keys[i], &uuid_0) != 0) {
+            memcpy(&slot.name, &key->lmots_keys[i], sizeof(slot.name));
+            (void)hal_ks_delete(ks, &slot);
+            hal_task_yield_maybe();
+        }
     }
 
     /* delete the lms key */
@@ -863,7 +884,7 @@ static hal_error_t lms_sign(lms_key_t * const key,
     if (key == NULL || key->type != HAL_KEY_TYPE_HASHSIG_LMS || msg == NULL || sig == NULL)
         return HAL_ERROR_BAD_ARGUMENTS;
 
-    if (key->q >= (1U << key->lms->h))
+    if (key->q >= key->q_end)
         return HAL_ERROR_HASHSIG_KEY_EXHAUSTED;
 
     if (sig_max < lms_signature_len(key->lms, key->lmots))
@@ -876,8 +897,7 @@ static hal_error_t lms_sign(lms_key_t * const key,
     check(hal_xdr_encode_int(&sigptr, siglim, key->q));
 
     /* fetch and decode the lmots signing key from the keystore */
-    hal_pkey_slot_t slot;
-    memset(&slot, 0, sizeof(slot));
+    hal_pkey_slot_t slot = {0};
     memcpy(&slot.name, &key->lmots_keys[key->q], sizeof(slot.name));
 
     lmots_key_t lmots_key;
@@ -1121,7 +1141,7 @@ static hal_error_t lms_private_key_to_der(const lms_key_t * const key,
      * Calculate data length.
      */
 
-    // u32str(lms_type) || u32str(lmots_type) || I || q
+    // u32str(lms_type) || u32str(lmots_type) || I || q || q_end
 
     size_t len, vlen = 0, hlen;
 
@@ -1129,6 +1149,7 @@ static hal_error_t lms_private_key_to_der(const lms_key_t * const key,
     check(hal_asn1_encode_lmots_algorithm(key->lmots->type, NULL, &len, 0)); vlen += len;
     check(hal_asn1_encode_bytestring16(&key->I, NULL, &len, 0));             vlen += len;
     check(hal_asn1_encode_size_t(key->q, NULL, &len, 0));                    vlen += len;
+    check(hal_asn1_encode_size_t(key->q_end, NULL, &len, 0));                vlen += len;
 
     check(hal_asn1_encode_header(ASN1_SEQUENCE, vlen, NULL, &hlen, 0));
 
@@ -1151,6 +1172,7 @@ static hal_error_t lms_private_key_to_der(const lms_key_t * const key,
     check(hal_asn1_encode_lmots_algorithm(key->lmots->type, d, &len, vlen)); d += len; vlen -= len;
     check(hal_asn1_encode_bytestring16(&key->I, d, &len, vlen));             d += len; vlen -= len;
     check(hal_asn1_encode_size_t(key->q, d, &len, vlen));                    d += len; vlen -= len;
+    check(hal_asn1_encode_size_t(key->q_end, d, &len, vlen));                d += len; vlen -= len;
 
     return hal_asn1_encode_pkcs8_privatekeyinfo(hal_asn1_oid_mts_hashsig, hal_asn1_oid_mts_hashsig_len,
                                                 NULL, 0, der, d - der, der, der_len, der_max);
@@ -1167,6 +1189,8 @@ static hal_error_t lms_private_key_from_der(lms_key_t *key,
 {
     if (key == NULL || der == NULL)
         return HAL_ERROR_BAD_ARGUMENTS;
+
+    memset(key, 0, sizeof(*key));
 
     key->type = HAL_KEY_TYPE_HASHSIG_LMS;
 
@@ -1188,7 +1212,7 @@ static hal_error_t lms_private_key_from_der(lms_key_t *key,
     const uint8_t *d = privkey + hlen;
     size_t n;
 
-    // u32str(lms_type) || u32str(lmots_type) || I || q
+    // u32str(lms_type) || u32str(lmots_type) || I || q || q_end
 
     hal_lms_algorithm_t lms_type;
     check(hal_asn1_decode_lms_algorithm(&lms_type, d, &n, vlen));     d += n; vlen -= n;
@@ -1198,6 +1222,7 @@ static hal_error_t lms_private_key_from_der(lms_key_t *key,
     key->lmots = lmots_select_parameter_set(lmots_type);
     check(hal_asn1_decode_bytestring16(&key->I, d, &n, vlen));        d += n; vlen -= n;
     check(hal_asn1_decode_size_t(&key->q, d, &n, vlen));              d += n; vlen -= n;
+    check(hal_asn1_decode_size_t(&key->q_end, d, &n, vlen));          d += n; vlen -= n;
 
     if (d != privkey + privkey_len)
         return HAL_ERROR_ASN1_PARSE_FAILED;
@@ -1226,6 +1251,7 @@ struct hal_hashsig_key {
     lms_parameter_t *lms;
     lmots_parameter_t *lmots;
     bytestring16 I;
+    size_t q_start, q_end;
     bytestring32 T1;
     bytestring32 seed;
     lms_key_t *lms_keys;
@@ -1234,6 +1260,16 @@ struct hal_hashsig_key {
 const size_t hal_hashsig_key_t_size = sizeof(hss_key_t);
 
 static hss_key_t *hss_keys = NULL;
+
+static hss_key_t *hss_find(bytestring16 *I)
+{
+    for (hss_key_t *key = hss_keys; key != NULL; key = key->next) {
+        if (memcmp(&key->I, I, sizeof(*I)) == 0)
+            return key;
+    }
+
+    return NULL;
+}
 
 #if 0 /* currently unused */
 static inline size_t hss_public_key_len(lms_parameter_t * const lms)
@@ -1286,25 +1322,18 @@ static inline void *gnaw(uint8_t **mem, size_t *len, const size_t size)
     return ret;
 }
 
-static hal_error_t hss_alloc(hal_hashsig_key_t **key_,
-                             const size_t L,
-                             const hal_lms_algorithm_t lms_type,
-                             const hal_lmots_algorithm_t lmots_type)
+static hal_error_t hss_alloc(hal_hashsig_key_t **key_)
 {
-    if (key_ == NULL)
+    if (key_ == NULL || *key_ == NULL ||
+        (*key_)->type != HAL_KEY_TYPE_HASHSIG_PRIVATE ||
+        (*key_)->L == 0 || (*key_)->L > 8 ||
+        (*key_)->lms == NULL || (*key_)->lmots == NULL)
         return HAL_ERROR_BAD_ARGUMENTS;
 
-    if (L == 0 || L > 8)
-        return HAL_ERROR_BAD_ARGUMENTS;
-
-    lms_parameter_t *lms = lms_select_parameter_set(lms_type);
-    if (lms == NULL)
-        return HAL_ERROR_BAD_ARGUMENTS;
-    size_t h2 = (1 << lms->h);
-
-    lmots_parameter_t *lmots = lmots_select_parameter_set(lmots_type);
-    if (lmots == NULL)
-        return HAL_ERROR_BAD_ARGUMENTS;
+    size_t L = (*key_)->L;
+    lms_parameter_t *lms = (*key_)->lms;
+    lmots_parameter_t *lmots = (*key_)->lmots;
+    size_t h2 = (1U << lms->h);
 
     /* w=1 fails on the Alpha, because the key exceeds the keystore block
      * size. The XDR encoding of the key is going to differ from the DER
@@ -1339,21 +1368,19 @@ static hal_error_t hss_alloc(hal_hashsig_key_t **key_,
     memset(mem, 0, len);
 
     /* allocate the key that will stay in working memory */
-    hss_key_t *key = gnaw(&mem, &len, sizeof(hss_key_t));
-    *key_ = key;
-    key->type = HAL_KEY_TYPE_HASHSIG_PRIVATE;
-    key->L = L;
-    key->lms = lms;
-    key->lmots = lmots;
+    hss_key_t *key = gnaw(&mem, &len, sizeof(*key));
 
-    /* add to the list of active keys */
+    /* initialize it from the transitory key */
+    memcpy(key, *key_, sizeof(*key));
+    *key_ = key;
+
+    /* add the in-memory key to the list of active keys */
     key->next = hss_keys;
     hss_keys = key;
 
     /* allocate the list of lms trees */
     key->lms_keys = gnaw(&mem, &len, L * sizeof(lms_key_t));
     for (size_t i = 0; i < L; ++i) {
-        /* XXX some of this is redundant to lms_private_key_from_der */
         lms_key_t * lms_key = &key->lms_keys[i];
         lms_key->type = HAL_KEY_TYPE_HASHSIG_LMS;
         lms_key->lms = lms;
@@ -1365,71 +1392,94 @@ static hal_error_t hss_alloc(hal_hashsig_key_t **key_,
         lms_key->signature_len = lms_sig_len;
         lms_key->pubkey = gnaw(&mem, &len, lms_pub_len);
         lms_key->pubkey_len = lms_pub_len;
+        lms_key->q_end = h2;
     }
 
     return HAL_OK;
 }
 
-/* called from pkey_local_generate_hashsig */
-hal_error_t hal_hashsig_key_gen(hal_core_t *core,
-                                hal_hashsig_key_t **key_,
-                                const size_t L,
-                                const hal_lms_algorithm_t lms_type,
-                                const hal_lmots_algorithm_t lmots_type,
-                                const hal_key_flags_t flags)
+static hal_error_t hss_generate(hss_key_t **key_, const hal_key_flags_t flags)
 {
-    /* hss_alloc does most of the checks */
+    /* Hashsig keys can only be used for signing, so it makes sense to check
+     * that now, rather than waiting until the user tries to sign.
+     *
+     * Also, the top-level tree must be stored in the token (flash) keystore.
+     * I experimented with allowing keys to be stored in the volatile
+     * keystore, but that had some ugly consequences around the fact that
+     * volatile keys are automatically deleted when the user logs out. I'm
+     * also not sure there's a good use case for volatile hashsig keys.
+     */
+    if (!(flags & HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE) ||
+        !(flags & HAL_KEY_FLAG_TOKEN))
+        return HAL_ERROR_FORBIDDEN;
 
-    if (restart_in_progress)
-        return HAL_ERROR_NOT_READY;
-
-    /* check flash keystore for space to store the root tree */
-    lms_parameter_t *lms = lms_select_parameter_set(lms_type);
-    if (lms == NULL)
+    if (key_ == NULL || *key_ == NULL || (*key_)->lms == NULL)
         return HAL_ERROR_BAD_ARGUMENTS;
+
+    /* hss_alloc does most of the sanity checks */
+
+    /* check flash keystore for space to store the root tree:
+     * 2^h lmots keys + 1 lms key + 1 hss key
+     */
     size_t available;
     check(hal_ks_available(hal_ks_token, &available));
-    if (available < (1U << lms->h) + 2)
+    if (available < (*key_)->q_end - (*key_)->q_start + 2)
         return HAL_ERROR_NO_KEY_INDEX_SLOTS;
 
-    check(hss_alloc(key_, L, lms_type, lmots_type));
+    check(hss_alloc(key_));
     hss_key_t *key = *key_;
+    hal_error_t err;
 
     /* generate the lms trees */
-    for (size_t i = 0; i < L; ++i) {
+    for (size_t i = 0; i < key->L; ++i) {
         lms_key_t * lms_key = &key->lms_keys[i];
+        bytestring32 *seed = NULL;
 
-        if (flags & HAL_KEY_FLAG_EXPORTABLE && i == 0) {
-            bytestring32 *seed = &key->seed;
-            check(hal_rpc_get_random(seed, sizeof(*seed)));
-            check(lms_generate(lms_key, seed));
-        }
-        else {
-            /* hss_alloc zeroes out the allocation, so we know seed == {0}
-             * for later use (store/restore)
+        if (i == 0) {
+            memcpy(&lms_key->I, &key->I, sizeof(key->I));
+            lms_key->q = key->q_start;
+            lms_key->q_end = key->q_end;
+
+            /* If we're called from import, seed will be filled in.
+             * If called from key_gen, seed will be 0, and we may need to
+             * generate it.
              */
-            check(lms_generate(lms_key, NULL));
+            bytestring32 seed_0 = {{0}};
+            if (memcmp(&key->seed, &seed_0, sizeof(seed_0)) != 0) {
+                seed = &key->seed;
+            }
+            else if (flags & HAL_KEY_FLAG_EXPORTABLE) {
+                seed = &key->seed;
+                if ((err = hal_rpc_get_random(seed, sizeof(*seed))) != HAL_OK)
+                    goto err_out;
+            }
         }
+
+        if ((err = lms_generate(lms_key, seed)) != HAL_OK)
+            goto err_out;
 
         if (i > 0)
             /* sign this tree with the previous */
-            check(lms_sign(&key->lms_keys[i-1],
-                           (const uint8_t * const)lms_key->pubkey, lms_public_key_len(key->lms),
-                           lms_key->signature, NULL, lms_signature_len(key->lms, key->lmots)));
+            if ((err = lms_sign(&key->lms_keys[i-1],
+                                (const uint8_t * const)lms_key->pubkey,
+                                lms_public_key_len(key->lms),
+                                lms_key->signature, NULL,
+                                lms_signature_len(key->lms, key->lmots))) != HAL_OK)
+                goto err_out;
 
         /* store the lms key */
+        hal_ks_t *ks = (i == 0) ? hal_ks_token : hal_ks_volatile;
         hal_pkey_slot_t slot = {
             .type  = HAL_KEY_TYPE_HASHSIG_LMS,
-            .curve = HAL_CURVE_NONE,
             .flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | ((i == 0) ? HAL_KEY_FLAG_TOKEN: 0)
         };
-        hal_ks_t *ks = (i == 0) ? hal_ks_token : hal_ks_volatile;
         uint8_t der[lms_private_key_to_der_len(lms_key)];
         size_t der_len;
 
         memcpy(&slot.name, &lms_key->I, sizeof(slot.name));
-        check(lms_private_key_to_der(lms_key, der, &der_len, sizeof(der)));
-        check(hal_ks_store(ks, &slot, der, der_len));
+        if ((err = lms_private_key_to_der(lms_key, der, &der_len, sizeof(der))) != HAL_OK ||
+            (err = hal_ks_store(ks, &slot, der, der_len)) != HAL_OK)
+            goto err_out;
     }
 
     memcpy(&key->I, &key->lms_keys[0].I, sizeof(key->I));
@@ -1438,26 +1488,43 @@ hal_error_t hal_hashsig_key_gen(hal_core_t *core,
     /* pkey_local_generate_hashsig stores the key */
 
     return HAL_OK;
+
+err_out:
+    (void)hal_free_static_memory(key);
+    return err;
 }
 
-/* caller will delete the hss key from the keystore */
-hal_error_t hal_hashsig_key_delete(const hal_hashsig_key_t * const key)
-{
+/* called from pkey_local_generate_hashsig
+ * caller will store the key
+ */
+hal_error_t hal_hashsig_key_gen(hal_core_t *core,
+                                hal_hashsig_key_t **key_,
+                                void *keybuf, const size_t keybuf_len,
+                                const size_t L,
+                                const hal_lms_algorithm_t lms_type,
+                                const hal_lmots_algorithm_t lmots_type,
+                                const hal_key_flags_t flags)
+{ 
+   if (key_ == NULL || keybuf == NULL || keybuf_len < sizeof(hss_key_t))
+        return HAL_ERROR_BAD_ARGUMENTS;
+
     if (restart_in_progress)
         return HAL_ERROR_NOT_READY;
 
-    if (key == NULL || key->type != HAL_KEY_TYPE_HASHSIG_PRIVATE)
-        return HAL_ERROR_BAD_ARGUMENTS;
+    hss_key_t *key = *key_ = keybuf;
+    memset(key, 0, sizeof(*key));
+    key->type = HAL_KEY_TYPE_HASHSIG_PRIVATE;
+    key->L = L;
+    key->lms = lms_select_parameter_set(lms_type);
+    key->lmots = lmots_select_parameter_set(lmots_type);
+    key->q_end = (1U << key->lms->h);
 
-    /* delete the lms trees and their lmots keys */
-    for (size_t level = 0; level < key->L; ++level)
-        check(lms_delete(&key->lms_keys[level]));
+    return hss_generate(key_, flags);
+}
 
-    /* XXX free memory, if supported */
-    (void)hal_free_static_memory(key);
-
-    /* remove from global hss_keys linked list */
-    /* XXX or mark it unused, for possible re-use */
+static void hss_delete(hss_key_t *key)
+{
+    /* remove key from global hss_keys linked list */
     if (hss_keys == key) {
         hss_keys = key->next;
     }
@@ -1470,6 +1537,41 @@ hal_error_t hal_hashsig_key_delete(const hal_hashsig_key_t * const key)
         }
     }
 
+    /* delete the lms trees and their lmots keys */
+    for (size_t level = 0; level < key->L; ++level)
+        (void)lms_delete(&key->lms_keys[level]);
+
+    /* free memory, if possible */
+    (void)hal_free_static_memory(key);
+}
+
+/* caller will delete the hss key from the keystore */
+hal_error_t hal_hashsig_delete(const hal_uuid_t * const name)
+{
+    if (restart_in_progress)
+        return HAL_ERROR_NOT_READY;
+
+    hal_pkey_slot_t slot = { .name = *name };
+    uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
+    size_t der_len;
+    check(hal_ks_fetch(hal_ks_token, &slot, der, &der_len, sizeof(der)));
+
+    hal_hashsig_key_t keybuf, *key;
+    check(hal_hashsig_private_key_from_der(&key, &keybuf, sizeof(keybuf), der, der_len));
+
+    /* hal_hashsig_private_key_from_der returns the key in the list of
+     * active hashsig keys, so we don't need this temporary key.
+     */
+    memset(der, 0, sizeof(der));
+    memset(&keybuf, 0, sizeof(keybuf));
+
+    /* OTOH, if we found the key in the keystore, but not in the list of
+     * active hashsig keys, that's Bad.
+     */
+    if (key == &keybuf)
+        return HAL_ERROR_KEY_NOT_FOUND;
+
+    hss_delete(key);
     return HAL_OK;
 }
 
@@ -1501,10 +1603,9 @@ hal_error_t hal_hashsig_sign(hal_core_t *core,
 //      values, then the public key pub[i] is signed with prv[i-1], and
 //      sig[i-1] is set to the resulting value.
 
-    size_t h2 = (1 << key->lms->h);
-    if (key->lms_keys[key->L-1].q >= h2) {
+    if (key->lms_keys[key->L-1].q >= key->lms_keys[key->L-1].q_end) {
         size_t d;
-        for (d = key->L-1; d > 0 && key->lms_keys[d-1].q >= h2; --d) {
+        for (d = key->L-1; d > 0 && key->lms_keys[d-1].q >= key->lms_keys[d-1].q_end; --d) {
         }
         if (d == 0)
             return HAL_ERROR_HASHSIG_KEY_EXHAUSTED;
@@ -1517,6 +1618,7 @@ hal_error_t hal_hashsig_sign(hal_core_t *core,
              * any additional memory.
              */
             check(lms_delete(lms_key));
+            lms_key->q = 0;
             check(lms_generate(lms_key, NULL));
             check(lms_sign(&key->lms_keys[d-1],
                            (const uint8_t * const)lms_key->pubkey, lms_key->pubkey_len,
@@ -1525,9 +1627,9 @@ hal_error_t hal_hashsig_sign(hal_core_t *core,
             hal_pkey_slot_t slot = {
                 .type  = HAL_KEY_TYPE_HASHSIG_LMS,
                 .curve = HAL_CURVE_NONE,
-                .flags = (lms_key->level == 0) ? HAL_KEY_FLAG_TOKEN: 0
+                .flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | (lms_key->level == 0) ? HAL_KEY_FLAG_TOKEN: 0
             };
-            hal_ks_t *ks = (lms_key->level == 0) ? hal_ks_token : hal_ks_volatile;
+            hal_ks_t *ks = hal_ks_volatile;
             uint8_t der[lms_private_key_to_der_len(lms_key)];
             size_t der_len;
 
@@ -1573,7 +1675,7 @@ hal_error_t hal_hashsig_verify(hal_core_t *core,
                                const uint8_t * const msg, const size_t msg_len,
                                const uint8_t * const sig, const size_t sig_len)
 {
-    if (key == NULL || key->type != HAL_KEY_TYPE_HASHSIG_PUBLIC || msg == NULL || sig == NULL)
+    if (key == NULL || (key->type != HAL_KEY_TYPE_HASHSIG_PRIVATE && key->type != HAL_KEY_TYPE_HASHSIG_PUBLIC) || msg == NULL || sig == NULL)
         return HAL_ERROR_BAD_ARGUMENTS;
 
 //   To verify a signature sig and message using the public key pub, the
@@ -1674,6 +1776,8 @@ hal_error_t hal_hashsig_private_key_to_der(const hal_hashsig_key_t * const key,
     check(hal_asn1_encode_bytestring16(&key->I, NULL, &len, 0));             vlen += len;
     check(hal_asn1_encode_bytestring32(&key->T1, NULL, &len, 0));            vlen += len;
     check(hal_asn1_encode_bytestring32(&key->seed, NULL, &len, 0));          vlen += len;
+    check(hal_asn1_encode_size_t(key->q_start, NULL, &len, 0));              vlen += len;
+    check(hal_asn1_encode_size_t(key->q_end, NULL, &len, 0));                vlen += len;
 
     check(hal_asn1_encode_header(ASN1_SEQUENCE, vlen, NULL, &hlen, 0));
 
@@ -1698,6 +1802,8 @@ hal_error_t hal_hashsig_private_key_to_der(const hal_hashsig_key_t * const key,
     check(hal_asn1_encode_bytestring16(&key->I, d, &len, vlen));             d += len; vlen -= len;
     check(hal_asn1_encode_bytestring32(&key->T1, d, &len, vlen));            d += len; vlen -= len;
     check(hal_asn1_encode_bytestring32(&key->seed, d, &len, vlen));          d += len; vlen -= len;
+    check(hal_asn1_encode_size_t(key->q_start, d, &len, vlen));              d += len; vlen -= len;
+    check(hal_asn1_encode_size_t(key->q_end, d, &len, vlen));                d += len; vlen -= len;
 
     return hal_asn1_encode_pkcs8_privatekeyinfo(hal_asn1_oid_mts_hashsig, hal_asn1_oid_mts_hashsig_len,
                                                 NULL, 0, der, d - der, der, der_len, der_max);
@@ -1753,6 +1859,8 @@ hal_error_t hal_hashsig_private_key_from_der(hal_hashsig_key_t **key_,
     check(hal_asn1_decode_bytestring16(&key->I, d, &n, vlen));        d += n; vlen -= n;
     check(hal_asn1_decode_bytestring32(&key->T1, d, &n, vlen));       d += n; vlen -= n;
     check(hal_asn1_decode_bytestring32(&key->seed, d, &n, vlen));     d += n; vlen -= n;
+    check(hal_asn1_decode_size_t(&key->q_start, d, &n, vlen));        d += n; vlen -= n;
+    check(hal_asn1_decode_size_t(&key->q_end, d, &n, vlen));          d += n; vlen -= n;
 
     if (d != privkey + privkey_len)
         return HAL_ERROR_ASN1_PARSE_FAILED;
@@ -1762,11 +1870,9 @@ hal_error_t hal_hashsig_private_key_from_der(hal_hashsig_key_t **key_,
      * structure. (The caller will wipe his own key structure when done,
      * and not molest ours.)
      */
-    for (hss_key_t *hss_key = hss_keys; hss_key != NULL; hss_key = hss_key->next) {
-        if (memcmp(&key->I, &hss_key->lms_keys[0].I, sizeof(key->I)) == 0) {
-            *key_ = hss_key;
-        }
-    }
+    hss_key_t *hss_key = hss_find(&key->I);
+    if (hss_key != NULL)
+        *key_ = hss_key;
 
     return HAL_OK;
 }
@@ -1998,6 +2104,9 @@ hal_error_t hal_hashsig_ks_init(void)
         if (hal_ks_fetch(hal_ks_token, &slot, der, &der_len, sizeof(der)) != HAL_OK ||
             hal_hashsig_private_key_from_der(&key, (void *)&keybuf, sizeof(keybuf), der, der_len) != HAL_OK) {
             (void)hal_ks_delete(hal_ks_token, &slot);
+            memset(der, 0, sizeof(der));
+            memset(&keybuf, 0, sizeof(keybuf));
+            key = NULL;
             continue;
         }
 
@@ -2011,24 +2120,29 @@ hal_error_t hal_hashsig_ks_init(void)
             lms_key.lms != key->lms ||
             lms_key.lmots != key->lmots ||
             memcmp(&lms_key.I, &key->I, sizeof(lms_key.I)) != 0 ||
+            /* check that key isn't exhausted */
+            lms_key.q >= lms_key.q_end ||
             /* optimistically allocate the full hss key structure */
-            hss_alloc(&key, key->L, key->lms->type, key->lmots->type) != HAL_OK) {
+            hss_alloc(&key) != HAL_OK) {
             (void)hal_ks_delete(hal_ks_token, &slot);
             (void)hal_ks_delete(hal_ks_token, &lms_slot);
+            memset(der, 0, sizeof(der));
+            memset(&lms_key, 0, sizeof(lms_key));
+            memset(&keybuf, 0, sizeof(keybuf));
+            key = NULL;
             continue;
         }
-
-        /* hss_alloc redefines key, so copy fields from the old version of the key */
-        memcpy(&key->I, &keybuf.I, sizeof(key->I));
-        memcpy(&key->T1, &keybuf.T1, sizeof(key->T1));
-        memcpy(&key->seed, &keybuf.seed, sizeof(key->seed));
-        key->name = slot.name;
 
         /* initialize top-level lms key (beyond what hss_alloc did) */
         memcpy(&key->lms_keys[0].I, &lms_key.I, sizeof(lms_key.I));
         key->lms_keys[0].q = lms_key.q;
+        key->lms_keys[0].q_end = key->q_end;
 
-        prev_name = slot.name;
+        prev_name = key->name = slot.name;
+        memset(der, 0, sizeof(der));
+        memset(&lms_key, 0, sizeof(lms_key));
+        memset(&keybuf, 0, sizeof(keybuf));
+        key = NULL;
         hal_task_yield_maybe();
     }
 
@@ -2037,12 +2151,7 @@ hal_error_t hal_hashsig_ks_init(void)
     while ((hal_ks_match(hal_ks_token, client, session,
                          HAL_KEY_TYPE_HASHSIG_LMS, HAL_CURVE_NONE, 0, 0, NULL, 0,
                          &slot.name, &len, 1, &prev_name) == HAL_OK) && (len > 0)) {
-        hss_key_t *hss_key;
-        for (hss_key = hss_keys; hss_key != NULL; hss_key = hss_key->next) {
-            if (memcmp(&slot.name, &hss_key->I, sizeof(slot.name)) == 0)
-                break;
-        }
-        if (hss_key == NULL) {
+        if (hss_find((bytestring16 *)&slot.name) == NULL) {
             (void)hal_ks_delete(hal_ks_token, &slot);
             continue;
         }
@@ -2066,17 +2175,15 @@ hal_error_t hal_hashsig_ks_init(void)
         if (hal_ks_fetch(hal_ks_token, &slot, der, &der_len, sizeof(der)) != HAL_OK ||
             lmots_private_key_from_der(&lmots_key, der, der_len) != HAL_OK) {
             (void)hal_ks_delete(hal_ks_token, &slot);
+            memset(&lmots_key, 0, sizeof(lmots_key));
             continue;
         }
 
-        hss_key_t *hss_key;
-        for (hss_key = hss_keys; hss_key != NULL; hss_key = hss_key->next) {
-            if (memcmp(&hss_key->I, &lmots_key.I, sizeof(lmots_key.I)) == 0)
-                break;
-        }
+        hss_key_t *hss_key = hss_find(&lmots_key.I);
         if (hss_key == NULL) {
             /* delete orphaned key */
             (void)hal_ks_delete(hal_ks_token, &slot);
+            memset(&lmots_key, 0, sizeof(lmots_key));
             continue;
         }
 
@@ -2084,9 +2191,14 @@ hal_error_t hal_hashsig_ks_init(void)
         memcpy(&hss_key->lms_keys[0].lmots_keys[lmots_key.q], &slot.name, sizeof(slot.name));
 
         /* compute T[r] = H(I || u32str(r) || u16str(D_LEAF) || K) */
-        check(lms_compute_T_leaf(&hss_key->lms_keys[0], &lmots_key));
+        if (lms_compute_T_leaf(&hss_key->lms_keys[0], &lmots_key) != HAL_OK) {
+            (void)hal_ks_delete(hal_ks_token, &slot);
+            memset(&lmots_key, 0, sizeof(lmots_key));
+            continue;
+        }
 
         prev_name = slot.name;
+        memset(&lmots_key, 0, sizeof(lmots_key));
         hal_task_yield_maybe();
     }
 
@@ -2096,93 +2208,42 @@ hal_error_t hal_hashsig_ks_init(void)
     for (hss_key = hss_keys; hss_key != NULL; hss_key = hss_next) {
         hss_next = hss_key->next;
         int fail = 0;
+        lms_key_t *lms_key = hss_key->lms_keys;
         for (size_t q = 0; q < (1U << hss_key->lms->h); ++q) {
-            if (hal_uuid_cmp(&hss_key->lms_keys[0].lmots_keys[q], &uuid_0) == 0) {
+            if (hal_uuid_cmp(&lms_key->lmots_keys[q], &uuid_0) == 0) {
                 bytestring32 seed_0 = {{0}};
                 if (memcmp(&hss_key->seed, &seed_0, sizeof(seed_0)) == 0) {
+                    /* lms key is incomplete, give up on it */
                     fail = 1;
                     break;
                 }
                 else {
-                    /* This key was generated with the pseudo-random
-                     * method, and can be regenerated.
+                    /* This key was generated with the pseudo-random method,
+                     * and can be regenerated.
                      */
-                    bytestring32 x[hss_key->lmots->p];
-                    lmots_key_t lmots_key = {
-                        .type = HAL_KEY_TYPE_HASHSIG_LMOTS,
-                        .lmots = hss_key->lmots,
-                        .q = q,
-                        .x = x
-                    };
-                    memcpy(&lmots_key.I, &hss_key->I, sizeof(hss_key->I));
-
-                    /* regenerate the lmots private and public key components */
-                    check(lmots_generate(&lmots_key, &hss_key->seed));
-
-                    /* store the lmots key */
-                    hal_pkey_slot_t slot = {
-                        .type  = HAL_KEY_TYPE_HASHSIG_LMOTS,
-                        .curve = HAL_CURVE_NONE,
-                        .flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | HAL_KEY_FLAG_TOKEN
-                    };                    
-                    uint8_t der[lmots_private_key_to_der_len(&lmots_key)];
-                    size_t der_len;
-                    check(lmots_private_key_to_der(&lmots_key, der, &der_len, sizeof(der)));
-                    check(hal_uuid_gen(&slot.name));
-                    hal_error_t err = hal_ks_store(hal_ks_token, &slot, der, der_len);
-                    memset(&x, 0, sizeof(x));
-                    memset(der, 0, sizeof(der));
-                    if (err != HAL_OK) return err;
-
-                    /* record the lmots keystore name */
-                    memcpy(&hss_key->lms_keys[0].lmots_keys[q], &slot.name, sizeof(slot.name));
-
-                    /* compute T[r] = H(I || u32str(r) || u16str(D_LEAF) || K) */
-                    check(lms_compute_T_leaf(&hss_key->lms_keys[0], &lmots_key));
+                    check(lms_generate_lmots(lms_key, q, &hss_key->seed));
+                    hal_task_yield_maybe();
                 }
             }
         }
         if (fail) {
         fail:
-            /* lms key is incomplete, give up on it */
-            /* delete lmots keys */
-            for (size_t i = 0; i < (1U << hss_key->lms->h); ++i) {
-                if (hal_uuid_cmp(&hss_key->lms_keys[0].lmots_keys[i], &uuid_0) != 0) {
-                    memcpy(&slot.name, &hss_key->lms_keys[0].lmots_keys[i], sizeof(slot.name));
-                    (void)hal_ks_delete(hal_ks_token, &slot);
-                }
-            }
-            /* delete lms key */
-            memcpy(&slot.name, &hss_key->I, sizeof(slot.name));
-            (void)hal_ks_delete(hal_ks_token, &slot);
             /* delete hss key */
+            hss_delete(hss_key);
             slot.name = hss_key->name;
             (void)hal_ks_delete(hal_ks_token, &slot);
-            /* remove the hss key from the key list */
-            if (hss_keys == hss_key) {
-                hss_keys = hss_key->next;
-            }
-            else {
-                for (hss_key_t *prev = hss_keys; prev != NULL; prev = prev->next) {
-                    if (prev->next == hss_key) {
-                        prev->next = hss_key->next;
-                        break;
-                    }
-                }
-            }
-            (void)hal_free_static_memory(hss_key);
             hal_task_yield_maybe();
             continue;
         }
 
         /* generate the rest of T[] */
-        lms_compute_T_intr(&hss_key->lms_keys[0]);
-        if (memcmp(&hss_key->lms_keys[0].T[1], &hss_key->T1, sizeof(hss_key->lms_keys[0].T[1])) != 0)
+        lms_compute_T_intr(lms_key);
+        if (memcmp(&lms_key->T[1], &hss_key->T1, sizeof(lms_key->T[1])) != 0)
             goto fail;
 
         /* generate the lower-level lms keys */
         for (size_t i = 1; i < hss_key->L; ++i) {
-            lms_key_t * lms_key = &hss_key->lms_keys[i];
+            lms_key = &hss_key->lms_keys[i];
             if (lms_generate(lms_key, NULL) != HAL_OK)
                 goto fail;
 
@@ -2203,5 +2264,93 @@ hal_error_t hal_hashsig_ks_init(void)
 
     restart_in_progress = 0;
     return HAL_OK;
+}
+
+hal_error_t hal_hashsig_export(const hal_uuid_t * const name, uint8_t *der, size_t *der_len, const size_t der_max)
+{
+    hal_error_t err;
+    hal_hashsig_key_t keybuf, *tmp_key = &keybuf, *hss_key;
+
+    if ((err = hal_hashsig_private_key_from_der(&hss_key, &keybuf, sizeof(keybuf), der, *der_len)) != HAL_OK)
+        goto err_out;
+    if (hss_key == tmp_key) {
+        err = HAL_ERROR_KEY_NOT_FOUND;         /* or IMPOSSIBLE? */
+        goto err_out;
+    }
+
+    /* adjust hss_key->end and tmp_key->start */
+    size_t new_end = (hss_key->lms_keys[0].q + hss_key->lms_keys[0].q_end) / 2;
+    if (new_end == hss_key->lms_keys[0].q) {
+        err = HAL_ERROR_HASHSIG_KEY_EXHAUSTED;
+        goto err_out;
+    }
+    hss_key->q_end = hss_key->lms_keys[0].q_end = tmp_key->q_start = new_end;
+
+    /* store updated hss_key */
+    hal_pkey_slot_t slot = {
+        .type = HAL_KEY_TYPE_HASHSIG_PRIVATE,
+        .name = *name,
+        .flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | HAL_KEY_FLAG_TOKEN | HAL_KEY_FLAG_EXPORTABLE
+    };
+    if ((err = hal_hashsig_private_key_to_der(hss_key, der, der_len, der_max)) != HAL_OK ||
+        (err = hal_ks_rewrite_der(hal_ks_token, &slot, der, *der_len)) != HAL_OK)
+        goto err_out;
+
+    /* store updated lms_key */
+    lms_key_t *lms_key = &hss_key->lms_keys[0];
+    uint8_t lms_der[HAL_KS_WRAPPED_KEYSIZE];
+    size_t lms_der_len;
+    if ((err = lms_private_key_to_der(lms_key, lms_der, &lms_der_len, sizeof(lms_der))) != HAL_OK)
+        goto err_out;
+
+    hal_pkey_slot_t lms_slot = {
+        .type = HAL_KEY_TYPE_HASHSIG_LMS,
+        .flags = HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | HAL_KEY_FLAG_TOKEN
+    };
+    memcpy(&lms_slot.name, &lms_key->I, sizeof(lms_slot.name));
+    if ((err = hal_ks_rewrite_der(hal_ks_token, &lms_slot, lms_der, lms_der_len)) != HAL_OK)
+        goto err_out;
+
+    /* re-encode tmp_key to der */
+    if ((err = hal_hashsig_private_key_to_der(tmp_key, der, der_len, der_max)) != HAL_OK)
+        goto err_out;
+
+    /* delete unused lmots keys? */
+
+err_out:
+    memset(&keybuf, 0, sizeof(keybuf));
+    hss_key = NULL;
+    return err;
+}
+
+hal_error_t hal_hashsig_import(const uint8_t *der, const size_t der_len,
+                               const hal_key_flags_t flags)
+{
+    if (restart_in_progress)
+        return HAL_ERROR_NOT_READY;
+
+    hss_key_t keybuf, *key;
+    hal_error_t err;
+
+    if ((err = hal_hashsig_private_key_from_der(&key, &keybuf, sizeof(keybuf), der, der_len)) != HAL_OK)
+        goto err_out;
+
+    /* If the key already exists, it could be that the user is attempting to
+     * return an exported key to its origin, and we could consolidate them,
+     * but then we have to deal with the possibility of disjoint partitions of
+     * the keyspace (or worse, overlapping or duplicate partitions, which is
+     * always an error). In any case, it's easier just to disallow it.
+     */
+    if (hss_find(&key->I) != NULL) {
+        err = HAL_ERROR_KEY_NAME_IN_USE;
+        goto err_out;
+    }
+
+    err = hss_generate(&key, flags);
+
+err_out:
+    memset(&keybuf, 0, sizeof(keybuf));
+    key = NULL;
+    return err;
 }
 #endif

@@ -1,7 +1,7 @@
 /*
  * hashsig.h
  * ---------
- * Implementation of draft-mcgrew-hash-sigs-08.txt
+ * Implementation of draft-mcgrew-hash-sigs-15.txt
  *
  * Copyright (c) 2018, NORDUnet A/S All rights reserved.
  *
@@ -41,12 +41,13 @@ extern const size_t hal_hashsig_key_t_size;
 
 extern hal_error_t hal_hashsig_key_gen(hal_core_t *core,
                                        hal_hashsig_key_t **key_,
+                                       void *keybuf, const size_t keybuf_len,
                                        const size_t hss_levels,
                                        const hal_lms_algorithm_t lms_type,
                                        const hal_lmots_algorithm_t lmots_type,
                                        const hal_key_flags_t flags);
 
-extern hal_error_t hal_hashsig_key_delete(const hal_hashsig_key_t * const key);
+extern hal_error_t hal_hashsig_delete(const hal_uuid_t * const name);
 
 extern hal_error_t hal_hashsig_private_key_to_der(const hal_hashsig_key_t * const key,
                                                   uint8_t *der, size_t *der_len, const size_t der_max);
@@ -69,12 +70,12 @@ extern hal_error_t hal_hashsig_public_key_from_der(hal_hashsig_key_t **key,
 extern hal_error_t hal_hashsig_sign(hal_core_t *core,
                                     const hal_hashsig_key_t * const key,
                                     const uint8_t * const hash, const size_t hash_len,
-                                    uint8_t *signature, size_t *signature_len, const size_t signature_max);
+                                    uint8_t *sig, size_t *sig_len, const size_t sig_max);
 
 extern hal_error_t hal_hashsig_verify(hal_core_t *core,
                                       const hal_hashsig_key_t * const key,
                                       const uint8_t * const hash, const size_t hash_len,
-                                      const uint8_t * const signature, const size_t signature_len);
+                                      const uint8_t * const sig, const size_t sig_len);
 
 extern hal_error_t hal_hashsig_key_load_public(hal_hashsig_key_t **key_,
                                                void *keybuf, const size_t keybuf_len,
@@ -98,5 +99,11 @@ extern hal_error_t hal_hashsig_public_key_der_to_xdr(const uint8_t * const der, 
                                                      uint8_t * const xdr, size_t * const xdr_len , const size_t xdr_max);
 
 extern hal_error_t hal_hashsig_ks_init(void);
+
+extern hal_error_t hal_hashsig_export(const hal_uuid_t * const name,
+                                      uint8_t *der, size_t *der_len, const size_t der_max);
+
+extern hal_error_t hal_hashsig_import(const uint8_t *der, const size_t der_len,
+                                      const hal_key_flags_t flags);
 
 #endif /* _HAL_HASHSIG_H_ */
