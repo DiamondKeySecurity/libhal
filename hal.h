@@ -815,22 +815,8 @@ extern hal_error_t hal_rpc_pkey_generate_ec(const hal_client_handle_t client,
                                             const hal_curve_name_t curve,
                                             const hal_key_flags_t flags);
 
-typedef enum lmots_algorithm_type {
-    hal_lmots_reserved      = 0,
-    hal_lmots_sha256_n32_w1 = 1,
-    hal_lmots_sha256_n32_w2 = 2,
-    hal_lmots_sha256_n32_w4 = 3,
-    hal_lmots_sha256_n32_w8 = 4
-} hal_lmots_algorithm_t;
-
-typedef enum lms_algorithm_type {
-    hal_lms_reserved        = 0,
-    hal_lms_sha256_n32_h5   = 5,
-    hal_lms_sha256_n32_h10  = 6,
-    hal_lms_sha256_n32_h15  = 7,
-    hal_lms_sha256_n32_h20  = 8,
-    hal_lms_sha256_n32_h25  = 9
-} hal_lms_algorithm_t;
+typedef enum hal_lmots_algorithm_type hal_lmots_algorithm_t;
+typedef enum hal_lms_algorithm_type hal_lms_algorithm_t;
 
 extern hal_error_t hal_rpc_pkey_generate_hashsig(const hal_client_handle_t client,
                                                  const hal_session_handle_t session,
@@ -917,6 +903,101 @@ extern hal_error_t hal_rpc_server_close(void);
 
 extern hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ilen,
                                            uint8_t * const obuf, size_t * const olen);
+
+/*
+ * Hash-Based Signatures.
+ *
+ * This really ought to be up with RSA and ECDSA, but it has forward
+ * references to hal_key_flags_t and hal_uuid_t.
+ */
+
+enum hal_lmots_algorithm_type {
+    HAL_LMOTS_RESERVED      = 0,
+    HAL_LMOTS_SHA256_N32_W1 = 1,
+    HAL_LMOTS_SHA256_N32_W2 = 2,
+    HAL_LMOTS_SHA256_N32_W4 = 3,
+    HAL_LMOTS_SHA256_N32_W8 = 4
+};
+
+enum hal_lms_algorithm_type {
+    HAL_LMS_RESERVED        = 0,
+    HAL_LMS_SHA256_N32_H5   = 5,
+    HAL_LMS_SHA256_N32_H10  = 6,
+    HAL_LMS_SHA256_N32_H15  = 7,
+    HAL_LMS_SHA256_N32_H20  = 8,
+    HAL_LMS_SHA256_N32_H25  = 9
+};
+
+typedef struct hal_hashsig_key hal_hashsig_key_t;
+
+extern const size_t hal_hashsig_key_t_size;
+
+extern hal_error_t hal_hashsig_key_gen(hal_core_t *core,
+                                       hal_hashsig_key_t **key_,
+                                       void *keybuf, const size_t keybuf_len,
+                                       const size_t hss_levels,
+                                       const hal_lms_algorithm_t lms_type,
+                                       const hal_lmots_algorithm_t lmots_type,
+                                       const hal_key_flags_t flags);
+
+extern hal_error_t hal_hashsig_delete(const hal_uuid_t * const name);
+
+extern hal_error_t hal_hashsig_private_key_to_der(const hal_hashsig_key_t * const key,
+                                                  uint8_t *der, size_t *der_len, const size_t der_max);
+
+extern size_t hal_hashsig_private_key_to_der_len(const hal_hashsig_key_t * const key);
+
+extern hal_error_t hal_hashsig_private_key_from_der(hal_hashsig_key_t **key_,
+                                                    void *keybuf, const size_t keybuf_len,
+                                                    const uint8_t *der, const size_t der_len);
+
+extern hal_error_t hal_hashsig_public_key_to_der(const hal_hashsig_key_t * const key,
+                                                 uint8_t *der, size_t *der_len, const size_t der_max);
+
+extern size_t hal_hashsig_public_key_to_der_len(const hal_hashsig_key_t * const key);
+
+extern hal_error_t hal_hashsig_public_key_from_der(hal_hashsig_key_t **key,
+                                                   void *keybuf, const size_t keybuf_len,
+                                                   const uint8_t * const der, const size_t der_len);
+
+extern hal_error_t hal_hashsig_sign(hal_core_t *core,
+                                    const hal_hashsig_key_t * const key,
+                                    const uint8_t * const hash, const size_t hash_len,
+                                    uint8_t *sig, size_t *sig_len, const size_t sig_max);
+
+extern hal_error_t hal_hashsig_verify(hal_core_t *core,
+                                      const hal_hashsig_key_t * const key,
+                                      const uint8_t * const hash, const size_t hash_len,
+                                      const uint8_t * const sig, const size_t sig_len);
+
+extern hal_error_t hal_hashsig_key_load_public(hal_hashsig_key_t **key_,
+                                               void *keybuf, const size_t keybuf_len,
+                                               const size_t L,
+                                               const hal_lms_algorithm_t lms_type,
+                                               const hal_lmots_algorithm_t lmots_type,
+                                               const uint8_t * const I, const size_t I_len,
+                                               const uint8_t * const T1, const size_t T1_len);
+
+extern hal_error_t hal_hashsig_key_load_public_xdr(hal_hashsig_key_t **key_,
+                                                   void *keybuf, const size_t keybuf_len,
+                                                   const uint8_t * const xdr, const size_t xdr_len);
+
+extern size_t hal_hashsig_signature_len(const size_t L,
+                                        const hal_lms_algorithm_t lms_type,
+                                        const hal_lmots_algorithm_t lmots_type);
+
+extern size_t hal_hashsig_lmots_private_key_len(const hal_lmots_algorithm_t lmots_type);
+
+extern hal_error_t hal_hashsig_public_key_der_to_xdr(const uint8_t * const der, const size_t der_len,
+                                                     uint8_t * const xdr, size_t * const xdr_len , const size_t xdr_max);
+
+extern hal_error_t hal_hashsig_ks_init(void);
+
+extern hal_error_t hal_hashsig_export(const hal_uuid_t * const name,
+                                      uint8_t *der, size_t *der_len, const size_t der_max);
+
+extern hal_error_t hal_hashsig_import(const uint8_t *der, const size_t der_len,
+                                      const hal_key_flags_t flags);
 
 #endif /* _HAL_H_ */
 

@@ -36,7 +36,6 @@
 #include "hal.h"
 #include "hal_internal.h"
 #include "xdr_internal.h"
-#include "hashsig.h"
 
 #ifndef HAL_RPC_CLIENT_DEBUG
 #define HAL_RPC_CLIENT_DEBUG 0

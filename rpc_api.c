@@ -35,7 +35,6 @@
 
 #include "hal.h"
 #include "hal_internal.h"
-#include "hashsig.h"
 
 const hal_hash_handle_t hal_hash_handle_none = {HAL_HANDLE_NONE};
 

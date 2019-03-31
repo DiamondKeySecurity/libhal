@@ -276,7 +276,6 @@ novena-eim.o hal_io_eim.o:					novena-eim.h
 slip.o rpc_client_serial.o rpc_server_serial.o:			slip_internal.h
 ${OBJ}:								verilog_constants.h
 rpc_client.o rpc_server.o xdr.o:				xdr_internal.h
-hashsig.o:                                                      hashsig.h
 
 last_gasp_pin_internal.h:
 	./utils/last_gasp_default_pin >$@

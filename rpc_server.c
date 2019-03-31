@@ -35,7 +35,6 @@
 #include "hal.h"
 #include "hal_internal.h"
 #include "xdr_internal.h"
-#include "hashsig.h"
 
 /*
  * RPC calls.

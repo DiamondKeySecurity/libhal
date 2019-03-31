@@ -38,7 +38,6 @@
 #include "hal.h"
 #include "hal_internal.h"
 #include "asn1_internal.h"
-#include "hashsig.h"
 
 #ifndef HAL_STATIC_PKEY_STATE_BLOCKS
 #define HAL_STATIC_PKEY_STATE_BLOCKS 0

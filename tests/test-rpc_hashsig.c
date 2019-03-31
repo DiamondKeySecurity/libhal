@@ -48,7 +48,6 @@
 #include <unistd.h>
 
 #include <hal.h>
-#include <hashsig.h>
 #include "test-hashsig.h"
 
 #include <sys/time.h>
@@ -170,11 +169,11 @@ static void hexdump(const char * const label, const uint8_t * const buf, const s
 static inline size_t lms_type_to_h(const hal_lms_algorithm_t lms_type)
 {
     switch (lms_type) {
-    case hal_lms_sha256_n32_h5:  return  5;
-    case hal_lms_sha256_n32_h10: return 10;
-    case hal_lms_sha256_n32_h15: return 15;
-    case hal_lms_sha256_n32_h20: return 20;
-    case hal_lms_sha256_n32_h25: return 25;
+    case HAL_LMS_SHA256_N32_H5:  return  5;
+    case HAL_LMS_SHA256_N32_H10: return 10;
+    case HAL_LMS_SHA256_N32_H15: return 15;
+    case HAL_LMS_SHA256_N32_H20: return 20;
+    case HAL_LMS_SHA256_N32_H25: return 25;
     default: return 0;
     }
 }
@@ -182,10 +181,10 @@ static inline size_t lms_type_to_h(const hal_lms_algorithm_t lms_type)
 static inline size_t lmots_type_to_w(const hal_lmots_algorithm_t lmots_type)
 {
     switch (lmots_type) {
-    case hal_lmots_sha256_n32_w1: return 1;
-    case hal_lmots_sha256_n32_w2: return 2;
-    case hal_lmots_sha256_n32_w4: return 4;
-    case hal_lmots_sha256_n32_w8: return 8;
+    case HAL_LMOTS_SHA256_N32_W1: return 1;
+    case HAL_LMOTS_SHA256_N32_W2: return 2;
+    case HAL_LMOTS_SHA256_N32_W4: return 4;
+    case HAL_LMOTS_SHA256_N32_W8: return 8;
     default: return 0;
     }
 }
@@ -193,10 +192,10 @@ static inline size_t lmots_type_to_w(const hal_lmots_algorithm_t lmots_type)
 static inline size_t lmots_type_to_p(const hal_lmots_algorithm_t lmots_type)
 {
     switch (lmots_type) {
-    case hal_lmots_sha256_n32_w1: return 265;
-    case hal_lmots_sha256_n32_w2: return 133;
-    case hal_lmots_sha256_n32_w4: return  67;
-    case hal_lmots_sha256_n32_w8: return  34;
+    case HAL_LMOTS_SHA256_N32_W1: return 265;
+    case HAL_LMOTS_SHA256_N32_W2: return 133;
+    case HAL_LMOTS_SHA256_N32_W4: return  67;
+    case HAL_LMOTS_SHA256_N32_W8: return  34;
     default: return 0;
     }
 }
