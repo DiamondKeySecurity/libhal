@@ -35,7 +35,7 @@ LIBS		= ${LIBHAL_BLD}/libhal.a ${LIBTFM_BLD}/libtfm.a
 
 CFLAGS		?= -g3 -Wall -fPIC -std=c99 -I${LIBHAL_SRC} -I${LIBTFM_BLD}
 
-BIN		= $(if $(wildcard ${LIBHAL_BLD}/hal_io_eim.o),eim_peek_poke) $(if $(wildcard ${LIBHAL_BLD}/core.o),cores) pkey-export pkey-import
+BIN		= $(if $(wildcard ${LIBHAL_BLD}/hal_io_eim.o),eim_peek_poke) $(if $(wildcard ${LIBHAL_BLD}/core.o),cores) pkey-export pkey-import pkey
 
 all: ${BIN}
 
