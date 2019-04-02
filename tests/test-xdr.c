@@ -95,8 +95,8 @@ int main(int argc, char *argv[])
     printf("\nhal_xdr_decode_variable_opaque:\n");
     readptr = buf;
     while (readptr < bufptr) {
-        size_t len = bufptr - readptr;
-        if ((ret = hal_xdr_decode_variable_opaque(&readptr, limit, readbuf, &len)) != HAL_OK) {
+        size_t len;
+        if ((ret = hal_xdr_decode_variable_opaque(&readptr, limit, readbuf, &len, bufptr - readptr)) != HAL_OK) {
             printf("%s\n", hal_error_string(ret));
             break;
         }

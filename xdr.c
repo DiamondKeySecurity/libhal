@@ -190,16 +190,19 @@ hal_error_t hal_xdr_decode_variable_opaque_ptr(const uint8_t ** const inbuf, con
 /* This version copies the data to the user-supplied buffer.
  * It is used in the rpc client.
  */
-hal_error_t hal_xdr_decode_variable_opaque(const uint8_t ** const inbuf, const uint8_t * const limit, uint8_t * const value, size_t * const len)
+hal_error_t hal_xdr_decode_variable_opaque(const uint8_t ** const inbuf, const uint8_t * const limit, uint8_t * const value, size_t * const len, const size_t len_max)
 {
     hal_error_t err;
     size_t xdr_len;
     const uint8_t *p;
 
+    /* arg checks */
+    hal_assert(value != NULL && len != NULL && len_max != 0);
+
     /* read data pointer and length */
     if ((err = hal_xdr_decode_variable_opaque_ptr(inbuf, limit, &p, &xdr_len)) == HAL_OK) {
         /* user buffer overflow check */
-        if (*len < xdr_len)
+        if (len_max < xdr_len)
             return HAL_ERROR_XDR_BUFFER_OVERFLOW;
         /* read the data */
         memcpy(value, p, xdr_len);

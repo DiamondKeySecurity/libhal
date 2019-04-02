@@ -684,69 +684,6 @@ static hal_error_t pkey_local_get_key_flags(const hal_pkey_handle_t pkey,
 }
 
 /*
- * Get length of public key associated with handle.
- */
-
-static size_t pkey_local_get_public_key_len(const hal_pkey_handle_t pkey)
-{
-  hal_pkey_slot_t *slot = find_handle(pkey);
-
-  if (slot == NULL)
-    return 0;
-
-  size_t result = 0;
-
-#ifndef max
-#define max(a, b) ((a) >= (b) ? (a) : (b))
-#endif
-  size_t keybuf_size = max(hal_rsa_key_t_size, hal_ecdsa_key_t_size);
-  keybuf_size = max(keybuf_size, hal_hashsig_key_t_size);
-  uint8_t keybuf[keybuf_size];
-  hal_rsa_key_t     *rsa_key   = NULL;
-  hal_ecdsa_key_t   *ecdsa_key = NULL;
-  hal_hashsig_key_t *hashsig_key = NULL;
-  uint8_t der[HAL_KS_WRAPPED_KEYSIZE];
-  size_t der_len;
-  hal_error_t err;
-
-  if ((err = ks_fetch_from_flags(slot, der, &der_len, sizeof(der))) == HAL_OK) {
-    switch (slot->type) {
-
-    case HAL_KEY_TYPE_RSA_PUBLIC:
-    case HAL_KEY_TYPE_EC_PUBLIC:
-    case HAL_KEY_TYPE_HASHSIG_PUBLIC:
-      result = der_len;
-      break;
-
-    case HAL_KEY_TYPE_RSA_PRIVATE:
-      if (hal_rsa_private_key_from_der(&rsa_key, keybuf, sizeof(keybuf), der, der_len) == HAL_OK)
-        result = hal_rsa_public_key_to_der_len(rsa_key);
-      break;
-
-    case HAL_KEY_TYPE_EC_PRIVATE:
-      if (hal_ecdsa_private_key_from_der(&ecdsa_key, keybuf, sizeof(keybuf), der, der_len) == HAL_OK)
-        result = hal_ecdsa_public_key_to_der_len(ecdsa_key);
-      break;
-
-    case HAL_KEY_TYPE_HASHSIG_PRIVATE:
-      if (hal_hashsig_private_key_from_der(&hashsig_key, keybuf, sizeof(keybuf), der, der_len) == HAL_OK) {
-        result = hal_hashsig_public_key_to_der_len(hashsig_key);
-        hashsig_key = NULL;
-      }
-      break;
-
-    default:
-      break;
-    }
-  }
-
-  memset(keybuf, 0, sizeof(keybuf));
-  memset(der,    0, sizeof(der));
-
-  return result;
-}
-
-/*
  * Get public key associated with handle.
  */
 
@@ -758,12 +695,6 @@ static hal_error_t pkey_local_get_public_key(const hal_pkey_handle_t pkey,
   if (slot == NULL)
     return HAL_ERROR_KEY_NOT_FOUND;
 
-  size_t keybuf_size = max(hal_rsa_key_t_size, hal_ecdsa_key_t_size);
-  keybuf_size = max(keybuf_size, hal_hashsig_key_t_size);
-  uint8_t keybuf[keybuf_size];
-  hal_rsa_key_t     *rsa_key   = NULL;
-  hal_ecdsa_key_t   *ecdsa_key = NULL;
-  hal_hashsig_key_t *hashsig_key = NULL;
   uint8_t buf[HAL_KS_WRAPPED_KEYSIZE];
   size_t buf_len;
   hal_error_t err;
@@ -776,28 +707,45 @@ static hal_error_t pkey_local_get_public_key(const hal_pkey_handle_t pkey,
     case HAL_KEY_TYPE_HASHSIG_PUBLIC:
       if (der_len != NULL)
         *der_len = buf_len;
-      if (der != NULL && der_max < buf_len)
-        err = HAL_ERROR_RESULT_TOO_LONG;
-      else if (der != NULL)
-        memcpy(der, buf, buf_len);
+      if (der != NULL) {
+        if (der_max < buf_len)
+          err = HAL_ERROR_RESULT_TOO_LONG;
+        else
+          memcpy(der, buf, buf_len);
+      }
       break;
 
     case HAL_KEY_TYPE_RSA_PRIVATE:
-      if ((err = hal_rsa_private_key_from_der(&rsa_key, keybuf, sizeof(keybuf), buf, buf_len)) == HAL_OK)
-        err = hal_rsa_public_key_to_der(rsa_key, der, der_len, der_max);
-      break;
+    {
+      uint8_t keybuf[hal_rsa_key_t_size];
+      hal_rsa_key_t *key;
+      if ((err = hal_rsa_private_key_from_der(&key, keybuf, sizeof(keybuf), buf, buf_len)) == HAL_OK)
+        err = hal_rsa_public_key_to_der(key, der, der_len, der_max);
+      memset(keybuf, 0, sizeof(keybuf));
+    }
+    break;
 
     case HAL_KEY_TYPE_EC_PRIVATE:
-      if ((err = hal_ecdsa_private_key_from_der(&ecdsa_key, keybuf, sizeof(keybuf), buf, buf_len)) == HAL_OK)
-        err = hal_ecdsa_public_key_to_der(ecdsa_key, der, der_len, der_max);
-      break;
+    {
+      uint8_t keybuf[hal_ecdsa_key_t_size];
+      hal_ecdsa_key_t *key;
+      if ((err = hal_ecdsa_private_key_from_der(&key, keybuf, sizeof(keybuf), buf, buf_len)) == HAL_OK)
+        err = hal_ecdsa_public_key_to_der(key, der, der_len, der_max);
+      memset(keybuf, 0, sizeof(keybuf));
+    }
+    break;
 
     case HAL_KEY_TYPE_HASHSIG_PRIVATE:
-      if ((err = hal_hashsig_private_key_from_der(&hashsig_key, keybuf, sizeof(keybuf), buf, buf_len)) == HAL_OK) {
-        err = hal_hashsig_public_key_to_der(hashsig_key, der, der_len, der_max);
-        hashsig_key = NULL;
+    {
+      uint8_t keybuf[hal_hashsig_key_t_size];
+      hal_hashsig_key_t *key;
+      if ((err = hal_hashsig_private_key_from_der(&key, keybuf, sizeof(keybuf), buf, buf_len)) == HAL_OK) {
+        err = hal_hashsig_public_key_to_der(key, der, der_len, der_max);
+        key = NULL;
       }
-      break;
+      memset(keybuf, 0, sizeof(keybuf));
+    }
+    break;
 
     default:
       err = HAL_ERROR_UNSUPPORTED_KEY;
@@ -805,10 +753,29 @@ static hal_error_t pkey_local_get_public_key(const hal_pkey_handle_t pkey,
     }
   }
 
-  memset(keybuf, 0, sizeof(keybuf));
-  memset(buf,    0, sizeof(buf));
+  memset(buf, 0, sizeof(buf));
 
   return err;
+}
+
+/*
+ * Get length of public key associated with handle.
+ */
+
+static size_t pkey_local_get_public_key_len(const hal_pkey_handle_t pkey)
+{
+  hal_pkey_slot_t *slot = find_handle(pkey);
+
+  if (slot == NULL)
+    return 0;
+
+  size_t der_len;
+  hal_error_t err;
+
+  if ((err = pkey_local_get_public_key(pkey, NULL, &der_len, 0)) == HAL_OK)
+    return der_len;
+  else
+    return 0;
 }
 
 /*

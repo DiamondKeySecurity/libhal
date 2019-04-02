@@ -68,7 +68,7 @@ hal_error_t hal_xdr_encode_variable_opaque(uint8_t ** const outbuf,
 hal_error_t hal_xdr_decode_variable_opaque(const uint8_t ** const inbuf,
                                            const uint8_t * const limit,
                                            uint8_t * const value,
-                                           size_t * const len);
+                                           size_t * const len, const size_t len_max);
 
 hal_error_t hal_xdr_decode_variable_opaque_ptr(const uint8_t ** const inbuf,
                                                const uint8_t * const limit,
