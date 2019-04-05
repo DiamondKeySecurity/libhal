@@ -55,7 +55,13 @@
  * Should the versions be here even if the names should be?
  */
 
-#define NOVENA_BOARD_NAME	"PVT1    "
+#define ALPHA_BOARD_NAME        "ALPHA   "
+#define ALPHA_BOARD_VERSION     "0.20"
+
+#define FMC_INTERFACE_NAME      "fmc     "
+#define FMC_INTERFACE_VERSION   "0.20"
+
+#define NOVENA_BOARD_NAME       "PVT1    "
 #define NOVENA_BOARD_VERSION    "0.10"
 
 #define EIM_INTERFACE_NAME      "eim     "
@@ -67,26 +73,29 @@
 #define TRNG_NAME               "trng    "
 #define TRNG_VERSION            "0.51"
 
-#define AVALANCHE_ENTROPY_NAME	"extnoise"
+#define AVALANCHE_ENTROPY_NAME  "extnoise"
 #define AVALANCHE_ENTROPY_VERSION "0.10"
 
 #define ROSC_ENTROPY_NAME       "rosc ent"
 #define ROSC_ENTROPY_VERSION    "0.10"
 
+#define RNG_MIXER_NAME          "rngmixer"
+#define RNG_MIXER_VERSION       "0.50"
+
 #define CSPRNG_NAME             "csprng  "
 #define CSPRNG_VERSION          "0.50"
 
 #define SHA1_NAME               "sha1    "
-#define SHA1_VERSION            "0.50"
+#define SHA1_VERSION            "0.60"
 
 #define SHA256_NAME             "sha2-256"
-#define SHA256_VERSION          "1.80"
+#define SHA256_VERSION          "1.82"
 
 #define SHA512_NAME             "sha2-512"
-#define SHA512_VERSION          "0.80"
+#define SHA512_VERSION          "0.81"
 
 #define AES_CORE_NAME           "aes     "
-#define AES_CORE_VERSION        "0.80"
+#define AES_CORE_VERSION        "0.70"
 
 #define CHACHA_NAME             "chacha  "
 #define CHACHA_VERSION          "0.80"
@@ -98,16 +107,16 @@
 #define MODEXPS6_VERSION        "0.10"
 
 #define MODEXPA7_NAME           "modexpa7"
-#define MODEXPA7_VERSION        "0.10"
+#define MODEXPA7_VERSION        "0.25"
 
 #define MKMIF_NAME              "mkmif   "
 #define MKMIF_VERSION           "0.10"
 
 #define ECDSA256_NAME           "ecdsa256"
-#define ECDSA256_VERSION        "0.11"
+#define ECDSA256_VERSION        "0.20"
 
 #define ECDSA384_NAME           "ecdsa384"
-#define ECDSA384_VERSION        "0.11"
+#define ECDSA384_VERSION        "0.20"
 
 /*
  * C API error codes.  Defined in this form so we can keep the tokens
