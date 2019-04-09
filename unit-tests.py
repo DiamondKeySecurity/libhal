@@ -860,11 +860,11 @@ class TestPKeyGen(TestCaseLoggedIn):
     Tests involving key generation.
     """
 
-    def sign_verify(self, hashalg, k1, k2):
+    def sign_verify(self, hashalg, k1, k2, length = 1024):
         h = hsm.hash_initialize(hashalg)
         h.update("Your mother was a hamster")
         data = h.finalize()
-        sig = k1.sign(data = data)
+        sig = k1.sign(data = data, length = length)
         k1.verify(signature = sig, data = data)
         k2.verify(signature = sig, data = data)
 
@@ -881,6 +881,13 @@ class TestPKeyGen(TestCaseLoggedIn):
         k2 = hsm.pkey_load(k1.public_key, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE)
         self.addCleanup(k2.delete)
         self.sign_verify(hashalg, k1, k2)
+
+    def gen_sign_verify_hashsig(self, L, lms, lmots, length):
+        k1 = hsm.pkey_generate_hashsig(L, lms, lmots, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | HAL_KEY_FLAG_TOKEN)
+        self.addCleanup(k1.delete)
+        k2 = hsm.pkey_load(k1.public_key, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | HAL_KEY_FLAG_TOKEN)
+        self.addCleanup(k2.delete)
+        self.sign_verify(HAL_DIGEST_ALGORITHM_SHA256, k1, k2, length)
 
     def test_gen_sign_verify_ecdsa_p256_sha256(self):
         self.gen_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA256, HAL_CURVE_P256)
@@ -906,6 +913,12 @@ class TestPKeyGen(TestCaseLoggedIn):
         with self.assertRaises(HAL_ERROR_BAD_ARGUMENTS):
             hsm.pkey_generate_rsa(1028).delete()
 
+    def test_gen_sign_verify_hashsig_L1_h5_w4(self):
+        self.gen_sign_verify_hashsig(1, HAL_LMS_SHA256_N32_H5, HAL_LMOTS_SHA256_N32_W4, 2352)
+
+    def test_gen_sign_verify_hashsig_L2_h5_w2(self):
+        self.gen_sign_verify_hashsig(2, HAL_LMS_SHA256_N32_H5, HAL_LMOTS_SHA256_N32_W2, 8980)
+
 
 class TestPKeyHashing(TestCaseLoggedIn):
     """
@@ -930,35 +943,42 @@ class TestPKeyHashing(TestCaseLoggedIn):
         self.addCleanup(k2.delete)
         method(alg, k1, k2)
 
+    def gen_sign_verify_hashsig(self, L, lms, lmots, length, method):
+        k1 = hsm.pkey_generate_hashsig(L, lms, lmots, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | HAL_KEY_FLAG_TOKEN)
+        self.addCleanup(k1.delete)
+        k2 = hsm.pkey_load(k1.public_key, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE | HAL_KEY_FLAG_TOKEN)
+        self.addCleanup(k2.delete)
+        method(HAL_DIGEST_ALGORITHM_SHA256, k1, k2, length)
+
     @staticmethod
     def h(alg, mixed_mode = False):
         h = hsm.hash_initialize(alg, mixed_mode = mixed_mode)
         h.update("Your mother was a hamster")
         return h
 
-    def sign_verify_data(self, alg, k1, k2):
+    def sign_verify_data(self, alg, k1, k2, length = 1024):
         data = self.h(alg, mixed_mode = True).finalize()
-        sig = k1.sign(data = data)
+        sig = k1.sign(data = data, length = length)
         k1.verify(signature = sig, data = data)
         k2.verify(signature = sig, data = data)
 
-    def sign_verify_remote_remote(self, alg, k1, k2):
-        sig = k1.sign(hash = self.h(alg, mixed_mode = False))
+    def sign_verify_remote_remote(self, alg, k1, k2, length = 1024):
+        sig = k1.sign(hash = self.h(alg, mixed_mode = False), length = length)
         k1.verify(signature = sig, hash = self.h(alg, mixed_mode = False))
         k2.verify(signature = sig, hash = self.h(alg, mixed_mode = False))
 
-    def sign_verify_remote_local(self, alg, k1, k2):
-        sig = k1.sign(hash = self.h(alg, mixed_mode = False))
+    def sign_verify_remote_local(self, alg, k1, k2, length = 1024):
+        sig = k1.sign(hash = self.h(alg, mixed_mode = False), length = length)
         k1.verify(signature = sig, hash = self.h(alg, mixed_mode = True))
         k2.verify(signature = sig, hash = self.h(alg, mixed_mode = True))
 
-    def sign_verify_local_remote(self, alg, k1, k2):
-        sig = k1.sign(hash = self.h(alg, mixed_mode = True))
+    def sign_verify_local_remote(self, alg, k1, k2, length = 1024):
+        sig = k1.sign(hash = self.h(alg, mixed_mode = True), length = length)
         k1.verify(signature = sig, hash = self.h(alg, mixed_mode = False))
         k2.verify(signature = sig, hash = self.h(alg, mixed_mode = False))
 
-    def sign_verify_local_local(self, alg, k1, k2):
-        sig = k1.sign(hash = self.h(alg, mixed_mode = True))
+    def sign_verify_local_local(self, alg, k1, k2, length = 1024):
+        sig = k1.sign(hash = self.h(alg, mixed_mode = True), length = length)
         k1.verify(signature = sig, hash = self.h(alg, mixed_mode = True))
         k2.verify(signature = sig, hash = self.h(alg, mixed_mode = True))
 
@@ -1081,6 +1101,18 @@ class TestPKeyHashing(TestCaseLoggedIn):
     @unittest.skipUnless(ecdsa_loaded, "Requires Python ECDSA package")
     def test_load_sign_verify_ecdsa_p521_sha512_local_local(self):
         self.load_sign_verify_ecdsa(HAL_DIGEST_ALGORITHM_SHA512, HAL_CURVE_P521, self.sign_verify_local_local)
+
+    def test_gen_sign_verify_hashsig_L1_h5_w4_remote_remote(self):
+        self.gen_sign_verify_hashsig(1, HAL_LMS_SHA256_N32_H5, HAL_LMOTS_SHA256_N32_W4, 2352, self.sign_verify_remote_remote)
+
+    def test_gen_sign_verify_hashsig_L1_h5_w4_remote_local(self):
+        self.gen_sign_verify_hashsig(1, HAL_LMS_SHA256_N32_H5, HAL_LMOTS_SHA256_N32_W4, 2352, self.sign_verify_remote_local)
+
+    def test_gen_sign_verify_hashsig_L1_h5_w4_local_remote(self):
+        self.gen_sign_verify_hashsig(1, HAL_LMS_SHA256_N32_H5, HAL_LMOTS_SHA256_N32_W4, 2352, self.sign_verify_local_remote)
+
+    def test_gen_sign_verify_hashsig_L1_h5_w4_local_local(self):
+        self.gen_sign_verify_hashsig(1, HAL_LMS_SHA256_N32_H5, HAL_LMOTS_SHA256_N32_W4, 2352, self.sign_verify_local_local)
 
 
 @unittest.skipUnless(pycrypto_loaded, "Requires Python Crypto package")

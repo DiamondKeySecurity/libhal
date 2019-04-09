@@ -190,6 +190,7 @@ RPCFunc.define('''
     RPC_FUNC_PKEY_GET_ATTRIBUTES,
     RPC_FUNC_PKEY_EXPORT,
     RPC_FUNC_PKEY_IMPORT,
+    RPC_FUNC_PKEY_GENERATE_HASHSIG,
 ''')
 
 class HALDigestAlgorithm(Enum): pass
@@ -212,7 +213,11 @@ HALKeyType.define('''
     HAL_KEY_TYPE_RSA_PRIVATE,
     HAL_KEY_TYPE_RSA_PUBLIC,
     HAL_KEY_TYPE_EC_PRIVATE,
-    HAL_KEY_TYPE_EC_PUBLIC
+    HAL_KEY_TYPE_EC_PUBLIC,
+    HAL_KEY_TYPE_HASHSIG_PRIVATE,
+    HAL_KEY_TYPE_HASHSIG_PUBLIC,
+    HAL_KEY_TYPE_HASHSIG_LMS,
+    HAL_KEY_TYPE_HASHSIG_LMOTS
 ''')
 
 class HALCurve(Enum): pass
@@ -232,6 +237,28 @@ HALUser.define('''
     HAL_USER_SO,
     HAL_USER_WHEEL
 ''')
+
+class HALLmotsAlgorithm(Enum): pass
+
+HALLmotsAlgorithm.define('''
+    HAL_LMOTS_RESERVED      = 0,
+    HAL_LMOTS_SHA256_N32_W1 = 1,
+    HAL_LMOTS_SHA256_N32_W2 = 2,
+    HAL_LMOTS_SHA256_N32_W4 = 3,
+    HAL_LMOTS_SHA256_N32_W8 = 4
+''')
+
+class HALLmsAlgorithm(Enum): pass
+
+HALLmsAlgorithm.define('''
+    HAL_LMS_RESERVED        = 0,
+    HAL_LMS_SHA256_N32_H5   = 5,
+    HAL_LMS_SHA256_N32_H10  = 6,
+    HAL_LMS_SHA256_N32_H15  = 7,
+    HAL_LMS_SHA256_N32_H20  = 8,
+    HAL_LMS_SHA256_N32_H25  = 9
+''')
+
 
 HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE     = (1 << 0)
 HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT      = (1 << 1)
@@ -583,6 +610,12 @@ class HSM(object):
         with self.rpc(RPC_FUNC_PKEY_GENERATE_EC, session, curve, flags, client = client) as r:
             pkey = PKey(self, r.unpack_uint(), UUID(bytes = r.unpack_bytes()))
             logger.debug("Generated EC pkey %s", pkey.uuid)
+            return pkey
+
+    def pkey_generate_hashsig(self, L, lms, lmots, flags = 0, client = 0, session = 0):
+        with self.rpc(RPC_FUNC_PKEY_GENERATE_HASHSIG, session, L, lms, lmots, flags, client = client) as r:
+            pkey = PKey(self, r.unpack_uint(), UUID(bytes = r.unpack_bytes()))
+            logger.debug("Generated hashsig pkey %s", pkey.uuid)
             return pkey
 
     def pkey_close(self, pkey):
