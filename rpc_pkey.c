@@ -884,23 +884,27 @@ static hal_error_t pkey_local_sign_hashsig(hal_pkey_slot_t *slot,
 
   if (input == NULL || input_len == 0) {
     hal_digest_algorithm_t alg;
+    size_t digest_len;
 
     if ((err = hal_rpc_hash_get_algorithm(hash, &alg))          != HAL_OK ||
-        (err = hal_rpc_hash_get_digest_length(alg, &input_len)) != HAL_OK)
+        (err = hal_rpc_hash_get_digest_length(alg, &digest_len)) != HAL_OK)
       return err;
 
-    if (input_len > signature_max)
+    if (digest_len > signature_max)
       return HAL_ERROR_RESULT_TOO_LONG;
 
-    if ((err = hal_rpc_hash_finalize(hash, signature, input_len)) != HAL_OK)
+    uint8_t digest[digest_len];
+
+    if ((err = hal_rpc_hash_finalize(hash, digest, digest_len)) != HAL_OK)
       return err;
 
-    input = signature;
+    err = hal_hashsig_sign(NULL, key, digest, digest_len, signature, signature_len, signature_max);
   }
 
-  err = hal_hashsig_sign(NULL, key, input, input_len, signature, signature_len, signature_max);
-  key = NULL;
+  else
+    err = hal_hashsig_sign(NULL, key, input, input_len, signature, signature_len, signature_max);
 
+  key = NULL;
   return err;
 }
 
