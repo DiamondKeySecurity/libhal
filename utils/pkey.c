@@ -54,15 +54,17 @@
  * i.e. Generate an RSA key with default parameters, hash the default message
  * and sign it 100 times, verify the signature, and delete the key.
  *
- * generate rsa [-l keylen-in-bits] [-e exponent]
- * generate ec [-c curve]
- * generate hashsig [-L levels] [-h height] [-w Winternitz factor]
- * list [-t type] [-c curve] [-y keystore]
+ * [-i (info)] [-p pin]
+ * generate [-x (exportable)] [-v (volatile keystore)]
+ *          rsa [-l keylen-in-bits] [-e exponent]
+ *          ec [-c curve]
+ *          hashsig [-L levels] [-h height] [-w Winternitz factor]
+ * list [-t type]
  * sign [-h (hash)] [-k keyname] [-m msgfile] [-s sigfile] [-n iterations]
  * verify [-h (hash)] [-k keyname] [-m msgfile] [-s sigfile]
  * export [-k keyname] [-K kekekfile] [-o outfile]
  * import [-K kekekfile] [-i infile] [-x (exportable)] [-v (volatile keystore)]
- * delete [-k keyname]
+ * delete [-k keyname] ...
  */
 
 /*
@@ -564,16 +566,10 @@ static int pkey_list(int argc, char *argv[])
 {
     char usage[] = "Usage: list [-t type] [-c curve] [-y keystore]";
 
-#if 0
-    char *type = NULL;
-    char *curve = NULL;
-    char *keystore = NULL;
-#endif
-
     int type_rsa = 0, type_ec = 0, type_hashsig = 0;
 
     int opt;
-    while ((opt = getopt(argc, argv, "-t:c:y:")) != -1) {
+    while ((opt = getopt(argc, argv, "-t:")) != -1) {
         switch (opt) {
         case 1:
             /* found the next command */
@@ -589,14 +585,6 @@ static int pkey_list(int argc, char *argv[])
             else
                 lose("unsupported key type %s, expected 'rsa', 'ec', or 'hashsig'\n", optarg);
             break;
-#if 0
-        case 'c':
-            curve = optarg;
-            break;
-        case 'y':
-            keystore = optarg;
-            break;
-#endif
         default:
             puts(usage);
             return -1;
@@ -819,10 +807,14 @@ done:
     if (info) {
         gettimeofday(&tv_end, NULL);
         timersub(&tv_end, &tv_start, &tv_diff);
-        long per_sig = (tv_diff.tv_sec * 1000000 + tv_diff.tv_usec) / i;
-        printf("Info: %ldm%ld.%03lds to generate %d signatures of length %lu (%ld.%03lds per signature)\n",
-               (long)tv_diff.tv_sec / 60, (long)tv_diff.tv_sec % 60, (long)tv_diff.tv_usec / 1000, i, sig_len,
-               (long)per_sig / 1000000, ((long)per_sig % 1000000) / 1000);
+        printf("Info: %ldm%ld.%03lds to generate %d signature%s of length %lu",
+               (long)tv_diff.tv_sec / 60, (long)tv_diff.tv_sec % 60, (long)tv_diff.tv_usec / 1000, i, ((i > 1) ? "s" : ""), sig_len);
+        if (i > 1) {
+            long per_sig = (tv_diff.tv_sec * 1000000 + tv_diff.tv_usec) / i;
+            printf(" (%ld.%03lds per signature)",
+                   (long)per_sig / 1000000, ((long)per_sig % 1000000) / 1000);
+        }
+        printf("\n");
     }
 
     if (sig_fn != NULL && file_write(sig_fn, sig, sig_len, 0) != 0)
@@ -836,12 +828,13 @@ fail:
 
 static int pkey_verify(int argc, char *argv[])
 {
-    char usage[] = "Usage: verify [-h (hash)] [-k keyname] [-m msgfile] [-s sigfile]";
+    char usage[] = "Usage: verify [-h (hash)] [-k keyname] [-m msgfile] [-s sigfile] [-n iterations]";
 
     int hash_msg = 0;
+    unsigned n = 1;
 
     int opt;
-    while ((opt = getopt(argc, argv, "-hk:m:s:")) != -1) {
+    while ((opt = getopt(argc, argv, "-hk:m:s:n:")) != -1) {
         switch (opt) {
         case 1:
             /* found the next command */
@@ -862,6 +855,9 @@ static int pkey_verify(int argc, char *argv[])
         case 's':
             if (file_read(optarg, sig, &sig_len, sizeof(sig)) != 0)
                 return -1;
+            break;
+        case 'n':
+            n = atoi(optarg);
             break;
         default:
             puts(usage);
@@ -894,20 +890,29 @@ done:
     if (hash_msg && hash_message(m = digest, &mlen, sizeof(digest)) != 0)
         goto fail;
 
-    hal_error_t err;
     struct timeval tv_start, tv_end, tv_diff;
     if (info)
         gettimeofday(&tv_start, NULL);
 
-    if ((err = hal_rpc_pkey_verify(key_handle, hal_hash_handle_none,
-                                   m, mlen, sig, sig_len)) != HAL_OK)
-        lose("Error verifying: %s\n", hal_error_string(err));
+    unsigned i;
+    for (i = 0; i < n; ++i) {
+        hal_error_t err;
+        if ((err = hal_rpc_pkey_verify(key_handle, hal_hash_handle_none,
+                                       m, mlen, sig, sig_len)) != HAL_OK)
+            lose("Error verifying: %s\n", hal_error_string(err));
+    }
 
     if (info) {
         gettimeofday(&tv_end, NULL);
         timersub(&tv_end, &tv_start, &tv_diff);
-        printf("Info: %ldm%ld.%03lds to verify 1 signature\n",
-               (long)tv_diff.tv_sec / 60, (long)tv_diff.tv_sec % 60, (long)tv_diff.tv_usec / 1000);
+        printf("Info: %ldm%ld.%03lds to verify %d signature",
+               (long)tv_diff.tv_sec / 60, (long)tv_diff.tv_sec % 60, (long)tv_diff.tv_usec / 1000, i);
+        if (i > 1) {
+            long per_sig = (tv_diff.tv_sec * 1000000 + tv_diff.tv_usec) / i;
+            printf("s (%ld.%03lds per verification)",
+                   (long)per_sig / 1000000, ((long)per_sig % 1000000) / 1000);
+        }
+        printf("\n");
     }
 
     return 0;
