@@ -57,9 +57,9 @@ from tornado.iostream   import IOStream, StreamClosedError
 
 from Crypto.Util.asn1               import DerSequence, DerNull, DerOctetString
 from Crypto.Util.number             import inverse
-from Crypto.PublicKey               import RSA
-from Crypto.Cipher.PKCS1_v1_5       import PKCS115_Cipher
-from Crypto.Signature.PKCS1_v1_5    import PKCS115_SigScheme
+from Crypto.PublicKey               import RSA, ECC
+#from Crypto.Cipher.PKCS1_v1_5       import PKCS115_Cipher
+from Crypto.Signature               import pkcs1_15
 from Crypto.Hash.SHA256             import SHA256Hash as SHA256
 from Crypto.Hash.SHA384             import SHA384Hash as SHA384
 from Crypto.Hash.SHA512             import SHA512Hash as SHA512
@@ -233,9 +233,15 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
 
     k = key_table[args.key]
-    d = k.exportKey(format = "DER", pkcs = 8)
+    key_type = args.key.split('_')[0]
+
+    if key_type == "rsa":
+        d = k.exportKey(format = "DER", pkcs = 8) #TODO Fix for RSA to use new function call
+    else:
+        d = k.export_key(format = "DER", use_pkcs8=True)
+
     h = SHA256(args.text)
-    v = PKCS115_SigScheme(k)
+    v = pkcs1_15.new(k)
     q = range(args.iterations)
     m = pkcs1_hash_and_pad(args.text)
     r = Result(args, args.key)
@@ -339,7 +345,7 @@ class Result(object):
 
 key_table = collections.OrderedDict()
 
-key_table.update(rsa_1024 = RSA.importKey('''\
+key_table.update(rsa_1024 = RSA.import_key('''\
 -----BEGIN RSA PRIVATE KEY-----
 MIICXQIBAAKBgQC95QlDOvlQhdCe/a7eIoX9SGPVfXfA8/62ilnF+NcwLrhxkr2R
 4EVQB65+9AbxqM8Hqol6fhZzmDs48cl2tOFGJpE8iMhiFm4i6SGl2RXYaG0xi+lJ
@@ -357,7 +363,7 @@ lsTSiPyQjc4dQQJxFduvWHLx28bx+l7FTav7FaKntCJo
 -----END RSA PRIVATE KEY-----
 '''))
 
-key_table.update(rsa_2048 = RSA.importKey('''\
+key_table.update(rsa_2048 = RSA.import_key('''\
 -----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAsbvq6syhDXD/OMVAuLoMceGQLUIiezfShVqFfyMqADjqhFRW
 Wbonn0XV9ZkypU4Ib9n6PtLATNaefhpsUlI4s+20YTlQ7GiwJ9p97/N1o1u060ja
@@ -387,7 +393,7 @@ EQfc0UFoFHyc3mYEKR4zHheqQG5OFBN89LqG3S+O69vc1qwCvNKL+Q==
 -----END RSA PRIVATE KEY-----
 '''))
 
-key_table.update(rsa_4096 = RSA.importKey('''\
+key_table.update(rsa_4096 = RSA.import_key('''\
 -----BEGIN RSA PRIVATE KEY-----
 MIIJKAIBAAKCAgEAzWpYSQt+DrUNI+EJT/ko92wM2POfFnmm3Kc34nmuK6sez0DJ
 r9Vib9R5K46RNgqcUdAodjU6cy3/MZA53SqP7RwR/LQtWmK2a+T4iey2vQZ0iCDA
@@ -439,6 +445,33 @@ u22yFikwoIgYpU6hBdbg1mnirZS/ZyqJV9gWB6ZYyUAUGdgBqL6euSAAqBp93qz8
 sQLesqTufT1mVZd/ndLyvjDJjNKUE0w1g/1xNtg6N5aM+7pc/DwE/s+EtCxc/858
 dQYLBHIPcw6e0FdL3nTs44BpAqcK28N5eWbe/KaZ3EA0lHRmyOQ++WgU6jo=
 -----END RSA PRIVATE KEY-----
+'''))
+
+key_table.update(ecc_256 = ECC.import_key('''\
+-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIDLIUDl4ZL62cMVoDekHxuUKHQUMUMXvh2tJTGj4vPmwoAoGCCqGSM49
+AwEHoUQDQgAEX8IPZV1M/i6OYZg2LCxwgHQtMrIt57YqMrTEgI+Db3hz1Tdpsbv1
+v7Yiq/Qd6uJ0E14f/mir94tTw1ezl/CzBg==
+-----END EC PRIVATE KEY-----
+'''))
+
+key_table.update(ecc_384 = ECC.import_key('''\
+-----BEGIN EC PRIVATE KEY-----
+MIGkAgEBBDCSIxIaAYAEMtHiirDlGtihnUSRjAr2enqW24x8JXQLqmY4glBFxpy4
+bls3mJ/C0FagBwYFK4EEACKhZANiAARnEiGXGAdjWqUVgvMwDpTYpQRuFpMbVuHA
+TjC0LjsLMQ+IpdJUMBSys4lp82AJOg4+pmxRsbsSO0IiaMFcS3FzGc6KBvFNXqfh
+HkkzWsLk/S5G6FG3ZF1JaSMpoj2FtAQ=
+-----END EC PRIVATE KEY-----
+'''))
+
+key_table.update(ecc_521 = ECC.import_key('''\
+-----BEGIN EC PRIVATE KEY-----
+MIHcAgEBBEIBXGqrYLTV96IGy84CzhCl/DUzZ3AxqD2dIZ6e80FSdTKK+A92d6KF
+xuQP/8KpRnSo35Q2mH6W+MwODayW2WpI22egBwYFK4EEACOhgYkDgYYABAB3e4ux
+kgEyL6Ib9hgewTSs1AK0/hQqT6AOVySY6tLl9PxI1Lwx2zMniNq2AcjUaF3+AVDX
+ayCMXD1lQY7FpPvqQQAe1RFfobtvCgddV+3L573bebeiabh3xEIHtTT7fo2rXUZ2
+0cdSS0nkUiSo2hXrEUJf6yN5x0+RB8YtfqEtvzDzOA==
+-----END EC PRIVATE KEY-----
 '''))
 
 if __name__ == "__main__":
