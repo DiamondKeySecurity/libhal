@@ -59,10 +59,8 @@ from Crypto.Util.asn1               import DerSequence, DerNull, DerOctetString
 from Crypto.Util.number             import inverse
 from Crypto.PublicKey               import RSA, ECC
 #from Crypto.Cipher.PKCS1_v1_5       import PKCS115_Cipher
-from Crypto.Signature               import pkcs1_15
-from Crypto.Hash.SHA256             import SHA256Hash as SHA256
-from Crypto.Hash.SHA384             import SHA384Hash as SHA384
-from Crypto.Hash.SHA512             import SHA512Hash as SHA512
+from Crypto.Signature               import pkcs1_15, DSS
+from Crypto.Hash                    import SHA256
 
 try:
     import statistics
@@ -197,8 +195,8 @@ class HSM(cryptech.libhal.HSM):
 
 
 def pkcs1_hash_and_pad(text):
-    return DerSequence([DerSequence([SHA256.oid, DerNull().encode()]).encode(),
-                        DerOctetString(SHA256(text).digest()).encode()]).encode()
+    return DerSequence([DerSequence([SHA256.SHA256Hash.oid, DerNull().encode()]).encode(),
+                        DerOctetString(SHA256.SHA256Hash(text).digest()).encode()]).encode()
 
 
 @coroutine
@@ -209,9 +207,13 @@ def client(args, k, p, q, r, m, v, h):
         t0 = datetime.datetime.now()
         s  = yield p.sign(data = m)
         t1 = datetime.datetime.now()
-        logger.debug("Signature %s: %s", n, ":".join("{:02x}".format(ord(b)) for b in s))
-        if args.verify and not v.verify(h, s):
-            raise RuntimeError("RSA verification failed")
+        logger.debug("HSM Signature %s: %s", n, ":".join("{:02x}".format(ord(b)) for b in s))
+        if args.verify:
+            try:
+                v.verify(h, s)
+            except (ValueError, TypeError):
+                logger.debug("Expected Signature %s: %s", n, ":".join("{:02x}".format(ord(b)) for b in v.sign(h)))
+                raise RuntimeError("Verification failed")
         r.add(t0, t1)
 
 
@@ -236,12 +238,13 @@ def main():
     key_type = args.key.split('_')[0]
 
     if key_type == "rsa":
-        d = k.exportKey(format = "DER", pkcs = 8) #TODO Fix for RSA to use new function call
+        d = k.export_key(format = "DER", pkcs = 8)
+        v = pkcs1_15.new(k)
     else:
         d = k.export_key(format = "DER", use_pkcs8=True)
+        v = DSS.new(k, 'fips-186-3')
 
-    h = SHA256(args.text)
-    v = pkcs1_15.new(k)
+    h = SHA256.new(args.text)
     q = range(args.iterations)
     m = pkcs1_hash_and_pad(args.text)
     r = Result(args, args.key)
