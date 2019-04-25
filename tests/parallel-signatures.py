@@ -55,7 +55,7 @@ from tornado.gen        import Return, coroutine
 from tornado.ioloop     import IOLoop
 from tornado.iostream   import IOStream, StreamClosedError
 
-from Crypto.Util.asn1               import DerSequence, DerNull, DerOctetString
+from Crypto.Util.asn1               import DerSequence, DerNull, DerOctetString, DerObjectId
 from Crypto.Util.number             import inverse
 from Crypto.PublicKey               import RSA, ECC
 #from Crypto.Cipher.PKCS1_v1_5       import PKCS115_Cipher
@@ -195,7 +195,7 @@ class HSM(cryptech.libhal.HSM):
 
 
 def pkcs1_hash_and_pad(text):
-    return DerSequence([DerSequence([SHA256.SHA256Hash.oid, DerNull().encode()]).encode(),
+    return DerSequence([DerSequence([DerObjectId(SHA256.SHA256Hash.oid).encode(), DerNull().encode()]).encode(),
                         DerOctetString(SHA256.SHA256Hash(text).digest()).encode()]).encode()
 
 
