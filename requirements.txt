@@ -1,0 +1,2 @@
+# Requirements for parallel-signatures.py
+pycryptodome==3.8.1

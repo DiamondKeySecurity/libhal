@@ -297,6 +297,10 @@ Yeah, we ought to document the API, Real Soon Now, perhaps using
 the Python definitions in cryptech.libhal, and and comments in the
 code.
 
+## Testing ##
+All python pip packages for python test can be installed using the [requirements.txt](requirements.txt) file by simply executing;
+
+    python -m pip install -r requirements.txt
 
 [EFD]:		http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-3.html
 [Doxygen]:	http://www.doxygen.org/
