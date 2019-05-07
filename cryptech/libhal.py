@@ -638,8 +638,7 @@ class HSM(object):
             return
 
     def pkey_match(self, type = 0, curve = 0, mask = 0, flags = 0,
-                   attributes = {}, length = 64, client = 0, session = 0):
-        u = UUID(int = 0)
+                   attributes = {}, length = 64, u = UUID(int = 0), client = 0, session = 0):
         n = length
         s = 0
         while n == length:
