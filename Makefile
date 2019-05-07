@@ -1,3 +1,36 @@
+# BSD 3-Clause License
+# 
+# Copyright (c) 2018, Diamond Key Security, NFP
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+# 
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+# 
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+# 
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# Diamond Key Security
+# Added updates to support TCP connection to RPC server
+#
 # Copyright (c) 2015-2018, NORDUnet A/S
 # All rights reserved.
 #
@@ -40,7 +73,7 @@ LIB		= libhal.a
 
 # Error checking on known control options, some of which allow the user entirely too much rope.
 
-USAGE := "usage: ${MAKE} [IO_BUS=eim|i2c|fmc] [RPC_MODE=none|server|client-simple|client-mixed] [RPC_TRANSPORT=none|loopback|serial|daemon] [MODEXP_CORE=no|yes] [HASH_CORES=no|yes] [ECDSA_CORES=no|yes]"
+USAGE := "usage: ${MAKE} [IO_BUS=eim|i2c|fmc] [RPC_MODE=none|server|client-simple|client-mixed] [RPC_TRANSPORT=none|loopback|serial|daemon|tcpdaemon] [MODEXP_CORE=no|yes] [HASH_CORES=no|yes] [ECDSA_CORES=no|yes]"
 
 IO_BUS		?= none
 RPC_MODE	?= none
@@ -52,7 +85,7 @@ ECDSA_CORES	?= yes
 ifeq (,$(and \
 	$(filter	none eim i2c fmc			,${IO_BUS}),\
 	$(filter	none server client-simple client-mixed	,${RPC_MODE}),\
-	$(filter	none loopback serial daemon		,${RPC_TRANSPORT}),\
+	$(filter	none loopback serial daemon tcpdaemon ,${RPC_TRANSPORT}),\
 	$(filter	no yes					,${MODEXP_CORE}),\
 	$(filter	no yes					,${HASH_CORES}),\
 	$(filter	no yes					,${ECDSA_CORES})))
@@ -86,6 +119,17 @@ else
   ECDSA_USE_ECDSA256_CORE := 0
   ECDSA_USE_ECDSA384_CORE := 0
 endif
+
+# add paths for LibreSSL
+# LIBERSSL_INCLUDE should be altered if libressl was installed on a different path
+# LibreSSL is used by the the Diamond Key Security, NFP to connect to the DKS HSM
+# using a secure TCP socket
+LIBRESSL_DIR	?= /opt/libressl
+LIBERSSL_INCLUDE	?= ${LIBRESSL_DIR}/include
+LIBRESSL_LIB_DIR	?= ${LIBRESSL_DIR}/lib
+LIBRESSL_LIBS	?= ${LIBRESSL_LIB_DIR}/libtls.a ${LIBRESSL_LIB_DIR}/libssl.a ${LIBRESSL_LIB_DIR}/libcrypto.a
+
+ADDITIONAL_LIBS :=
 
 # Object files to build, initialized with ones we always want.
 # There's a balance here between skipping files we don't strictly
@@ -164,6 +208,11 @@ else ifeq "${RPC_TRANSPORT}" "serial"
   RPC_CLIENT_OBJ += rpc_serial.o rpc_client_serial.o
 else ifeq "${RPC_TRANSPORT}" "daemon"
   RPC_CLIENT_OBJ += rpc_client_daemon.o
+# add new support for TCP connection to RPC server
+else ifeq "${RPC_TRANSPORT}" "tcpdaemon"
+  RPC_CLIENT_OBJ += rpc_client_tcp.o
+  ADDITIONAL_LIBS := ${LIBRESSL_LIBS} -lpthread
+  CFLAGS += -I${LIBERSSL_INCLUDE}
 endif
 
 RPC_SERVER_OBJ = ${KS_OBJ} rpc_misc.o rpc_pkey.o rpc_server.o
@@ -244,7 +293,7 @@ export RPC_MODE
 export LIBHAL_SRC LIBHAL_BLD LIBTFM_BLD
 
 all: ${LIB}
-	${MAKE} -C tests $@ CFLAGS='${CFLAGS}'
+	${MAKE} -C tests $@ CFLAGS='${CFLAGS}' ADDITIONAL_LIBS='${ADDITIONAL_LIBS}'
 	${MAKE} -C utils $@ CFLAGS='${CFLAGS}'
 
 client:
@@ -261,10 +310,13 @@ serial:
 
 daemon: mixed
 
-.PHONY: client mixed server serial daemon
+tcpdaemon:
+	${MAKE} RPC_MODE=client-mixed RPC_TRANSPORT=tcpdaemon
 
-${LIB}: ${OBJ}
-	${AR} rcs $@ $^
+.PHONY: client mixed server serial daemon tcpdaemon
+
+${LIB}: ${EXTRA_LIBS} ${OBJ}
+	${AR} rcs $@ $^ 
 
 asn1.o rsa.o ecdsa.o:						asn1_internal.h
 ecdsa.o:							ecdsa_curves.h
@@ -282,7 +334,7 @@ last_gasp_pin_internal.h:
 	./utils/last_gasp_default_pin >$@
 
 test: all
-	${MAKE} -C tests -k $@ CFLAGS='${CFLAGS}'
+	${MAKE} -C tests -k $@ CFLAGS='${CFLAGS}' ADDITIONAL_LIBS='${ADDITIONAL_LIBS}'
 
 clean:
 	rm -f *.o ${LIB}

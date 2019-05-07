@@ -1,3 +1,6 @@
+// Diamond Key Security, NFP Changes
+// Copyright 2019 Diamond Key Security, NFP
+// All rights reserved
 /*
  * hal_internal.h
  * --------------
@@ -249,6 +252,9 @@ typedef struct {
   hal_error_t (*get_random)(void *buffer, const size_t length);
 
   hal_error_t (*get_version)(uint32_t *version);
+
+  // RPC Functions added by Diamond Key Security for the Diamond-HSM
+  hal_error_t (*check_tamper)(void);
 
 } hal_rpc_misc_dispatch_t;
 
@@ -620,6 +626,7 @@ extern hal_error_t hal_rpc_recvfrom(uint8_t * const buf, size_t * const len, voi
 
 extern hal_error_t hal_rpc_client_transport_init(void);
 extern hal_error_t hal_rpc_client_transport_close(void);
+extern hal_error_t hal_rpc_client_transport_init_ip(const char *hostip, const char *hostname);
 
 extern hal_error_t hal_rpc_server_transport_init(void);
 extern hal_error_t hal_rpc_server_transport_close(void);
@@ -662,6 +669,9 @@ typedef enum {
     RPC_FUNC_PKEY_EXPORT,
     RPC_FUNC_PKEY_IMPORT,
     RPC_FUNC_PKEY_GENERATE_HASHSIG,
+
+    // RPC Functions added by Diamond Key Security for the Diamond-HSM
+    RPC_FUNC_CHECK_TAMPER = 66
 } rpc_func_num_t;
 
 #define RPC_VERSION 0x01010100          /* 1.1.1.0 */

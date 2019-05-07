@@ -1,3 +1,6 @@
+// Diamond Key Security, NFP Changes
+// Copyright 2019 Diamond Key Security, NFP
+// All rights reserved
 /*
  * rpc_misc.c
  * ----------
@@ -35,6 +38,12 @@
 
 #include "hal.h"
 #include "hal_internal.h"
+
+
+#define HAL_OK CMSIS_HAL_OK
+#include "avr.h"
+#undef HAL_OK
+
 
 static hal_error_t get_version(uint32_t *version)
 {
@@ -249,6 +258,33 @@ static hal_error_t logout_all(void)
   return HAL_OK;
 }
 
+// RPC Functions added by Diamond Key Security for the Diamond-HSM
+static hal_error_t check_tamper(void)
+{
+  static int counter = 0;
+  uint8_t resp =0 ;
+      resp = tamp_chk();
+  	// the arguments have been parsed and validated
+  	if (resp == 0x14) {
+  		counter = 0;
+  		return HAL_OK;
+  	}
+  	else if (resp == 0x15){
+  		return HAL_ERROR_TAMPER;
+  	}
+  	else {
+  		counter += 1;   //no response or garbage response
+  		return HAL_OK;
+  	}
+  if (counter == 60)
+  {
+    // on the 60th call, send tamper
+    return HAL_ERROR_TAMPER;
+  }
+
+
+}
+
 static hal_error_t set_pin(const hal_client_handle_t client,
                            const hal_user_t user,
                            const char * const newpin, const size_t newpin_len)
@@ -300,7 +336,8 @@ const hal_rpc_misc_dispatch_t hal_rpc_local_misc_dispatch = {
   .logout_all   = logout_all,
   .is_logged_in = is_logged_in,
   .get_random   = get_random,
-  .get_version  = get_version
+  .get_version  = get_version,
+  .check_tamper = check_tamper
 };
 
 /*
