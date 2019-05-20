@@ -294,7 +294,7 @@ export LIBHAL_SRC LIBHAL_BLD LIBTFM_BLD
 
 all: ${LIB}
 	${MAKE} -C tests $@ CFLAGS='${CFLAGS}' ADDITIONAL_LIBS='${ADDITIONAL_LIBS}'
-	${MAKE} -C utils $@ CFLAGS='${CFLAGS}'
+	${MAKE} -C utils $@ CFLAGS='${CFLAGS}' ADDITIONAL_LIBS='${ADDITIONAL_LIBS}'
 
 client:
 	${MAKE} RPC_MODE=client-simple RPC_TRANSPORT=daemon
