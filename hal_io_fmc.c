@@ -53,31 +53,16 @@
 #define HAL_IO_FMC_DEBUG        0
 #endif
 
-static int debug = 0;
 static int inited = 0;
 
-static inline hal_error_t init(void)
-{
-  if (!inited) {
-    fmc_init();
-    inited = 1;
-  }
-  return HAL_OK;
-}
+#if HAL_IO_FMC_DEBUG
 
-/* Translate cryptech register number to FMC address.
- */
-static inline hal_addr_t fmc_offset(hal_addr_t offset)
-{
-  return offset << 2;
-}
+static int debug = 0;
 
 void hal_io_set_debug(int onoff)
 {
   debug = onoff;
 }
-
-#if HAL_IO_FMC_DEBUG
 
 static inline void dump(const char *label, const hal_addr_t offset, const uint8_t * const buf, const size_t len)
 {
@@ -95,54 +80,71 @@ static inline void dump(const char *label, const hal_addr_t offset, const uint8_
 
 #endif
 
+/*
+ * Translate cryptech register number to FMC address.
+ */
+static inline hal_addr_t fmc_offset(hal_addr_t offset)
+{
+  return offset << 2;
+}
+
+/*
+ * Minimal version of memcpy, where we know the addresses and length are
+ * word-aligned.
+ */
+static inline void fmc_fpga_memcpy(uint32_t *dst, uint32_t *src, size_t nword)
+{
+    while (nword >= 4) {
+        *dst++ = *src++;
+        *dst++ = *src++;
+        *dst++ = *src++;
+        *dst++ = *src++;
+        nword -= 4;
+    }
+    while (nword > 0) {
+        *dst++ = *src++;
+        nword--;
+    }
+}
+
 hal_error_t hal_io_write(const hal_core_t *core, hal_addr_t offset, const uint8_t *buf, size_t len)
 {
-  hal_error_t err;
-
   if (core == NULL)
     return HAL_ERROR_CORE_NOT_FOUND;
 
   if (len % 4 != 0)
     return HAL_ERROR_IO_BAD_COUNT;
 
-  if ((err = init()) != HAL_OK)
-    return err;
+  if (!inited) {
+    fmc_init();
+    inited = 1;
+  }
 
   dump("write ", offset + hal_core_base(core), buf, len);
 
   offset = fmc_offset(offset + hal_core_base(core));
-  for (; len > 0; offset += 4, buf += 4, len -= 4) {
-    uint32_t val;
-    val = htonl(*(uint32_t *)buf);
-    fmc_write_32(offset, val);
-  }
+  fmc_fpga_memcpy((uint32_t *)fmc_fpga_addr(offset), (uint32_t *)buf, len/4);
 
   return HAL_OK;
 }
 
 hal_error_t hal_io_read(const hal_core_t *core, hal_addr_t offset, uint8_t *buf, size_t len)
 {
-  uint8_t *rbuf = buf;
-  int rlen = len;
-  hal_error_t err;
-
   if (core == NULL)
     return HAL_ERROR_CORE_NOT_FOUND;
 
   if (len % 4 != 0)
     return HAL_ERROR_IO_BAD_COUNT;
 
-  if ((err = init()) != HAL_OK)
-    return err;
+  if (!inited) {
+    fmc_init();
+    inited = 1;
+  }
 
   dump("read  ", offset + hal_core_base(core), buf, len);
 
   offset = fmc_offset(offset + hal_core_base(core));
-  for (; rlen > 0; offset += 4, rbuf += 4, rlen -= 4) {
-    uint32_t val;
-    fmc_read_32(offset, &val);
-    *(uint32_t *)rbuf = ntohl(val);
-  }
+  fmc_fpga_memcpy((uint32_t *)buf, (uint32_t *)fmc_fpga_addr(offset), len/4);
 
   return HAL_OK;
 }

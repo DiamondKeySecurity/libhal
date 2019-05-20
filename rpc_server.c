@@ -35,7 +35,6 @@
 #include "hal.h"
 #include "hal_internal.h"
 #include "xdr_internal.h"
-#include "hashsig.h"
 
 /*
  * RPC calls.
@@ -171,10 +170,16 @@ static hal_error_t hash_get_digest_algorithm_id(const uint8_t **iptr, const uint
     if (nargs(1) + pad(len_max) > (uint32_t)(olimit - *optr))
         return HAL_ERROR_RPC_PACKET_OVERFLOW;
 
-    /* get the data directly into the output buffer */
-    if ((err = hal_rpc_hash_get_digest_algorithm_id(alg, *optr + nargs(1), &len, (size_t)len_max)) == HAL_OK) {
-        check(hal_xdr_encode_int(optr, olimit, len));
-        *optr += pad(len);
+    if (len_max == 0) {
+        if ((err = hal_rpc_hash_get_digest_algorithm_id(alg, NULL, &len, 0)) == HAL_OK)
+            check(hal_xdr_encode_int(optr, olimit, len));
+    }
+    else {
+        /* get the data directly into the output buffer */
+        if ((err = hal_rpc_hash_get_digest_algorithm_id(alg, *optr + nargs(1), &len, (size_t)len_max)) == HAL_OK) {
+            check(hal_xdr_encode_int(optr, olimit, len));
+            *optr += pad(len);
+        }
     }
 
     return err;
@@ -210,6 +215,8 @@ static hal_error_t hash_initialize(const uint8_t **iptr, const uint8_t * const i
     check(hal_xdr_decode_int(iptr, ilimit, &session.handle));
     check(hal_xdr_decode_int(iptr, ilimit, &alg));
     check(hal_xdr_decode_variable_opaque_ptr(iptr, ilimit, &key, &key_len));
+    if (key_len == 0)
+        key = NULL;
 
     check(hal_rpc_hash_initialize(client, session, &hash, (hal_digest_algorithm_t)alg, key, (size_t)key_len));
 

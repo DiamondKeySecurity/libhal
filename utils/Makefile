@@ -62,14 +62,15 @@
 
 LIBHAL_SRC	?= ..
 LIBHAL_BLD	?= ${LIBHAL_SRC}
+LIBTFM_BLD	?= ../../thirdparty/libtfm
 
-LIBS		= ${LIBHAL_BLD}/libhal.a ${ADDITIONAL_LIBS}
+LIBS		= ${LIBHAL_BLD}/libhal.a ${LIBTFM_BLD}/libtfm.a ${ADDITIONAL_LIBS}
 
-CFLAGS		?= -g3 -Wall -fPIC -std=c99 -I${LIBHAL_SRC}
+CFLAGS		?= -g3 -Wall -fPIC -std=c99 -I${LIBHAL_SRC} -I${LIBTFM_BLD}
 
-BIN		= eim_peek_poke cores
+BIN		= $(if $(wildcard ${LIBHAL_BLD}/hal_io_eim.o),eim_peek_poke) $(if $(wildcard ${LIBHAL_BLD}/core.o),cores) pkey-export pkey-import pkey
 
-all: $(if $(wildcard ${LIBHAL_BLD}/hal_io_eim.o),eim_peek_poke) $(if $(wildcard ${LIBHAL_BLD}/core.o),cores)
+all: ${BIN}
 
 clean:
 	rm -f *.o ${BIN}

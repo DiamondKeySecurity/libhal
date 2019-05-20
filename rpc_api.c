@@ -35,7 +35,6 @@
 
 #include "hal.h"
 #include "hal_internal.h"
-#include "hashsig.h"
 
 const hal_hash_handle_t hal_hash_handle_none = {HAL_HANDLE_NONE};
 
@@ -121,6 +120,8 @@ static inline int check_pkey_type_curve_flags(const hal_key_type_t type,
 
 hal_error_t hal_rpc_get_version(uint32_t *version)
 {
+  if (version == NULL)
+    return HAL_ERROR_BAD_ARGUMENTS;
   return hal_rpc_misc_dispatch->get_version(version);
 }
 
@@ -185,6 +186,8 @@ hal_error_t hal_rpc_hash_get_digest_length(const hal_digest_algorithm_t alg, siz
 hal_error_t hal_rpc_hash_get_digest_algorithm_id(const hal_digest_algorithm_t alg,
                                                  uint8_t *id, size_t *len, const size_t len_max)
 {
+  if (id == NULL && len_max != 0)
+    return HAL_ERROR_BAD_ARGUMENTS;
   return hal_rpc_hash_dispatch->get_digest_algorithm_id(alg, id, len, len_max);
 }
 
@@ -201,7 +204,7 @@ hal_error_t hal_rpc_hash_initialize(const hal_client_handle_t client,
                                     const hal_digest_algorithm_t alg,
                                     const uint8_t * const key, const size_t key_len)
 {
-  if (hash == NULL)
+  if (hash == NULL || (key == NULL && key_len != 0))
     return HAL_ERROR_BAD_ARGUMENTS;
   return hal_rpc_hash_dispatch->initialize(client, session, hash, alg, key, key_len);
 }
@@ -329,7 +332,7 @@ size_t hal_rpc_pkey_get_public_key_len(const hal_pkey_handle_t pkey)
 hal_error_t hal_rpc_pkey_get_public_key(const hal_pkey_handle_t pkey,
                                         uint8_t *der, size_t *der_len, const size_t der_max)
 {
-  if (der == NULL || der_len == NULL || der_max == 0)
+  if (der == NULL && der_max != 0)
     return HAL_ERROR_BAD_ARGUMENTS;
   return hal_rpc_pkey_dispatch->get_public_key(pkey, der, der_len, der_max);
 }
