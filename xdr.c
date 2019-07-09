@@ -197,7 +197,7 @@ hal_error_t hal_xdr_decode_variable_opaque(const uint8_t ** const inbuf, const u
     const uint8_t *p;
 
     /* arg checks */
-    hal_assert(value != NULL && len != NULL && len_max != 0);
+    //hal_assert(value != NULL && len != NULL && len_max != 0);
 
     /* read data pointer and length */
     if ((err = hal_xdr_decode_variable_opaque_ptr(inbuf, limit, &p, &xdr_len)) == HAL_OK) {
