@@ -46,6 +46,7 @@ import socket
 import logging
 import datetime
 import collections
+import json
 
 import cryptech.libhal
 
@@ -222,7 +223,7 @@ def pkcs1_hash_and_pad(text):
 
 
 @coroutine
-def client_ec(args, pyhash, pkey, q, r, m, v, h):
+def client_ec(verify, pyhash, pkey, q, r, m, v, h):
     while q:
         n = q.pop(0)
         logger.debug("Signing %s", n)
@@ -230,12 +231,12 @@ def client_ec(args, pyhash, pkey, q, r, m, v, h):
         s  = yield pkey.sign(hash = h)
         t1 = datetime.datetime.now()
         logger.debug("Signature %s: %s", n, ":".join("{:02x}".format(ord(b)) for b in s))
-        if args.verify and not v.verify(m, pyhash, s):
+        if verify and not v.verify(m, pyhash, s):
             raise RuntimeError("EC verification failed")
         r.add(t0, t1)
 
 @coroutine
-def client_rsa(args, k, pkey, q, r, m, v, h):
+def client_rsa(verify, k, pkey, q, r, m, v, h):
     while q:
         n = q.pop(0)
         logger.debug("Signing %s", n)
@@ -243,9 +244,47 @@ def client_rsa(args, k, pkey, q, r, m, v, h):
         s  = yield pkey.sign(data = m)
         t1 = datetime.datetime.now()
         logger.debug("Signature %s: %s", n, ":".join("{:02x}".format(ord(b)) for b in s))
-        if args.verify and not v.verify(h, s):
+        if verify and not v.verify(h, s):
             raise RuntimeError("RSA verification failed")
         r.add(t0, t1)
+
+@coroutine
+def load_sign(iterations, clients, key, quiet, text, verify, output, file, hsms):
+    k = key_table[key]
+    key_type = key.split('_')[0]
+    q = range(iterations)
+    r = Result(iterations, clients, quiet, key, output, file)
+
+    if key_type == "rsa":
+        d = k.exportKey(format = "DER", pkcs = 8)
+        v = PKCS115_SigScheme(k)
+        m = pkcs1_hash_and_pad(text)
+        h = SHA256(text)
+        pkeys = yield [hsm.pkey_load(d, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE) for hsm in hsms]
+        yield [client_rsa(verify, k, pkey, q, r, m, v, h) for pkey in pkeys]
+    else:
+        key_size = key.split('_')[1]
+        if key_size == "521":
+            alg = HAL_DIGEST_ALGORITHM_SHA512
+            pyhash = SHA512
+            curve = HAL_CURVE_P521
+        else:
+            curve = eval('HAL_CURVE_P' + key_size)
+            alg = eval('HAL_DIGEST_ALGORITHM_SHA' + key_size)
+            pyhash = eval('SHA' + key_size)
+        d = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, curve].der
+        v = PreloadedKey.db[HAL_KEY_TYPE_EC_PUBLIC, curve]
+        m = text
+        for hsm in hsms:
+            h = hsm.hash_initialize(alg, mixed_mode = True)
+            h.update(m)
+
+        pkeys = yield [hsm.pkey_load(d, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE) for hsm in hsms]
+        yield [client_ec(verify, pyhash, pkey, q, r, m, v, h) for pkey in pkeys]
+
+    yield [pkey.delete() for pkey in pkeys]
+
+    yield r.report()
 
 @coroutine
 def main():
@@ -259,64 +298,66 @@ def main():
     parser.add_argument("-d", "--debug",        action = "store_true",          help = "bark more")
     parser.add_argument("-t", "--text",         default = "Hamsters'R'Us",      help = "plaintext to sign")
     parser.add_argument("-v", "--verify",       action = "store_true",          help = "verify signatures")
+    parser.add_argument("-l", "--loop",         action = "store_true",          help = "loop from 1..n clients, 1..n iteration")
+    parser.add_argument("-o", "--output",       choices=["str", "json", "json_pretty", "csv"], default = "str", help = "Output format of output 'str, json, csv'")
+    parser.add_argument("-f", "--file",         default = "",                 help = "Save result to file location")
+
     args = parser.parse_args()
 
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    if args.file != "":
+        with open(args.file, "w") as outfile:
+            outfile.write('')
 
     hsms = [HSM() for i in xrange(args.clients)]
 
     for hsm in hsms:
         yield hsm.login(HAL_USER_NORMAL, args.pin)
 
-    k = key_table[args.key]
-    key_type = args.key.split('_')[0]
-    q = range(args.iterations)
-    r = Result(args, args.key)
-
-    if key_type == "rsa":
-        d = k.exportKey(format = "DER", pkcs = 8)
-        v = PKCS115_SigScheme(k)
-        m = pkcs1_hash_and_pad(args.text)
-        h = SHA256(args.text)
-        pkeys = yield [hsm.pkey_load(d, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE) for hsm in hsms]
-        yield [client_rsa(args, k, pkey, q, r, m, v, h) for pkey in pkeys]
+    if args.loop:
+        for i in range(0, args.iterations):
+            for c in range(0, args.clients):
+                if args.key == "all":
+                    for key in key_table:
+                        if key != "all":
+                            yield load_sign((i + 1), (c + 1), key, args.quiet, args.text, args.verify, args.output, args.file, hsms)
+                else:
+                    yield load_sign((i + 1), (c + 1), args.key, args.quiet, args.text, args.verify, args.output, args.file, hsms)
     else:
-        key_size = args.key.split('_')[1]
-        if key_size == "521":
-            alg = HAL_DIGEST_ALGORITHM_SHA512
-            pyhash = SHA512
-            curve = HAL_CURVE_P521
+        if args.key == "all":
+            for key in key_table:
+                if key != "all":
+                    yield load_sign(args.iterations, args.clients, key, args.quiet, args.text, args.verify, args.output, args.file, hsms)
         else:
-            curve = eval('HAL_CURVE_P' + key_size)
-            alg = eval('HAL_DIGEST_ALGORITHM_SHA' + key_size)
-            pyhash = eval('SHA' + key_size)
-        d = PreloadedKey.db[HAL_KEY_TYPE_EC_PRIVATE, curve].der
-        v = PreloadedKey.db[HAL_KEY_TYPE_EC_PUBLIC, curve]
-        m = args.text
-        for hsm in hsms:
-            h = hsm.hash_initialize(alg, mixed_mode = True)
-            h.update(m)
+            yield load_sign(args.iterations, args.clients, args.key, args.quiet, args.text, args.verify, args.output, args.file, hsms)
 
-        pkeys = yield [hsm.pkey_load(d, HAL_KEY_FLAG_USAGE_DIGITALSIGNATURE) for hsm in hsms]
-        yield [client_ec(args, pyhash, pkey, q, r, m, v, h) for pkey in pkeys]
+    if args.file != "" and (args.output == "json" or args.output == "json_pretty"):
+        with open(args.file, "r") as outfile:
+            #converto to JSON object, remove last two chars ",\n"
+            file_contents = "[\n" + outfile.read()[:-2] + "\n]"
+        with open(args.file, "w") as outfile:
+            outfile.write(file_contents)
 
-    yield [pkey.delete() for pkey in pkeys]
-
-    r.report()
-
+def datetime_convert(o):
+    if isinstance(o, datetime.timedelta):
+        return o.__str__()
 
 class Result(object):
 
-    def __init__(self, args, name):
-        self.args = args
+    def __init__(self, iterations, clients, quiet, name, output, file):
         self.name = name
         self.sum = datetime.timedelta(seconds = 0)
         if statistics_loaded:
-            self.readings = [None] * args.iterations
+            self.readings = [None] * iterations
         self.t0 = None
         self.t1 = None
         self.n = 0
+        self.clients = clients
+        self.quiet = quiet
+        self.output = output
+        self.file = file
 
     def add(self, t0, t1):
         if self.t0 is None:
@@ -327,7 +368,7 @@ class Result(object):
         if statistics_loaded:
             self.readings[self.n] = delta.total_seconds()
         self.n += 1
-        if not self.args.quiet:
+        if not self.quiet:
             sys.stdout.write("\r{:4d} {}".format(self.n, delta))
             sys.stdout.flush()
 
@@ -361,35 +402,109 @@ class Result(object):
 
     @property
     def speedup(self):
-        return  self.sum.total_seconds() / (self.t1 - self.t0).total_seconds()
+        return self.sum.total_seconds() / (self.t1 - self.t0).total_seconds()
 
-    def report(self):
+    @property
+    def toJSON(self):
         if statistics_loaded:
-            sys.stdout.write(("\r{0.name} "
-                              "sigs/sec {0.sigs_per_sec} "
-                              "secs/sig {0.secs_per_sig} "
-                              "mean {0.mean} "
-                              "median {0.median} "
-                              "stdev {0.stdev} "
-                              "speedup {0.speedup} "
-                              "(n {0.n}, "
-                              "c {0.args.clients} "
-                              "t0 {0.t0} "
-                              "t1 {0.t1})\n").format(self))
+            return {
+                "name" : self.name,
+                "sigs_per_sec" : self.sigs_per_sec.__str__(),
+                "secs_per_sig" : self.secs_per_sig.__str__(),
+                "mean" : self.mean,
+                "median" : self.median,
+                "stdev" : self.stdev,
+                "speedup" : self.speedup.__str__(),
+                "n" : self.n,
+                "clients" : self.clients,
+                "t0" : self.t0.__str__(),
+                "t1" : self.t1.__str__()
+            }
         else:
-            sys.stdout.write(("\r{0.name} "
-                              "sigs/sec {0.sigs_per_sec} "
-                              "secs/sig {0.secs_per_sig} "
-                              "mean {0.mean} "
-                              "speedup {0.speedup} "
-                              "(n {0.n}, "
-                              "c {0.args.clients} "
-                              "t0 {0.t0} "
-                              "t1 {0.t1})\n").format(self))
+            return {
+                "name" : self.name,
+                "sigs_per_sec" : self.sigs_per_sec.__str__(),
+                "secs_per_sig" : self.secs_per_sig.__str__(),
+                "mean" : self.mean,
+                "speedup" : self.speedup.__str__(),
+                "n" : self.n,
+                "clients" : self.clients,
+                "t0" : self.t0.__str__(),
+                "t1" : self.t1.__str__()
+            }
+
+    @property
+    def toCSV(self):
+        if statistics_loaded:
+            return ("{0.name}, "
+                    "{0.sigs_per_sec}, "
+                    "{0.secs_per_sig}, "
+                    "{0.mean}, "
+                    "{0.median}, "
+                    "{0.stdev}, "
+                    "{0.speedup}, "
+                    "{0.n}, "
+                    "{0.clients}, "
+                    "{0.t0}, "
+                    "{0.t1}").format(self)
+        else:
+            return ("{0.name}, "
+                    "{0.sigs_per_sec}, "
+                    "{0.secs_per_sig}, "
+                    "{0.mean}, "
+                    "{0.speedup}, "
+                    "{0.n}, "
+                    "{0.clients}, "
+                    "{0.t0}, "
+                    "{0.t1}").format(self)
+
+    def __str__(self):
+        if statistics_loaded:
+            return ("{0.name} "
+                "sigs/sec {0.sigs_per_sec} "
+                "secs/sig {0.secs_per_sig} "
+                "mean {0.mean} "
+                "median {0.median} "
+                "stdev {0.stdev} "
+                "speedup {0.speedup} "
+                "(n {0.n}, "
+                "c {0.clients} "
+                "t0 {0.t0} "
+                "t1 {0.t1})").format(self)
+        else:
+            return ("{0.name} "
+                "sigs/sec {0.sigs_per_sec} "
+                "secs/sig {0.secs_per_sig} "
+                "mean {0.mean} "
+                "speedup {0.speedup} "
+                "(n {0.n}, "
+                "c {0.args.clients} "
+                "t0 {0.t0} "
+                "t1 {0.t1})").format(self)
+
+    @coroutine
+    def report(self):
+        if self.output == "str":
+            result = str(self)
+        elif self.output == "json":
+            result = json.dumps(self.toJSON, sort_keys = True)
+            result = result + ','
+        elif self.output == "json_pretty":
+            result = json.dumps(self.toJSON, sort_keys = True, indent = 4)
+            result = result + ','
+        elif self.output == "csv":
+            result = self.toCSV
+
+        sys.stdout.write('\r' + result + '\n')
         sys.stdout.flush()
 
+        if self.file != "":
+            with open(self.file, "a") as outfile:
+                outfile.write(result + '\n')
 
 key_table = collections.OrderedDict()
+
+key_table.update(all = "")
 
 key_table.update(rsa_1024 = RSA.importKey('''\
 -----BEGIN RSA PRIVATE KEY-----
