@@ -120,6 +120,11 @@ HALError.define(HAL_ERROR_KS_INDEX_UUID_MISORDERED  = "Key index UUID misordered
 HALError.define(HAL_ERROR_KEYSTORE_WRONG_BLOCK_TYPE = "Wrong block type in keystore")
 HALError.define(HAL_ERROR_RPC_PROTOCOL_ERROR        = "RPC protocol error")
 HALError.define(HAL_ERROR_NOT_IMPLEMENTED           = "Not implemented")
+HALError.define(HAL_ERROR_CORE_REASSIGNED           = "Core has been reassigned since last use")
+HALError.define(HAL_ERROR_ASSERTION_FAILED          = "Assertion failed")
+HALError.define(HAL_ERROR_HASHSIG_KEY_EXHAUSTED     = "Key exhausted")
+HALError.define(HAL_ERROR_NOT_READY                 = "Not ready for this operation")
+HALError.define(HAL_ERROR_TAMPER                    = "There was a tamper event")
 
 
 class Enum(int):

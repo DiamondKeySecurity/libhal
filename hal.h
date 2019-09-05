@@ -1,3 +1,6 @@
+// Diamond Key Security, NFP Changes
+// Copyright 2019 Diamond Key Security, NFP
+// All rights reserved
 /*
  * hal.h
  * ----------
@@ -174,6 +177,7 @@
   DEFINE_HAL_ERROR(HAL_ERROR_ASSERTION_FAILED,          "Assertion failed")                             \
   DEFINE_HAL_ERROR(HAL_ERROR_HASHSIG_KEY_EXHAUSTED,     "Key exhausted")                                \
   DEFINE_HAL_ERROR(HAL_ERROR_NOT_READY,                 "Not ready for this operation")                 \
+  DEFINE_HAL_ERROR(HAL_ERROR_TAMPER,                    "There was a tamper event")                     \
   END_OF_HAL_ERROR_LIST
 
 /* Marker to forestall silly line continuation errors */
@@ -695,6 +699,9 @@ extern hal_error_t hal_rpc_login(const hal_client_handle_t client,
 extern hal_error_t hal_rpc_logout(const hal_client_handle_t client);
 
 extern hal_error_t hal_rpc_logout_all(void);
+
+// RPC Functions added by Diamond Key Security for the Diamond-HSM
+extern hal_error_t hal_rpc_check_tamper(void);
 
 extern hal_error_t hal_rpc_is_logged_in(const hal_client_handle_t client,
                                         const hal_user_t user);
