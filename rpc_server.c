@@ -1,3 +1,6 @@
+// Diamond Key Security, NFP Changes
+// Copyright 2019 Diamond Key Security, NFP
+// All rights reserved
 /*
  * rpc_server.c
  * ------------
@@ -123,6 +126,13 @@ static hal_error_t logout_all(const uint8_t **iptr, const uint8_t * const ilimit
                               uint8_t **optr, const uint8_t * const olimit)
 {
     return hal_rpc_logout_all();
+}
+
+// RPC Functions added by Diamond Key Security for the Diamond-HSM
+static hal_error_t check_tamper(const uint8_t **iptr, const uint8_t * const ilimit,
+                              uint8_t **optr, const uint8_t * const olimit)
+{
+    return hal_rpc_check_tamper();
 }
 
 static hal_error_t is_logged_in(const uint8_t **iptr, const uint8_t * const ilimit,
@@ -889,6 +899,9 @@ hal_error_t hal_rpc_server_dispatch(const uint8_t * const ibuf, const size_t ile
         break;
     case RPC_FUNC_PKEY_IMPORT:
         handler = pkey_import;
+        break;
+    case RPC_FUNC_CHECK_TAMPER:
+        handler = check_tamper;
         break;
     }
 

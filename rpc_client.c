@@ -1,3 +1,6 @@
+// Diamond Key Security, NFP Changes
+// Copyright 2019 Diamond Key Security, NFP
+// All rights reserved
 /*
  * rpc_client.c
  * ------------
@@ -242,6 +245,25 @@ static hal_error_t logout_all(void)
   check(hal_rpc_send(outbuf, optr - outbuf));
 
   check(read_matching_packet(RPC_FUNC_LOGOUT_ALL, inbuf, sizeof(inbuf), &iptr, &ilimit));
+
+  check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
+  return rpc_ret;
+}
+
+// RPC Functions added by Diamond Key Security for the Diamond-HSM
+static hal_error_t check_tamper(void)
+{
+  uint8_t outbuf[nargs(2)], *optr = outbuf, *olimit = outbuf + sizeof(outbuf);
+  uint8_t inbuf[nargs(3)];
+  const uint8_t *iptr = inbuf, *ilimit = inbuf + sizeof(inbuf);
+  hal_client_handle_t dummy_client = {0};
+  hal_error_t rpc_ret;
+
+  check(hal_xdr_encode_int(&optr, olimit, RPC_FUNC_CHECK_TAMPER));
+  check(hal_xdr_encode_int(&optr, olimit, dummy_client.handle));
+  check(hal_rpc_send(outbuf, optr - outbuf));
+
+  check(read_matching_packet(RPC_FUNC_CHECK_TAMPER, inbuf, sizeof(inbuf), &iptr, &ilimit));
 
   check(hal_xdr_decode_int(&iptr, ilimit, &rpc_ret));
   return rpc_ret;
@@ -1118,7 +1140,8 @@ const hal_rpc_misc_dispatch_t hal_rpc_remote_misc_dispatch = {
   .logout_all                   = logout_all,
   .is_logged_in                 = is_logged_in,
   .get_random                   = get_random,
-  .get_version                  = get_version
+  .get_version                  = get_version,
+  .check_tamper                 = check_tamper
 };
 
 const hal_rpc_hash_dispatch_t hal_rpc_remote_hash_dispatch = {
